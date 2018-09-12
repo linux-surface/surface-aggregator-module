@@ -265,6 +265,11 @@ static void sb2_mshw0153_irq_free(struct sb2_mshw0153_irq *irq)
 }
 
 
+static void sb2_mshw0153_acpi_notify(acpi_handle adev, u32 value, void *context)
+{
+	pr_info("sb2_mshw0153: notify handler called: %x\n", value);
+}
+
 static int sb2_mshw0153_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
@@ -283,7 +288,14 @@ static int sb2_mshw0153_probe(struct platform_device *pdev)
 	// dump current states
 	status = sb2_mshw0153_dump_gpios(&pdev->dev);
 	if (status) {
-		goto err_alloc;
+		goto err_notify;
+	}
+
+	// add acpi notify handler
+	status = acpi_install_notify_handler(shps_dev->handle, ACPI_ALL_NOTIFY,
+			sb2_mshw0153_acpi_notify, NULL);
+	if (ACPI_FAILURE(status)) {
+		goto err_notify;
 	}
 
 	// allocate driver data
@@ -306,6 +318,9 @@ static int sb2_mshw0153_probe(struct platform_device *pdev)
 err_init:
 	kfree(data);
 err_alloc:
+	acpi_remove_notify_handler(shps_dev->handle, ACPI_ALL_NOTIFY,
+			sb2_mshw0153_acpi_notify);
+err_notify:
 	acpi_dev_remove_driver_gpios(shps_dev);
 	return status;
 }
@@ -319,6 +334,10 @@ static int sb2_mshw0153_remove(struct platform_device *pdev)
 	data = platform_get_drvdata(pdev);
 	sb2_mshw0153_irq_free(&data->irq);
 	kfree(data);
+
+	acpi_remove_notify_handler(shps_dev->handle, ACPI_ALL_NOTIFY,
+			sb2_mshw0153_acpi_notify);
+
 
 	acpi_dev_remove_driver_gpios(shps_dev);
 
