@@ -1,6 +1,7 @@
 #include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/serdev.h>
 
 
 #define surfacegen5_BASE_DETACHED		0x00
@@ -129,7 +130,7 @@ surfacegen5_rqst(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buf
 	// TODO: implement RQST handler
 
 	dev_warn(ctx->dev, "unsupported request: RQST(0x%02x, 0x%02x, 0x%02x)\n",
-			 rqst->tc, rqst->cid, rqst->iid);
+		 rqst->tc, rqst->cid, rqst->iid);
 
 	return AE_OK;
 }
@@ -244,21 +245,76 @@ static int surfacegen5_acpi_notify_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_match[] = {
+static const struct acpi_device_id surfacegen5_acpi_notify_match[] = {
 	{ "MSHW0091", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_match);
+MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_match);
 
-static struct platform_driver sb2_platform_driver = {
+static struct platform_driver surfacegen5_acpi_notify_driver = {
 	.probe = surfacegen5_acpi_notify_probe,
 	.remove = surfacegen5_acpi_notify_remove,
 	.driver = {
 		.name = "surfacegen5_acpi_notify",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_match),
+		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_match),
 	},
 };
-module_platform_driver(sb2_platform_driver);
+
+
+static int surfacegen5_ec_probe(struct serdev_device *serdev)
+{
+	dev_info(&serdev->dev, "surfacegen5_ec_probe\n");	// TODO: serdev driver
+	return 0;
+}
+
+static void surfacegen5_ec_remove(struct serdev_device *serdev)
+{
+	dev_info(&serdev->dev, "surfacegen5_ec_remove\n");	// TODO: serdev driver
+}
+
+
+static const struct acpi_device_id surfacegen5_ec_match[] = {
+	{ "MSHW0084", 0 },
+	{ },
+};
+MODULE_DEVICE_TABLE(acpi, surfacegen5_ec_match);
+
+static struct serdev_device_driver surfacegen5_ec_driver = {
+	.probe = surfacegen5_ec_probe,
+	.remove = surfacegen5_ec_remove,
+	.driver = {
+		.name = "surfacegen5_ec",
+		.acpi_match_table = ACPI_PTR(surfacegen5_ec_match),
+	},
+};
+
+
+int __init surfacegen5_acpi_notify_init(void)
+{
+	int status;
+
+	status = serdev_device_driver_register(&surfacegen5_ec_driver);
+	if (status) {
+		return status;
+	}
+
+	status = platform_driver_register(&surfacegen5_acpi_notify_driver);
+	if (status) {
+		serdev_device_driver_unregister(&surfacegen5_ec_driver);
+		return status;
+	}
+
+	return 0;
+}
+
+void __exit surfacegen5_acpi_notify_exit(void)
+{
+	platform_driver_unregister(&surfacegen5_acpi_notify_driver);
+	serdev_device_driver_unregister(&surfacegen5_ec_driver);
+}
+
+module_init(surfacegen5_acpi_notify_init)
+module_exit(surfacegen5_acpi_notify_exit)
 
 MODULE_AUTHOR("Maximilian Luz");
 MODULE_DESCRIPTION("ACPI Notify Driver for 5th Generation Surface Devices");
