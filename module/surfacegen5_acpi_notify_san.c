@@ -1,15 +1,9 @@
 #include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
-#include <linux/serdev.h>
 
 
-#define surfacegen5_BASE_DETACHED		0x00
-#define surfacegen5_BASE_ATTACHED		0x01
-#define surfacegen5_BASE_UNDEFINED		0xFF
-
-
-struct surfacegen5_handler_context {
+struct surfacegen5_san_handler_context {
 	struct acpi_connection_info connection;
 	struct device *dev;
 };
@@ -57,7 +51,7 @@ struct gsb_buffer {
 } __packed;
 
 
-static struct gsb_data_rqsx *surfacegen5_validate_rqsx(
+static struct gsb_data_rqsx *surfacegen5_san_validate_rqsx(
 	struct device *dev, const char *type, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *rqsx = &buffer->data.rqsx;
@@ -84,7 +78,7 @@ static struct gsb_data_rqsx *surfacegen5_validate_rqsx(
 }
 
 static acpi_status
-surfacegen5_etwl(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buffer)
+surfacegen5_san_etwl(struct surfacegen5_san_handler_context *ctx, struct gsb_buffer *buffer)
 {
 	struct gsb_data_etwl *etwl = &buffer->data.etwl;
 
@@ -105,9 +99,9 @@ surfacegen5_etwl(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buf
 }
 
 static acpi_status
-surfacegen5_rqst(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buffer)
+surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *rqst = surfacegen5_validate_rqsx(ctx->dev, "RQST", buffer);
+	struct gsb_data_rqsx *rqst = surfacegen5_san_validate_rqsx(ctx->dev, "RQST", buffer);
 	if (!rqst) { return AE_OK; }
 
 	// FIXME: temporary fix for base status (lid notify loop)
@@ -122,7 +116,7 @@ surfacegen5_rqst(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buf
 		buffer->len             = 0x03;
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = 0x01;
-		buffer->data.out.pld[0] = surfacegen5_BASE_ATTACHED;
+		buffer->data.out.pld[0] = 0x01;		// base-status: attached
 
 		return AE_OK;
 	}
@@ -136,9 +130,9 @@ surfacegen5_rqst(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buf
 }
 
 static acpi_status
-surfacegen5_rqsg(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buffer)
+surfacegen5_san_rqsg(struct surfacegen5_san_handler_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *rqsg = surfacegen5_validate_rqsx(ctx->dev, "RQSG", buffer);
+	struct gsb_data_rqsx *rqsg = surfacegen5_san_validate_rqsx(ctx->dev, "RQSG", buffer);
 	if (!rqsg) { return AE_OK; }
 
 	// TODO: implement RQSG handler
@@ -151,11 +145,11 @@ surfacegen5_rqsg(struct surfacegen5_handler_context *ctx, struct gsb_buffer *buf
 
 
 static acpi_status
-surfacegen5_space_handler(u32 function, acpi_physical_address command,
+surfacegen5_san_space_handler(u32 function, acpi_physical_address command,
 			u32 bits, u64 *value64,
 			void *handler_context, void *region_context)
 {
-	struct surfacegen5_handler_context *context = handler_context;
+	struct surfacegen5_san_handler_context *context = handler_context;
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
 	int accessor_type = (0xFFFF0000 & function) >> 16;
 
@@ -177,11 +171,11 @@ surfacegen5_space_handler(u32 function, acpi_physical_address command,
 
 	switch (buffer->data.in.cv) {
 	case 0x01:
-		return surfacegen5_rqst(context, buffer);
+		return surfacegen5_san_rqst(context, buffer);
 	case 0x02:
-		return surfacegen5_etwl(context, buffer);
+		return surfacegen5_san_etwl(context, buffer);
 	case 0x03:
-		return surfacegen5_rqsg(context, buffer);
+		return surfacegen5_san_rqsg(context, buffer);
 	}
 
 	dev_warn(context->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
@@ -189,13 +183,13 @@ surfacegen5_space_handler(u32 function, acpi_physical_address command,
 }
 
 
-static int surfacegen5_acpi_notify_probe(struct platform_device *pdev)
+static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 {
-	struct surfacegen5_handler_context *context = NULL;
+	struct surfacegen5_san_handler_context *context = NULL;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
-	context = kzalloc(sizeof(struct surfacegen5_handler_context), GFP_KERNEL);
+	context = kzalloc(sizeof(struct surfacegen5_san_handler_context), GFP_KERNEL);
 	if (!context) {
 		return -ENOMEM;
 	}
@@ -209,7 +203,7 @@ static int surfacegen5_acpi_notify_probe(struct platform_device *pdev)
 
 	status = acpi_install_address_space_handler(san,
 			ACPI_ADR_SPACE_GSBUS,
-			&surfacegen5_space_handler,
+			&surfacegen5_san_space_handler,
 			NULL,
 			context);
 
@@ -226,14 +220,14 @@ err_privdata:
 	return status;
 }
 
-static int surfacegen5_acpi_notify_remove(struct platform_device *pdev)
+static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 {
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
-	struct surfacegen5_handler_context *context = NULL;
+	struct surfacegen5_san_handler_context *context = NULL;
 
-	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_space_handler);
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
 
 	status = acpi_bus_get_private_data(san, (void **)&context);
 	if (ACPI_SUCCESS(status) && context) {
@@ -245,77 +239,17 @@ static int surfacegen5_acpi_notify_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_notify_match[] = {
+static const struct acpi_device_id surfacegen5_acpi_notify_san_match[] = {
 	{ "MSHW0091", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_match);
+MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_san_match);
 
-static struct platform_driver surfacegen5_acpi_notify_driver = {
-	.probe = surfacegen5_acpi_notify_probe,
-	.remove = surfacegen5_acpi_notify_remove,
+struct platform_driver surfacegen5_acpi_notify_san = {
+	.probe = surfacegen5_acpi_notify_san_probe,
+	.remove = surfacegen5_acpi_notify_san_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_notify",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_match),
+		.name = "surfacegen5_acpi_notify_san",
+		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_san_match),
 	},
 };
-
-
-static int surfacegen5_ec_probe(struct serdev_device *serdev)
-{
-	dev_info(&serdev->dev, "surfacegen5_ec_probe\n");	// TODO: serdev driver
-	return 0;
-}
-
-static void surfacegen5_ec_remove(struct serdev_device *serdev)
-{
-	dev_info(&serdev->dev, "surfacegen5_ec_remove\n");	// TODO: serdev driver
-}
-
-
-static const struct acpi_device_id surfacegen5_ec_match[] = {
-	{ "MSHW0084", 0 },
-	{ },
-};
-MODULE_DEVICE_TABLE(acpi, surfacegen5_ec_match);
-
-static struct serdev_device_driver surfacegen5_ec_driver = {
-	.probe = surfacegen5_ec_probe,
-	.remove = surfacegen5_ec_remove,
-	.driver = {
-		.name = "surfacegen5_ec",
-		.acpi_match_table = ACPI_PTR(surfacegen5_ec_match),
-	},
-};
-
-
-int __init surfacegen5_acpi_notify_init(void)
-{
-	int status;
-
-	status = serdev_device_driver_register(&surfacegen5_ec_driver);
-	if (status) {
-		return status;
-	}
-
-	status = platform_driver_register(&surfacegen5_acpi_notify_driver);
-	if (status) {
-		serdev_device_driver_unregister(&surfacegen5_ec_driver);
-		return status;
-	}
-
-	return 0;
-}
-
-void __exit surfacegen5_acpi_notify_exit(void)
-{
-	platform_driver_unregister(&surfacegen5_acpi_notify_driver);
-	serdev_device_driver_unregister(&surfacegen5_ec_driver);
-}
-
-module_init(surfacegen5_acpi_notify_init)
-module_exit(surfacegen5_acpi_notify_exit)
-
-MODULE_AUTHOR("Maximilian Luz");
-MODULE_DESCRIPTION("ACPI Notify Driver for 5th Generation Surface Devices");
-MODULE_LICENSE("GPL v2");

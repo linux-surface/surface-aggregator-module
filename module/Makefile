@@ -4,6 +4,16 @@ MODULE_VERSION := "0.1"
 KVERSION := "$(shell uname -r)"
 
 obj-m += surfacegen5_acpi_notify.o
+surfacegen5_acpi_notify-objs := surfacegen5_acpi_notify_base.o
+surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_ssh.o
+surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_san.o
+
+sources := Makefile
+sources += dkms.conf
+sources += surfacegen5_acpi_notify_base.c
+sources += surfacegen5_acpi_notify.h
+sources += surfacegen5_acpi_notify_ssh.c
+sources += surfacegen5_acpi_notify_san.c
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
@@ -11,11 +21,9 @@ all:
 clean:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) clean
 
-dkms-install: surfacegen5_acpi_notify.c dkms.conf Makefile
+dkms-install: $(sources)
 	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
-	cp surfacegen5_acpi_notify.c /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
-	cp dkms.conf /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
-	cp Makefile /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
+	cp -t /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/ $(sources)
 	dkms add $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms build $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms install $(MODULE_NAME)/$(MODULE_VERSION)
