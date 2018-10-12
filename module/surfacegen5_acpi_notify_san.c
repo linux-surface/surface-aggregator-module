@@ -170,12 +170,9 @@ surfacegen5_san_space_handler(u32 function, acpi_physical_address command,
 	}
 
 	switch (buffer->data.in.cv) {
-	case 0x01:
-		return surfacegen5_san_rqst(context, buffer);
-	case 0x02:
-		return surfacegen5_san_etwl(context, buffer);
-	case 0x03:
-		return surfacegen5_san_rqsg(context, buffer);
+	case 0x01:  return surfacegen5_san_rqst(context, buffer);
+	case 0x02:  return surfacegen5_san_etwl(context, buffer);
+	case 0x03:  return surfacegen5_san_rqsg(context, buffer);
 	}
 
 	dev_warn(context->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
