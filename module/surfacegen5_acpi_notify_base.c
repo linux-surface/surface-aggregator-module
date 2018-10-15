@@ -14,7 +14,6 @@ static int surfacegen5_devlink_init(void)
 {
 	struct acpi_device *san_dev;
 	struct acpi_device *ssh_dev;
-	struct device *ssh_dev_uart;
 	acpi_handle san_handle;
 	acpi_handle ssh_handle;
 	acpi_status status = 0;
@@ -39,13 +38,11 @@ static int surfacegen5_devlink_init(void)
 		return status;
 	}
 
-	surfacegen5_devlink = device_link_add(&san_dev->dev, ssh_dev_uart, 0);
+	surfacegen5_devlink = device_link_add(&san_dev->dev, &ssh_dev->dev, 0);
 	if (IS_ERR_OR_NULL(surfacegen5_devlink)) {
 		status = surfacegen5_devlink ? PTR_ERR(surfacegen5_devlink) : -EFAULT;
 		surfacegen5_devlink = NULL;
 	}
-
-	put_device(ssh_dev_uart);
 
 	return status;
 }
