@@ -2,6 +2,8 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
+#include "surfacegen5_acpi_notify_ec.h"
+
 
 struct surfacegen5_san_handler_context {
 	struct acpi_connection_info connection;
@@ -101,30 +103,48 @@ surfacegen5_san_etwl(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 static acpi_status
 surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *rqst = surfacegen5_san_validate_rqsx(ctx->dev, "RQST", buffer);
-	if (!rqst) { return AE_OK; }
+	struct gsb_data_rqsx *gsb_rqst = surfacegen5_san_validate_rqsx(ctx->dev, "RQST", buffer);
+	struct surfacegen5_rqst rqst = {};
+	struct surfacegen5_buf result = {};
+	int status = 0;
 
-	// FIXME: temporary fix for base status (lid notify loop)
-	if (
-		rqst->tc  == 0x11 &&
-		rqst->tid == 0x01 &&
-		rqst->iid == 0x00 &&
-		rqst->snc == 0x01 &&
-		rqst->cid == 0x0D
-	) {
-		buffer->status          = 0x00;
-		buffer->len             = 0x03;
-		buffer->data.out.status = 0x00;
-		buffer->data.out.len    = 0x01;
-		buffer->data.out.pld[0] = 0x01;		// base-status: attached
-
+	if (!gsb_rqst) {
 		return AE_OK;
 	}
 
-	// TODO: implement RQST handler
+	rqst.tc  = gsb_rqst->tc;
+	rqst.iid = gsb_rqst->iid;
+	rqst.cid = gsb_rqst->cid;
+	rqst.snc = gsb_rqst->snc;
+	rqst.cdl = gsb_rqst->cdl;
+	rqst.pld = &gsb_rqst->pld[0];
 
-	dev_warn(ctx->dev, "unsupported request: RQST(0x%02x, 0x%02x, 0x%02x)\n",
-		 rqst->tc, rqst->cid, rqst->iid);
+	result.cap = SURFACEGEN5_MAX_RQST_RESPONSE;
+	result.len = 0;
+	result.pld = kzalloc(result.cap, GFP_KERNEL);
+
+	if (!result.pld) {
+		return -ENOMEM;
+	}
+
+	status = surfacegen5_ec_rqst(&rqst, &result);
+
+	if (!status) {
+		buffer->status          = 0x00;
+		buffer->len             = result.len + 2;
+		buffer->data.out.status = 0x00;
+		buffer->data.out.len    = result.len;
+		memcpy(&buffer->data.out.pld[0], result.pld, result.len);
+
+	} else {
+		dev_err(ctx->dev, "surfacegen5_ec_rqst failed with error %d\n", status);
+		buffer->status          = 0x00;
+		buffer->len             = 0x02;
+		buffer->data.out.status = 0x01;		// indicate _SSH error
+		buffer->data.out.len    = 0x00;
+	}
+
+	kfree(result.pld);
 
 	return AE_OK;
 }

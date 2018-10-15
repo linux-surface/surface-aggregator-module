@@ -11,7 +11,7 @@ surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_san.o
 sources := Makefile
 sources += dkms.conf
 sources += surfacegen5_acpi_notify_base.c
-sources += surfacegen5_acpi_notify.h
+sources += surfacegen5_acpi_notify_ec.h
 sources += surfacegen5_acpi_notify_ssh.c
 sources += surfacegen5_acpi_notify_san.c
 
