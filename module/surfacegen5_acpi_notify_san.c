@@ -186,6 +186,8 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
+	dev_info(&pdev->dev, "surfacegen5_acpi_notify_san_probe\n");
+
 	context = kzalloc(sizeof(struct surfacegen5_san_handler_context), GFP_KERNEL);
 	if (!context) {
 		return -ENOMEM;
@@ -219,10 +221,11 @@ err_privdata:
 
 static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 {
+	struct surfacegen5_san_handler_context *context = NULL;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
-	struct surfacegen5_san_handler_context *context = NULL;
+	dev_info(&pdev->dev, "surfacegen5_acpi_notify_san_remove\n");
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
 
