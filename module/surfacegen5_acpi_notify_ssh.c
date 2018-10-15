@@ -35,9 +35,52 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 }
 
 
+static acpi_status
+surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *context)
+{
+	struct serdev_device *serdev = context;
+	struct acpi_resource_common_serialbus *serial;
+	struct acpi_resource_uart_serialbus *uart;
+
+	if (resource->type != ACPI_RESOURCE_TYPE_SERIAL_BUS) {
+		return AE_OK;
+	}
+
+	serial = &resource->data.common_serial_bus;
+	if (serial->type != ACPI_RESOURCE_SERIAL_TYPE_UART) {
+		return AE_OK;
+	}
+
+	dev_info(&serdev->dev, "surfacegen5_ssh_setup_from_resource\n");
+
+	uart = &resource->data.uart_serial_bus;
+
+	// TODO: set up serdev_device
+
+ 	// serdev_device_set_baudrate
+ 	// serdev_device_set_flow_control
+	// serdev_device_set_parity
+	// serdev_device_set_tiocm ?
+
+	return AE_CTRL_TERMINATE;	// we've found the resource and are done
+}
+
+
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
-	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_probe\n");		// TODO: serdev driver
+	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
+	acpi_status status;
+
+	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_probe\n");
+
+	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
+	                             surfacegen5_ssh_setup_from_resource, serdev);
+	if (ACPI_FAILURE(status)) {
+		return status;
+	}
+
+	// TODO: serdev driver
+
 	return 0;
 }
 
