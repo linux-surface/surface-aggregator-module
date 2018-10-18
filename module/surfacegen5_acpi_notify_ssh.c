@@ -57,47 +57,6 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	return size;
 }
 
-// FIXME: temporary test, to be removed
-static int surfacegen5_ssh_example_write(struct serdev_device *serdev)
-{
-	u8 msg[18];
-	u16 crc_hdr;
-	u16 crc_pld;
-
-	// sync
-	msg[0] = 0xaa;
-	msg[1] = 0x55;
-
-	// command header frame
-	msg[2] = 0x80;
-	msg[3] = 0x08;		// command frame length
-	msg[4] = 0x00;
-	msg[5] = 0x00;		// sequence id
-
-	// crc for command header frame
-	crc_hdr = surfacegen5_ssh_crc(msg + 2, 4);
-	put_unaligned_le16(crc_hdr, msg + 6);
-
-	// command frame
-	msg[ 8] = 0x80;
-	msg[ 9] = 0x11;		// rtc
-	msg[10] = 0x01;
-	msg[11] = 0x00;
-	msg[12] = 0x00;		// riid
-	msg[13] = 0x00;
-	msg[14] = 0x00;
-	msg[15] = 0x0d;		// rcid
-
-	// crc for command frame
-	crc_pld = surfacegen5_ssh_crc(msg + 8, 8);
-	put_unaligned_le16(crc_pld, msg + 16);
-
-	dev_info(&serdev->dev, "sending buffer\n");
-	print_hex_dump(KERN_INFO, "send: ", DUMP_PREFIX_OFFSET, 16, 1, msg, 18, false);
-
-	return serdev_device_write(serdev, msg, 18, HZ /* timeout one second */);
-}
-
 static acpi_status
 surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *context)
 {
@@ -176,13 +135,6 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
 	                             surfacegen5_ssh_setup_from_resource, serdev);
 	if (ACPI_FAILURE(status)) {
-		serdev_device_close(serdev);
-		return status;
-	}
-
-	// FIXME: temporary test, to be removed
-	status = surfacegen5_ssh_example_write(serdev);
-	if (status) {
 		serdev_device_close(serdev);
 		return status;
 	}
