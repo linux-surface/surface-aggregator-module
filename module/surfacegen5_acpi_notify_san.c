@@ -208,6 +208,19 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "surfacegen5_acpi_notify_san_probe\n");
 
+	/*
+	 * Defer probe if the _SSH driver has not set up the controller yet. This
+	 * makes sure we do not fail any initial requests (e.g. _STA request without
+	 * which the battery does not get set up correctly). Otherwise register as
+	 * consumer to set up a device_link.
+	 */
+	status = surfacegen5_ec_consumer_set(&pdev->dev);
+	if (status == -ENXIO) {
+		return -EPROBE_DEFER;
+	} else if (status) {
+		return status;
+	}
+
 	context = kzalloc(sizeof(struct surfacegen5_san_handler_context), GFP_KERNEL);
 	if (!context) {
 		return -ENOMEM;
@@ -255,6 +268,8 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	}
 	acpi_bus_detach_private_data(san);
 
+	surfacegen5_ec_consumer_remove(&pdev->dev);
+
 	return status;
 }
 
@@ -271,5 +286,6 @@ struct platform_driver surfacegen5_acpi_notify_san = {
 	.driver = {
 		.name = "surfacegen5_acpi_notify_san",
 		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_san_match),
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

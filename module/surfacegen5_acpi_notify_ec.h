@@ -20,6 +20,9 @@ struct surfacegen5_rqst {
 	u8 *pld;
 };
 
+int surfacegen5_ec_consumer_set(struct device *consumer);
+int surfacegen5_ec_consumer_remove(struct device *consumer);
+
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
 
 #endif /* _SURFACEGEN5_ACPI_NOTIFY_EC_H */
