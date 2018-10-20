@@ -212,6 +212,7 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 {
 	struct surfacegen5_ec *ec;
 	u8 *w;
+	int status = 0;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
 		return -EINVAL;
@@ -232,9 +233,12 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	print_hex_dump(KERN_INFO, "rqst: ", DUMP_PREFIX_OFFSET, 16, 1,
 	               ec->buf_write.data, w - ec->buf_write.data, false);
 
-	serdev_device_write(ec->serdev,
-	                    ec->buf_write.data, w - ec->buf_write.data,
-			    SG5_WRITE_TIMEOUT);
+	status = serdev_device_write(ec->serdev, ec->buf_write.data,
+				     w - ec->buf_write.data, SG5_WRITE_TIMEOUT);
+
+	if (status) {
+		goto rqst_out_release;
+	}
 
 	// TODO: surfacegen5_ec_rqst
 
@@ -247,7 +251,9 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	) {
 		if (result->cap < 1) {
 			printk(RQST_ERR "output buffer too small\n");
-			return -ENOMEM;
+
+			status = -ENOMEM;
+			goto rqst_out_release;
 		}
 
 		printk(RQST_INFO "handling base state request\n");
@@ -255,15 +261,15 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 		result->len     = 0x01;
 		result->data[0] = 0x01;		// base-status: attached
 
-		surfacegen5_ec_release(ec);
-		return 0;
+		goto rqst_out_release;
 	}
 
 	printk(RQST_WARN "unsupported request: RQST(0x%02x, 0x%02x, 0x%02x)\n",
 	       rqst->tc, rqst->cid, rqst->iid);
 
+rqst_out_release:
 	surfacegen5_ec_release(ec);
-	return 1;
+	return status;
 }
 
 static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
