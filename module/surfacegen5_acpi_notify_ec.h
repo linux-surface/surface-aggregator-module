@@ -2,13 +2,22 @@
 #define _SURFACEGEN5_ACPI_NOTIFY_EC_H
 
 
-#define SURFACEGEN5_MAX_RQST_RESPONSE	251	// 255 bytes minus header/status bytes
+/*
+ * Maximum request payload size in bytes.
+ * Value based on ACPI (255 bytes minus header/status bytes).
+ */
+#define SURFACEGEN5_MAX_RQST_PAYLOAD	(255 - 10)
 
+/*
+ * Maximum response payload size in bytes.
+ * Value based on ACPI (255 bytes minus header/status bytes).
+ */
+#define SURFACEGEN5_MAX_RQST_RESPONSE	(255 - 4)
 
 struct surfacegen5_buf {
-	int cap;
-	int len;
-	u8 *pld;
+	u8 cap;
+	u8 len;
+	u8 *data;
 };
 
 struct surfacegen5_rqst {

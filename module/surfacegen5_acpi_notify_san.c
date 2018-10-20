@@ -119,11 +119,11 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 	rqst.cdl = gsb_rqst->cdl;
 	rqst.pld = &gsb_rqst->pld[0];
 
-	result.cap = SURFACEGEN5_MAX_RQST_RESPONSE;
-	result.len = 0;
-	result.pld = kzalloc(result.cap, GFP_KERNEL);
+	result.cap  = SURFACEGEN5_MAX_RQST_RESPONSE;
+	result.len  = 0;
+	result.data = kzalloc(result.cap, GFP_KERNEL);
 
-	if (!result.pld) {
+	if (!result.data) {
 		return -ENOMEM;
 	}
 
@@ -134,7 +134,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 		buffer->len             = result.len + 2;
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = result.len;
-		memcpy(&buffer->data.out.pld[0], result.pld, result.len);
+		memcpy(&buffer->data.out.pld[0], result.data, result.len);
 
 	} else {
 		dev_err(ctx->dev, "surfacegen5_ec_rqst failed with error %d\n", status);
@@ -144,7 +144,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 		buffer->data.out.len    = 0x00;
 	}
 
-	kfree(result.pld);
+	kfree(result.data);
 
 	return AE_OK;
 }
