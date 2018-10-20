@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 #include <linux/serdev.h>
 #include <linux/crc-ccitt.h>
+#include <linux/spinlock.h>
 #include <linux/mutex.h>
 #include <linux/jiffies.h>
 #include <asm/unaligned.h>
@@ -19,13 +20,12 @@
 #define SG5_BYTELEN_SYNC	2
 #define SG5_BYTELEN_TERM	2
 #define SG5_BYTELEN_CRC		2
-#define SG5_BYTELEN_ACK		4		// also RETRY
-#define SG5_BYTELEN_CMDHDR	4
+#define SG5_BYTELEN_CTRL	4		// command-header, ACK, or RETRY
 #define SG5_BYTELEN_CMDFRAME	8		// without payload
 
 #define SG5_MAX_WRITE (                \
 	  SG5_BYTELEN_SYNC             \
-      	+ SG5_BYTELEN_CMDHDR           \
+      	+ SG5_BYTELEN_CTRL             \
 	+ SG5_BYTELEN_CRC              \
       	+ SG5_BYTELEN_CMDFRAME         \
 	+ SURFACEGEN5_MAX_RQST_PAYLOAD \
@@ -33,6 +33,11 @@
 )
 
 #define SG5_WRITE_TIMEOUT	msecs_to_jiffies(1000)
+#define SG5_RETRY		3
+
+#define SG5_FRAMETYPE_CMD	0x80
+#define SG5_FRAMETYPE_ACK	0x40
+#define SG5_FRAMETYPE_RETRY	0x04
 
 
 /*
@@ -45,11 +50,30 @@
  * Response Message:		sync cmd-hdr crc(cmd-hdr) cmd-resp-frame crc(cmd-resp-frame)
  *
  * Command Header:		80 LEN 00 SEQ
- * Command Request Frame:	80 RTC 01 00 RIID CNT16LE RCID PLD
- * Command Response Frame:	80 RTC 00 01 RIID CNT16LE RCID PLD
  * Ack:                 	40 00 00 SEQ
  * Retry:			04 00 00 00
+ * Command Request Frame:	80 RTC 01 00 RIID CNT16LE RCID PLD
+ * Command Response Frame:	80 RTC 00 01 RIID CNT16LE RCID PLD
  */
+
+struct surfacegen5_frame_ctrl {
+	u8 type;
+	u8 len;
+	u8 pad;
+	u8 seq;
+} __packed;
+
+struct surfacegen5_frame_cmd {
+	u8 type;
+	u8 tc;
+	u8 unknown1;
+	u8 unknown2;
+	u8 iid;
+	u8 cnt_lo;
+	u8 cnt_hi;
+	u8 cid;
+} __packed;
+
 
 enum surfacegen5_ec_state {
 	SG5_EC_UNINITIALIZED,
@@ -61,9 +85,21 @@ struct surfacegen5_ec_counters {
 	u16 pld;
 };
 
-struct surfacegen5_io_buf {
-	u32 cap;
+struct surfacegen5_ec_writer {
 	u8 *data;
+	u8 *ptr;
+};
+
+enum surfacegen5_ec_receiver_state {
+	SG5_RCV_DISCARD,
+	SG5_RCV_SYNC,
+	SG5_RCV_CTRL,
+	SG5_RCV_CMD,
+};
+
+struct surfacegen5_ec_receiver {
+	spinlock_t                         lock;
+	enum surfacegen5_ec_receiver_state state;
 };
 
 struct surfacegen5_ec {
@@ -72,9 +108,8 @@ struct surfacegen5_ec {
 	struct serdev_device          *serdev;
 	struct device_link            *link;
 	struct surfacegen5_ec_counters count;
-	struct surfacegen5_io_buf      buf_write;
-	// rcv_buffer?
-	// rcv_cv?
+	struct surfacegen5_ec_writer   writer;
+	struct surfacegen5_ec_receiver receiver;
 };
 
 
@@ -85,6 +120,14 @@ static struct surfacegen5_ec surfacegen5_ec = {
 	.count = {
 		.seq = 0,
 		.pld = 0,
+	},
+	.writer = {
+		.data = NULL,
+		.ptr  = NULL,
+	},
+	.receiver = {
+		.lock  = __SPIN_LOCK_UNLOCKED(surfacegen5_ec.receiver.lock),
+		.state = SG5_RCV_DISCARD,
 	},
 };
 
@@ -155,63 +198,132 @@ int surfacegen5_ec_consumer_remove(struct device *consumer)
 	return 0;
 }
 
-
-inline static u8 *surfacegen5_ssh_write_u16(u8 *out, u16 in)
+inline static u16 surfacegen5_ssh_crc(const u8 *buf, size_t size)
 {
-	put_unaligned_le16(in, out);
-	return out + 2;
+	return crc_ccitt_false(0xffff, buf, size);
 }
 
-inline static u8 *surfacegen5_ssh_write_crc(u8 *out, const u8 *buf, size_t size)
+inline static void surfacegen5_ssh_write_u16(struct surfacegen5_ec_writer *writer, u16 in)
 {
-	u16 crc = crc_ccitt_false(0xffff, buf, size);
-	return surfacegen5_ssh_write_u16(out, crc);
+	put_unaligned_le16(in, writer->ptr);
+	writer->ptr += 2;
 }
 
-inline static u8 *surfacegen5_ssh_write_syn(u8 *out)
+inline static void surfacegen5_ssh_write_crc(struct surfacegen5_ec_writer *writer,
+                                             const u8 *buf, size_t size)
 {
-	*out++ = 0xaa;
-	*out++ = 0x55;
-
-	return out;
+	surfacegen5_ssh_write_u16(writer, surfacegen5_ssh_crc(buf, size));
 }
 
-inline static u8 *surfacegen5_ssh_write_hdr(u8 *out, struct surfacegen5_rqst *rqst, struct surfacegen5_ec *ec)
+inline static void surfacegen5_ssh_write_syn(struct surfacegen5_ec_writer *writer)
 {
-	u8 *w = out;
+	u8 *w = writer->ptr;
 
-	*w++ = 0x80;
-	*w++ = SG5_BYTELEN_CMDFRAME + rqst->cdl;	// without CRC
-	*w++ = 0x00;
-	*w++ = ec->count.seq;
+	*w++ = 0xaa;
+	*w++ = 0x55;
 
-	return surfacegen5_ssh_write_crc(w, out, w - out);
+	writer->ptr = w;
 }
 
-inline static u8 *surfacegen5_ssh_write_cmd(u8 *out, struct surfacegen5_rqst *rqst, struct surfacegen5_ec *ec)
+inline static void surfacegen5_ssh_write_ter(struct surfacegen5_ec_writer *writer)
 {
-	u8 *w = out;
+	u8 *w = writer->ptr;
 
-	*w++ = 0x80;
-	*w++ = rqst->tc;
-	*w++ = 0x01;
-	*w++ = 0x00;
-	*w++ = rqst->iid;
+	*w++ = 0xff;
+	*w++ = 0xff;
 
-	w = surfacegen5_ssh_write_u16(w, ec->count.pld);
+	writer->ptr = w;
+}
 
-	*w++ = rqst->cid;
+inline static void surfacegen5_ssh_write_buf(struct surfacegen5_ec_writer *writer,
+                                            u8 *in, size_t len)
+{
+	writer->ptr = memcpy(writer->ptr, in, len) + len;
+}
 
-	w = memcpy(w, rqst->pld, rqst->cdl) + rqst->cdl;
+inline static void surfacegen5_ssh_write_hdr(struct surfacegen5_ec_writer *writer,
+                                             struct surfacegen5_rqst *rqst,
+                                             struct surfacegen5_ec *ec)
+{
+	struct surfacegen5_frame_ctrl *hdr = (struct surfacegen5_frame_ctrl *)writer->ptr;
+	u8 *begin = writer->ptr;
 
-	return surfacegen5_ssh_write_crc(w, out, w - out);
+	hdr->type = SG5_FRAMETYPE_CMD;
+	hdr->len  = SG5_BYTELEN_CMDFRAME + rqst->cdl;	// without CRC
+	hdr->pad  = 0x00;
+	hdr->seq  = ec->count.seq;
+
+	writer->ptr += sizeof(*hdr);
+
+	surfacegen5_ssh_write_crc(writer, begin, writer->ptr - begin);
+}
+
+inline static void surfacegen5_ssh_write_cmd(struct surfacegen5_ec_writer *writer,
+                                             struct surfacegen5_rqst *rqst,
+                                             struct surfacegen5_ec *ec)
+{
+	struct surfacegen5_frame_cmd *cmd = (struct surfacegen5_frame_cmd *)writer->ptr;
+	u8 *begin = writer->ptr;
+	u8 cnt_lo = ec->count.pld & 0xFF;
+	u8 cnt_hi = ec->count.pld >> 8;
+
+	cmd->type     = SG5_FRAMETYPE_CMD;
+	cmd->tc       = rqst->tc;
+	cmd->unknown1 = 0x01;
+	cmd->unknown2 = 0x00;
+	cmd->iid      = rqst->iid;
+	cmd->cnt_lo   = cnt_lo;
+	cmd->cnt_hi   = cnt_hi;
+	cmd->cid      = rqst->cid;
+
+	writer->ptr += sizeof(*cmd);
+
+	surfacegen5_ssh_write_buf(writer, rqst->pld, rqst->cdl);
+	surfacegen5_ssh_write_crc(writer, begin, writer->ptr - begin);
+}
+
+inline static void surfacegen5_ssh_write_ack(struct surfacegen5_ec_writer *writer, u8 seq)
+{
+	struct surfacegen5_frame_ctrl *ack = (struct surfacegen5_frame_ctrl *)writer->ptr;
+	u8 *begin = writer->ptr;
+
+	ack->type = SG5_FRAMETYPE_ACK;
+	ack->len  = 0x00;
+	ack->pad  = 0x00;
+	ack->seq  = seq;
+
+	writer->ptr += sizeof(*ack);
+
+	surfacegen5_ssh_write_crc(writer, begin, writer->ptr - begin);
+	surfacegen5_ssh_write_ter(writer);
+}
+
+inline static int surfacegen5_ssh_writer_flush(struct serdev_device *serdev,
+                                               struct surfacegen5_ec_writer *writer)
+{
+	size_t len = writer->ptr - writer->data;
+	int status;
+
+	status = serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
+	if (!status) {
+		serdev_device_write_flush(serdev);
+	}
+
+	return status;
+}
+
+inline static void surfacegen5_ssh_writer_reset(struct surfacegen5_ec_writer *writer)
+{
+	writer->ptr = writer->data;
 }
 
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
 {
 	struct surfacegen5_ec *ec;
-	u8 *w;
+	unsigned long flags;
+	int retry;
+	int response_seq;
 	int status = 0;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
@@ -226,47 +338,68 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	}
 
 	// build request message
-	w = ec->buf_write.data;
-	w = surfacegen5_ssh_write_syn(w);
-	w = surfacegen5_ssh_write_hdr(w, rqst, ec);
-	w = surfacegen5_ssh_write_cmd(w, rqst, ec);
+	surfacegen5_ssh_writer_reset(&ec->writer);
+	surfacegen5_ssh_write_syn(&ec->writer);
+	surfacegen5_ssh_write_hdr(&ec->writer, rqst, ec);
+	surfacegen5_ssh_write_cmd(&ec->writer, rqst, ec);
 
-	print_hex_dump(KERN_INFO, "rqst: ", DUMP_PREFIX_OFFSET, 16, 1,
-	               ec->buf_write.data, w - ec->buf_write.data, false);
+	print_hex_dump(KERN_INFO, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	               ec->writer.data, ec->writer.ptr - ec->writer.data,
+		       false);
 
-	status = serdev_device_write(ec->serdev, ec->buf_write.data,
-				     w - ec->buf_write.data, SG5_WRITE_TIMEOUT);
+	// reset receiver
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	ec->receiver.state = SG5_RCV_SYNC;
+	// TODO: clear buffer
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
-	if (status) {
-		goto rqst_out_release;
-	}
-
-	// TODO: surfacegen5_ec_rqst
-
-	// FIXME: temporary fix for base status (lid notify loop)
-	if (
-		rqst->tc  == 0x11 &&
-		rqst->iid == 0x00 &&
-		rqst->cid == 0x0D &&
-		rqst->snc == 0x01
-	) {
-		if (result->cap < 1) {
-			printk(RQST_ERR "output buffer too small\n");
-
-			status = -ENOMEM;
+	// write command message, retry if necessary
+	retry = SG5_RETRY;
+	do {
+		status = surfacegen5_ssh_writer_flush(ec->serdev, &ec->writer);
+		if (status) {
+			printk(RQST_ERR "error writing request: %d\n", status);
 			goto rqst_out_release;
 		}
 
-		printk(RQST_INFO "handling base state request\n");
+		// read ACK/RETRY
+		// TODO: read ack/retry
 
-		result->len     = 0x01;
-		result->data[0] = 0x01;		// base-status: attached
+		// TODO: if ack
+		retry = 0;
+		// TODO: else retry -= 1
 
-		goto rqst_out_release;
-	}
+	} while (retry > 0);
 
-	printk(RQST_WARN "unsupported request: RQST(0x%02x, 0x%02x, 0x%02x)\n",
-	       rqst->tc, rqst->cid, rqst->iid);
+//	// increment counters
+//	ec->count.seq += 1;
+//	ec->count.pld += 1;
+//
+//	// if we expect a response/payload, read it
+//	if (rqst->snc) {
+//		response_seq = 0;	// TODO: read response
+//
+//		// build ACK message
+//		surfacegen5_ssh_writer_reset(&ec->writer);
+//		surfacegen5_ssh_write_syn(&ec->writer);
+//		surfacegen5_ssh_write_ack(&ec->writer, response_seq);
+//
+//		// send ACK message
+//		status = surfacegen5_ssh_writer_flush(ec->serdev, &ec->writer);
+//		if (status) {
+//			printk(RQST_ERR "error writing ACK: %d\n", status);
+//			goto rqst_out_release;
+//		}
+//
+//	} else {
+//		result->len = 0;
+//	}
+
+	// set receiver to discard
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	ec->receiver.state = SG5_RCV_DISCARD;
+	// TODO: clear buffer
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 rqst_out_release:
 	surfacegen5_ec_release(ec);
@@ -276,12 +409,41 @@ rqst_out_release:
 static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
                                        const unsigned char *buf, size_t size)
 {
-	// TODO: surfacegen5_ssh_receive_buf
+	struct surfacegen5_ec_receiver *rcv = serdev_device_get_drvdata(serdev);
+	unsigned long flags;
+	const u8 *src = buf;
+	const u8 *end = buf + size;
 
 	dev_info(&serdev->dev, "received buffer (size: %zu)\n", size);
 	print_hex_dump(KERN_INFO, "recv: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
-	return size;
+	// TODO:
+	// - notify when syn-ack-term, syn-retry-term, or syn-cmdhdr-cmdfame received
+	// - validate crc
+
+	spin_lock_irqsave(&rcv->lock, flags);
+//	while (src < end) {
+//		switch (rcv->state) {
+//		case SG5_RCV_SYNC:
+//			// TODO
+//			break;
+//
+//		case SG5_RCV_CTRL:
+//			// TODO
+//			break;
+//
+//		case SG5_RCV_CMD:
+//			// TODO
+//			break;
+//
+//		case SG5_RCV_DISCARD:
+//			// TODO
+//			break;
+//		}
+//	}
+	spin_unlock_irqrestore(&rcv->lock, flags);
+
+	return src - buf;
 }
 
 static acpi_status
@@ -349,6 +511,7 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
+	unsigned long flags;
 	u8 *buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
@@ -374,7 +537,7 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 		return -ENOMEM;
 	}
 
-	// set up EC state
+	// set up EC
 	ec = surfacegen5_ec_acquire();
 	if (ec->state != SG5_EC_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
@@ -382,14 +545,19 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 		return -EBUSY;		// already initialized via other device
 	}
 
-	ec->serdev         = serdev;
-	ec->buf_write.cap  = SG5_MAX_WRITE;
-	ec->buf_write.data = buf;
-	ec->state          = SG5_EC_INITIALIZED;
+	ec->serdev      = serdev;
+	ec->writer.data = buf;
+	ec->writer.ptr  = buf;
 
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	ec->receiver.state = SG5_RCV_DISCARD;
+	// TODO: setup receiver
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+
+	ec->state = SG5_EC_INITIALIZED;
+
+	serdev_device_set_drvdata(serdev, &ec->receiver);
 	surfacegen5_ec_release(ec);
-
-	// TODO: read-buffer setup
 
 	return 0;
 }
@@ -397,6 +565,7 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
+	unsigned long flags;
 
 	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_remove\n");		// TODO: serdev driver
 
@@ -405,12 +574,18 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 		ec->state  = SG5_EC_UNINITIALIZED;
 		ec->serdev = NULL;
 
-		kfree(ec->buf_write.data);
-		ec->buf_write.cap  = 0;
-		ec->buf_write.data = NULL;
+		kfree(ec->writer.data);
+		ec->writer.data = NULL;
+		ec->writer.ptr  = NULL;
+
+		spin_lock_irqsave(&ec->receiver.lock, flags);
+		ec->receiver.state = SG5_RCV_DISCARD;
+		// TODO: free receiver
+		spin_unlock_irqrestore(&ec->receiver.lock, flags);
 	}
 	surfacegen5_ec_release(ec);
 
+	serdev_device_set_drvdata(serdev, NULL);
 	serdev_device_close(serdev);
 }
 
