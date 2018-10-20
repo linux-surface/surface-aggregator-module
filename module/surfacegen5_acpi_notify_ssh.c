@@ -215,6 +215,7 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	int status = 0;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
+		printk(RQST_ERR "request payload too large\n");
 		return -EINVAL;
 	}
 
