@@ -5,6 +5,8 @@
 #include <linux/spinlock.h>
 #include <linux/mutex.h>
 #include <linux/jiffies.h>
+#include <linux/kfifo.h>
+#include <linux/completion.h>
 #include <asm/unaligned.h>
 
 #include "surfacegen5_acpi_notify_ec.h"
@@ -14,6 +16,9 @@
 #define RQST_INFO	KERN_INFO RQST_PREFIX
 #define RQST_WARN	KERN_WARNING RQST_PREFIX
 #define RQST_ERR	KERN_ERR RQST_PREFIX
+
+#define RECV_PREFIX	"surfacegen5_ssh_receive_buf: "
+#define RECV_WARN	KERN_WARNING RECV_PREFIX
 
 #define SG5_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
@@ -33,6 +38,7 @@
 )
 
 #define SG5_WRITE_TIMEOUT	msecs_to_jiffies(1000)
+#define SG5_READ_TIMEOUT	msecs_to_jiffies(1000)
 #define SG5_RETRY		3
 
 #define SG5_FRAMETYPE_CMD	0x80
@@ -99,9 +105,7 @@ enum surfacegen5_ec_receiver_state {
 };
 
 struct surfacegen5_ec_receiver {
-	spinlock_t                         lock;
-	enum surfacegen5_ec_receiver_state state;
-	u8                                 cmd_len;
+	// TODO
 };
 
 struct surfacegen5_ec {
@@ -128,9 +132,7 @@ static struct surfacegen5_ec surfacegen5_ec = {
 		.ptr  = NULL,
 	},
 	.receiver = {
-		.lock    = __SPIN_LOCK_UNLOCKED(surfacegen5_ec.receiver.lock),
-		.state   = SG5_RCV_DISCARD,
-		.cmd_len = 0,
+		// TODO
 	},
 };
 
@@ -307,6 +309,9 @@ inline static int surfacegen5_ssh_writer_flush(struct serdev_device *serdev,
 	size_t len = writer->ptr - writer->data;
 	int status;
 
+	print_hex_dump(KERN_INFO, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	               writer->data, writer->ptr - writer->data, false);
+
 	status = serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
 	if (!status) {
 		serdev_device_write_flush(serdev);
@@ -324,9 +329,6 @@ inline static void surfacegen5_ssh_writer_reset(struct surfacegen5_ec_writer *wr
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
 {
 	struct surfacegen5_ec *ec;
-	unsigned long flags;
-	int retry;
-	int response_seq;
 	int status = 0;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
@@ -346,65 +348,15 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	surfacegen5_ssh_write_hdr(&ec->writer, rqst, ec);
 	surfacegen5_ssh_write_cmd(&ec->writer, rqst, ec);
 
-	print_hex_dump(KERN_INFO, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
-	               ec->writer.data, ec->writer.ptr - ec->writer.data,
-		       false);
+	// TODO
 
-	// reset receiver
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	ec->receiver.state = SG5_RCV_SYNC;
-	// TODO: clear buffer
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+	// build ACK message
+	surfacegen5_ssh_writer_reset(&ec->writer);
+	surfacegen5_ssh_write_syn(&ec->writer);
+	surfacegen5_ssh_write_ack(&ec->writer, 0 /* TODO */);
 
-	// write command message, retry if necessary
-	retry = SG5_RETRY;
-	do {
-		status = surfacegen5_ssh_writer_flush(ec->serdev, &ec->writer);
-		if (status) {
-			printk(RQST_ERR "error writing request: %d\n", status);
-			goto rqst_out_release;
-		}
+	// TODO
 
-		// read ACK/RETRY
-		// TODO: read ack/retry
-
-		// TODO: if ack
-		retry = 0;
-		// TODO: else retry -= 1
-
-	} while (retry > 0);
-
-	// increment counters
-	ec->counter.seq += 1;
-	ec->counter.pld += 1;
-
-	// if we expect a response/payload, read it
-	if (rqst->snc) {
-		response_seq = 0;	// TODO: read response
-
-		// build ACK message
-		surfacegen5_ssh_writer_reset(&ec->writer);
-		surfacegen5_ssh_write_syn(&ec->writer);
-		surfacegen5_ssh_write_ack(&ec->writer, response_seq);
-
-		// send ACK message
-		status = surfacegen5_ssh_writer_flush(ec->serdev, &ec->writer);
-		if (status) {
-			printk(RQST_ERR "error writing ACK: %d\n", status);
-			goto rqst_out_release;
-		}
-
-	} else {
-		result->len = 0;
-	}
-
-	// set receiver to discard
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	ec->receiver.state = SG5_RCV_DISCARD;
-	// TODO: clear buffer
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
-
-rqst_out_release:
 	surfacegen5_ec_release(ec);
 	return status;
 }
@@ -413,169 +365,21 @@ rqst_out_release:
 inline static bool surfacegen5_ssh_validate_crc(const u8 *begin, const u8 *end)
 {
 	u16 crc = surfacegen5_ssh_crc(begin, end - begin);
-	return (end[0] == (crc & 0xff)) && (end[1] == (crc > 8));
+	return (end[0] == (crc & 0xff)) && (end[1] == (crc >> 8));
 }
 
-inline static int surfacegen5_ssh_receive_sync(struct surfacegen5_ec_receiver *rcv,
-                                               const u8 *begin, const u8 *end)
-{
-	int avail = end - begin;
-
-	if (avail < SG5_BYTELEN_SYNC) {
-		return 0;
-	}
-
-	if (begin[0] == 0xaa && begin[1] == 0x55) {
-		// TODO: publish
-
-		rcv->state = SG5_RCV_CTRL;
-		return SG5_BYTELEN_SYNC;
-	}
-
-	return -avail;		// skip everything
-}
-
-inline static int surfacegen5_ssh_receive_ctrl(struct surfacegen5_ec_receiver *rcv,
-                                               const u8 *begin, const u8 *end)
-{
-	struct surfacegen5_frame_ctrl *ctrl = (struct surfacegen5_frame_ctrl *)begin;
-	enum surfacegen5_ec_receiver_state next;
-	int avail = end - begin;
-
-	if (avail < SG5_BYTELEN_CTRL + SG5_BYTELEN_CRC) {
-		return 0;
-	}
-
-	// check control-frame type
-	if (ctrl->type == SG5_FRAMETYPE_ACK || ctrl->type == SG5_FRAMETYPE_RETRY) {
-		next = SG5_RCV_TERM;
-
-	} else if (ctrl->type == SG5_FRAMETYPE_CMD) {
-		next = SG5_RCV_CMD;
-
-		// set length of following command-frame
-		if (ctrl->len >= SG5_BYTELEN_CMDFRAME) {
-			rcv->cmd_len = ctrl->len;
-		} else {
-			return -(SG5_BYTELEN_CTRL + SG5_BYTELEN_CRC);
-		}
-
-	} else {		// unknown frame type
-		return -avail;	// skip everything
-	}
-
-	// check crc
-	if (surfacegen5_ssh_validate_crc(begin, begin + SG5_BYTELEN_CTRL)) {
-		// TODO: publish
-
-		rcv->state = next;
-		return SG5_BYTELEN_CTRL + SG5_BYTELEN_CRC;
-	} else {
-		return -(SG5_BYTELEN_CTRL + SG5_BYTELEN_CRC);
-	}
-}
-
-inline static int surfacegen5_ssh_receive_term(struct surfacegen5_ec_receiver *rcv,
-                                               const u8 *begin, const u8 *end)
-{
-	int avail = end - begin;
-
-	if (avail < SG5_BYTELEN_TERM) {
-		return 0;
-	}
-
-	if (begin[0] == 0xff && begin[1] == 0xff) {
-		// TODO: publish & notify
-
-		rcv->state = SG5_RCV_SYNC;
-		return SG5_BYTELEN_TERM;
-	}
-
-	return -avail;		// skip everything
-}
-
-inline static int surfacegen5_ssh_receive_cmd(struct surfacegen5_ec_receiver *rcv,
-                                              const u8 *begin, const u8 *end)
-{
-	int avail = end - begin;
-
-	// length is provided via previous control frame
-	if (avail < rcv->cmd_len + SG5_BYTELEN_CRC) {
-		return 0;
-	}
-
-	if (begin[0] != SG5_FRAMETYPE_CMD) {
-		return -avail;	// not a command frame: skip everything
-	}
-
-	if (surfacegen5_ssh_validate_crc(begin, begin + rcv->cmd_len)) {
-		// TODO: publish & notify
-
-		rcv->state = SG5_RCV_DISCARD;	// we're finished
-		return rcv->cmd_len + SG5_BYTELEN_CRC;
-	} else {
-		rcv->state = SG5_RCV_CTRL;	// no independend command frames
-		return -(rcv->cmd_len + SG5_BYTELEN_CRC);
-	}
-}
 
 static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
                                        const unsigned char *buf, size_t size)
 {
 	struct surfacegen5_ec_receiver *rcv = serdev_device_get_drvdata(serdev);
-	unsigned long flags;
-	const u8 *begin = buf;
-	const u8 *end = buf + size;
-	int n;
 
 	dev_info(&serdev->dev, "received buffer (size: %zu)\n", size);
 	print_hex_dump(KERN_INFO, "recv: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
-	spin_lock_irqsave(&rcv->lock, flags);
-	while (begin < end) {
-		switch (rcv->state) {
-		case SG5_RCV_SYNC:
-			n = surfacegen5_ssh_receive_sync(rcv, begin, end);
-			break;
+	// TODO
 
-		case SG5_RCV_CTRL:
-			n = surfacegen5_ssh_receive_ctrl(rcv, begin, end);
-			break;
-
-		case SG5_RCV_TERM:
-			n = surfacegen5_ssh_receive_term(rcv, begin, end);
-			break;
-
-		case SG5_RCV_CMD:
-			n = surfacegen5_ssh_receive_cmd(rcv, begin, end);
-			break;
-
-		case SG5_RCV_DISCARD:
-			n = end - begin;
-			break;
-
-		default:
-			unreachable();
-		}
-
-		if (n > 0) {		// processed n bytes
-			begin += n;
-
-		} else if (n == 0) {	// not enough bytes to process yet
-			break;
-
-		} else {		// invaild frame
-			dev_err(&serdev->dev, "received invalid frame\n");
-			print_hex_dump(KERN_ERR, "mem: ", DUMP_PREFIX_OFFSET,
-			               16, 1, begin, end - begin, false);
-
-			begin -= n;	// n is the negative number of bytes to skip
-			break;
-		}
-	}
-	spin_unlock_irqrestore(&rcv->lock, flags);
-
-	return begin - buf;
+	return size;
 }
 
 
@@ -644,8 +448,7 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
-	unsigned long flags;
-	u8 *buf;
+	u8 *write_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
 
@@ -660,14 +463,13 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
 	                             surfacegen5_ssh_setup_from_resource, serdev);
 	if (ACPI_FAILURE(status)) {
-		serdev_device_close(serdev);
-		return status;
+		goto err_probe_alloc_write;
 	}
 
-	buf = kzalloc(SG5_MAX_WRITE, GFP_KERNEL);
-	if (!buf) {
-		serdev_device_close(serdev);
-		return -ENOMEM;
+	write_buf = kzalloc(SG5_MAX_WRITE, GFP_KERNEL);
+	if (!write_buf) {
+		status = -ENOMEM;
+		goto err_probe_alloc_write;
 	}
 
 	// set up EC
@@ -675,17 +477,16 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	if (ec->state != SG5_EC_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
 		surfacegen5_ec_release(ec);
-		return -EBUSY;		// already initialized via other device
+
+		status = -EBUSY;
+		goto err_probe_busy;
 	}
 
 	ec->serdev      = serdev;
-	ec->writer.data = buf;
-	ec->writer.ptr  = buf;
+	ec->writer.data = write_buf;
+	ec->writer.ptr  = write_buf;
 
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	ec->receiver.state = SG5_RCV_DISCARD;
-	// TODO: setup receiver
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+	// TODO: init receiver
 
 	ec->state = SG5_EC_INITIALIZED;
 
@@ -693,12 +494,17 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	surfacegen5_ec_release(ec);
 
 	return 0;
+
+err_probe_busy:
+	kfree(write_buf);
+err_probe_alloc_write:
+	serdev_device_close(serdev);
+	return status;
 }
 
 static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
-	unsigned long flags;
 
 	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_remove\n");
 
@@ -711,10 +517,7 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 		ec->writer.data = NULL;
 		ec->writer.ptr  = NULL;
 
-		spin_lock_irqsave(&ec->receiver.lock, flags);
-		ec->receiver.state = SG5_RCV_DISCARD;
 		// TODO: free receiver
-		spin_unlock_irqrestore(&ec->receiver.lock, flags);
 	}
 	surfacegen5_ec_release(ec);
 
