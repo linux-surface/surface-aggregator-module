@@ -12,13 +12,15 @@
 #include "surfacegen5_acpi_notify_ec.h"
 
 
-#define RQST_PREFIX	"surfacegen5_ec_rqst: "
-#define RQST_INFO	KERN_INFO RQST_PREFIX
-#define RQST_WARN	KERN_WARNING RQST_PREFIX
-#define RQST_ERR	KERN_ERR RQST_PREFIX
+#define RQST_PREFIX			"surfacegen5_ec_rqst: "
+#define RQST_INFO			KERN_INFO RQST_PREFIX
+#define RQST_WARN			KERN_WARNING RQST_PREFIX
+#define RQST_ERR			KERN_ERR RQST_PREFIX
 
-#define RECV_PREFIX	"surfacegen5_ssh_receive_buf: "
-#define RECV_WARN	KERN_WARNING RECV_PREFIX
+#define RECV_PREFIX			"surfacegen5_ssh_receive_buf: "
+#define RECV_INFO			KERN_INFO RECV_PREFIX
+#define RECV_WARN			KERN_WARNING RECV_PREFIX
+#define RECV_ERR			KERN_ERR RECV_PREFIX
 
 #define SG5_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
@@ -37,14 +39,33 @@
 	+ SG5_BYTELEN_CRC              \
 )
 
-#define SG5_WRITE_TIMEOUT	msecs_to_jiffies(1000)
-#define SG5_READ_TIMEOUT	msecs_to_jiffies(1000)
-#define SG5_RETRY		3
+#define SG5_MSG_LEN_CTRL (             \
+	  SG5_BYTELEN_SYNC             \
+      	+ SG5_BYTELEN_CTRL             \
+	+ SG5_BYTELEN_CRC              \
+	+ SG5_BYTELEN_TERM             \
+)
 
-#define SG5_FRAMETYPE_CMD	0x80
-#define SG5_FRAMETYPE_ACK	0x40
-#define SG5_FRAMETYPE_RETRY	0x04
+#define SG5_MSG_LEN_CMD_BASE (              \
+	  SG5_BYTELEN_SYNC             \
+      	+ SG5_BYTELEN_CTRL             \
+	+ SG5_BYTELEN_CRC              \
+	+ SG5_BYTELEN_CRC              \
+)	// without payload and command-frame
 
+#define SG5_WRITE_TIMEOUT		msecs_to_jiffies(1000)
+#define SG5_READ_TIMEOUT		msecs_to_jiffies(1000)
+#define SG5_RETRY			3
+
+#define SG5_FRAME_TYPE_CMD		0x80
+#define SG5_FRAME_TYPE_ACK		0x40
+#define SG5_FRAME_TYPE_RETRY		0x04
+
+#define SG5_FRAME_OFFS_CTRL		SG5_BYTELEN_SYNC
+#define SG5_FRAME_OFFS_CTRL_CRC		(SG5_FRAME_OFFS_CTRL + SG5_BYTELEN_CTRL)
+#define SG5_FRAME_OFFS_TERM		(SG5_FRAME_OFFS_CTRL_CRC + SG5_BYTELEN_CRC)
+#define SG5_FRAME_OFFS_CMD		SG5_FRAME_OFFS_TERM	// either TERM or CMD
+#define SG5_FRAME_OFFS_CMD_PLD		(SG5_FRAME_OFFS_CMD + SG5_BYTELEN_CMDFRAME)
 
 /*
  * Sync:			aa 55
@@ -94,14 +115,6 @@ struct surfacegen5_ec_counters {
 struct surfacegen5_ec_writer {
 	u8 *data;
 	u8 *ptr;
-};
-
-enum surfacegen5_ec_receiver_state {
-	SG5_RCV_DISCARD,
-	SG5_RCV_SYNC,
-	SG5_RCV_CTRL,
-	SG5_RCV_TERM,
-	SG5_RCV_CMD,
 };
 
 struct surfacegen5_ec_receiver {
@@ -253,7 +266,7 @@ inline static void surfacegen5_ssh_write_hdr(struct surfacegen5_ec_writer *write
 	struct surfacegen5_frame_ctrl *hdr = (struct surfacegen5_frame_ctrl *)writer->ptr;
 	u8 *begin = writer->ptr;
 
-	hdr->type = SG5_FRAMETYPE_CMD;
+	hdr->type = SG5_FRAME_TYPE_CMD;
 	hdr->len  = SG5_BYTELEN_CMDFRAME + rqst->cdl;	// without CRC
 	hdr->pad  = 0x00;
 	hdr->seq  = ec->counter.seq;
@@ -272,7 +285,7 @@ inline static void surfacegen5_ssh_write_cmd(struct surfacegen5_ec_writer *write
 	u8 cnt_lo = ec->counter.pld & 0xFF;
 	u8 cnt_hi = ec->counter.pld >> 8;
 
-	cmd->type     = SG5_FRAMETYPE_CMD;
+	cmd->type     = SG5_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
 	cmd->unknown1 = 0x01;
 	cmd->unknown2 = 0x00;
@@ -292,7 +305,7 @@ inline static void surfacegen5_ssh_write_ack(struct surfacegen5_ec_writer *write
 	struct surfacegen5_frame_ctrl *ack = (struct surfacegen5_frame_ctrl *)writer->ptr;
 	u8 *begin = writer->ptr;
 
-	ack->type = SG5_FRAMETYPE_ACK;
+	ack->type = SG5_FRAME_TYPE_ACK;
 	ack->len  = 0x00;
 	ack->pad  = 0x00;
 	ack->seq  = seq;
@@ -362,24 +375,148 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 }
 
 
-inline static bool surfacegen5_ssh_validate_crc(const u8 *begin, const u8 *end)
+inline static bool surfacegen5_ssh_is_valid_syn(const u8 *ptr)
+{
+	return ptr[0] == 0xaa && ptr[1] == 0x55;
+}
+
+inline static bool surfacegen5_ssh_is_valid_term(const u8 *ptr)
+{
+	return ptr[0] == 0xff && ptr[1] == 0xff;
+}
+
+inline static bool surfacegen5_ssh_is_valid_crc(const u8 *begin, const u8 *end)
 {
 	u16 crc = surfacegen5_ssh_crc(begin, end - begin);
 	return (end[0] == (crc & 0xff)) && (end[1] == (crc >> 8));
 }
 
 
+static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
+                                            const unsigned char *buf, size_t size)
+{
+	const struct surfacegen5_frame_ctrl *ctrl;
+
+	const u8 *ctrl_begin = buf + SG5_FRAME_OFFS_CTRL;
+	const u8 *ctrl_end   = buf + SG5_FRAME_OFFS_CTRL_CRC;
+
+	ctrl = (const struct surfacegen5_frame_ctrl *)(ctrl_begin);
+
+	// actual length check
+	if (size < SG5_MSG_LEN_CTRL) {
+		return 0;			// need more bytes
+	}
+
+	// validate TERM
+	if (!surfacegen5_ssh_is_valid_term(buf + SG5_FRAME_OFFS_TERM)) {
+		printk(RECV_ERR "invalid end of message\n");
+		return size;			// discard everything
+	}
+
+	// validate CRC
+	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
+		printk(RECV_ERR "invalid checksum\n");
+		return SG5_MSG_LEN_CTRL;	// only discard message
+	}
+
+	// we now have a valid ACK/RETRY message
+	printk(RECV_INFO "valid control message received (type: 0x%02x)\n", ctrl->type);
+
+	// TODO: handle ack/retry message
+
+	return SG5_MSG_LEN_CTRL;		// handled message
+}
+
+static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
+                                           const unsigned char *buf, size_t size)
+{
+	const struct surfacegen5_frame_ctrl *ctrl;
+	const struct surfacegen5_frame_cmd *cmd;
+
+	const u8 *ctrl_begin     = buf + SG5_FRAME_OFFS_CTRL;
+	const u8 *ctrl_end       = buf + SG5_FRAME_OFFS_CTRL_CRC;
+	const u8 *cmd_begin      = buf + SG5_FRAME_OFFS_CMD;
+	const u8 *cmd_begin_pld  = buf + SG5_FRAME_OFFS_CMD_PLD;
+	const u8 *cmd_end;
+
+	size_t msg_len;
+
+	ctrl = (const struct surfacegen5_frame_ctrl *)(ctrl_begin);
+	cmd  = (const struct surfacegen5_frame_cmd  *)(cmd_begin);
+
+	// validate control-frame CRC
+	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
+		printk(RECV_ERR "invalid checksum\n");
+		/*
+		 * We can't be sure here if length is valid, thus
+		 * discard everything.
+		 */
+		return size;
+	}
+
+	// actual length check (ctrl->len contains command-frame but not crc)
+	msg_len = SG5_MSG_LEN_CMD_BASE + ctrl->len;
+	if (size < msg_len) {
+		return 0;			// need more bytes
+	}
+
+	cmd_end = cmd_begin + ctrl->len;
+
+	// validate command-frame type
+	if (cmd->type != SG5_FRAME_TYPE_CMD) {
+		printk(RECV_ERR "expected command frame type but got 0x%02x\n", cmd->type);
+		return size;			// discard everything
+	}
+
+	// validate command-frame CRC
+	if (!surfacegen5_ssh_is_valid_crc(cmd_begin, cmd_end)) {
+		printk(RECV_ERR "invalid checksum\n");
+		return msg_len;			// only discard message
+	}
+
+	// we now have a valid command message
+	printk(RECV_INFO "valid command message received\n");
+
+	// TODO: handle command message
+
+	return msg_len;				// handled message
+}
+
 static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
                                        const unsigned char *buf, size_t size)
 {
 	struct surfacegen5_ec_receiver *rcv = serdev_device_get_drvdata(serdev);
+	struct surfacegen5_frame_ctrl *ctrl;
 
 	dev_info(&serdev->dev, "received buffer (size: %zu)\n", size);
 	print_hex_dump(KERN_INFO, "recv: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
-	// TODO
+	// we need at least a control frame to check what to do
+	if (size < (SG5_BYTELEN_SYNC + SG5_BYTELEN_CTRL)) {
+		return 0;		// need more bytes
+	}
 
-	return size;
+	// make sure we're actually at the start of a new message
+	if (!surfacegen5_ssh_is_valid_syn(buf)) {
+		printk(RECV_ERR "invalid start of message\n");
+		return size;		// discard everything
+	}
+
+	// handle individual message types seperately
+	ctrl = (struct surfacegen5_frame_ctrl *)(buf + SG5_FRAME_OFFS_CTRL);
+
+	switch (ctrl->type) {
+	case SG5_FRAME_TYPE_ACK:
+	case SG5_FRAME_TYPE_RETRY:
+		return surfacegen5_ssh_receive_msg_ctrl(rcv, buf, size);
+
+	case SG5_FRAME_TYPE_CMD:
+		return surfacegen5_ssh_receive_msg_cmd(rcv, buf, size);
+
+	default:
+		printk(RECV_WARN "unknown frame type 0x%02x\n", ctrl->type);
+		return size;		// discard everything
+	}
 }
 
 
