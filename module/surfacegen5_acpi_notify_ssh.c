@@ -315,9 +315,16 @@ inline static void surfacegen5_ssh_write_ack(struct surfacegen5_ec_writer *write
 	surfacegen5_ssh_write_crc(writer, begin, writer->ptr - begin);
 }
 
-inline static int surfacegen5_ssh_writer_flush(struct serdev_device *serdev,
-                                               struct surfacegen5_ec_writer *writer)
+inline static void surfacegen5_ssh_writer_reset(struct surfacegen5_ec_writer *writer)
 {
+	writer->ptr = writer->data;
+}
+
+inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
+{
+	struct surfacegen5_ec_writer *writer = &ec->writer;
+	struct serdev_device *serdev = ec->serdev;
+
 	size_t len = writer->ptr - writer->data;
 	int status;
 
@@ -330,11 +337,6 @@ inline static int surfacegen5_ssh_writer_flush(struct serdev_device *serdev,
 	}
 
 	return status;
-}
-
-inline static void surfacegen5_ssh_writer_reset(struct surfacegen5_ec_writer *writer)
-{
-	writer->ptr = writer->data;
 }
 
 inline static void surfacegen5_ssh_write_msg_cmd(struct surfacegen5_ec *ec,
@@ -373,7 +375,10 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 
 	// TODO
 	surfacegen5_ssh_write_msg_cmd(ec, rqst);
-	surfacegen5_ssh_write_msg_ack(ec, 0);
+	status = surfacegen5_ssh_writer_flush(ec);
+
+	// surfacegen5_ssh_write_msg_ack(ec, 0);
+	// status = surfacegen5_ssh_writer_flush(ec);
 
 	surfacegen5_ec_release(ec);
 	return status;
