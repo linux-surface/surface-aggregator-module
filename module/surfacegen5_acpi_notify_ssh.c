@@ -46,7 +46,7 @@
 	+ SG5_BYTELEN_TERM             \
 )
 
-#define SG5_MSG_LEN_CMD_BASE (              \
+#define SG5_MSG_LEN_CMD_BASE (         \
 	  SG5_BYTELEN_SYNC             \
       	+ SG5_BYTELEN_CTRL             \
 	+ SG5_BYTELEN_CRC              \
@@ -254,7 +254,7 @@ inline static void surfacegen5_ssh_write_ter(struct surfacegen5_ec_writer *write
 }
 
 inline static void surfacegen5_ssh_write_buf(struct surfacegen5_ec_writer *writer,
-                                            u8 *in, size_t len)
+                                             u8 *in, size_t len)
 {
 	writer->ptr = memcpy(writer->ptr, in, len) + len;
 }
@@ -385,7 +385,7 @@ inline static bool surfacegen5_ssh_is_valid_syn(const u8 *ptr)
 	return ptr[0] == 0xaa && ptr[1] == 0x55;
 }
 
-inline static bool surfacegen5_ssh_is_valid_term(const u8 *ptr)
+inline static bool surfacegen5_ssh_is_valid_ter(const u8 *ptr)
 {
 	return ptr[0] == 0xff && ptr[1] == 0xff;
 }
@@ -413,7 +413,7 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 	}
 
 	// validate TERM
-	if (!surfacegen5_ssh_is_valid_term(buf + SG5_FRAME_OFFS_TERM)) {
+	if (!surfacegen5_ssh_is_valid_ter(buf + SG5_FRAME_OFFS_TERM)) {
 		printk(RECV_ERR "invalid end of message\n");
 		return size;			// discard everything
 	}
