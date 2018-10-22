@@ -313,7 +313,6 @@ inline static void surfacegen5_ssh_write_ack(struct surfacegen5_ec_writer *write
 	writer->ptr += sizeof(*ack);
 
 	surfacegen5_ssh_write_crc(writer, begin, writer->ptr - begin);
-	surfacegen5_ssh_write_ter(writer);
 }
 
 inline static int surfacegen5_ssh_writer_flush(struct serdev_device *serdev,
@@ -338,6 +337,23 @@ inline static void surfacegen5_ssh_writer_reset(struct surfacegen5_ec_writer *wr
 	writer->ptr = writer->data;
 }
 
+inline static void surfacegen5_ssh_write_msg_cmd(struct surfacegen5_ec *ec,
+                                                 struct surfacegen5_rqst *rqst)
+{
+	surfacegen5_ssh_writer_reset(&ec->writer);
+	surfacegen5_ssh_write_syn(&ec->writer);
+	surfacegen5_ssh_write_hdr(&ec->writer, rqst, ec);
+	surfacegen5_ssh_write_cmd(&ec->writer, rqst, ec);
+}
+
+inline static void surfacegen5_ssh_write_msg_ack(struct surfacegen5_ec *ec, u8 seq)
+{
+	surfacegen5_ssh_writer_reset(&ec->writer);
+	surfacegen5_ssh_write_syn(&ec->writer);
+	surfacegen5_ssh_write_ack(&ec->writer, seq);
+	surfacegen5_ssh_write_ter(&ec->writer);
+}
+
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
 {
@@ -355,20 +371,9 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 		return -ENXIO;
 	}
 
-	// build request message
-	surfacegen5_ssh_writer_reset(&ec->writer);
-	surfacegen5_ssh_write_syn(&ec->writer);
-	surfacegen5_ssh_write_hdr(&ec->writer, rqst, ec);
-	surfacegen5_ssh_write_cmd(&ec->writer, rqst, ec);
-
 	// TODO
-
-	// build ACK message
-	surfacegen5_ssh_writer_reset(&ec->writer);
-	surfacegen5_ssh_write_syn(&ec->writer);
-	surfacegen5_ssh_write_ack(&ec->writer, 0 /* TODO */);
-
-	// TODO
+	surfacegen5_ssh_write_msg_cmd(ec, rqst);
+	surfacegen5_ssh_write_msg_ack(ec, 0);
 
 	surfacegen5_ec_release(ec);
 	return status;
