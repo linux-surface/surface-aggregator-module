@@ -96,8 +96,8 @@ struct surfacegen5_frame_cmd {
 	u8 unknown1;
 	u8 unknown2;
 	u8 iid;
-	u8 cnt_lo;
-	u8 cnt_hi;
+	u8 rqid_lo;		// id for request/response matching (low byte)
+	u8 rqid_hi;		// id for request/response matching (high byte)
 	u8 cid;
 } __packed;
 
@@ -108,8 +108,8 @@ enum surfacegen5_ec_state {
 };
 
 struct surfacegen5_ec_counters {
-	u8  seq;
-	u16 pld;
+	u8  seq;		// control sequence id
+	u16 rqid;		// id for request/response matching
 };
 
 struct surfacegen5_ec_writer {
@@ -137,8 +137,8 @@ static struct surfacegen5_ec surfacegen5_ec = {
 	.state  = SG5_EC_UNINITIALIZED,
 	.serdev = NULL,
 	.counter = {
-		.seq = 0,
-		.pld = 0,
+		.seq  = 0,
+		.rqid = 0,
 	},
 	.writer = {
 		.data = NULL,
@@ -282,16 +282,16 @@ inline static void surfacegen5_ssh_write_cmd(struct surfacegen5_ec_writer *write
 {
 	struct surfacegen5_frame_cmd *cmd = (struct surfacegen5_frame_cmd *)writer->ptr;
 	u8 *begin = writer->ptr;
-	u8 cnt_lo = ec->counter.pld & 0xFF;
-	u8 cnt_hi = ec->counter.pld >> 8;
+	u8 rqid_lo = ec->counter.rqid & 0xFF;
+	u8 rqid_hi = ec->counter.rqid >> 8;
 
 	cmd->type     = SG5_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
 	cmd->unknown1 = 0x01;
 	cmd->unknown2 = 0x00;
 	cmd->iid      = rqst->iid;
-	cmd->cnt_lo   = cnt_lo;
-	cmd->cnt_hi   = cnt_hi;
+	cmd->rqid_lo  = rqid_lo;
+	cmd->rqid_hi  = rqid_hi;
 	cmd->cid      = rqst->cid;
 
 	writer->ptr += sizeof(*cmd);
