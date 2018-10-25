@@ -117,8 +117,19 @@ struct surfacegen5_ec_writer {
 	u8 *ptr;
 };
 
+enum surfacegen5_ec_receiver_state {
+	SG5_RCV_DISCARD,
+	SG5_RCV_CONTROL,
+	SG5_RCV_COMMAND,
+};
+
 struct surfacegen5_ec_receiver {
-	// TODO
+	enum surfacegen5_ec_receiver_state state;
+	struct {
+		bool pld;
+		u8   seq;
+		u16  rqid;
+	} expect;
 };
 
 struct surfacegen5_ec {
@@ -145,7 +156,8 @@ static struct surfacegen5_ec surfacegen5_ec = {
 		.ptr  = NULL,
 	},
 	.receiver = {
-		// TODO
+		.state = SG5_RCV_DISCARD,
+		.expect = {},
 	},
 };
 
@@ -429,10 +441,27 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 		return SG5_MSG_LEN_CTRL;	// only discard message
 	}
 
-	// we now have a valid ACK/RETRY message
+	// check if we expect the message
+	if (rcv->state != SG5_RCV_CONTROL) {
+		return size;			// discard message
+	}
+
+	// check if it is for our request
+	if (ctrl->type == SG5_FRAME_TYPE_ACK && ctrl->seq != rcv->expect.seq) {
+		return size;		// discard message
+	}
+
+	// we now have a valid & expected ACK/RETRY message
 	printk(RECV_INFO "valid control message received (type: 0x%02x)\n", ctrl->type);
 
 	// TODO: handle ack/retry message
+
+	// update decoder state
+	if (ctrl->type == SG5_FRAME_TYPE_ACK) {
+		rcv->state = rcv->expect.pld
+			? SG5_RCV_COMMAND
+			: SG5_RCV_DISCARD;
+	}
 
 	return SG5_MSG_LEN_CTRL;		// handled message
 }
@@ -484,11 +513,22 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 		return msg_len;			// only discard message
 	}
 
-	// we now have a valid command message
-	printk(RECV_INFO "valid command message received\n");
+	// check if we expect the message
+	if (rcv->state != SG5_RCV_COMMAND) {
+		return msg_len;			// discard message
+	}
+
+	// check if response is for our request
+	if (rcv->expect.rqid != (cmd->rqid_lo | (cmd->rqid_hi << 8))) {
+		return msg_len;			// discard message
+	}
+
+	// we now have a valid & expected command message
+	printk(RECV_INFO "command message received\n");
 
 	// TODO: handle command message
 
+	rcv->state = SG5_RCV_DISCARD;
 	return msg_len;				// handled message
 }
 
