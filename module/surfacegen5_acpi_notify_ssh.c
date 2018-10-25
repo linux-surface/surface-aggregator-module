@@ -124,6 +124,8 @@ enum surfacegen5_ec_receiver_state {
 };
 
 struct surfacegen5_ec_receiver {
+	spinlock_t        lock;
+	struct completion signal;
 	enum surfacegen5_ec_receiver_state state;
 	struct {
 		bool pld;
@@ -156,6 +158,7 @@ static struct surfacegen5_ec surfacegen5_ec = {
 		.ptr  = NULL,
 	},
 	.receiver = {
+		.lock = __SPIN_LOCK_UNLOCKED(),
 		.state = SG5_RCV_DISCARD,
 		.expect = {},
 	},
@@ -368,6 +371,30 @@ inline static void surfacegen5_ssh_write_msg_ack(struct surfacegen5_ec *ec, u8 s
 	surfacegen5_ssh_write_ter(&ec->writer);
 }
 
+inline static void surfacegen5_ssh_receiver_restart(struct surfacegen5_ec *ec,
+                                                    struct surfacegen5_rqst *rqst)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	reinit_completion(&ec->receiver.signal);
+	ec->receiver.state = SG5_RCV_CONTROL;
+	ec->receiver.expect.pld  = rqst->snc;
+	ec->receiver.expect.seq  = ec->counter.seq;
+	ec->receiver.expect.rqid = ec->counter.rqid;
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+}
+
+inline static void surfacegen5_ssh_receiver_discard(struct surfacegen5_ec *ec)
+{
+	unsigned long flags;
+
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	ec->receiver.state = SG5_RCV_DISCARD;
+	// TODO: clear receive buffer
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+}
+
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
 {
@@ -385,12 +412,20 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 		return -ENXIO;
 	}
 
-	// TODO
+	// write command in buffer, we may need it multiple times
 	surfacegen5_ssh_write_msg_cmd(ec, rqst);
-	status = surfacegen5_ssh_writer_flush(ec);
 
-	// surfacegen5_ssh_write_msg_ack(ec, 0);
-	// status = surfacegen5_ssh_writer_flush(ec);
+//	surfacegen5_ssh_receiver_restart(ec, rqst);
+//
+//	status = surfacegen5_ssh_writer_flush(ec);
+//	wait_for_completion(&ec->receiver.signal);
+//
+//	surfacegen5_ssh_write_msg_ack(ec, 0);
+//
+//	status = surfacegen5_ssh_writer_flush(ec);
+//	wait_for_completion(&ec->receiver.signal);
+//
+//	surfacegen5_ssh_receiver_discard(ec);
 
 	surfacegen5_ec_release(ec);
 	return status;
@@ -443,12 +478,12 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 
 	// check if we expect the message
 	if (rcv->state != SG5_RCV_CONTROL) {
-		return size;			// discard message
+		return SG5_MSG_LEN_CTRL;	// discard message
 	}
 
 	// check if it is for our request
 	if (ctrl->type == SG5_FRAME_TYPE_ACK && ctrl->seq != rcv->expect.seq) {
-		return size;		// discard message
+		return SG5_MSG_LEN_CTRL;	// discard message
 	}
 
 	// we now have a valid & expected ACK/RETRY message
@@ -463,6 +498,7 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 			: SG5_RCV_DISCARD;
 	}
 
+	complete(&rcv->signal);
 	return SG5_MSG_LEN_CTRL;		// handled message
 }
 
@@ -529,6 +565,8 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 	// TODO: handle command message
 
 	rcv->state = SG5_RCV_DISCARD;
+
+	complete(&rcv->signal);
 	return msg_len;				// handled message
 }
 
@@ -537,6 +575,8 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 {
 	struct surfacegen5_ec_receiver *rcv = serdev_device_get_drvdata(serdev);
 	struct surfacegen5_frame_ctrl *ctrl;
+	unsigned long flags;
+	int ret;
 
 	dev_info(&serdev->dev, "received buffer (size: %zu)\n", size);
 	print_hex_dump(KERN_INFO, "recv: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
@@ -555,18 +595,22 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	// handle individual message types seperately
 	ctrl = (struct surfacegen5_frame_ctrl *)(buf + SG5_FRAME_OFFS_CTRL);
 
+	spin_lock_irqsave(&rcv->lock, flags);
 	switch (ctrl->type) {
 	case SG5_FRAME_TYPE_ACK:
 	case SG5_FRAME_TYPE_RETRY:
-		return surfacegen5_ssh_receive_msg_ctrl(rcv, buf, size);
+		ret = surfacegen5_ssh_receive_msg_ctrl(rcv, buf, size);
 
 	case SG5_FRAME_TYPE_CMD:
-		return surfacegen5_ssh_receive_msg_cmd(rcv, buf, size);
+		ret = surfacegen5_ssh_receive_msg_cmd(rcv, buf, size);
 
 	default:
 		printk(RECV_WARN "unknown frame type 0x%02x\n", ctrl->type);
-		return size;		// discard everything
+		ret = size;		// discard everything
 	}
+	spin_unlock_irqrestore(&rcv->lock, flags);
+
+	return ret;
 }
 
 
@@ -635,6 +679,7 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
+	unsigned long flags;
 	u8 *write_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
@@ -673,7 +718,10 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->writer.data = write_buf;
 	ec->writer.ptr  = write_buf;
 
-	// TODO: init receiver
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	init_completion(&ec->receiver.signal);
+	// TODO: init receive buffer
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 	ec->state = SG5_EC_INITIALIZED;
 
@@ -692,6 +740,7 @@ err_probe_alloc_write:
 static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
+	unsigned long flags;
 
 	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_remove\n");
 
@@ -704,7 +753,10 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 		ec->writer.data = NULL;
 		ec->writer.ptr  = NULL;
 
-		// TODO: free receiver
+		spin_lock_irqsave(&ec->receiver.lock, flags);
+		ec->receiver.state = SG5_RCV_DISCARD;
+		// TODO: free receive buffer
+		spin_unlock_irqrestore(&ec->receiver.lock, flags);
 	}
 	surfacegen5_ec_release(ec);
 
