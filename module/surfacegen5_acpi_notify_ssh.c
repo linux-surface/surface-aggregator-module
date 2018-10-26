@@ -528,7 +528,7 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 
 	// validate CRC
 	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		printk(RECV_ERR "invalid checksum\n");
+		printk(RECV_ERR "invalid checksum (ctrl)\n");
 		return SG5_MSG_LEN_CTRL;	// only discard message
 	}
 
@@ -597,7 +597,7 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 
 	// validate control-frame CRC
 	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		printk(RECV_ERR "invalid checksum\n");
+		printk(RECV_ERR "invalid checksum (cmd-ctrl)\n");
 		/*
 		 * We can't be sure here if length is valid, thus
 		 * discard everything.
@@ -621,7 +621,7 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 
 	// validate command-frame CRC
 	if (!surfacegen5_ssh_is_valid_crc(cmd_begin, cmd_end)) {
-		printk(RECV_ERR "invalid checksum\n");
+		printk(RECV_ERR "invalid checksum (cmd-pld)\n");
 		return msg_len;			// only discard message
 	}
 
