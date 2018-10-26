@@ -135,6 +135,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = result.len;
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
+		dev_info(ctx->dev, "surfacegen5_ec_rqst succeeded\n");
 
 	} else {
 		dev_err(ctx->dev, "surfacegen5_ec_rqst failed with error %d\n", status);
@@ -242,6 +243,8 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 	if (ACPI_FAILURE(status)) {
 		goto err_install_handler;
 	}
+
+	acpi_walk_dep_device_list(san);
 
 	return status;
 
