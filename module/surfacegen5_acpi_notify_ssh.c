@@ -7,7 +7,6 @@
 #include <linux/jiffies.h>
 #include <linux/kfifo.h>
 #include <linux/completion.h>
-#include <linux/delay.h>
 #include <asm/unaligned.h>
 
 #include "surfacegen5_acpi_notify_ec.h"
