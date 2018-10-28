@@ -6,7 +6,7 @@
 
 
 #define SG5_RQST_MSG 	"surfacegen5_ec_rqst: "
-#define SG5_RQST_RETRY 	5
+#define SG5_RQST_RETRY 	10
 
 
 struct surfacegen5_san_handler_context {
@@ -133,10 +133,12 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 	}
 
 	for (try = 0; try < SG5_RQST_RETRY; try++) {
+		if (try) {
+			dev_warn(ctx->dev, SG5_RQST_MSG "IO error occured, trying again\n");
+		}
+
 		status = surfacegen5_ec_rqst(&rqst, &result);
 		if (status != -EIO) break;
-
-		dev_warn(ctx->dev, SG5_RQST_MSG "IO error occured, trying again\n");
 	}
 
 	if (!status) {
