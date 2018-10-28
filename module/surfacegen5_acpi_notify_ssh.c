@@ -451,7 +451,7 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	// check if we ran out of tries?
 	if (try >= SG5_NUM_RETRY) {
 		printk(RQST_ERR "communication failed %d times, giving up\n", try);
-		status = 1;
+		status = -EIO;
 		goto ec_rqst_out;
 	}
 
@@ -467,7 +467,7 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 			result->len = packet.len;
 		} else {
 			printk(RQST_ERR "communication timed out\n");
-			status = 1;
+			status = -EIO;
 			goto ec_rqst_out;
 		}
 
