@@ -5,6 +5,10 @@
 #include "surfacegen5_acpi_notify_ec.h"
 
 
+#define SG5_RQST_MSG 	"surfacegen5_ec_rqst: "
+#define SG5_RQST_RETRY 	5
+
+
 struct surfacegen5_san_handler_context {
 	struct acpi_connection_info connection;
 	struct device *dev;
@@ -107,6 +111,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 	struct surfacegen5_rqst rqst = {};
 	struct surfacegen5_buf result = {};
 	int status = 0;
+	int try;
 
 	if (!gsb_rqst) {
 		return AE_OK;
@@ -127,7 +132,12 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 		return -ENOMEM;
 	}
 
-	status = surfacegen5_ec_rqst(&rqst, &result);
+	for (try = 0; try < SG5_RQST_RETRY; try++) {
+		status = surfacegen5_ec_rqst(&rqst, &result);
+		if (status != -EIO) break;
+
+		dev_warn(ctx->dev, SG5_RQST_MSG "IO error occured, trying again\n");
+	}
 
 	if (!status) {
 		buffer->status          = 0x00;
@@ -135,10 +145,10 @@ surfacegen5_san_rqst(struct surfacegen5_san_handler_context *ctx, struct gsb_buf
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = result.len;
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
-		dev_info(ctx->dev, "surfacegen5_ec_rqst succeeded\n");
+		dev_info(ctx->dev, SG5_RQST_MSG "succeeded\n");
 
 	} else {
-		dev_err(ctx->dev, "surfacegen5_ec_rqst failed with error %d\n", status);
+		dev_err(ctx->dev, SG5_RQST_MSG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
 		buffer->data.out.status = 0x01;		// indicate _SSH error
