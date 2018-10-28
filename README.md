@@ -15,6 +15,8 @@ CONFIG_SERIAL_DEV_BUS=y
 CONFIG_SERIAL_DEV_CTRL_TTYPORT=y
 ```
 
+There is a pre-compiled kernel available [here][prebuilt-linux-surface].
+
 If you have all the prequisites, you can
 
 ### Build/Test the module
@@ -28,3 +30,4 @@ If you want to permanently install the module (or ensure it is loaded during boo
 To uninstall it, run `make dkms-uninstall`.
 
 [patches-linux-surface]: https://github.com/qzed/linux-surface/tree/master/patches/4.18
+[prebuilt-linux-surface]: https://github.com/qzed/linux-surface/releases/tag/v4.18.16-pre1
