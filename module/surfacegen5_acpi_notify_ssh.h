@@ -1,5 +1,5 @@
-#ifndef _SURFACEGEN5_ACPI_NOTIFY_EC_H
-#define _SURFACEGEN5_ACPI_NOTIFY_EC_H
+#ifndef _SURFACEGEN5_ACPI_NOTIFY_SSH_H
+#define _SURFACEGEN5_ACPI_NOTIFY_SSH_H
 
 
 /*
@@ -34,4 +34,4 @@ int surfacegen5_ec_consumer_remove(struct device *consumer);
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
 
-#endif /* _SURFACEGEN5_ACPI_NOTIFY_EC_H */
+#endif /* _SURFACEGEN5_ACPI_NOTIFY_SSH_H */

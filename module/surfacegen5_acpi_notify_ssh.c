@@ -9,7 +9,7 @@
 #include <linux/completion.h>
 #include <asm/unaligned.h>
 
-#include "surfacegen5_acpi_notify_ec.h"
+#include "surfacegen5_acpi_notify_ssh.h"
 
 
 #define RQST_PREFIX			"surfacegen5_ec_rqst: "

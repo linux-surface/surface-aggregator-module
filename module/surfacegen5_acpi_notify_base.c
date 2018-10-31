@@ -6,6 +6,7 @@
 
 extern struct serdev_device_driver surfacegen5_acpi_notify_ssh;
 extern struct platform_driver surfacegen5_acpi_notify_san;
+extern struct platform_driver surfacegen5_acpi_notify_shps;
 
 
 int __init surfacegen5_acpi_notify_init(void)
@@ -18,8 +19,13 @@ int __init surfacegen5_acpi_notify_init(void)
 	status = platform_driver_register(&surfacegen5_acpi_notify_san);
 	if (status) goto err_init_san;
 
+	status = platform_driver_register(&surfacegen5_acpi_notify_shps);
+	if (status) goto err_init_shps;
+
 	return 0;
 
+err_init_shps:
+	platform_driver_unregister(&surfacegen5_acpi_notify_san);
 err_init_san:
 	serdev_device_driver_unregister(&surfacegen5_acpi_notify_ssh);
 err_init_ssh:
@@ -28,6 +34,7 @@ err_init_ssh:
 
 void __exit surfacegen5_acpi_notify_exit(void)
 {
+	platform_driver_unregister(&surfacegen5_acpi_notify_shps);
 	platform_driver_unregister(&surfacegen5_acpi_notify_san);
 	serdev_device_driver_unregister(&surfacegen5_acpi_notify_ssh);
 }

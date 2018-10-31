@@ -2,11 +2,20 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
-#include "surfacegen5_acpi_notify_ec.h"
+#include "surfacegen5_acpi_notify_ssh.h"
+#include "surfacegen5_acpi_notify_san.h"
 
+#define SG5_RQST_RETRY          10
 
-#define SG5_RQST_MSG 	"surfacegen5_ec_rqst: "
-#define SG5_RQST_RETRY 	10
+#define SG5_RQST_MSG            "surfacegen5_ec_rqst: "
+#define SG5_NOTIFY_PWR_MSG      "surfacegen5_acpi_notify_power_event: "
+
+#define SG5_SAN_PATH            "\\_SB._SAN"
+#define SG5_SAN_DSM_REVISION    0
+
+static const guid_t SG5_SAN_DSM_UUID =
+	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
+	          0x48, 0x7c, 0x91, 0xab, 0x3c);
 
 
 struct surfacegen5_san_handler_context {
@@ -55,6 +64,40 @@ struct gsb_buffer {
 	u8 len;				// GSB AttribRawProcess length
 	union gsb_buffer_data data;
 } __packed;
+
+
+int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
+{
+	acpi_handle san;
+	union acpi_object *obj;
+	int status;
+
+	if (event < _surfacegen5_pwr_event_MIN || event > _surfacegen5_pwr_event_MAX) {
+		return -EINVAL;
+	}
+
+	status = acpi_get_handle(NULL, SG5_SAN_PATH, &san);
+	if (ACPI_FAILURE(status)) {
+		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "failed to get _SAN handle\n");
+		return status;
+	}
+
+	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
+	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
+
+	if (IS_ERR_OR_NULL(obj)) {
+		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "failed to evaluate _DSM\n");
+		return obj ? PTR_ERR(obj) : -EFAULT;
+	}
+
+	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
+		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "got unexpected result from _DSM\n");
+		return -EIO;
+	}
+
+	ACPI_FREE(obj);
+	return 0;
+}
 
 
 static struct gsb_data_rqsx *surfacegen5_san_validate_rqsx(
