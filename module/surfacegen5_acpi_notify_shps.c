@@ -171,6 +171,8 @@ static int surfacegen5_acpi_notify_shps_remove(struct platform_device *pdev)
 	dev_info(&pdev->dev, "surfacegen5_acpi_notify_shps_remove\n");
 
 	sg5_base_state_irq_free(&pdev->dev, data);
+	kfree(data);
+
 	acpi_dev_remove_driver_gpios(shps_dev);
 	return 0;
 }
