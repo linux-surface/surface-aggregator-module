@@ -459,10 +459,16 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	ec->counter.rqid += 1;
 
 	// get command response/payload
-	if (rqst->snc) {
+	if (rqst->snc && result) {
 		rem = wait_for_completion_timeout(&ec->receiver.signal, SG5_READ_TIMEOUT);
 		if (rem) {
 			kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
+
+			if (result->cap < packet.len) {
+				status = -EINVAL;
+				goto ec_rqst_out;
+			}
+
 			kfifo_out(&ec->receiver.fifo, result->data, packet.len);
 			result->len = packet.len;
 		} else {
