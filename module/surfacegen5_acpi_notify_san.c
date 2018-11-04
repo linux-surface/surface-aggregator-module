@@ -1,5 +1,6 @@
 #include <linux/acpi.h>
 #include <linux/kernel.h>
+#include <linux/delay.h>
 #include <linux/platform_device.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
@@ -16,6 +17,15 @@
 static const guid_t SG5_SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 	          0x48, 0x7c, 0x91, 0xab, 0x3c);
+
+
+#define SG5_EVENT_CID_POWER_INFO	0x15
+#define SG5_EVENT_CID_POWER_ADAPTER	0x17
+
+#define SG5_EVENT_TIMEOUT_POWER_ADAPTER	5000
+
+#define PWR_EVENT_PREFIX		"surfacegen5_san_power_event: "
+#define PWR_EVENT_WARN			KERN_WARNING PWR_EVENT_PREFIX
 
 
 struct surfacegen5_san_handler_context {
@@ -96,6 +106,74 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 	}
 
 	ACPI_FREE(obj);
+	return 0;
+}
+
+
+int surfacegen5_evt_power_adapter(struct surfacegen5_event *event)
+{
+	int status;
+
+	msleep(SG5_EVENT_TIMEOUT_POWER_ADAPTER);
+
+	// re-check secondary battery
+	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_BAT2_STAT);
+	if (status) {
+		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	// re-check primary battery (power-adapter may be connected to base)
+	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_BAT1_STAT);
+	if (status) {
+		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	// re-check power adapter (may be connected to base)
+	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_ADP1_STAT);
+	if (status) {
+		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	return 0;
+}
+
+int surfacegen5_evt_power_info(struct surfacegen5_event *event)
+{
+	enum surfacegen5_pwr_event evcode;
+	int status;
+
+	if (event->iid == 0x02) {
+		evcode = SURFACEGEN5_PWR_EVENT_BAT2_INFO;
+	} else {
+		evcode = SURFACEGEN5_PWR_EVENT_BAT1_INFO;
+	}
+
+	// re-check secondary battery
+	status = surfacegen5_acpi_notify_power_event(evcode);
+	if (status) {
+		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	return 0;
+}
+
+int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
+{
+	switch (event->cid) {
+	case SG5_EVENT_CID_POWER_ADAPTER:
+		return surfacegen5_evt_power_adapter(event);
+
+	case SG5_EVENT_CID_POWER_INFO:
+		return surfacegen5_evt_power_info(event);
+
+	default:
+		printk(PWR_EVENT_WARN "unhandled power event (cid = %x)\n", event->cid);
+	}
+
 	return 0;
 }
 
@@ -301,14 +379,17 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 
 	acpi_walk_dep_device_list(san);
 
-	dev_err(&pdev->dev, "enabling events");
 	status = surfacegen5_ec_enable_events();
 	if (status) {
 		dev_err(&pdev->dev, "failed to enable events: 0x%x\n", status);
 		// TODO: properly handle error
 	}
 
-	dev_err(&pdev->dev, "enabling event type 02 01");
+	status = surfacegen5_ec_set_event_handler(0x0002, surfacegen5_evt_power, NULL);
+	if (status) {
+		dev_err(&pdev->dev, "failed to remove event handler (type 02 01): 0x%x\n", status);
+	}
+
 	status = surfacegen5_ec_enable_event_source(0x02, 0x01, 0x0002);
 	if (status) {
 		dev_err(&pdev->dev, "failed to enable event type 02 01: 0x%x\n", status);
@@ -360,6 +441,11 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	status = surfacegen5_ec_disable_events();
 	if (status) {
 		dev_err(&pdev->dev, "failed to disable events: 0x%x\n", status);
+	}
+
+	status = surfacegen5_ec_remove_event_handler(0x0002);
+	if (status) {
+		dev_err(&pdev->dev, "failed to remove event handler (type 02 01): 0x%x\n", status);
 	}
 
 	status = acpi_bus_get_private_data(san, (void **)&context);

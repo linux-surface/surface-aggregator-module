@@ -153,7 +153,7 @@ struct surfacegen5_ec_receiver {
 };
 
 struct surfacegen5_ec_event_handler {
-	surfacegen5_ec_event_callback callback;
+	surfacegen5_ec_event_handler_fn handler;
 	void *data;
 };
 
@@ -356,7 +356,7 @@ int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
 
-int surfacegen5_ec_set_event_callback(u16 rqid, surfacegen5_ec_event_callback fn, void *data)
+int surfacegen5_ec_set_event_handler(u16 rqid, surfacegen5_ec_event_handler_fn fn, void *data)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
@@ -373,7 +373,7 @@ int surfacegen5_ec_set_event_callback(u16 rqid, surfacegen5_ec_event_callback fn
 	spin_lock_irqsave(&ec->events.lock, flags);
 
 	// 0 is not a valid event RQID
-	ec->events.handler[rqid - 1].callback = fn;
+	ec->events.handler[rqid - 1].handler = fn;
 	ec->events.handler[rqid - 1].data = data;
 
 	spin_unlock_irqrestore(&ec->events.lock, flags);
@@ -382,7 +382,7 @@ int surfacegen5_ec_set_event_callback(u16 rqid, surfacegen5_ec_event_callback fn
 	return 0;
 }
 
-int surfacegen5_ec_remove_event_callback(u16 rqid)
+int surfacegen5_ec_remove_event_handler(u16 rqid)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
@@ -399,7 +399,7 @@ int surfacegen5_ec_remove_event_callback(u16 rqid)
 	spin_lock_irqsave(&ec->events.lock, flags);
 
 	// 0 is not a valid event RQID
-	ec->events.handler[rqid - 1].callback = NULL;
+	ec->events.handler[rqid - 1].handler = NULL;
 	ec->events.handler[rqid - 1].data = NULL;
 
 	spin_unlock_irqrestore(&ec->events.lock, flags);
@@ -702,8 +702,8 @@ static void surfacegen5_event_work_handler(struct work_struct *_work)
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
 
-	surfacegen5_ec_event_callback callback;
-	void *callback_data;
+	surfacegen5_ec_event_handler_fn handler;
+	void *handler_data;
 
 	int status;
 
@@ -722,17 +722,17 @@ static void surfacegen5_event_work_handler(struct work_struct *_work)
 	}
 
 	spin_lock_irqsave(&ec->events.lock, flags);
-	callback      = ec->events.handler[event->rqid - 1].callback;
-	callback_data = ec->events.handler[event->rqid - 1].data;
+	handler      = ec->events.handler[event->rqid - 1].handler;
+	handler_data = ec->events.handler[event->rqid - 1].data;
 
-	if (callback) {
-		status = callback(event, callback_data);
+	if (handler) {
+		status = handler(event, handler_data);
 	}
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	if (status) {
 		printk(EVENT_ERR "error handling event: %d\n", status);
-	} else if (!callback) {
+	} else if (!handler) {
 		printk(EVENT_WARN "unhandled event (rqid: %04x)\n", event->rqid);
 	}
 

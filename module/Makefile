@@ -7,7 +7,6 @@ obj-m += surfacegen5_acpi_notify.o
 surfacegen5_acpi_notify-objs := surfacegen5_acpi_notify_base.o
 surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_ssh.o
 surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_san.o
-surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_shps.o
 
 sources := Makefile
 sources += dkms.conf
@@ -16,7 +15,6 @@ sources += surfacegen5_acpi_notify_ssh.h
 sources += surfacegen5_acpi_notify_ssh.c
 sources += surfacegen5_acpi_notify_san.h
 sources += surfacegen5_acpi_notify_san.c
-sources += surfacegen5_acpi_notify_shps.c
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
