@@ -6,6 +6,7 @@
 #include <linux/mutex.h>
 #include <linux/jiffies.h>
 #include <linux/kfifo.h>
+#include <linux/workqueue.h>
 #include <linux/completion.h>
 #include <asm/unaligned.h>
 
@@ -21,6 +22,10 @@
 #define RECV_INFO			KERN_INFO RECV_PREFIX
 #define RECV_WARN			KERN_WARNING RECV_PREFIX
 #define RECV_ERR			KERN_ERR RECV_PREFIX
+
+#define EVENT_PREFIX			"surfacegen5_ssh_handle_event: "
+#define EVENT_WARN			KERN_WARNING EVENT_PREFIX
+#define EVENT_ERR			KERN_ERR EVENT_PREFIX
 
 #define SG5_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
@@ -70,6 +75,9 @@
 #define SG5_FRAME_OFFS_TERM		(SG5_FRAME_OFFS_CTRL_CRC + SG5_BYTELEN_CRC)
 #define SG5_FRAME_OFFS_CMD		SG5_FRAME_OFFS_TERM	// either TERM or CMD
 #define SG5_FRAME_OFFS_CMD_PLD		(SG5_FRAME_OFFS_CMD + SG5_BYTELEN_CMDFRAME)
+
+// 0 is not a valid event RQID
+#define SG5_NUM_EVENT_TYPES		((1 << SURFACEGEN5_RQID_EVENT_BITS) - 1)
 
 /*
  * Sync:			aa 55
@@ -144,6 +152,17 @@ struct surfacegen5_ec_receiver {
 	} eval_buf;
 };
 
+struct surfacegen5_ec_event_handler {
+	surfacegen5_ec_event_callback callback;
+	void *data;
+};
+
+struct surfacegen5_ec_events {
+	spinlock_t lock;
+	struct workqueue_struct *queue;
+	struct surfacegen5_ec_event_handler handler[SG5_NUM_EVENT_TYPES];
+};
+
 struct surfacegen5_ec {
 	struct mutex                   lock;
 	enum surfacegen5_ec_state      state;
@@ -152,12 +171,20 @@ struct surfacegen5_ec {
 	struct surfacegen5_ec_counters counter;
 	struct surfacegen5_ec_writer   writer;
 	struct surfacegen5_ec_receiver receiver;
+	struct surfacegen5_ec_events   events;
 };
 
 struct surfacegen5_fifo_packet {
 	u8 type;	// packet type (ACK/RETRY/CMD)
 	u8 seq;
 	u8 len;
+};
+
+struct surfacegen5_event_work {
+	struct surfacegen5_ec   *ec;
+	struct work_struct       work;
+	struct surfacegen5_event event;
+	u8 seq;
 };
 
 
@@ -178,6 +205,10 @@ static struct surfacegen5_ec surfacegen5_ec = {
 		.state = SG5_RCV_DISCARD,
 		.expect = {},
 	},
+	.events = {
+		.lock = __SPIN_LOCK_UNLOCKED(),
+		.handler = {},
+	}
 };
 
 
@@ -247,6 +278,137 @@ int surfacegen5_ec_consumer_remove(struct device *consumer)
 	return 0;
 }
 
+
+inline static u16 surfacegen5_rqid_to_rqst(u16 rqid) {
+	return rqid << SURFACEGEN5_RQID_EVENT_BITS;
+}
+
+inline static bool surfacegen5_rqid_is_event(u16 rqid) {
+	const u16 mask = (1 << SURFACEGEN5_RQID_EVENT_BITS) - 1;
+	return rqid != 0 && (rqid | mask) == mask;
+}
+
+int surfacegen5_ec_enable_events()
+{
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x16,
+		.snc = 0x00,
+		.cdl = 0x00,
+		.pld = NULL,
+	};
+
+	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+int surfacegen5_ec_disable_events()
+{
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x15,
+		.snc = 0x00,
+		.cdl = 0x00,
+		.pld = NULL,
+	};
+
+	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid)
+{
+	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x0b,
+		.snc = 0x00,
+		.cdl = 0x04,
+		.pld = pld,
+	};
+
+	// only allow RQIDs that lie within event spectrum
+	if (!surfacegen5_rqid_is_event(rqid)) {
+		return -EINVAL;
+	}
+
+	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid)
+{
+	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x0c,
+		.snc = 0x00,
+		.cdl = 0x04,
+		.pld = pld,
+	};
+
+	// only allow RQIDs that lie within event spectrum
+	if (!surfacegen5_rqid_is_event(rqid)) {
+		return -EINVAL;
+	}
+
+	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+int surfacegen5_ec_set_event_callback(u16 rqid, surfacegen5_ec_event_callback fn, void *data)
+{
+	struct surfacegen5_ec *ec;
+	unsigned long flags;
+
+	if (!surfacegen5_rqid_is_event(rqid)) {
+		return -EINVAL;
+	}
+
+	ec = surfacegen5_ec_acquire_init();
+	if (!ec) {
+		return -ENXIO;
+	}
+
+	spin_lock_irqsave(&ec->events.lock, flags);
+
+	// 0 is not a valid event RQID
+	ec->events.handler[rqid - 1].callback = fn;
+	ec->events.handler[rqid - 1].data = data;
+
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+	surfacegen5_ec_release(ec);
+
+	return 0;
+}
+
+int surfacegen5_ec_remove_event_callback(u16 rqid)
+{
+	struct surfacegen5_ec *ec;
+	unsigned long flags;
+
+	if (!surfacegen5_rqid_is_event(rqid)) {
+		return -EINVAL;
+	}
+
+	ec = surfacegen5_ec_acquire_init();
+	if (!ec) {
+		return -ENXIO;
+	}
+
+	spin_lock_irqsave(&ec->events.lock, flags);
+
+	// 0 is not a valid event RQID
+	ec->events.handler[rqid - 1].callback = NULL;
+	ec->events.handler[rqid - 1].data = NULL;
+
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+	surfacegen5_ec_release(ec);
+
+	return 0;
+}
+
+
 inline static u16 surfacegen5_ssh_crc(const u8 *buf, size_t size)
 {
 	return crc_ccitt_false(0xffff, buf, size);
@@ -313,8 +475,10 @@ inline static void surfacegen5_ssh_write_cmd(struct surfacegen5_ec_writer *write
 {
 	struct surfacegen5_frame_cmd *cmd = (struct surfacegen5_frame_cmd *)writer->ptr;
 	u8 *begin = writer->ptr;
-	u8 rqid_lo = ec->counter.rqid & 0xFF;
-	u8 rqid_hi = ec->counter.rqid >> 8;
+
+	u16 rqid = surfacegen5_rqid_to_rqst(ec->counter.rqid);
+	u8 rqid_lo = rqid & 0xFF;
+	u8 rqid_hi = rqid >> 8;
 
 	cmd->type     = SG5_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
@@ -391,7 +555,7 @@ inline static void surfacegen5_ssh_receiver_restart(struct surfacegen5_ec *ec,
 	ec->receiver.state = SG5_RCV_CONTROL;
 	ec->receiver.expect.pld  = rqst->snc;
 	ec->receiver.expect.seq  = ec->counter.seq;
-	ec->receiver.expect.rqid = ec->counter.rqid;
+	ec->receiver.expect.rqid = surfacegen5_rqid_to_rqst(ec->counter.rqid);
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
@@ -509,9 +673,110 @@ inline static bool surfacegen5_ssh_is_valid_crc(const u8 *begin, const u8 *end)
 }
 
 
-static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
-                                            const unsigned char *buf, size_t size)
+static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 {
+	u8 buf[SG5_MSG_LEN_CTRL];
+	u16 crc;
+
+	buf[0] = 0xaa;
+	buf[1] = 0x55;
+	buf[2] = 0x40;
+	buf[3] = 0x00;
+	buf[4] = 0x00;
+	buf[5] = seq;
+
+	crc = surfacegen5_ssh_crc(buf + SG5_FRAME_OFFS_CTRL, SG5_BYTELEN_CTRL);
+	buf[6] = crc & 0xff;
+	buf[7] = crc >> 8;
+
+	buf[8] = 0xff;
+	buf[9] = 0xff;
+
+	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
+}
+
+static void surfacegen5_event_work_handler(struct work_struct *_work)
+{
+	struct surfacegen5_event_work *work;
+	struct surfacegen5_event *event;
+	struct surfacegen5_ec *ec;
+	unsigned long flags;
+
+	surfacegen5_ec_event_callback callback;
+	void *callback_data;
+
+	int status;
+
+ 	work = container_of(_work, struct surfacegen5_event_work, work);
+	event = &work->event;
+	ec = work->ec;
+
+	if (ec->state != SG5_EC_INITIALIZED) {
+		return;
+	}
+
+	status = surfacegen5_ssh_send_ack(ec, work->seq);
+	if (status) {
+		printk(EVENT_ERR "failed to send ACK: %d\n", status);
+		return;
+	}
+
+	spin_lock_irqsave(&ec->events.lock, flags);
+	callback      = ec->events.handler[event->rqid - 1].callback;
+	callback_data = ec->events.handler[event->rqid - 1].data;
+
+	if (callback) {
+		status = callback(event, callback_data);
+	}
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+
+	if (status) {
+		printk(EVENT_ERR "error handling event: %d\n", status);
+	} else if (!callback) {
+		printk(EVENT_WARN "unhandled event (rqid: %04x)\n", event->rqid);
+	}
+
+	kfree(work);
+}
+
+static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *buf)
+{
+	const struct surfacegen5_frame_ctrl *ctrl;
+	const struct surfacegen5_frame_cmd *cmd;
+	struct surfacegen5_event_work *work;
+	u16 pld_len;
+
+	ctrl = (const struct surfacegen5_frame_ctrl *)(buf + SG5_FRAME_OFFS_CTRL);
+	cmd  = (const struct surfacegen5_frame_cmd  *)(buf + SG5_FRAME_OFFS_CMD);
+
+	pld_len = ctrl->len - SG5_BYTELEN_CMDFRAME;
+
+	work = kzalloc(sizeof(struct surfacegen5_event_work) + pld_len, GFP_ATOMIC);
+	if (!work) {
+		printk(EVENT_WARN "failed to allocate memory, dropping event\n");
+		return;
+	}
+
+	INIT_WORK(&work->work, surfacegen5_event_work_handler);
+
+	work->ec         = ec;
+	work->seq        = ctrl->seq;
+	work->event.rqid = (cmd->rqid_hi << 8) | cmd->rqid_lo;
+	work->event.tc   = cmd->tc;
+	work->event.iid  = cmd->iid;
+	work->event.cid  = cmd->cid;
+	work->event.len  = pld_len;
+	work->event.pld  = ((u8*) work) + sizeof(struct surfacegen5_event_work);
+
+	memcpy(work->event.pld, buf + SG5_FRAME_OFFS_CMD_PLD, pld_len);
+
+	queue_work(ec->events.queue, &work->work);
+}
+
+static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
+                                            const u8 *buf, size_t size)
+{
+	struct surfacegen5_ec_receiver *rcv = &ec->receiver;
 	const struct surfacegen5_frame_ctrl *ctrl;
 	struct surfacegen5_fifo_packet packet;
 
@@ -577,9 +842,10 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec_receiver *rcv,
 	return SG5_MSG_LEN_CTRL;		// handled message
 }
 
-static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
-                                           const unsigned char *buf, size_t size)
+static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
+                                           const u8 *buf, size_t size)
 {
+	struct surfacegen5_ec_receiver *rcv = &ec->receiver;
 	const struct surfacegen5_frame_ctrl *ctrl;
 	const struct surfacegen5_frame_cmd *cmd;
 	struct surfacegen5_fifo_packet packet;
@@ -630,6 +896,12 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 		return msg_len;			// only discard message
 	}
 
+	// check if we received an event notification
+	if (surfacegen5_rqid_is_event((cmd->rqid_hi << 8) | cmd->rqid_lo)) {
+		surfacegen5_ssh_handle_event(ec, buf);
+		return msg_len;			// handled message
+	}
+
 	// check if we expect the message
 	if (rcv->state != SG5_RCV_COMMAND) {
 		printk(RECV_INFO "discarding message: command not expected\n");
@@ -667,8 +939,8 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec_receiver *rcv,
 	return msg_len;				// handled message
 }
 
-static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec_receiver *rcv,
-                                       const unsigned char *buf, size_t size)
+static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec *ec,
+                                    const u8 *buf, size_t size)
 {
 	struct surfacegen5_frame_ctrl *ctrl;
 
@@ -689,10 +961,10 @@ static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec_receiver *rcv,
 	switch (ctrl->type) {
 	case SG5_FRAME_TYPE_ACK:
 	case SG5_FRAME_TYPE_RETRY:
-		return surfacegen5_ssh_receive_msg_ctrl(rcv, buf, size);
+		return surfacegen5_ssh_receive_msg_ctrl(ec, buf, size);
 
 	case SG5_FRAME_TYPE_CMD:
-		return surfacegen5_ssh_receive_msg_cmd(rcv, buf, size);
+		return surfacegen5_ssh_receive_msg_cmd(ec, buf, size);
 
 	default:
 		printk(RECV_WARN "unknown frame type 0x%02x\n", ctrl->type);
@@ -703,7 +975,8 @@ static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec_receiver *rcv,
 static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
                                        const unsigned char *buf, size_t size)
 {
-	struct surfacegen5_ec_receiver *rcv = serdev_device_get_drvdata(serdev);
+	struct surfacegen5_ec *ec = serdev_device_get_drvdata(serdev);
+	struct surfacegen5_ec_receiver *rcv = &ec->receiver;
 	unsigned long flags;
 	int offs = 0;
 	int used, n;
@@ -726,7 +999,7 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	// evaluate buffer until we need more bytes or eval-buf is empty
 	while (offs < rcv->eval_buf.len) {
 		n = rcv->eval_buf.len - offs;
-		n = surfacegen5_ssh_eval_buf(rcv, rcv->eval_buf.ptr + offs, n);
+		n = surfacegen5_ssh_eval_buf(ec, rcv->eval_buf.ptr + offs, n);
 		if (n <= 0) break;	// need more bytes
 
 		offs += n;
@@ -808,6 +1081,7 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
+	struct workqueue_struct *event_queue;
 	u8 *write_buf;
 	u8 *read_buf;
 	u8 *eval_buf;
@@ -846,6 +1120,12 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 		goto err_probe_alloc_eval;
 	}
 
+	event_queue = create_singlethread_workqueue("sg5_eventq");
+	if (!event_queue) {
+		status = -ENOMEM;
+		goto err_probe_alloc_queue;
+	}
+
 	// set up EC
 	ec = surfacegen5_ec_acquire();
 	if (ec->state != SG5_EC_UNINITIALIZED) {
@@ -868,9 +1148,13 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
+	spin_lock_irqsave(&ec->events.lock, flags);
+	ec->events.queue = event_queue;
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+
 	ec->state = SG5_EC_INITIALIZED;
 
-	serdev_device_set_drvdata(serdev, &ec->receiver);
+	serdev_device_set_drvdata(serdev, ec);
 	surfacegen5_ec_release(ec);
 
 	acpi_walk_dep_device_list(ssh);
@@ -878,6 +1162,9 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	return 0;
 
 err_probe_busy:
+	destroy_workqueue(event_queue);
+err_probe_alloc_queue:
+	kfree(eval_buf);
 err_probe_alloc_eval:
 	kfree(read_buf);
 err_probe_alloc_read:
@@ -912,6 +1199,15 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 		ec->receiver.state = SG5_RCV_DISCARD;
 		kfifo_free(&ec->receiver.fifo);
 		spin_unlock_irqrestore(&ec->receiver.lock, flags);
+
+		// remove event handlers
+		spin_lock_irqsave(&ec->events.lock, flags);
+		memset(ec->events.handler, 0,
+		       sizeof(struct surfacegen5_ec_event_handler)
+		        * SG5_NUM_EVENT_TYPES);
+		spin_unlock_irqrestore(&ec->events.lock, flags);
+
+		destroy_workqueue(ec->events.queue);
 	}
 	surfacegen5_ec_release(ec);
 

@@ -14,6 +14,10 @@
  */
 #define SURFACEGEN5_MAX_RQST_RESPONSE	(255 - 4)
 
+
+#define SURFACEGEN5_RQID_EVENT_BITS	5
+
+
 struct surfacegen5_buf {
 	u8 cap;
 	u8 len;
@@ -29,9 +33,28 @@ struct surfacegen5_rqst {
 	u8 *pld;
 };
 
+struct surfacegen5_event {
+	u16 rqid;
+	u8  tc;
+	u8  iid;
+	u8  cid;
+	u8  len;
+	u8 *pld;
+};
+
+typedef int (*surfacegen5_ec_event_callback)(struct surfacegen5_event *event, void *data);
+
 int surfacegen5_ec_consumer_set(struct device *consumer);
 int surfacegen5_ec_consumer_remove(struct device *consumer);
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
+
+
+int surfacegen5_ec_enable_events(void);
+int surfacegen5_ec_disable_events(void);
+int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid);
+int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid);
+int surfacegen5_ec_set_event_callback(u16 rqid, surfacegen5_ec_event_callback fn, void *data);
+int surfacegen5_ec_remove_event_callback(u16 rqid);
 
 #endif /* _SURFACEGEN5_ACPI_NOTIFY_SSH_H */

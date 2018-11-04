@@ -301,7 +301,37 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 
 	acpi_walk_dep_device_list(san);
 
-	return status;
+	dev_err(&pdev->dev, "enabling events");
+	status = surfacegen5_ec_enable_events();
+	if (status) {
+		dev_err(&pdev->dev, "failed to enable events: 0x%x\n", status);
+		// TODO: properly handle error
+	}
+
+	dev_err(&pdev->dev, "enabling event type 02 01");
+	status = surfacegen5_ec_enable_event_source(0x02, 0x01, 0x0002);
+	if (status) {
+		dev_err(&pdev->dev, "failed to enable event type 02 01: 0x%x\n", status);
+		// TODO: properly handle error
+	}
+
+	// dev_err(&pdev->dev, "enabling event type for release button");
+	// status = surfaegen5_acpi_notify_enable_event_source(0x11, 0x01, 0x0011);
+	// if (status) {
+	// 	dev_err(&pdev->dev, "failed to enable event type 11 01: 0x%x\n", status);
+	// 	// TODO: properly handle error
+	// }
+
+	// dev_err(&pdev->dev, "enabling event type 03 01");
+	// status = surfaegen5_acpi_notify_enable_event_source(0x03, 0x01, 0x0003);
+	// if (status) {
+	// 	dev_err(&pdev->dev, "failed to enable event type 03 01: 0x%x\n", status);
+	// 	// TODO: properly handle error
+	// }
+
+	// TODO: try stuff out
+
+	return 0;
 
 err_install_handler:
 	acpi_bus_detach_private_data(san);
@@ -319,6 +349,18 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	dev_info(&pdev->dev, "surfacegen5_acpi_notify_san_remove\n");
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
+
+	// TODO: disable event types
+
+	status = surfacegen5_ec_disable_event_source(0x02, 0x01, 0x0002);
+	if (status) {
+		dev_err(&pdev->dev, "failed to disable event type 02 01: 0x%x\n", status);
+	}
+
+	status = surfacegen5_ec_disable_events();
+	if (status) {
+		dev_err(&pdev->dev, "failed to disable events: 0x%x\n", status);
+	}
 
 	status = acpi_bus_get_private_data(san, (void **)&context);
 	if (ACPI_SUCCESS(status) && context) {
