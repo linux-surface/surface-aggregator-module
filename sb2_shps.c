@@ -5,7 +5,7 @@
 #include <linux/platform_device.h>
 
 
-#define SB2_SHPS_DSM_REVISION	0
+#define SB2_SHPS_DSM_REVISION	1
 #define SB2_SHPS_DSM_GPU_STATE	0x05
 
 static const guid_t SB2_SHPS_DSM_UUID =
@@ -45,18 +45,13 @@ MODULE_PARM_DESC(dgpu_pwr, "dGPU power state (on/off)");
 static int sb2_shps_dgpu_set_power(acpi_handle handle, bool on)
 {
 	union acpi_object *result;
-	union acpi_object pkg;
-	union acpi_object param[1];
+	union acpi_object param;
 
-	pkg.type = ACPI_TYPE_PACKAGE;
-	pkg.package.count = ARRAY_SIZE(param);
-	pkg.package.elements = param;
-
-	param[0].type = ACPI_TYPE_INTEGER;
-	param[0].integer.value = on;
+	param.type = ACPI_TYPE_INTEGER;
+	param.integer.value = on;
 
 	result = acpi_evaluate_dsm_typed(handle, &SB2_SHPS_DSM_UUID, SB2_SHPS_DSM_REVISION,
-	                                 SB2_SHPS_DSM_GPU_STATE, &pkg, ACPI_TYPE_BUFFER);
+	                                 SB2_SHPS_DSM_GPU_STATE, &param, ACPI_TYPE_BUFFER);
 
 	if (IS_ERR_OR_NULL(result)) {
 		return result ? PTR_ERR(result) : -EFAULT;
