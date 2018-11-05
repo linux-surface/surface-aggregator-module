@@ -18,10 +18,11 @@ static const guid_t SG5_SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 	          0x48, 0x7c, 0x91, 0xab, 0x3c);
 
-
-#define SG5_EVENT_CID_POWER_INFO	0x15
-#define SG5_EVENT_CID_POWER_STATE	0x16
-#define SG5_EVENT_CID_POWER_ADAPTER	0x17
+#define SG5_EVENT_PWR_TC		0x02
+#define SG5_EVENT_PWR_RQID		0x0002
+#define SG5_EVENT_PWR_CID_INFO		0x15
+#define SG5_EVENT_PWR_CID_STATE		0x16
+#define SG5_EVENT_PWR_CID_ADAPTER	0x17
 
 #define SG5_EVENT_DELAY_POWER_STATE	msecs_to_jiffies(2000)
 
@@ -93,6 +94,8 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 		return status;
 	}
 
+	// TODO: check function availability
+
 	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
 	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
 
@@ -141,8 +144,6 @@ static int surfacegen5_evt_power_info(struct surfacegen5_event *event)
 		return status;
 	}
 
-	printk(KERN_ERR "handled power info event (iid = %d)", event->iid);
-
 	return 0;
 }
 
@@ -162,14 +163,12 @@ static int surfacegen5_evt_power_state(struct surfacegen5_event *event)
 		return status;
 	}
 
-	printk(KERN_ERR "handled power state event (iid = %d)", event->iid);
-
 	return 0;
 }
 
 static unsigned long surfacegen5_evt_power_delay(struct surfacegen5_event *event, void *data)
 {
-	if (event->cid == SG5_EVENT_CID_POWER_STATE) {
+	if (event->cid == SG5_EVENT_PWR_CID_STATE) {
 		return SG5_EVENT_DELAY_POWER_STATE;
 	}
 
@@ -179,13 +178,13 @@ static unsigned long surfacegen5_evt_power_delay(struct surfacegen5_event *event
 static int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
 {
 	switch (event->cid) {
-	case SG5_EVENT_CID_POWER_INFO:
+	case SG5_EVENT_PWR_CID_INFO:
 		return surfacegen5_evt_power_info(event);
 
-	case SG5_EVENT_CID_POWER_STATE:
+	case SG5_EVENT_PWR_CID_STATE:
 		return surfacegen5_evt_power_state(event);
 
-	case SG5_EVENT_CID_POWER_ADAPTER:
+	case SG5_EVENT_PWR_CID_ADAPTER:
 		return surfacegen5_evt_power_adapter(event);
 
 	// TODO: 0x4f event
@@ -353,6 +352,59 @@ surfacegen5_san_space_handler(u32 function, acpi_physical_address command,
 	return AE_OK;
 }
 
+static int surfacegen5_san_enable_events(void)
+{
+	int status;
+
+	status = surfacegen5_ec_enable_events();
+	if (status) {
+		goto err_events_enable;
+	}
+
+	status = surfacegen5_ec_set_delayed_event_handler(
+			SG5_EVENT_PWR_RQID, surfacegen5_evt_power,
+			surfacegen5_evt_power_delay, NULL);
+	if (status) {
+		goto err_event_power_handler;
+	}
+
+	status = surfacegen5_ec_enable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+	if (status) {
+		goto err_event_power_source;
+	}
+
+	// dev_err(&pdev->dev, "enabling event type for release button");
+	// status = surfaegen5_acpi_notify_enable_event_source(0x11, 0x01, 0x0011);
+	// if (status) {
+	// 	dev_err(&pdev->dev, "failed to enable event type 11 01: 0x%x\n", status);
+	// 	// TODO: properly handle error
+	// }
+
+	// dev_err(&pdev->dev, "enabling event type 03 01");
+	// status = surfaegen5_acpi_notify_enable_event_source(0x03, 0x01, 0x0003);
+	// if (status) {
+	// 	dev_err(&pdev->dev, "failed to enable event type 03 01: 0x%x\n", status);
+	// 	// TODO: properly handle error
+	// }
+
+	// TODO: try stuff out
+
+	return 0;
+
+err_event_power_source:
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
+err_event_power_handler:
+	surfacegen5_ec_disable_events();
+err_events_enable:
+	return status;
+}
+
+static void surfacegen5_san_disable_events(void)
+{
+	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+	surfacegen5_ec_disable_events();
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
+}
 
 static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 {
@@ -384,7 +436,7 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 
 	status = acpi_bus_attach_private_data(san, context);
 	if (ACPI_FAILURE(status)) {
-		goto err_privdata;
+		goto err_probe_privdata;
 	}
 
 	status = acpi_install_address_space_handler(san,
@@ -394,51 +446,22 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 			context);
 
 	if (ACPI_FAILURE(status)) {
-		goto err_install_handler;
+		goto err_probe_install_handler;
+	}
+
+	status = surfacegen5_san_enable_events();
+	if (status) {
+		goto err_probe_enable_events;
 	}
 
 	acpi_walk_dep_device_list(san);
-
-	status = surfacegen5_ec_enable_events();
-	if (status) {
-		dev_err(&pdev->dev, "failed to enable events: 0x%x\n", status);
-		// TODO: properly handle error
-	}
-
-	status = surfacegen5_ec_set_delayed_event_handler(
-			0x0002, surfacegen5_evt_power,
-			surfacegen5_evt_power_delay, NULL);
-	if (status) {
-		dev_err(&pdev->dev, "failed to remove event handler (type 02 01): 0x%x\n", status);
-	}
-
-	status = surfacegen5_ec_enable_event_source(0x02, 0x01, 0x0002);
-	if (status) {
-		dev_err(&pdev->dev, "failed to enable event type 02 01: 0x%x\n", status);
-		// TODO: properly handle error
-	}
-
-	// dev_err(&pdev->dev, "enabling event type for release button");
-	// status = surfaegen5_acpi_notify_enable_event_source(0x11, 0x01, 0x0011);
-	// if (status) {
-	// 	dev_err(&pdev->dev, "failed to enable event type 11 01: 0x%x\n", status);
-	// 	// TODO: properly handle error
-	// }
-
-	// dev_err(&pdev->dev, "enabling event type 03 01");
-	// status = surfaegen5_acpi_notify_enable_event_source(0x03, 0x01, 0x0003);
-	// if (status) {
-	// 	dev_err(&pdev->dev, "failed to enable event type 03 01: 0x%x\n", status);
-	// 	// TODO: properly handle error
-	// }
-
-	// TODO: try stuff out
-
 	return 0;
 
-err_install_handler:
+err_probe_enable_events:
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
+err_probe_install_handler:
 	acpi_bus_detach_private_data(san);
-err_privdata:
+err_probe_privdata:
 	kfree(context);
 	return status;
 }
@@ -452,23 +475,7 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	dev_info(&pdev->dev, "surfacegen5_acpi_notify_san_remove\n");
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
-
-	// TODO: disable event types
-
-	status = surfacegen5_ec_disable_event_source(0x02, 0x01, 0x0002);
-	if (status) {
-		dev_err(&pdev->dev, "failed to disable event type 02 01: 0x%x\n", status);
-	}
-
-	status = surfacegen5_ec_disable_events();
-	if (status) {
-		dev_err(&pdev->dev, "failed to disable events: 0x%x\n", status);
-	}
-
-	status = surfacegen5_ec_remove_event_handler(0x0002);
-	if (status) {
-		dev_err(&pdev->dev, "failed to remove event handler (type 02 01): 0x%x\n", status);
-	}
+	surfacegen5_san_disable_events();
 
 	status = acpi_bus_get_private_data(san, (void **)&context);
 	if (ACPI_SUCCESS(status) && context) {
