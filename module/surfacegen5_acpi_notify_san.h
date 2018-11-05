@@ -13,5 +13,6 @@ enum surfacegen5_pwr_event {
 };
 
 int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event);
+int surfacegen5_acpi_notify_sensor_trip_point(u8 iid);
 
 #endif /* _SURFACEGEN5_ACPI_NOTIFY_SAN_H */

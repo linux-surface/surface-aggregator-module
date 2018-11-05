@@ -10,13 +10,17 @@
 
 #define SG5_RQST_MSG            "surfacegen5_ec_rqst: "
 #define SG5_NOTIFY_PWR_MSG      "surfacegen5_acpi_notify_power_event: "
+#define SG5_NOTIFY_SENSOR_MSG   "surfacegen5_acpi_notify_senor_trip_point: "
 
 #define SG5_SAN_PATH            "\\_SB._SAN"
 #define SG5_SAN_DSM_REVISION    0
+#define SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
 
 static const guid_t SG5_SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 	          0x48, 0x7c, 0x91, 0xab, 0x3c);
+
+#define SG5_EVENT_DELAY_POWER		msecs_to_jiffies(5000)
 
 #define SG5_EVENT_PWR_TC		0x02
 #define SG5_EVENT_PWR_RQID		0x0002
@@ -25,10 +29,15 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define SG5_EVENT_PWR_CID_ADAPTER	0x17
 #define SG5_EVENT_PWR_CID_STATE		0x4f
 
-#define SG5_EVENT_DELAY_POWER		msecs_to_jiffies(5000)
+#define SG5_EVENT_TEMP_TC		0x03
+#define SG5_EVENT_TEMP_RQID		0x0003
+#define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
 #define PWR_EVENT_PREFIX		"surfacegen5_san_power_event: "
 #define PWR_EVENT_WARN			KERN_WARNING PWR_EVENT_PREFIX
+
+#define TEMP_EVENT_PREFIX		"surfacegen5_san_thermal_event: "
+#define TEMP_EVENT_WARN			KERN_WARNING TEMP_EVENT_PREFIX
 
 
 struct surfacegen5_san_handler_context {
@@ -95,8 +104,6 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 		return status;
 	}
 
-	// TODO: check function availability
-
 	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
 	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
 
@@ -107,6 +114,40 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 
 	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
 		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "got unexpected result from _DSM\n");
+		return -EIO;
+	}
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
+int surfacegen5_acpi_notify_sensor_trip_point(u8 iid)
+{
+	acpi_handle san;
+	union acpi_object *obj;
+	union acpi_object param;
+	int status;
+
+	status = acpi_get_handle(NULL, SG5_SAN_PATH, &san);
+	if (ACPI_FAILURE(status)) {
+		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "failed to get _SAN handle\n");
+		return status;
+	}
+
+	param.type = ACPI_TYPE_INTEGER;
+	param.integer.value = iid;
+
+	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
+	                              SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT,
+				      &param, ACPI_TYPE_BUFFER);
+
+	if (IS_ERR_OR_NULL(obj)) {
+		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "failed to evaluate _DSM\n");
+		return obj ? PTR_ERR(obj) : -EFAULT;
+	}
+
+	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
+		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "got unexpected result from _DSM\n");
 		return -EIO;
 	}
 
@@ -195,7 +236,34 @@ static int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
 		return surfacegen5_evt_power_state(event);
 
 	default:
-		printk(PWR_EVENT_WARN "unhandled power event (cid = %x)\n", event->cid);
+		printk(PWR_EVENT_WARN "unhandled event (cid = %x)\n", event->cid);
+	}
+
+	return 0;
+}
+
+
+static int surfacegen5_evt_thermal_notify(struct surfacegen5_event *event)
+{
+	int status;
+
+	status = surfacegen5_acpi_notify_sensor_trip_point(event->iid);
+	if (status) {
+		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	return 0;
+}
+
+static int surfacegen5_evt_thermal(struct surfacegen5_event *event, void *data)
+{
+	switch (event->cid) {
+	case SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
+		return surfacegen5_evt_thermal_notify(event);
+
+	default:
+		printk(TEMP_EVENT_WARN "unhandled event (cid = %x)\n", event->cid);
 	}
 
 	return 0;
@@ -370,35 +438,37 @@ static int surfacegen5_san_enable_events(void)
 			SG5_EVENT_PWR_RQID, surfacegen5_evt_power,
 			surfacegen5_evt_power_delay, NULL);
 	if (status) {
-		goto err_event_power_handler;
+		goto err_event_handler_power;
+	}
+
+	status = surfacegen5_ec_set_event_handler(
+			SG5_EVENT_TEMP_RQID, surfacegen5_evt_thermal,
+			NULL);
+	if (status) {
+		goto err_event_handler_thermal;
 	}
 
 	status = surfacegen5_ec_enable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
 	if (status) {
-		goto err_event_power_source;
+		goto err_event_source_power;
 	}
 
-	// dev_err(&pdev->dev, "enabling event type for release button");
-	// status = surfaegen5_acpi_notify_enable_event_source(0x11, 0x01, 0x0011);
-	// if (status) {
-	// 	dev_err(&pdev->dev, "failed to enable event type 11 01: 0x%x\n", status);
-	// 	// TODO: properly handle error
-	// }
+	status = surfacegen5_ec_enable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
+	if (status) {
+		goto err_event_source_thermal;
+	}
 
-	// dev_err(&pdev->dev, "enabling event type 03 01");
-	// status = surfaegen5_acpi_notify_enable_event_source(0x03, 0x01, 0x0003);
-	// if (status) {
-	// 	dev_err(&pdev->dev, "failed to enable event type 03 01: 0x%x\n", status);
-	// 	// TODO: properly handle error
-	// }
-
-	// TODO: try stuff out
+	// TODO: SB2 clipboard events?
 
 	return 0;
 
-err_event_power_source:
+err_event_source_thermal:
+	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+err_event_source_power:
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
+err_event_handler_thermal:
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
-err_event_power_handler:
+err_event_handler_power:
 	surfacegen5_ec_disable_events();
 err_events_enable:
 	return status;
@@ -406,8 +476,10 @@ err_events_enable:
 
 static void surfacegen5_san_disable_events(void)
 {
+	surfacegen5_ec_disable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
 	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
 	surfacegen5_ec_disable_events();
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
 }
 
