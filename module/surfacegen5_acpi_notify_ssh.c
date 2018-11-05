@@ -155,6 +155,7 @@ struct surfacegen5_ec_receiver {
 
 struct surfacegen5_ec_event_handler {
 	surfacegen5_ec_event_handler_fn handler;
+	surfacegen5_ec_event_handler_delay delay;
 	void *data;
 };
 
@@ -186,7 +187,7 @@ struct surfacegen5_event_work {
 	refcount_t               refcount;
 	struct surfacegen5_ec   *ec;
 	struct work_struct       work_ack;
-	struct work_struct       work_evt;
+	struct delayed_work      work_evt;
 	struct surfacegen5_event event;
 	u8 seq;
 };
@@ -360,7 +361,10 @@ int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
 
-int surfacegen5_ec_set_event_handler(u16 rqid, surfacegen5_ec_event_handler_fn fn, void *data)
+int surfacegen5_ec_set_delayed_event_handler(
+		u16 rqid, surfacegen5_ec_event_handler_fn fn,
+		surfacegen5_ec_event_handler_delay delay,
+		void *data)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
@@ -378,12 +382,19 @@ int surfacegen5_ec_set_event_handler(u16 rqid, surfacegen5_ec_event_handler_fn f
 
 	// 0 is not a valid event RQID
 	ec->events.handler[rqid - 1].handler = fn;
+	ec->events.handler[rqid - 1].delay = delay;
 	ec->events.handler[rqid - 1].data = data;
 
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surfacegen5_ec_release(ec);
 
 	return 0;
+}
+
+int surfacegen5_ec_set_event_handler(
+		u16 rqid, surfacegen5_ec_event_handler_fn fn, void *data)
+{
+	return surfacegen5_ec_set_delayed_event_handler(rqid, fn, NULL, data);
 }
 
 int surfacegen5_ec_remove_event_handler(u16 rqid)
@@ -408,6 +419,8 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surfacegen5_ec_release(ec);
+
+	flush_workqueue(ec->events.queue_evt);
 
 	return 0;
 }
@@ -724,6 +737,7 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 
 static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 {
+	struct delayed_work *dwork = (struct delayed_work *)_work;
 	struct surfacegen5_event_work *work;
 	struct surfacegen5_event *event;
 	struct surfacegen5_ec *ec;
@@ -734,7 +748,7 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 
 	int status = 0;
 
- 	work = container_of(_work, struct surfacegen5_event_work, work_evt);
+ 	work = container_of(dwork, struct surfacegen5_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
 
@@ -763,7 +777,12 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	const struct surfacegen5_frame_ctrl *ctrl;
 	const struct surfacegen5_frame_cmd *cmd;
 	struct surfacegen5_event_work *work;
+	unsigned long flags;
 	u16 pld_len;
+
+	surfacegen5_ec_event_handler_delay delay_fn;
+	void *handler_data;
+	unsigned long delay = 0;
 
 	ctrl = (const struct surfacegen5_frame_ctrl *)(buf + SG5_FRAME_OFFS_CTRL);
 	cmd  = (const struct surfacegen5_frame_cmd  *)(buf + SG5_FRAME_OFFS_CMD);
@@ -779,7 +798,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	refcount_set(&work->refcount, 2);
 
 	INIT_WORK(&work->work_ack, surfacegen5_event_work_ack_handler);
-	INIT_WORK(&work->work_evt, surfacegen5_event_work_evt_handler);
+	INIT_DELAYED_WORK(&work->work_evt, surfacegen5_event_work_evt_handler);
 
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
@@ -793,7 +812,16 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	memcpy(work->event.pld, buf + SG5_FRAME_OFFS_CMD_PLD, pld_len);
 
 	queue_work(ec->events.queue_ack, &work->work_ack);
-	queue_work(ec->events.queue_evt, &work->work_evt);
+
+	spin_lock_irqsave(&ec->events.lock, flags);
+	handler_data = ec->events.handler[work->event.rqid - 1].data;
+	delay_fn     = ec->events.handler[work->event.rqid - 1].delay;
+	if (delay_fn) {
+		delay = delay_fn(&work->event, handler_data);
+	}
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+
+	queue_delayed_work(ec->events.queue_evt, &work->work_evt, delay);
 }
 
 static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
