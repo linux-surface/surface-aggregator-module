@@ -1,9 +1,9 @@
-MODULE_NAME := "sb2_mshw0153"
+MODULE_NAME := "sb2_shps"
 MODULE_VERSION := "0.1"
 
 KVERSION := "$(shell uname -r)"
 
-obj-m += sb2_mshw0153.o
+obj-m += sb2_shps.o
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
@@ -11,9 +11,9 @@ all:
 clean:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) clean
 
-dkms-install: sb2_mshw0153.c dkms.conf Makefile
+dkms-install: sb2_shps.c dkms.conf Makefile
 	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
-	cp sb2_mshw0153.c /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
+	cp sb2_shps.c /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
 	cp dkms.conf /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
 	cp Makefile /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
 	dkms add $(MODULE_NAME)/$(MODULE_VERSION)

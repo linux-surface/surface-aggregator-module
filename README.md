@@ -15,7 +15,7 @@ make all
 ```
 
 inside this folder.
-The module can then be loaded via `insmod sb2_mshw0153.ko` (and removed with `rmmod sb2_mshw0153.ko`).
+The module can then be loaded via `insmod sb2_shps.ko` (and removed with `rmmod sb2_shps.ko`).
 
 ## Getting Debug Output
 
