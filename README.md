@@ -1,29 +1,18 @@
 # Linux Kernel Module for MSHW0153
 
-This module is currently only for trying to figure out what `MSHW0153` on the Surface Book 2 does, specifically what the GPIO interrupts and values it provides indicate.
+Linux Kernel Module for the Surface Hot-Plug System (`MSHW0153`).
 
-`MSHW0153` is related to the base of the Surface Book 2, it may indicate the general connection status of the base, or devices in the base, such as the dedicated GPU.
+## Current functionality
 
-Currently it just prints the GPIO values when loaded, and the following interrupts triggered by them.
+- Enable/Disable dGPU power.
+  Currently this only works on loading the module and can be specified via the parameter `dgpu_pwr=0` (disable power, default) or `dgpu_pwr=1` (enable power).
 
 ## Building the Module
 
-Run
-
-```shell
-make all
-```
-
-inside this folder.
+Run `make all` inside this folder.
 The module can then be loaded via `insmod sb2_shps.ko` (and removed with `rmmod sb2_shps.ko`).
 
-## Getting Debug Output
+### Permanently install the module
 
-Once the module has been loaded, run
-
-```shell
-dmesg -w | grep mshw0153
-```
-
-You can now disconnect the top from the base and you should see some interrupt messages appear in the terminal.
-You should see similar messages when re-attaching them.
+If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
+To uninstall it, run `make dkms-uninstall`.
