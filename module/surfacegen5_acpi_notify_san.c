@@ -8,10 +8,6 @@
 
 #define SG5_RQST_RETRY          10
 
-#define SG5_RQST_MSG            "surfacegen5_ec_rqst: "
-#define SG5_NOTIFY_PWR_MSG      "surfacegen5_acpi_notify_power_event: "
-#define SG5_NOTIFY_SENSOR_MSG   "surfacegen5_acpi_notify_senor_trip_point: "
-
 #define SG5_SAN_PATH            "\\_SB._SAN"
 #define SG5_SAN_DSM_REVISION    0
 #define SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
@@ -33,11 +29,21 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define SG5_EVENT_TEMP_RQID		0x0003
 #define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
+#define SG5_RQST_MSG            	"surfacegen5_ec_rqst: "
+
 #define PWR_EVENT_PREFIX		"surfacegen5_san_power_event: "
 #define PWR_EVENT_WARN			KERN_WARNING PWR_EVENT_PREFIX
+#define PWR_EVENT_ERR			KERN_ERR PWR_EVENT_PREFIX
 
 #define TEMP_EVENT_PREFIX		"surfacegen5_san_thermal_event: "
 #define TEMP_EVENT_WARN			KERN_WARNING TEMP_EVENT_PREFIX
+#define TEMP_EVENT_ERR			KERN_ERR TEMP_EVENT_PREFIX
+
+#define NOTIFY_PRW_PREFIX		"surfacegen5_acpi_notify_power_event: "
+#define NOTIFY_PWR_ERR			KERN_ERR NOTIFY_PRW_PREFIX
+
+#define NOTIFY_SENSOR_PREFIX		"surfacegen5_acpi_notify_senor_trip_point: "
+#define NOTIFY_SENSOR_ERR		KERN_ERR NOTIFY_SENSOR_PREFIX
 
 
 struct surfacegen5_san_handler_context {
@@ -100,7 +106,7 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 
 	status = acpi_get_handle(NULL, SG5_SAN_PATH, &san);
 	if (ACPI_FAILURE(status)) {
-		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "failed to get _SAN handle\n");
+		printk(NOTIFY_PWR_ERR "failed to get _SAN handle\n");
 		return status;
 	}
 
@@ -108,12 +114,12 @@ int surfacegen5_acpi_notify_power_event(enum surfacegen5_pwr_event event)
 	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
 
 	if (IS_ERR_OR_NULL(obj)) {
-		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "failed to evaluate _DSM\n");
+		printk(NOTIFY_PWR_ERR "failed to evaluate _DSM\n");
 		return obj ? PTR_ERR(obj) : -EFAULT;
 	}
 
 	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
-		printk(KERN_ERR SG5_NOTIFY_PWR_MSG "got unexpected result from _DSM\n");
+		printk(NOTIFY_PWR_ERR "got unexpected result from _DSM\n");
 		return -EIO;
 	}
 
@@ -130,7 +136,7 @@ int surfacegen5_acpi_notify_sensor_trip_point(u8 iid)
 
 	status = acpi_get_handle(NULL, SG5_SAN_PATH, &san);
 	if (ACPI_FAILURE(status)) {
-		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "failed to get _SAN handle\n");
+		printk(NOTIFY_SENSOR_ERR "failed to get _SAN handle\n");
 		return status;
 	}
 
@@ -142,12 +148,12 @@ int surfacegen5_acpi_notify_sensor_trip_point(u8 iid)
 				      &param, ACPI_TYPE_BUFFER);
 
 	if (IS_ERR_OR_NULL(obj)) {
-		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "failed to evaluate _DSM\n");
+		printk(NOTIFY_SENSOR_ERR "failed to evaluate _DSM\n");
 		return obj ? PTR_ERR(obj) : -EFAULT;
 	}
 
 	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
-		printk(KERN_ERR SG5_NOTIFY_SENSOR_MSG "got unexpected result from _DSM\n");
+		printk(NOTIFY_SENSOR_ERR "got unexpected result from _DSM\n");
 		return -EIO;
 	}
 
@@ -162,7 +168,7 @@ static int surfacegen5_evt_power_adapter(struct surfacegen5_event *event)
 
 	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_ADP1_STAT);
 	if (status) {
-		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		printk(PWR_EVENT_ERR "error handling event (cid = %x)\n", event->cid);
 		return status;
 	}
 
@@ -182,7 +188,7 @@ static int surfacegen5_evt_power_hwchange(struct surfacegen5_event *event)
 
 	status = surfacegen5_acpi_notify_power_event(evcode);
 	if (status) {
-		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		printk(PWR_EVENT_ERR "error handling event (cid = %x)\n", event->cid);
 		return status;
 	}
 
@@ -195,13 +201,13 @@ static int surfacegen5_evt_power_state(struct surfacegen5_event *event)
 
 	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_BAT1_STAT);
 	if (status) {
-		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		printk(PWR_EVENT_ERR "error handling event (cid = %x)\n", event->cid);
 		return status;
 	}
 
 	status = surfacegen5_acpi_notify_power_event(SURFACEGEN5_PWR_EVENT_BAT2_STAT);
 	if (status) {
-		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		printk(PWR_EVENT_ERR "error handling event (cid = %x)\n", event->cid);
 		return status;
 	}
 
@@ -249,7 +255,7 @@ static int surfacegen5_evt_thermal_notify(struct surfacegen5_event *event)
 
 	status = surfacegen5_acpi_notify_sensor_trip_point(event->iid);
 	if (status) {
-		printk(KERN_ERR "error handling power event (cid = %x)\n", event->cid);
+		printk(TEMP_EVENT_ERR "error handling event (cid = %x)\n", event->cid);
 		return status;
 	}
 
