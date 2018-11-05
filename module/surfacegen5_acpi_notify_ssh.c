@@ -8,6 +8,7 @@
 #include <linux/kfifo.h>
 #include <linux/workqueue.h>
 #include <linux/completion.h>
+#include <linux/refcount.h>
 #include <asm/unaligned.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
@@ -159,7 +160,8 @@ struct surfacegen5_ec_event_handler {
 
 struct surfacegen5_ec_events {
 	spinlock_t lock;
-	struct workqueue_struct *queue;
+	struct workqueue_struct *queue_ack;
+	struct workqueue_struct *queue_evt;
 	struct surfacegen5_ec_event_handler handler[SG5_NUM_EVENT_TYPES];
 };
 
@@ -181,8 +183,10 @@ struct surfacegen5_fifo_packet {
 };
 
 struct surfacegen5_event_work {
+	refcount_t               refcount;
 	struct surfacegen5_ec   *ec;
-	struct work_struct       work;
+	struct work_struct       work_ack;
+	struct work_struct       work_evt;
 	struct surfacegen5_event event;
 	u8 seq;
 };
@@ -695,7 +699,30 @@ static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
 }
 
-static void surfacegen5_event_work_handler(struct work_struct *_work)
+static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
+{
+	struct surfacegen5_event_work *work;
+	struct surfacegen5_event *event;
+	struct surfacegen5_ec *ec;
+	int status;
+
+ 	work = container_of(_work, struct surfacegen5_event_work, work_ack);
+	event = &work->event;
+	ec = work->ec;
+
+	if (ec->state == SG5_EC_INITIALIZED) {
+		status = surfacegen5_ssh_send_ack(ec, work->seq);
+		if (status) {
+			printk(EVENT_ERR "failed to send ACK: %d\n", status);
+		}
+	}
+
+	if (refcount_dec_and_test(&work->refcount)) {
+		kfree(work);
+	}
+}
+
+static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 {
 	struct surfacegen5_event_work *work;
 	struct surfacegen5_event *event;
@@ -705,30 +732,20 @@ static void surfacegen5_event_work_handler(struct work_struct *_work)
 	surfacegen5_ec_event_handler_fn handler;
 	void *handler_data;
 
-	int status;
+	int status = 0;
 
- 	work = container_of(_work, struct surfacegen5_event_work, work);
+ 	work = container_of(_work, struct surfacegen5_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
 
-	if (ec->state != SG5_EC_INITIALIZED) {
-		return;
-	}
-
-	status = surfacegen5_ssh_send_ack(ec, work->seq);
-	if (status) {
-		printk(EVENT_ERR "failed to send ACK: %d\n", status);
-		return;
-	}
-
 	spin_lock_irqsave(&ec->events.lock, flags);
-	handler      = ec->events.handler[event->rqid - 1].handler;
-	handler_data = ec->events.handler[event->rqid - 1].data;
+	handler       = ec->events.handler[event->rqid - 1].handler;
+	handler_data  = ec->events.handler[event->rqid - 1].data;
+	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	if (handler) {
 		status = handler(event, handler_data);
 	}
-	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	if (status) {
 		printk(EVENT_ERR "error handling event: %d\n", status);
@@ -736,7 +753,9 @@ static void surfacegen5_event_work_handler(struct work_struct *_work)
 		printk(EVENT_WARN "unhandled event (rqid: %04x)\n", event->rqid);
 	}
 
-	kfree(work);
+	if (refcount_dec_and_test(&work->refcount)) {
+		kfree(work);
+	}
 }
 
 static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *buf)
@@ -757,7 +776,10 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 		return;
 	}
 
-	INIT_WORK(&work->work, surfacegen5_event_work_handler);
+	refcount_set(&work->refcount, 2);
+
+	INIT_WORK(&work->work_ack, surfacegen5_event_work_ack_handler);
+	INIT_WORK(&work->work_evt, surfacegen5_event_work_evt_handler);
 
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
@@ -770,7 +792,8 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	memcpy(work->event.pld, buf + SG5_FRAME_OFFS_CMD_PLD, pld_len);
 
-	queue_work(ec->events.queue, &work->work);
+	queue_work(ec->events.queue_ack, &work->work_ack);
+	queue_work(ec->events.queue_evt, &work->work_evt);
 }
 
 static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
@@ -1081,7 +1104,8 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
-	struct workqueue_struct *event_queue;
+	struct workqueue_struct *event_queue_ack;
+	struct workqueue_struct *event_queue_evt;
 	u8 *write_buf;
 	u8 *read_buf;
 	u8 *eval_buf;
@@ -1120,10 +1144,16 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 		goto err_probe_alloc_eval;
 	}
 
-	event_queue = create_singlethread_workqueue("sg5_eventq");
-	if (!event_queue) {
+	event_queue_ack = create_singlethread_workqueue("sg5_ackq");
+	if (!event_queue_ack) {
 		status = -ENOMEM;
-		goto err_probe_alloc_queue;
+		goto err_probe_alloc_queue_ack;
+	}
+
+	event_queue_evt = create_workqueue("sg5_evtq");
+	if (!event_queue_evt) {
+		status = -ENOMEM;
+		goto err_probe_alloc_queue_evt;
 	}
 
 	// set up EC
@@ -1149,7 +1179,8 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 	spin_lock_irqsave(&ec->events.lock, flags);
-	ec->events.queue = event_queue;
+	ec->events.queue_ack = event_queue_ack;
+	ec->events.queue_evt = event_queue_evt;
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	ec->state = SG5_EC_INITIALIZED;
@@ -1162,8 +1193,10 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	return 0;
 
 err_probe_busy:
-	destroy_workqueue(event_queue);
-err_probe_alloc_queue:
+	destroy_workqueue(event_queue_evt);
+err_probe_alloc_queue_evt:
+	destroy_workqueue(event_queue_ack);
+err_probe_alloc_queue_ack:
 	kfree(eval_buf);
 err_probe_alloc_eval:
 	kfree(read_buf);
@@ -1207,7 +1240,8 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 		        * SG5_NUM_EVENT_TYPES);
 		spin_unlock_irqrestore(&ec->events.lock, flags);
 
-		destroy_workqueue(ec->events.queue);
+		destroy_workqueue(ec->events.queue_ack);
+		destroy_workqueue(ec->events.queue_evt);
 	}
 	surfacegen5_ec_release(ec);
 

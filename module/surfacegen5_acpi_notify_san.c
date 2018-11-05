@@ -170,6 +170,8 @@ int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
 	case SG5_EVENT_CID_POWER_INFO:
 		return surfacegen5_evt_power_info(event);
 
+	// TODO: events 0x16, 0x4f
+
 	default:
 		printk(PWR_EVENT_WARN "unhandled power event (cid = %x)\n", event->cid);
 	}
