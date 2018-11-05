@@ -20,11 +20,12 @@ static const guid_t SG5_SAN_DSM_UUID =
 
 #define SG5_EVENT_PWR_TC		0x02
 #define SG5_EVENT_PWR_RQID		0x0002
-#define SG5_EVENT_PWR_CID_INFO		0x15
-#define SG5_EVENT_PWR_CID_STATE		0x16
+#define SG5_EVENT_PWR_CID_HWCHANGE	0x15
+#define SG5_EVENT_PWR_CID_CHARGING	0x16
 #define SG5_EVENT_PWR_CID_ADAPTER	0x17
+#define SG5_EVENT_PWR_CID_STATE		0x4f
 
-#define SG5_EVENT_DELAY_POWER_STATE	msecs_to_jiffies(2000)
+#define SG5_EVENT_DELAY_POWER		msecs_to_jiffies(5000)
 
 #define PWR_EVENT_PREFIX		"surfacegen5_san_power_event: "
 #define PWR_EVENT_WARN			KERN_WARNING PWR_EVENT_PREFIX
@@ -127,7 +128,7 @@ static int surfacegen5_evt_power_adapter(struct surfacegen5_event *event)
 	return 0;
 }
 
-static int surfacegen5_evt_power_info(struct surfacegen5_event *event)
+static int surfacegen5_evt_power_hwchange(struct surfacegen5_event *event)
 {
 	enum surfacegen5_pwr_event evcode;
 	int status;
@@ -168,26 +169,30 @@ static int surfacegen5_evt_power_state(struct surfacegen5_event *event)
 
 static unsigned long surfacegen5_evt_power_delay(struct surfacegen5_event *event, void *data)
 {
-	if (event->cid == SG5_EVENT_PWR_CID_STATE) {
-		return SG5_EVENT_DELAY_POWER_STATE;
-	}
+	switch (event->cid) {
+	case SG5_EVENT_PWR_CID_CHARGING:
+	case SG5_EVENT_PWR_CID_STATE:
+		return SG5_EVENT_DELAY_POWER;
 
-	return 0;
+	case SG5_EVENT_PWR_CID_ADAPTER:
+	case SG5_EVENT_PWR_CID_HWCHANGE:
+	default:
+		return 0;
+	}
 }
 
 static int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
 {
 	switch (event->cid) {
-	case SG5_EVENT_PWR_CID_INFO:
-		return surfacegen5_evt_power_info(event);
-
-	case SG5_EVENT_PWR_CID_STATE:
-		return surfacegen5_evt_power_state(event);
+	case SG5_EVENT_PWR_CID_HWCHANGE:
+		return surfacegen5_evt_power_hwchange(event);
 
 	case SG5_EVENT_PWR_CID_ADAPTER:
 		return surfacegen5_evt_power_adapter(event);
 
-	// TODO: 0x4f event
+	case SG5_EVENT_PWR_CID_CHARGING:
+	case SG5_EVENT_PWR_CID_STATE:
+		return surfacegen5_evt_power_state(event);
 
 	default:
 		printk(PWR_EVENT_WARN "unhandled power event (cid = %x)\n", event->cid);
