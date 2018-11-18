@@ -9,6 +9,7 @@
 #include <linux/workqueue.h>
 #include <linux/completion.h>
 #include <linux/refcount.h>
+#include <linux/dmaengine.h>
 #include <asm/unaligned.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
@@ -1123,6 +1124,63 @@ surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *contex
 }
 
 
+static bool surfacegen5_idma_filter(struct dma_chan *chan, void *param)
+{
+	// see dw8250_idma_filter
+	return param == chan->device->dev->parent;
+}
+
+static int surfacegen5_ssh_check_dma(struct serdev_device *serdev)
+{
+	struct device *dev = serdev->ctrl->dev.parent;
+	struct dma_chan *rx, *tx;
+	dma_cap_mask_t mask;
+	int status = 0;
+
+	/*
+	 * The EC UART requires DMA for proper communication. If we don't use DMA,
+	 * we'll drop bytes when the system has high load, e.g. during boot. This
+	 * causes some ugly behaviour, i.e. battery information (_BIX) messages
+	 * failing frequently. We're making sure the required DMA channels are
+	 * available here so serial8250_do_startup is able to grab them later
+	 * instead of silently falling back to a non-DMA approach.
+	 */
+
+	dma_cap_zero(mask);
+	dma_cap_set(DMA_SLAVE, mask);
+
+	rx = dma_request_slave_channel_compat(mask, surfacegen5_idma_filter, dev->parent, dev, "rx");
+	if (IS_ERR_OR_NULL(rx)) {
+		status = rx ? PTR_ERR(rx) : -EPROBE_DEFER;
+		if (status != -EPROBE_DEFER) {
+			dev_err(&serdev->dev, "sg5_dma: error requesting rx channel: %d\n", status);
+		} else {
+			dev_info(&serdev->dev, "sg5_dma: rx channel not found, deferring probe\n");
+		}
+		goto check_dma_out;
+	}
+
+	tx = dma_request_slave_channel_compat(mask, surfacegen5_idma_filter, dev->parent, dev, "tx");
+	if (IS_ERR_OR_NULL(tx)) {
+		status = tx ? PTR_ERR(tx) : -EPROBE_DEFER;
+		if (status != -EPROBE_DEFER) {
+			dev_err(&serdev->dev, "sg5_dma: error requesting tx channel: %d\n", status);
+		} else {
+			dev_info(&serdev->dev, "sg5_dma: tx channel not found, deferring probe\n");
+		}
+		goto check_dma_release_rx;
+	}
+
+	dev_info(&serdev->dev, "sg5_dma: rx and tx channels found\n");
+
+	dma_release_channel(tx);
+check_dma_release_rx:
+	dma_release_channel(rx);
+check_dma_out:
+	return status;
+}
+
+
 static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 	.receive_buf  = surfacegen5_ssh_receive_buf,
 	.write_wakeup = serdev_device_write_wakeup,
@@ -1141,6 +1199,11 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	acpi_status status;
 
 	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_probe\n");
+
+	status = surfacegen5_ssh_check_dma(serdev);
+	if (status) {
+		return status;
+	}
 
 	serdev_device_set_client_ops(serdev, &surfacegen5_ssh_device_ops);
 	status = serdev_device_open(serdev);
