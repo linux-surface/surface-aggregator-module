@@ -10,6 +10,7 @@
 #include <linux/completion.h>
 #include <linux/refcount.h>
 #include <linux/dmaengine.h>
+#include <linux/pm.h>
 #include <asm/unaligned.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
@@ -1181,6 +1182,21 @@ check_dma_out:
 }
 
 
+static int surfacegen5_ssh_suspend(struct device *dev)
+{
+	printk(KERN_WARNING "sg5_pm_ssh_suspend\n");
+	return 0;
+}
+
+static int surfacegen5_ssh_resume(struct device *dev)
+{
+	printk(KERN_WARNING "sg5_pm_ssh_resume\n");
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(surfacegen5_ssh_pm_ops, surfacegen5_ssh_suspend, surfacegen5_ssh_resume);
+
+
 static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 	.receive_buf  = surfacegen5_ssh_receive_buf,
 	.write_wakeup = serdev_device_write_wakeup,
@@ -1353,5 +1369,6 @@ struct serdev_device_driver surfacegen5_acpi_notify_ssh = {
 	.driver = {
 		.name = "surfacegen5_acpi_notify_ssh",
 		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_ssh_match),
+		.pm = &surfacegen5_ssh_pm_ops,
 	},
 };

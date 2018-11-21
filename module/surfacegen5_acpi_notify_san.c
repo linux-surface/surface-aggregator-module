@@ -2,6 +2,7 @@
 #include <linux/kernel.h>
 #include <linux/jiffies.h>
 #include <linux/platform_device.h>
+#include <linux/pm.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
 #include "surfacegen5_acpi_notify_san.h"
@@ -489,6 +490,22 @@ static void surfacegen5_san_disable_events(void)
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
 }
 
+
+static int surfacegen5_san_suspend(struct device *dev)
+{
+	printk(KERN_WARNING "sg5_pm_san_suspend\n");
+	return 0;
+}
+
+static int surfacegen5_san_resume(struct device *dev)
+{
+	printk(KERN_WARNING "sg5_pm_san_resume\n");
+	return 0;
+}
+
+static SIMPLE_DEV_PM_OPS(surfacegen5_san_pm_ops, surfacegen5_san_suspend, surfacegen5_san_resume);
+
+
 static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 {
 	struct surfacegen5_san_handler_context *context = NULL;
@@ -585,5 +602,6 @@ struct platform_driver surfacegen5_acpi_notify_san = {
 		.name = "surfacegen5_acpi_notify_san",
 		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_san_match),
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
+		.pm = &surfacegen5_san_pm_ops,
 	},
 };
