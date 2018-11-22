@@ -248,7 +248,7 @@ int surfacegen5_ec_consumer_set(struct device *consumer)
 {
 	struct surfacegen5_ec *ec = surfacegen5_ec_acquire_init();
 	struct device_link *link;
-	u32 flags = DL_FLAG_PM_RUNTIME;		// TODO: consider DL_FLAG_RPM_ACTIVE
+	u32 flags = DL_FLAG_PM_RUNTIME;
 	int status = 0;
 
 	if (!ec) {

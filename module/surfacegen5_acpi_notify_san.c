@@ -50,6 +50,7 @@ static const guid_t SG5_SAN_DSM_UUID =
 struct surfacegen5_san_acpi_dep {
 	char *consumer;
 	bool  required;
+	u32   flags;
 };
 
 struct surfacegen5_san_handler_context {
@@ -514,7 +515,6 @@ static int surfacegen5_san_devlink_setup(struct platform_device *pdev,
 	struct device_link **links, **link;
 	struct acpi_device *adev;
 	acpi_handle handle;
-	u32 flags = DL_FLAG_PM_RUNTIME;		// TODO: consider DL_FLAG_RPM_ACTIVE
 	u32 max_links = 0;
 	int status;
 
@@ -546,7 +546,7 @@ static int surfacegen5_san_devlink_setup(struct platform_device *pdev,
 		if (status)
 			goto devlink_setup_cleanup;
 
-		*link = device_link_add(&adev->dev, &pdev->dev, flags);
+		*link = device_link_add(&adev->dev, &pdev->dev, dep->flags);
 		if (!(*link)) {
 			status = -ENOMEM;
 			goto devlink_setup_cleanup;
@@ -573,6 +573,9 @@ devlink_setup_cleanup:
 
 static void surfacegen5_san_devlink_release(struct surfacegen5_san_devlink *devlink) {
 	u32 i;
+
+	if (!devlink)
+		return;
 
 	printk(KERN_WARNING "sg5_devlink: removing %d links\n", devlink->num);
 
@@ -633,7 +636,6 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 
 	drvdata->handler_ctx.dev = &pdev->dev;
 
-	// TODO: add device links here
 	deps = acpi_device_get_match_data(&pdev->dev);
 	status = surfacegen5_san_devlink_setup(pdev, deps, &drvdata->devlink);
 	if (ACPI_FAILURE(status)) {
@@ -692,9 +694,9 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 
 
 static const struct surfacegen5_san_acpi_dep surfacegen5_mshw0091_deps[] = {
-	{ "\\ADP1",     true  },
-	{ "\\_SB.BAT1", true  },
-	{ "\\_SB.BAT2", false },
+	{ "\\ADP1",     true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.BAT1", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.BAT2", false, DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ },
 };
 
