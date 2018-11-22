@@ -47,9 +47,24 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define NOTIFY_SENSOR_ERR		KERN_ERR NOTIFY_SENSOR_PREFIX
 
 
+struct surfacegen5_san_acpi_dep {
+	char *consumer;
+	bool  required;
+};
+
 struct surfacegen5_san_handler_context {
 	struct acpi_connection_info connection;
 	struct device *dev;
+};
+
+struct surfacegen5_san_devlink {
+	u32                  num;
+	struct device_link **links;
+};
+
+struct surfacegen5_san_drvdata {
+	struct surfacegen5_san_handler_context handler_ctx;
+	struct surfacegen5_san_devlink         devlink;
 };
 
 struct gsb_data_in {
@@ -491,6 +506,89 @@ static void surfacegen5_san_disable_events(void)
 }
 
 
+static int surfacegen5_san_devlink_setup(struct platform_device *pdev,
+                                         const struct surfacegen5_san_acpi_dep *deps,
+                                         struct surfacegen5_san_devlink *out)
+{
+	const struct surfacegen5_san_acpi_dep *dep;
+	struct device_link **links, **link;
+	struct acpi_device *adev;
+	acpi_handle handle;
+	u32 flags = DL_FLAG_PM_RUNTIME;		// TODO: consider DL_FLAG_RPM_ACTIVE
+	u32 max_links = 0;
+	int status;
+
+	if (!deps)
+		return 0;
+
+	// count links
+	for (dep = deps; dep->consumer; ++dep)
+		max_links += 1;
+
+	// allocate
+	links = kzalloc(max_links * sizeof(struct device_link *), GFP_KERNEL);
+	link = &links[0];
+
+	if (!links)
+		return -ENOMEM;
+
+	// create links
+	for (dep = deps; dep->consumer; ++dep) {
+		status = acpi_get_handle(NULL, dep->consumer, &handle);
+		if (status) {
+			if (dep->required || status != AE_NOT_FOUND)
+				goto devlink_setup_cleanup;
+			else
+				continue;
+		}
+
+		status = acpi_bus_get_device(handle, &adev);
+		if (status)
+			goto devlink_setup_cleanup;
+
+		*link = device_link_add(&adev->dev, &pdev->dev, flags);
+		if (!(*link)) {
+			status = -ENOMEM;
+			goto devlink_setup_cleanup;
+		}
+
+		link += 1;
+
+		printk(KERN_WARNING "sg5_devlink: setup dependency for %s\n", dep->consumer);
+	}
+
+	out->num = link - links;
+	out->links = links;
+
+	printk(KERN_WARNING "sg5_devlink: added %d links\n", out->num);
+
+	return 0;
+
+devlink_setup_cleanup:
+	for (link = link - 1; link >= links; --link)
+		device_link_del(*link);
+
+	return status;
+}
+
+static void surfacegen5_san_devlink_release(struct surfacegen5_san_devlink *devlink) {
+	u32 i;
+
+	printk(KERN_WARNING "sg5_devlink: removing %d links\n", devlink->num);
+
+	for (i = 0; i < devlink->num; ++i) {
+		printk(KERN_WARNING "sg5_devlink: removing link %d\n", i);
+		device_link_del(devlink->links[i]);
+	}
+
+	printk(KERN_WARNING "sg5_devlink: freeing memory\n");
+	kfree(devlink->links);
+
+	devlink->num = 0;
+	devlink->links = NULL;
+}
+
+
 static int surfacegen5_san_suspend(struct device *dev)
 {
 	printk(KERN_WARNING "sg5_pm_san_suspend\n");
@@ -508,7 +606,8 @@ static SIMPLE_DEV_PM_OPS(surfacegen5_san_pm_ops, surfacegen5_san_suspend, surfac
 
 static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 {
-	struct surfacegen5_san_handler_context *context = NULL;
+	const struct surfacegen5_san_acpi_dep *deps;
+	struct surfacegen5_san_drvdata *drvdata = NULL;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
@@ -527,23 +626,27 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 		return status;
 	}
 
-	context = kzalloc(sizeof(struct surfacegen5_san_handler_context), GFP_KERNEL);
-	if (!context) {
+	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
+	if (!drvdata) {
 		return -ENOMEM;
 	}
 
-	context->dev = &pdev->dev;
+	drvdata->handler_ctx.dev = &pdev->dev;
 
-	status = acpi_bus_attach_private_data(san, context);
+	// TODO: add device links here
+	deps = acpi_device_get_match_data(&pdev->dev);
+	status = surfacegen5_san_devlink_setup(pdev, deps, &drvdata->devlink);
 	if (ACPI_FAILURE(status)) {
-		goto err_probe_privdata;
+		goto err_probe_devlink;
 	}
+
+	platform_set_drvdata(pdev, drvdata);
 
 	status = acpi_install_address_space_handler(san,
 			ACPI_ADR_SPACE_GSBUS,
 			&surfacegen5_san_space_handler,
 			NULL,
-			context);
+			&drvdata->handler_ctx);
 
 	if (ACPI_FAILURE(status)) {
 		goto err_probe_install_handler;
@@ -560,15 +663,16 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 err_probe_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
 err_probe_install_handler:
-	acpi_bus_detach_private_data(san);
-err_probe_privdata:
-	kfree(context);
+	platform_set_drvdata(san, NULL);
+	surfacegen5_san_devlink_release(&drvdata->devlink);
+err_probe_devlink:
+	kfree(drvdata);
 	return status;
 }
 
 static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 {
-	struct surfacegen5_san_handler_context *context = NULL;
+	struct surfacegen5_san_drvdata *drvdata = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
@@ -577,20 +681,25 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_space_handler);
 	surfacegen5_san_disable_events();
 
-	status = acpi_bus_get_private_data(san, (void **)&context);
-	if (ACPI_SUCCESS(status) && context) {
-		kfree(context);
-	}
-	acpi_bus_detach_private_data(san);
+	surfacegen5_san_devlink_release(&drvdata->devlink);
+	kfree(drvdata);
 
 	surfacegen5_ec_consumer_remove(&pdev->dev);
 
+	platform_set_drvdata(pdev, NULL);
 	return status;
 }
 
 
+static const struct surfacegen5_san_acpi_dep surfacegen5_mshw0091_deps[] = {
+	{ "\\ADP1",     true  },
+	{ "\\_SB.BAT1", true  },
+	{ "\\_SB.BAT2", false },
+	{ },
+};
+
 static const struct acpi_device_id surfacegen5_acpi_notify_san_match[] = {
-	{ "MSHW0091", 0 },
+	{ "MSHW0091", (long unsigned int) surfacegen5_mshw0091_deps },
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_san_match);
