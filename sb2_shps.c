@@ -67,6 +67,13 @@ static int sb2_shps_dgpu_set_power(acpi_handle handle, bool on)
 	return 0;
 }
 
+static int sb2_shps_resume(struct device *dev)
+{
+	acpi_handle shps = ACPI_HANDLE(dev);
+
+	return sb2_shps_dgpu_set_power(shps, sb2_dgpu_default_pwr);
+}
+
 static int sb2_shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
@@ -101,6 +108,8 @@ static int sb2_shps_remove(struct platform_device *pdev)
 }
 
 
+static SIMPLE_DEV_PM_OPS(sb2_shps_pm_ops, NULL, sb2_shps_resume);
+
 static const struct acpi_device_id sb2_shps_acpi_match[] = {
 	{ "MSHW0153", 0 },
 	{ },
@@ -113,6 +122,7 @@ static struct platform_driver sb2_shps_driver = {
 	.driver = {
 		.name = "sb2_shps",
 		.acpi_match_table = ACPI_PTR(sb2_shps_acpi_match),
+		.pm = &sb2_shps_pm_ops,
 	},
 };
 module_platform_driver(sb2_shps_driver);
