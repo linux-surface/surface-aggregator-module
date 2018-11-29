@@ -7,7 +7,7 @@
 #include "surfacegen5_acpi_notify_ssh.h"
 #include "surfacegen5_acpi_notify_san.h"
 
-#define SG5_RQST_RETRY          3
+#define SG5_RQST_RETRY          5
 
 #define SG5_SAN_PATH            "\\_SB._SAN"
 #define SG5_SAN_DSM_REVISION    0

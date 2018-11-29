@@ -120,6 +120,7 @@ struct surfacegen5_frame_cmd {
 enum surfacegen5_ec_state {
 	SG5_EC_UNINITIALIZED,
 	SG5_EC_INITIALIZED,
+	SG5_EC_SUSPENDED,
 };
 
 struct surfacegen5_ec_counters {
@@ -236,7 +237,7 @@ inline static struct surfacegen5_ec *surfacegen5_ec_acquire_init(void)
 {
 	struct surfacegen5_ec *ec = surfacegen5_ec_acquire();
 
-	if (ec->state != SG5_EC_INITIALIZED) {
+	if (ec->state == SG5_EC_UNINITIALIZED) {
 		surfacegen5_ec_release(ec);
 		return NULL;
 	}
@@ -307,21 +308,38 @@ int surfacegen5_ec_enable_events()
 		.pld = NULL,
 	};
 
+	// TODO: according to windows logs, this should return something.
+	// Based on linux-testing, it doesn't.
+
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
 
 int surfacegen5_ec_disable_events()
 {
+	/* Note:
+	 * On the Surface Book 2, this also disables keyboard lighting.
+	 */
+
+	u8 buf[1];
+
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
 		.iid = 0x00,
 		.cid = 0x15,
-		.snc = 0x00,
+		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
 	};
 
-	return surfacegen5_ec_rqst(&rqst, NULL);
+	struct surfacegen5_buf result = {
+		result.cap = ARRAY_SIZE(buf),
+		result.len = 0,
+		result.data = buf,
+	};
+
+	// TODO: check result.data?
+
+	return surfacegen5_ec_rqst(&rqst, &result);
 }
 
 int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid)
@@ -609,6 +627,13 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 	if (!ec) {
 		printk(RQST_WARN "embedded controller is uninitialized\n");
 		return -ENXIO;
+	}
+
+	if (ec->state == SG5_EC_SUSPENDED) {
+		surfacegen5_ec_release(ec);
+
+		printk(RQST_WARN "embedded controller is suspended\n");
+		return -EPERM;
 	}
 
 	// write command in buffer, we may need it multiple times
@@ -1185,14 +1210,52 @@ check_dma_out:
 
 static int surfacegen5_ssh_suspend(struct device *dev)
 {
+	struct surfacegen5_ec *ec;
+
 	printk(KERN_WARNING "sg5_pm_ssh_suspend\n");
+
+	/*
+	 * On the Surface Book 2, "disabling events" also disables the keyboard
+	 * backlight (respecitvely "enabling events" enables the keyboard backlight
+	 * again). Thus we always disable events regardless if they have been
+	 * enabled.
+	 *
+	 * TODO: Make this more consistent. Either disable/enable events only in the
+	 * _SAN or only in the _SSH driver, but not both.
+	 */
+	surfacegen5_ec_disable_events();
+
+	ec = surfacegen5_ec_acquire_init();
+	if (ec) {
+		ec->state = SG5_EC_SUSPENDED;
+		surfacegen5_ec_release(ec);
+	}
+
 	return 0;
 }
 
 static int surfacegen5_ssh_resume(struct device *dev)
 {
+	struct surfacegen5_ec *ec;
+	int status = 0;
+
 	printk(KERN_WARNING "sg5_pm_ssh_resume\n");
-	return 0;
+
+	ec = surfacegen5_ec_acquire_init();
+	if (ec && ec->state == SG5_EC_SUSPENDED) {
+		ec->state = SG5_EC_INITIALIZED;
+		surfacegen5_ec_release(ec);
+	}
+
+	/*
+	 * Unconditionally enable events. See surfacegen5_ssh_suspend for details.
+	 */
+	status = surfacegen5_ec_enable_events();
+	if (status) {
+		printk(KERN_ERR "sg5_pm_ssh_resume: failed to enable events: %d\n", status);
+	}
+
+	return status;
 }
 
 static SIMPLE_DEV_PM_OPS(surfacegen5_ssh_pm_ops, surfacegen5_ssh_suspend, surfacegen5_ssh_resume);
