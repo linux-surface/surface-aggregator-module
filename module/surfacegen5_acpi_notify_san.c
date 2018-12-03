@@ -694,6 +694,7 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 
 
 static const struct surfacegen5_san_acpi_dep surfacegen5_mshw0091_deps[] = {
+	{ "\\_SB.SRTC", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\ADP1",     true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\_SB.BAT1", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\_SB.BAT2", false, DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
