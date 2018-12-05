@@ -6,7 +6,6 @@
 
 extern struct serdev_device_driver surfacegen5_acpi_notify_ssh;
 extern struct platform_driver surfacegen5_acpi_notify_san;
-extern struct platform_driver surfacegen5_acpi_notify_shps;
 
 
 int __init surfacegen5_acpi_notify_init(void)
