@@ -2,6 +2,7 @@
 #define _SURFACEGEN5_ACPI_NOTIFY_SSH_H
 
 #include <linux/types.h>
+#include <linux/device.h>
 
 
 /*
@@ -47,8 +48,8 @@ struct surfacegen5_event {
 typedef int (*surfacegen5_ec_event_handler_fn)(struct surfacegen5_event *event, void *data);
 typedef unsigned long (*surfacegen5_ec_event_handler_delay)(struct surfacegen5_event *event, void *data);
 
-int surfacegen5_ec_consumer_set(struct device *consumer);
-int surfacegen5_ec_consumer_remove(struct device *consumer);
+struct device_link *surfacegen5_ec_consumer_add(struct device *consumer, u32 flags);
+int surfacegen5_ec_consumer_remove(struct device_link *link);
 
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
 

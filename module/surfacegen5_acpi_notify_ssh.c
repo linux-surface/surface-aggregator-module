@@ -173,7 +173,6 @@ struct surfacegen5_ec {
 	struct mutex                   lock;
 	enum surfacegen5_ec_state      state;
 	struct serdev_device          *serdev;
-	struct device_link            *link;
 	struct surfacegen5_ec_counters counter;
 	struct surfacegen5_ec_writer   writer;
 	struct surfacegen5_ec_receiver receiver;
@@ -245,43 +244,28 @@ inline static struct surfacegen5_ec *surfacegen5_ec_acquire_init(void)
 	return ec;
 }
 
-int surfacegen5_ec_consumer_set(struct device *consumer)
+struct device_link *surfacegen5_ec_consumer_add(struct device *consumer, u32 flags)
 {
-	struct surfacegen5_ec *ec = surfacegen5_ec_acquire_init();
+	struct surfacegen5_ec *ec;
 	struct device_link *link;
-	u32 flags = DL_FLAG_PM_RUNTIME;
-	int status = 0;
 
+	ec = surfacegen5_ec_acquire_init();
 	if (!ec) {
-		return -ENXIO;
-	}
-
-	if (ec->link) {
-		surfacegen5_ec_release(ec);
-		return -EBUSY;
+		return ERR_PTR(-ENXIO);
 	}
 
 	link = device_link_add(consumer, &ec->serdev->dev, flags);
-	if (link) {
-		ec->link = link;
-	} else {
-		status = -EFAULT;
-	}
 
 	surfacegen5_ec_release(ec);
-	return status;
+	return link;
 }
 
-int surfacegen5_ec_consumer_remove(struct device *consumer)
+int surfacegen5_ec_consumer_remove(struct device_link *link)
 {
 	struct surfacegen5_ec *ec = surfacegen5_ec_acquire_init();
+	if (!ec) { return -ENXIO; }
 
-	if (!ec) {
-		return -ENXIO;
-	}
-
-	device_link_del(ec->link);
-	ec->link = NULL;
+	device_link_del(link);
 
 	surfacegen5_ec_release(ec);
 	return 0;

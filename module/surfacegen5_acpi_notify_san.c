@@ -50,6 +50,7 @@ struct surfacegen5_san_consumers {
 struct surfacegen5_san_drvdata {
 	struct surfacegen5_san_opreg_context opreg_ctx;
 	struct surfacegen5_san_consumers     consumers;
+	struct device_link                  *ec_link;
 };
 
 struct gsb_data_in {
@@ -567,8 +568,14 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 {
 	const struct surfacegen5_san_acpi_consumer *cons;
 	struct surfacegen5_san_drvdata *drvdata;
+	struct device_link *ec_link;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	int status;
+
+	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
+	if (!drvdata) {
+		return -ENOMEM;
+	}
 
 	/*
 	 * Defer probe if the _SSH driver has not set up the controller yet. This
@@ -576,18 +583,18 @@ static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
 	 * which the battery does not get set up correctly). Otherwise register as
 	 * consumer to set up a device_link.
 	 */
-	status = surfacegen5_ec_consumer_set(&pdev->dev);
-	if (status == -ENXIO) {
-		return -EPROBE_DEFER;
-	} else if (status) {
-		return status;
+	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
+	if (IS_ERR_OR_NULL(ec_link)) {
+		if (PTR_ERR(ec_link) == -ENXIO) {
+			status = -EPROBE_DEFER;
+		} else {
+			status = -EFAULT;
+		}
+
+		goto err_probe_ec_link;
 	}
 
-	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
-	if (!drvdata) {
-		return -ENOMEM;
-	}
-
+	drvdata->ec_link = ec_link;
 	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
@@ -622,6 +629,8 @@ err_probe_install_handler:
 	platform_set_drvdata(san, NULL);
 	surfacegen5_san_consumers_unlink(&drvdata->consumers);
 err_probe_consumers:
+	surfacegen5_ec_consumer_remove(drvdata->ec_link);
+err_probe_ec_link:
 	kfree(drvdata);
 	return status;
 }
@@ -636,9 +645,8 @@ static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
 	surfacegen5_san_disable_events();
 
 	surfacegen5_san_consumers_unlink(&drvdata->consumers);
+	surfacegen5_ec_consumer_remove(drvdata->ec_link);
 	kfree(drvdata);
-
-	surfacegen5_ec_consumer_remove(&pdev->dev);
 
 	platform_set_drvdata(pdev, NULL);
 	return status;
