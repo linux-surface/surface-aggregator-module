@@ -743,6 +743,8 @@ static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 	buf[8] = 0xff;
 	buf[9] = 0xff;
 
+	dev_info(&ec->serdev->dev, "sending ACK for seq = 0x%02x\n", seq);
+
 	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
 }
 
