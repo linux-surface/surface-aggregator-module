@@ -13,10 +13,14 @@ int __init surfacegen5_acpi_notify_init(void)
 	int status = 0;
 
 	status = serdev_device_driver_register(&surfacegen5_acpi_notify_ssh);
-	if (status) goto err_init_ssh;
+	if (status) {
+		goto err_init_ssh;
+	}
 
 	status = platform_driver_register(&surfacegen5_acpi_notify_san);
-	if (status) goto err_init_san;
+	if (status) {
+		goto err_init_san;
+	}
 
 	return 0;
 
