@@ -164,8 +164,8 @@ struct surfacegen5_ec_event_handler {
 
 struct surfacegen5_ec_events {
 	spinlock_t lock;
-	struct workqueue_struct *queue_ack;
-	struct workqueue_struct *queue_evt;
+	struct workqueue_struct *queue_ack;		// TODO: move to system workqueue/don't use any at all?
+	struct workqueue_struct *queue_evt;		// TODO: move to system workqueue/don't use any at all?
 	struct surfacegen5_ec_event_handler handler[SG5_NUM_EVENT_TYPES];
 };
 
@@ -297,51 +297,6 @@ inline static bool surfacegen5_rqid_is_event(u16 rqid) {
 	return rqid != 0 && (rqid | mask) == mask;
 }
 
-int surfacegen5_ec_enable_events()
-{
-	struct surfacegen5_rqst rqst = {
-		.tc  = 0x01,
-		.iid = 0x00,
-		.cid = 0x16,
-		.snc = 0x00,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	// TODO: according to windows logs, this should return something.
-	// Based on linux-testing, it doesn't.
-
-	return surfacegen5_ec_rqst(&rqst, NULL);
-}
-
-int surfacegen5_ec_disable_events()
-{
-	/* Note:
-	 * On the Surface Book 2, this also disables keyboard lighting.
-	 */
-
-	u8 buf[1];
-
-	struct surfacegen5_rqst rqst = {
-		.tc  = 0x01,
-		.iid = 0x00,
-		.cid = 0x15,
-		.snc = 0x01,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	struct surfacegen5_buf result = {
-		result.cap = ARRAY_SIZE(buf),
-		result.len = 0,
-		result.data = buf,
-	};
-
-	// TODO: check result.data?
-
-	return surfacegen5_ec_rqst(&rqst, &result);
-}
-
 int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
@@ -358,6 +313,8 @@ int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 	if (!surfacegen5_rqid_is_event(rqid)) {
 		return -EINVAL;
 	}
+
+	// TODO: make sure there actually is no response for this request
 
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
@@ -378,6 +335,8 @@ int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 	if (!surfacegen5_rqid_is_event(rqid)) {
 		return -EINVAL;
 	}
+
+	// TODO: make sure there actually is no response for this request
 
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
@@ -441,6 +400,11 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surfacegen5_ec_release(ec);
 
+ 	/*
+	 * Make sure that the handler is not in use any more after we've
+	 * removed it.
+	 */
+	 // TODO: make sure that work is actually finished after a flush
 	flush_workqueue(ec->events.queue_evt);
 
 	return 0;
@@ -609,31 +573,18 @@ inline static void surfacegen5_ssh_receiver_discard(struct surfacegen5_ec *ec)
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
 
-
-int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
+static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
+                                 struct surfacegen5_rqst *rqst,
+				 struct surfacegen5_buf *result)
 {
-	struct surfacegen5_ec *ec;
 	struct surfacegen5_fifo_packet packet = {};
-	int status = 0;
-	int try = 0;
-	unsigned int rem = 0;
+	int status;
+	int try;
+	unsigned int rem;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
 		printk(RQST_ERR "request payload too large\n");
 		return -EINVAL;
-	}
-
-	ec = surfacegen5_ec_acquire_init();
-	if (!ec) {
-		printk(RQST_WARN "embedded controller is uninitialized\n");
-		return -ENXIO;
-	}
-
-	if (ec->state == SG5_EC_SUSPENDED) {
-		surfacegen5_ec_release(ec);
-
-		printk(RQST_WARN "embedded controller is suspended\n");
-		return -EPERM;
 	}
 
 	// write command in buffer, we may need it multiple times
@@ -696,8 +647,79 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 
 ec_rqst_out:
 	surfacegen5_ssh_receiver_discard(ec);
-	surfacegen5_ec_release(ec);
 	return status;
+}
+
+int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
+{
+	struct surfacegen5_ec *ec;
+	int status;
+
+	ec = surfacegen5_ec_acquire_init();
+	if (!ec) {
+		printk(RQST_WARN "embedded controller is uninitialized\n");
+		return -ENXIO;
+	}
+
+	if (ec->state == SG5_EC_SUSPENDED) {
+		surfacegen5_ec_release(ec);
+
+		printk(RQST_WARN "embedded controller is suspended\n");
+		return -EPERM;
+	}
+
+	status = surfacegen5_ec_rqst_unlocked(ec, rqst, result);
+
+	surfacegen5_ec_release(ec);
+
+	return status;
+}
+
+
+static int surfacegen5_ssh_ec_resume(struct surfacegen5_ec *ec)
+{
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x16,
+		.snc = 0x00,
+		.cdl = 0x00,
+		.pld = NULL,
+	};
+
+	// TODO: according to windows logs, this should return something.
+	// Based on linux-testing, it doesn't.
+	// -> make sure there actially is no response here (not even empty)
+
+	return surfacegen5_ec_rqst_unlocked(ec, &rqst, NULL);
+}
+
+static int surfacegen5_ssh_ec_suspend(struct surfacegen5_ec *ec)
+{
+	/* Note:
+	 * On the Surface Book 2, this also disables keyboard lighting.
+	 */
+
+	u8 buf[1];
+
+	struct surfacegen5_rqst rqst = {
+		.tc  = 0x01,
+		.iid = 0x00,
+		.cid = 0x15,
+		.snc = 0x01,
+		.cdl = 0x00,
+		.pld = NULL,
+	};
+
+	struct surfacegen5_buf result = {
+		result.cap = ARRAY_SIZE(buf),
+		result.len = 0,
+		result.data = buf,
+	};
+
+	// TODO: check result.data?
+
+	return surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
 }
 
 
@@ -751,6 +773,8 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 	event = &work->event;
 	ec = work->ec;
 
+	// TODO: referencing ec without synchronization
+
 	if (ec->state == SG5_EC_INITIALIZED) {
 		status = surfacegen5_ssh_send_ack(ec, work->seq);
 		if (status) {
@@ -784,6 +808,8 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 	handler       = ec->events.handler[event->rqid - 1].handler;
 	handler_data  = ec->events.handler[event->rqid - 1].data;
 	spin_unlock_irqrestore(&ec->events.lock, flags);
+
+	// TODO: this might go wrong when handler gets removed here...?
 
 	if (handler) {
 		status = handler(event, handler_data);
@@ -972,7 +998,13 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 	// validate command-frame CRC
 	if (!surfacegen5_ssh_is_valid_crc(cmd_begin, cmd_end)) {
 		printk(RECV_ERR "invalid checksum (cmd-pld)\n");
-		return msg_len;			// only discard message
+
+		/*
+		 * The message length is provided in the control frame. As we
+		 * already validated that, we can be sure here that it's
+		 * correct, so we only need to discard the message.
+		 */
+		return msg_len;
 	}
 
 	// check if we received an event notification
@@ -1111,8 +1143,6 @@ surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *contex
 		return AE_OK;
 	}
 
-	dev_info(&serdev->dev, "surfacegen5_ssh_setup_from_resource\n");
-
 	uart = &resource->data.uart_serial_bus;
 
 	// set up serdev device
@@ -1211,8 +1241,9 @@ check_dma_out:
 static int surfacegen5_ssh_suspend(struct device *dev)
 {
 	struct surfacegen5_ec *ec;
+	int status = 0;
 
-	printk(KERN_WARNING "sg5_pm_ssh_suspend\n");
+	printk(KERN_INFO "sg5_pm_ssh_suspend\n");
 
 	/*
 	 * On the Surface Book 2, "disabling events" also disables the keyboard
@@ -1223,15 +1254,20 @@ static int surfacegen5_ssh_suspend(struct device *dev)
 	 * TODO: Make this more consistent. Either disable/enable events only in the
 	 * _SAN or only in the _SSH driver, but not both.
 	 */
-	surfacegen5_ec_disable_events();
 
+	// TODO: move to set state method
 	ec = surfacegen5_ec_acquire_init();
 	if (ec) {
+		status = surfacegen5_ssh_ec_suspend(ec);
+		if (status) {
+			// TODO
+		}
+
 		ec->state = SG5_EC_SUSPENDED;
 		surfacegen5_ec_release(ec);
 	}
 
-	return 0;
+	return status;
 }
 
 static int surfacegen5_ssh_resume(struct device *dev)
@@ -1239,20 +1275,19 @@ static int surfacegen5_ssh_resume(struct device *dev)
 	struct surfacegen5_ec *ec;
 	int status = 0;
 
-	printk(KERN_WARNING "sg5_pm_ssh_resume\n");
+	printk(KERN_INFO "sg5_pm_ssh_resume\n");
 
+	// TODO: move to set state method
 	ec = surfacegen5_ec_acquire_init();
-	if (ec && ec->state == SG5_EC_SUSPENDED) {
+	if (ec) {
 		ec->state = SG5_EC_INITIALIZED;
-		surfacegen5_ec_release(ec);
-	}
 
-	/*
-	 * Unconditionally enable events. See surfacegen5_ssh_suspend for details.
-	 */
-	status = surfacegen5_ec_enable_events();
-	if (status) {
-		printk(KERN_ERR "sg5_pm_ssh_resume: failed to enable events: %d\n", status);
+		status = surfacegen5_ssh_ec_resume(ec);
+		if (status) {
+			printk(KERN_ERR "sg5_pm_ssh_resume: failed to enable events: %d\n", status);
+		}
+
+		surfacegen5_ec_release(ec);
 	}
 
 	return status;
@@ -1341,6 +1376,7 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->writer.data = write_buf;
 	ec->writer.ptr  = write_buf;
 
+	// initialize receiver
 	spin_lock_irqsave(&ec->receiver.lock, flags);
 	init_completion(&ec->receiver.signal);
 	kfifo_init(&ec->receiver.fifo, read_buf, SG5_READ_BUF_LEN);
@@ -1349,6 +1385,8 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
+	// initialize event handling
+	// TODO: do we need the locks here?
 	spin_lock_irqsave(&ec->events.lock, flags);
 	ec->events.queue_ack = event_queue_ack;
 	ec->events.queue_evt = event_queue_evt;
@@ -1357,6 +1395,11 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->state = SG5_EC_INITIALIZED;
 
 	serdev_device_set_drvdata(serdev, ec);
+
+	status = surfacegen5_ssh_ec_resume(ec);
+	if (status) {
+		// TODO
+	}
 	surfacegen5_ec_release(ec);
 
 	acpi_walk_dep_device_list(ssh);
@@ -1380,13 +1423,21 @@ err_probe_alloc_write:
 
 static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 {
+	// TODO: check if/make shure that we're not freeing anything before its truely unused
+
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
+	int status;
 
 	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_remove\n");
 
 	ec = surfacegen5_ec_acquire_init();
 	if (ec && ec->serdev == serdev) {
+		status = surfacegen5_ssh_ec_suspend(ec);
+		if (status) {
+			// TODO
+		}
+
 		ec->state  = SG5_EC_UNINITIALIZED;
 		ec->serdev = NULL;
 

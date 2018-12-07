@@ -1,6 +1,8 @@
 #ifndef _SURFACEGEN5_ACPI_NOTIFY_SSH_H
 #define _SURFACEGEN5_ACPI_NOTIFY_SSH_H
 
+#include <linux/types.h>
+
 
 /*
  * Maximum request payload size in bytes.
@@ -51,8 +53,6 @@ int surfacegen5_ec_consumer_remove(struct device *consumer);
 int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
 
 
-int surfacegen5_ec_enable_events(void);
-int surfacegen5_ec_disable_events(void);
 int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid);
 int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid);
 int surfacegen5_ec_remove_event_handler(u16 rqid);

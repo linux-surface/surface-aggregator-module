@@ -13,7 +13,6 @@ sources += dkms.conf
 sources += surfacegen5_acpi_notify_base.c
 sources += surfacegen5_acpi_notify_ssh.h
 sources += surfacegen5_acpi_notify_ssh.c
-sources += surfacegen5_acpi_notify_san.h
 sources += surfacegen5_acpi_notify_san.c
 
 all:
