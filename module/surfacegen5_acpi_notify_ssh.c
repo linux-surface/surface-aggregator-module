@@ -759,7 +759,8 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 	event = &work->event;
 	ec = work->ec;
 
-	// TODO: referencing ec without synchronization
+	// make sure we load a fresh ec state
+	smp_mb();
 
 	if (ec->state == SG5_EC_INITIALIZED) {
 		status = surfacegen5_ssh_send_ack(ec, work->seq);
@@ -1409,52 +1410,67 @@ err_probe_alloc_write:
 
 static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 {
-	// TODO: check if/make shure that we're not freeing anything before its truely unused
-
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
 	int status;
 
-	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_remove\n");
-
 	ec = surfacegen5_ec_acquire_init();
-	if (ec && ec->serdev == serdev) {
-		status = surfacegen5_ssh_ec_suspend(ec);
-		if (status) {
-			// TODO
-		}
-
-		ec->state  = SG5_EC_UNINITIALIZED;
-		ec->serdev = NULL;
-
-		kfree(ec->writer.data);
-		ec->writer.data = NULL;
-		ec->writer.ptr  = NULL;
-
-		kfree(ec->receiver.eval_buf.ptr);
-		ec->receiver.eval_buf.ptr = NULL;
-		ec->receiver.eval_buf.cap = 0;
-		ec->receiver.eval_buf.len = 0;
-
-		spin_lock_irqsave(&ec->receiver.lock, flags);
-		ec->receiver.state = SG5_RCV_DISCARD;
-		kfifo_free(&ec->receiver.fifo);
-		spin_unlock_irqrestore(&ec->receiver.lock, flags);
-
-		// remove event handlers
-		spin_lock_irqsave(&ec->events.lock, flags);
-		memset(ec->events.handler, 0,
-		       sizeof(struct surfacegen5_ec_event_handler)
-		        * SG5_NUM_EVENT_TYPES);
-		spin_unlock_irqrestore(&ec->events.lock, flags);
-
-		destroy_workqueue(ec->events.queue_ack);
-		destroy_workqueue(ec->events.queue_evt);
+	if (!ec) {
+		return;
 	}
-	surfacegen5_ec_release(ec);
+
+	// suspend EC and disable events
+	status = surfacegen5_ssh_ec_suspend(ec);
+	if (status) {
+		dev_err(&serdev->dev, "failed to suspend EC: %d\n", status);
+	}
+
+	// make sure all events (received up to now) have been properly handled
+	flush_workqueue(ec->events.queue_ack);
+	flush_workqueue(ec->events.queue_evt);
+
+	// remove event handlers
+	spin_lock_irqsave(&ec->events.lock, flags);
+	memset(ec->events.handler, 0,
+	       sizeof(struct surfacegen5_ec_event_handler)
+	        * SG5_NUM_EVENT_TYPES);
+	spin_unlock_irqrestore(&ec->events.lock, flags);
+
+	// set device to deinitialized state and close
+	ec->state  = SG5_EC_UNINITIALIZED;
+	ec->serdev = NULL;
+
+	// ensure state and serdev get set before continuing
+	smp_mb();
+
+	serdev_device_close(serdev);
+
+	/*
+         * Only at this point, no new events can be received. Destroying the
+         * workqueue here flushes all remaining events, but does not ensure that
+	 * the proper handlers get called, i.e. here we just ignore those events.
+	 */
+	destroy_workqueue(ec->events.queue_ack);
+	destroy_workqueue(ec->events.queue_evt);
+
+	// free writer
+	kfree(ec->writer.data);
+	ec->writer.data = NULL;
+	ec->writer.ptr  = NULL;
+
+	// free receiver
+	spin_lock_irqsave(&ec->receiver.lock, flags);
+	ec->receiver.state = SG5_RCV_DISCARD;
+	kfifo_free(&ec->receiver.fifo);
+
+	kfree(ec->receiver.eval_buf.ptr);
+	ec->receiver.eval_buf.ptr = NULL;
+	ec->receiver.eval_buf.cap = 0;
+	ec->receiver.eval_buf.len = 0;
+	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 	serdev_device_set_drvdata(serdev, NULL);
-	serdev_device_close(serdev);
+	surfacegen5_ec_release(ec);
 }
 
 
