@@ -16,49 +16,40 @@
 #include "surfacegen5_acpi_notify_ssh.h"
 
 
-#define RQST_PREFIX			"surfacegen5_ec_rqst: "
-#define RQST_INFO			KERN_INFO RQST_PREFIX
-#define RQST_WARN			KERN_WARNING RQST_PREFIX
-#define RQST_ERR			KERN_ERR RQST_PREFIX
-
-#define RECV_PREFIX			"surfacegen5_ssh_receive_buf: "
-#define RECV_INFO			KERN_INFO RECV_PREFIX
-#define RECV_WARN			KERN_WARNING RECV_PREFIX
-#define RECV_ERR			KERN_ERR RECV_PREFIX
-
-#define EVENT_PREFIX			"surfacegen5_ssh_handle_event: "
-#define EVENT_WARN			KERN_WARNING EVENT_PREFIX
-#define EVENT_ERR			KERN_ERR EVENT_PREFIX
+#define SG5_RQST_TAG_FULL		"surfacegen5_ec_rqst: "
+#define SG5_RQST_TAG			"rqst: "
+#define SG5_EVENT_TAG			"event: "
+#define SG5_RECV_TAG			"recv: "
 
 #define SG5_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
-#define SG5_BYTELEN_SYNC	2
-#define SG5_BYTELEN_TERM	2
-#define SG5_BYTELEN_CRC		2
-#define SG5_BYTELEN_CTRL	4		// command-header, ACK, or RETRY
-#define SG5_BYTELEN_CMDFRAME	8		// without payload
+#define SG5_BYTELEN_SYNC		2
+#define SG5_BYTELEN_TERM		2
+#define SG5_BYTELEN_CRC			2
+#define SG5_BYTELEN_CTRL		4	// command-header, ACK, or RETRY
+#define SG5_BYTELEN_CMDFRAME		8	// without payload
 
-#define SG5_MAX_WRITE (                \
-	  SG5_BYTELEN_SYNC             \
-      	+ SG5_BYTELEN_CTRL             \
-	+ SG5_BYTELEN_CRC              \
-      	+ SG5_BYTELEN_CMDFRAME         \
-	+ SURFACEGEN5_MAX_RQST_PAYLOAD \
-	+ SG5_BYTELEN_CRC              \
+#define SG5_MAX_WRITE (                 \
+	  SG5_BYTELEN_SYNC              \
+      	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CRC               \
+      	+ SG5_BYTELEN_CMDFRAME          \
+	+ SURFACEGEN5_MAX_RQST_PAYLOAD  \
+	+ SG5_BYTELEN_CRC               \
 )
 
-#define SG5_MSG_LEN_CTRL (             \
-	  SG5_BYTELEN_SYNC             \
-      	+ SG5_BYTELEN_CTRL             \
-	+ SG5_BYTELEN_CRC              \
-	+ SG5_BYTELEN_TERM             \
+#define SG5_MSG_LEN_CTRL (              \
+	  SG5_BYTELEN_SYNC              \
+      	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CRC               \
+	+ SG5_BYTELEN_TERM              \
 )
 
-#define SG5_MSG_LEN_CMD_BASE (         \
-	  SG5_BYTELEN_SYNC             \
-      	+ SG5_BYTELEN_CTRL             \
-	+ SG5_BYTELEN_CRC              \
-	+ SG5_BYTELEN_CRC              \
+#define SG5_MSG_LEN_CMD_BASE (          \
+	  SG5_BYTELEN_SYNC              \
+      	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CRC               \
+	+ SG5_BYTELEN_CRC               \
 )	// without payload and command-frame
 
 #define SG5_WRITE_TIMEOUT		msecs_to_jiffies(1000)
@@ -79,7 +70,11 @@
 #define SG5_FRAME_OFFS_CMD		SG5_FRAME_OFFS_TERM	// either TERM or CMD
 #define SG5_FRAME_OFFS_CMD_PLD		(SG5_FRAME_OFFS_CMD + SG5_BYTELEN_CMDFRAME)
 
-// 0 is not a valid event RQID
+/*
+ * A note on Request IDs (RQIDs):
+ * 	0x0000 is not a valid RQID
+ * 	0x0001 is valid, but reserved for Surface Laptop keyboard events
+ */
 #define SG5_NUM_EVENT_TYPES		((1 << SURFACEGEN5_RQID_EVENT_BITS) - 1)
 
 /*
@@ -94,8 +89,8 @@
  * Command Header:		80 LEN 00 SEQ
  * Ack:                 	40 00 00 SEQ
  * Retry:			04 00 00 00
- * Command Request Frame:	80 RTC 01 00 RIID CNT16LE RCID PLD
- * Command Response Frame:	80 RTC 00 01 RIID CNT16LE RCID PLD
+ * Command Request Frame:	80 RTC 01 00 RIID RQID RCID PLD
+ * Command Response Frame:	80 RTC 00 01 RIID RQID RCID PLD
  */
 
 struct surfacegen5_frame_ctrl {
@@ -191,7 +186,7 @@ struct surfacegen5_event_work {
 	struct work_struct       work_ack;
 	struct delayed_work      work_evt;
 	struct surfacegen5_event event;
-	u8 seq;
+	u8                       seq;
 };
 
 
@@ -263,7 +258,9 @@ struct device_link *surfacegen5_ec_consumer_add(struct device *consumer, u32 fla
 int surfacegen5_ec_consumer_remove(struct device_link *link)
 {
 	struct surfacegen5_ec *ec = surfacegen5_ec_acquire_init();
-	if (!ec) { return -ENXIO; }
+	if (!ec) {
+		return -ENXIO;
+	}
 
 	device_link_del(link);
 
@@ -379,6 +376,7 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 
 	// 0 is not a valid event RQID
 	ec->events.handler[rqid - 1].handler = NULL;
+	ec->events.handler[rqid - 1].delay = NULL;
 	ec->events.handler[rqid - 1].data = NULL;
 
 	spin_unlock_irqrestore(&ec->events.lock, flags);
@@ -388,7 +386,6 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 	 * Make sure that the handler is not in use any more after we've
 	 * removed it.
 	 */
-	 // TODO: make sure that work is actually finished after a flush
 	flush_workqueue(ec->events.queue_evt);
 
 	return 0;
@@ -508,7 +505,8 @@ inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
 
 	size_t len = writer->ptr - writer->data;
 
-	print_hex_dump(KERN_INFO, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	dev_dbg(&ec->serdev->dev, "sending message\n");
+	print_hex_dump(KERN_DEBUG, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
 	               writer->data, writer->ptr - writer->data, false);
 
 	return serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
@@ -561,13 +559,14 @@ static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
                                  struct surfacegen5_rqst *rqst,
 				 struct surfacegen5_buf *result)
 {
+	struct device *dev = &ec->serdev->dev;
 	struct surfacegen5_fifo_packet packet = {};
 	int status;
 	int try;
 	unsigned int rem;
 
 	if (rqst->cdl > SURFACEGEN5_MAX_RQST_PAYLOAD) {
-		printk(RQST_ERR "request payload too large\n");
+		dev_err(dev, SG5_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
@@ -594,7 +593,7 @@ static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
 
 	// check if we ran out of tries?
 	if (try >= SG5_NUM_RETRY) {
-		printk(RQST_ERR "communication failed %d times, giving up\n", try);
+		dev_err(dev, SG5_RQST_TAG "communication failed %d times, giving up\n", try);
 		status = -EIO;
 		goto ec_rqst_out;
 	}
@@ -616,7 +615,7 @@ static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
 			kfifo_out(&ec->receiver.fifo, result->data, packet.len);
 			result->len = packet.len;
 		} else {
-			printk(RQST_ERR "communication timed out\n");
+			dev_err(dev, SG5_RQST_TAG "communication timed out\n");
 			status = -EIO;
 			goto ec_rqst_out;
 		}
@@ -641,21 +640,20 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 
 	ec = surfacegen5_ec_acquire_init();
 	if (!ec) {
-		printk(RQST_WARN "embedded controller is uninitialized\n");
+		printk(KERN_WARNING SG5_RQST_TAG_FULL "embedded controller is uninitialized\n");
 		return -ENXIO;
 	}
 
 	if (ec->state == SG5_EC_SUSPENDED) {
-		surfacegen5_ec_release(ec);
+		dev_warn(&ec->serdev->dev, SG5_RQST_TAG "embedded controller is suspended\n");
 
-		printk(RQST_WARN "embedded controller is suspended\n");
+		surfacegen5_ec_release(ec);
 		return -EPERM;
 	}
 
 	status = surfacegen5_ec_rqst_unlocked(ec, rqst, result);
 
 	surfacegen5_ec_release(ec);
-
 	return status;
 }
 
@@ -743,7 +741,9 @@ static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 	buf[8] = 0xff;
 	buf[9] = 0xff;
 
-	dev_info(&ec->serdev->dev, "sending ACK for seq = 0x%02x\n", seq);
+	dev_dbg(&ec->serdev->dev, "sending message\n");
+	print_hex_dump(KERN_DEBUG, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	               buf, SG5_MSG_LEN_CTRL, false);
 
 	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
 }
@@ -753,11 +753,13 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 	struct surfacegen5_event_work *work;
 	struct surfacegen5_event *event;
 	struct surfacegen5_ec *ec;
+	struct device *dev;
 	int status;
 
  	work = container_of(_work, struct surfacegen5_event_work, work_ack);
 	event = &work->event;
 	ec = work->ec;
+	dev = &ec->serdev->dev;
 
 	// make sure we load a fresh ec state
 	smp_mb();
@@ -765,7 +767,7 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 	if (ec->state == SG5_EC_INITIALIZED) {
 		status = surfacegen5_ssh_send_ack(ec, work->seq);
 		if (status) {
-			printk(EVENT_ERR "failed to send ACK: %d\n", status);
+			dev_err(dev, SG5_EVENT_TAG "failed to send ACK: %d\n", status);
 		}
 	}
 
@@ -780,6 +782,7 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 	struct surfacegen5_event_work *work;
 	struct surfacegen5_event *event;
 	struct surfacegen5_ec *ec;
+	struct device *dev;
 	unsigned long flags;
 
 	surfacegen5_ec_event_handler_fn handler;
@@ -790,22 +793,27 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
  	work = container_of(dwork, struct surfacegen5_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
+	dev = &ec->serdev->dev;
 
 	spin_lock_irqsave(&ec->events.lock, flags);
 	handler       = ec->events.handler[event->rqid - 1].handler;
 	handler_data  = ec->events.handler[event->rqid - 1].data;
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
-	// TODO: this might go wrong when handler gets removed here...?
+	/*
+	 * During handler removal or driver release, we ensure every event gets
+	 * handled before return of that function. Thus a handler obtained here is
+	 * guaranteed to be valid at least until this function returns.
+	 */
 
 	if (handler) {
 		status = handler(event, handler_data);
+	} else {
+		dev_warn(dev, SG5_EVENT_TAG "unhandled event (rqid: %04x)\n", event->rqid);
 	}
 
 	if (status) {
-		printk(EVENT_ERR "error handling event: %d\n", status);
-	} else if (!handler) {
-		printk(EVENT_WARN "unhandled event (rqid: %04x)\n", event->rqid);
+		dev_err(dev, SG5_EVENT_TAG "error handling event: %d\n", status);
 	}
 
 	if (refcount_dec_and_test(&work->refcount)) {
@@ -815,6 +823,7 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 
 static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *buf)
 {
+	struct device *dev = &ec->serdev->dev;
 	const struct surfacegen5_frame_ctrl *ctrl;
 	const struct surfacegen5_frame_cmd *cmd;
 	struct surfacegen5_event_work *work;
@@ -830,9 +839,10 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	pld_len = ctrl->len - SG5_BYTELEN_CMDFRAME;
 
+	// TODO: switch to GFP_KERNEL here?
 	work = kzalloc(sizeof(struct surfacegen5_event_work) + pld_len, GFP_ATOMIC);
 	if (!work) {
-		printk(EVENT_WARN "failed to allocate memory, dropping event\n");
+		dev_warn(dev, SG5_EVENT_TAG "failed to allocate memory, dropping event\n");
 		return;
 	}
 
@@ -868,6 +878,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
                                             const u8 *buf, size_t size)
 {
+	struct device *dev = &ec->serdev->dev;
 	struct surfacegen5_ec_receiver *rcv = &ec->receiver;
 	const struct surfacegen5_frame_ctrl *ctrl;
 	struct surfacegen5_fifo_packet packet;
@@ -884,30 +895,30 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
 
 	// validate TERM
 	if (!surfacegen5_ssh_is_valid_ter(buf + SG5_FRAME_OFFS_TERM)) {
-		printk(RECV_ERR "invalid end of message\n");
+		dev_err(dev, SG5_RECV_TAG "invalid end of message\n");
 		return size;			// discard everything
 	}
 
 	// validate CRC
 	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		printk(RECV_ERR "invalid checksum (ctrl)\n");
+		dev_err(dev, SG5_RECV_TAG "invalid checksum (ctrl)\n");
 		return SG5_MSG_LEN_CTRL;	// only discard message
 	}
 
 	// check if we expect the message
 	if (rcv->state != SG5_RCV_CONTROL) {
-		printk(RECV_INFO "discarding message: ctrl not expected\n");
+		dev_err(dev, SG5_RECV_TAG "discarding message: ctrl not expected\n");
 		return SG5_MSG_LEN_CTRL;	// discard message
 	}
 
 	// check if it is for our request
 	if (ctrl->type == SG5_FRAME_TYPE_ACK && ctrl->seq != rcv->expect.seq) {
-		printk(RECV_INFO "discarding message: ack does not match\n");
+		dev_err(dev, SG5_RECV_TAG "discarding message: ack does not match\n");
 		return SG5_MSG_LEN_CTRL;	// discard message
 	}
 
 	// we now have a valid & expected ACK/RETRY message
-	printk(RECV_INFO "valid control message received (type: 0x%02x)\n", ctrl->type);
+	dev_dbg(dev, SG5_RECV_TAG "valid control message received (type: 0x%02x)\n", ctrl->type);
 
 	packet.type = ctrl->type;
 	packet.seq  = ctrl->seq;
@@ -917,8 +928,9 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
 		kfifo_in(&rcv->fifo, (u8 *) &packet, sizeof(packet));
 
 	} else {
-		printk(RECV_WARN "dropping frame: "
-		       "not enough space in fifo (type = %d)\n", ctrl->type);
+		dev_warn(dev, SG5_RECV_TAG
+			 "dropping frame: not enough space in fifo (type = %d)\n",
+			 SG5_FRAME_TYPE_CMD);
 
 		return SG5_MSG_LEN_CTRL;	// discard message
 	}
@@ -937,6 +949,7 @@ static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
 static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
                                            const u8 *buf, size_t size)
 {
+	struct device *dev = &ec->serdev->dev;
 	struct surfacegen5_ec_receiver *rcv = &ec->receiver;
 	const struct surfacegen5_frame_ctrl *ctrl;
 	const struct surfacegen5_frame_cmd *cmd;
@@ -953,14 +966,14 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 	ctrl = (const struct surfacegen5_frame_ctrl *)(ctrl_begin);
 	cmd  = (const struct surfacegen5_frame_cmd  *)(cmd_begin);
 
-	// validate associated control frame
+	// we need at least a full control frame
 	if (size < (SG5_BYTELEN_SYNC + SG5_BYTELEN_CTRL + SG5_BYTELEN_CRC)) {
 		return 0;		// need more bytes
 	}
 
 	// validate control-frame CRC
 	if (!surfacegen5_ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		printk(RECV_ERR "invalid checksum (cmd-ctrl)\n");
+		dev_err(dev, SG5_RECV_TAG "invalid checksum (cmd-ctrl)\n");
 		/*
 		 * We can't be sure here if length is valid, thus
 		 * discard everything.
@@ -978,13 +991,13 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 
 	// validate command-frame type
 	if (cmd->type != SG5_FRAME_TYPE_CMD) {
-		printk(RECV_ERR "expected command frame type but got 0x%02x\n", cmd->type);
+		dev_err(dev, SG5_RECV_TAG "expected command frame type but got 0x%02x\n", cmd->type);
 		return size;			// discard everything
 	}
 
 	// validate command-frame CRC
 	if (!surfacegen5_ssh_is_valid_crc(cmd_begin, cmd_end)) {
-		printk(RECV_ERR "invalid checksum (cmd-pld)\n");
+		dev_err(dev, SG5_RECV_TAG "invalid checksum (cmd-pld)\n");
 
 		/*
 		 * The message length is provided in the control frame. As we
@@ -1002,18 +1015,18 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 
 	// check if we expect the message
 	if (rcv->state != SG5_RCV_COMMAND) {
-		printk(RECV_INFO "discarding message: command not expected\n");
+		dev_dbg(dev, SG5_RECV_TAG "discarding message: command not expected\n");
 		return msg_len;			// discard message
 	}
 
 	// check if response is for our request
 	if (rcv->expect.rqid != (cmd->rqid_lo | (cmd->rqid_hi << 8))) {
-		printk(RECV_INFO "discarding message: command not a match\n");
+		dev_dbg(dev, SG5_RECV_TAG "discarding message: command not a match\n");
 		return msg_len;			// discard message
 	}
 
 	// we now have a valid & expected command message
-	printk(RECV_INFO "valid command message received\n");
+	dev_dbg(dev, SG5_RECV_TAG "valid command message received\n");
 
 	packet.type = ctrl->type;
 	packet.seq = ctrl->seq;
@@ -1024,9 +1037,9 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 		kfifo_in(&rcv->fifo, cmd_begin_pld, packet.len);
 
 	} else {
-		printk(RECV_WARN "dropping frame: "
-		       "not enough space in fifo (type = %d)\n",
-		        SG5_FRAME_TYPE_CMD);
+		dev_warn(dev, SG5_RECV_TAG
+			 "dropping frame: not enough space in fifo (type = %d)\n",
+			 SG5_FRAME_TYPE_CMD);
 
 		return SG5_MSG_LEN_CTRL;	// discard message
 	}
@@ -1040,6 +1053,7 @@ static int surfacegen5_ssh_receive_msg_cmd(struct surfacegen5_ec *ec,
 static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec *ec,
                                     const u8 *buf, size_t size)
 {
+	struct device *dev = &ec->serdev->dev;
 	struct surfacegen5_frame_ctrl *ctrl;
 
 	// we need at least a control frame to check what to do
@@ -1049,7 +1063,7 @@ static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec *ec,
 
 	// make sure we're actually at the start of a new message
 	if (!surfacegen5_ssh_is_valid_syn(buf)) {
-		printk(RECV_ERR "invalid start of message\n");
+		dev_err(dev, SG5_RECV_TAG "invalid start of message\n");
 		return size;		// discard everything
 	}
 
@@ -1065,7 +1079,7 @@ static int surfacegen5_ssh_eval_buf(struct surfacegen5_ec *ec,
 		return surfacegen5_ssh_receive_msg_cmd(ec, buf, size);
 
 	default:
-		printk(RECV_WARN "unknown frame type 0x%02x\n", ctrl->type);
+		dev_err(dev, SG5_RECV_TAG "unknown frame type 0x%02x\n", ctrl->type);
 		return size;		// discard everything
 	}
 }
@@ -1079,8 +1093,8 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	int offs = 0;
 	int used, n;
 
-	dev_info(&serdev->dev, "received buffer (size: %zu)\n", size);
-	print_hex_dump(KERN_INFO, "recv: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
+	dev_dbg(&serdev->dev, SG5_RECV_TAG "received buffer (size: %zu)\n", size);
+	print_hex_dump(KERN_DEBUG, SG5_RECV_TAG, DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
 	/*
          * The battery _BIX message gets a bit long, thus we have to add some

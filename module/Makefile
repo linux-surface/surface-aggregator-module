@@ -17,6 +17,8 @@ sources += surfacegen5_acpi_notify_ssh.c
 sources += surfacegen5_acpi_notify_san.c
 sources += surfacegen5_acpi_notify_vhf.c
 
+ccflags-y := -DDEBUG
+
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
 
