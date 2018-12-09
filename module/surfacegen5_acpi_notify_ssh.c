@@ -1291,7 +1291,6 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
-	unsigned long flags;
 	struct workqueue_struct *event_queue_ack;
 	struct workqueue_struct *event_queue_evt;
 	u8 *write_buf;
@@ -1300,53 +1299,41 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
 
-	dev_info(&serdev->dev, "surfacegen5_acpi_notify_ssh_probe\n");
-
+	// ensure DMA is ready before we set up the device
 	status = surfacegen5_ssh_check_dma(serdev);
 	if (status) {
 		return status;
 	}
 
-	serdev_device_set_client_ops(serdev, &surfacegen5_ssh_device_ops);
-	status = serdev_device_open(serdev);
-	if (status) {
-		return status;
-	}
-
-	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
-	                             surfacegen5_ssh_setup_from_resource, serdev);
-	if (ACPI_FAILURE(status)) {
-		goto err_probe_alloc_write;
-	}
-
+	// allocate buffers
 	write_buf = kzalloc(SG5_WRITE_BUF_LEN, GFP_KERNEL);
 	if (!write_buf) {
 		status = -ENOMEM;
-		goto err_probe_alloc_write;
+		goto err_probe_write_buf;
 	}
 
 	read_buf = kzalloc(SG5_READ_BUF_LEN, GFP_KERNEL);
 	if (!read_buf) {
 		status = -ENOMEM;
-		goto err_probe_alloc_read;
+		goto err_probe_read_buf;
 	}
 
 	eval_buf = kzalloc(SG5_EVAL_BUF_LEN, GFP_KERNEL);
 	if (!eval_buf) {
 		status = -ENOMEM;
-		goto err_probe_alloc_eval;
+		goto err_probe_eval_buf;
 	}
 
 	event_queue_ack = create_singlethread_workqueue("sg5_ackq");
 	if (!event_queue_ack) {
 		status = -ENOMEM;
-		goto err_probe_alloc_queue_ack;
+		goto err_probe_ackq;
 	}
 
 	event_queue_evt = create_workqueue("sg5_evtq");
 	if (!event_queue_evt) {
 		status = -ENOMEM;
-		goto err_probe_alloc_queue_evt;
+		goto err_probe_evtq;
 	}
 
 	// set up EC
@@ -1364,47 +1351,62 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->writer.ptr  = write_buf;
 
 	// initialize receiver
-	spin_lock_irqsave(&ec->receiver.lock, flags);
 	init_completion(&ec->receiver.signal);
 	kfifo_init(&ec->receiver.fifo, read_buf, SG5_READ_BUF_LEN);
 	ec->receiver.eval_buf.ptr = eval_buf;
 	ec->receiver.eval_buf.cap = SG5_EVAL_BUF_LEN;
 	ec->receiver.eval_buf.len = 0;
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 	// initialize event handling
-	// TODO: do we need the locks here?
-	spin_lock_irqsave(&ec->events.lock, flags);
 	ec->events.queue_ack = event_queue_ack;
 	ec->events.queue_evt = event_queue_evt;
-	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	ec->state = SG5_EC_INITIALIZED;
 
 	serdev_device_set_drvdata(serdev, ec);
 
+	// ensure everything is properly set-up before we open the device
+	smp_mb();
+
+	serdev_device_set_client_ops(serdev, &surfacegen5_ssh_device_ops);
+	status = serdev_device_open(serdev);
+	if (status) {
+		goto err_probe_open;
+	}
+
+	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
+	                             surfacegen5_ssh_setup_from_resource, serdev);
+	if (ACPI_FAILURE(status)) {
+		goto err_probe_devinit;
+	}
+
 	status = surfacegen5_ssh_ec_resume(ec);
 	if (status) {
-		// TODO
+		goto err_probe_devinit;
 	}
-	surfacegen5_ec_release(ec);
 
+	surfacegen5_ec_release(ec);
 	acpi_walk_dep_device_list(ssh);
 
 	return 0;
 
+err_probe_devinit:
+	serdev_device_close(serdev);
+err_probe_open:
+	ec->state = SG5_EC_UNINITIALIZED;
+	serdev_device_set_drvdata(serdev, NULL);
+	surfacegen5_ec_release(ec);
 err_probe_busy:
 	destroy_workqueue(event_queue_evt);
-err_probe_alloc_queue_evt:
+err_probe_evtq:
 	destroy_workqueue(event_queue_ack);
-err_probe_alloc_queue_ack:
+err_probe_ackq:
 	kfree(eval_buf);
-err_probe_alloc_eval:
+err_probe_eval_buf:
 	kfree(read_buf);
-err_probe_alloc_read:
+err_probe_read_buf:
 	kfree(write_buf);
-err_probe_alloc_write:
-	serdev_device_close(serdev);
+err_probe_write_buf:
 	return status;
 }
 
@@ -1436,19 +1438,26 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 	        * SG5_NUM_EVENT_TYPES);
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
-	// set device to deinitialized state and close
+	// set device to deinitialized state
 	ec->state  = SG5_EC_UNINITIALIZED;
 	ec->serdev = NULL;
 
 	// ensure state and serdev get set before continuing
 	smp_mb();
 
+	/*
+	 * Flush any event that has not been processed yet to ensure we're not going to
+	 * use the serial device any more (e.g. for ACKing).
+	 */
+	flush_workqueue(ec->events.queue_ack);
+	flush_workqueue(ec->events.queue_evt);
+
 	serdev_device_close(serdev);
 
 	/*
          * Only at this point, no new events can be received. Destroying the
-         * workqueue here flushes all remaining events, but does not ensure that
-	 * the proper handlers get called, i.e. here we just ignore those events.
+         * workqueue here flushes all remaining events. Those events will be
+         * silently ignored and neither ACKed nor any handler gets called.
 	 */
 	destroy_workqueue(ec->events.queue_ack);
 	destroy_workqueue(ec->events.queue_evt);
