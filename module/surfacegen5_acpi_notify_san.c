@@ -673,6 +673,5 @@ struct platform_driver surfacegen5_acpi_notify_san = {
 	.driver = {
 		.name = "surfacegen5_acpi_notify_san",
 		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_san_match),
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
