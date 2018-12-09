@@ -660,29 +660,42 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 
 static int surfacegen5_ssh_ec_resume(struct surfacegen5_ec *ec)
 {
+	u8 buf[1] = { 0x00 };
+	int status;
+
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
 		.iid = 0x00,
 		.cid = 0x16,
-		.snc = 0x00,
+		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
 	};
 
-	// TODO: according to windows logs, this should return something.
-	// Based on linux-testing, it doesn't.
-	// -> make sure there actially is no response here (not even empty)
+	struct surfacegen5_buf result = {
+		result.cap = ARRAY_SIZE(buf),
+		result.len = 0,
+		result.data = buf,
+	};
 
-	return surfacegen5_ec_rqst_unlocked(ec, &rqst, NULL);
+	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+	if (status) {
+		return status;
+	}
+
+	if (buf[0] != 0x00) {
+		dev_warn(&ec->serdev->dev,
+		         "unexpected result while trying to resume EC: 0x%02x\n",
+			 buf[0]);
+	}
+
+	return 0;
 }
 
 static int surfacegen5_ssh_ec_suspend(struct surfacegen5_ec *ec)
 {
-	/* Note:
-	 * On the Surface Book 2, this also disables keyboard lighting.
-	 */
-
-	u8 buf[1];
+	u8 buf[1] = { 0x00 };
+	int status;
 
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
@@ -699,9 +712,18 @@ static int surfacegen5_ssh_ec_suspend(struct surfacegen5_ec *ec)
 		result.data = buf,
 	};
 
-	// TODO: check result.data?
+	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+	if (status) {
+		return status;
+	}
 
-	return surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+	if (buf[0] != 0x00) {
+		dev_warn(&ec->serdev->dev,
+		         "unexpected result while trying to suspend EC: 0x%02x\n",
+			 buf[0]);
+	}
+
+	return 0;
 }
 
 
