@@ -1199,7 +1199,7 @@ static int surfacegen5_ssh_check_dma(struct serdev_device *serdev)
 		if (status != -EPROBE_DEFER) {
 			dev_err(&serdev->dev, "sg5_dma: error requesting rx channel: %d\n", status);
 		} else {
-			dev_info(&serdev->dev, "sg5_dma: rx channel not found, deferring probe\n");
+			dev_dbg(&serdev->dev, "sg5_dma: rx channel not found, deferring probe\n");
 		}
 		goto check_dma_out;
 	}
@@ -1210,12 +1210,10 @@ static int surfacegen5_ssh_check_dma(struct serdev_device *serdev)
 		if (status != -EPROBE_DEFER) {
 			dev_err(&serdev->dev, "sg5_dma: error requesting tx channel: %d\n", status);
 		} else {
-			dev_info(&serdev->dev, "sg5_dma: tx channel not found, deferring probe\n");
+			dev_dbg(&serdev->dev, "sg5_dma: tx channel not found, deferring probe\n");
 		}
 		goto check_dma_release_rx;
 	}
-
-	dev_info(&serdev->dev, "sg5_dma: rx and tx channels found\n");
 
 	dma_release_channel(tx);
 check_dma_release_rx:
@@ -1230,24 +1228,13 @@ static int surfacegen5_ssh_suspend(struct device *dev)
 	struct surfacegen5_ec *ec;
 	int status = 0;
 
-	printk(KERN_INFO "sg5_pm_ssh_suspend\n");
+	dev_dbg(dev, "suspending\n");
 
-	/*
-	 * On the Surface Book 2, "disabling events" also disables the keyboard
-	 * backlight (respecitvely "enabling events" enables the keyboard backlight
-	 * again). Thus we always disable events regardless if they have been
-	 * enabled.
-	 *
-	 * TODO: Make this more consistent. Either disable/enable events only in the
-	 * _SAN or only in the _SSH driver, but not both.
-	 */
-
-	// TODO: move to set state method
 	ec = surfacegen5_ec_acquire_init();
 	if (ec) {
 		status = surfacegen5_ssh_ec_suspend(ec);
 		if (status) {
-			// TODO
+			dev_err(dev, "failed to suspend EC: %d\n", status);
 		}
 
 		ec->state = SG5_EC_SUSPENDED;
@@ -1262,16 +1249,15 @@ static int surfacegen5_ssh_resume(struct device *dev)
 	struct surfacegen5_ec *ec;
 	int status = 0;
 
-	printk(KERN_INFO "sg5_pm_ssh_resume\n");
+	dev_dbg(dev, "resuming\n");
 
-	// TODO: move to set state method
 	ec = surfacegen5_ec_acquire_init();
 	if (ec) {
 		ec->state = SG5_EC_INITIALIZED;
 
 		status = surfacegen5_ssh_ec_resume(ec);
 		if (status) {
-			printk(KERN_ERR "sg5_pm_ssh_resume: failed to enable events: %d\n", status);
+			dev_err(dev, "failed to resume EC: %d\n", status);
 		}
 
 		surfacegen5_ec_release(ec);
@@ -1298,6 +1284,8 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	u8 *eval_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
+
+	dev_dbg(&serdev->dev, "probing\n");
 
 	// ensure DMA is ready before we set up the device
 	status = surfacegen5_ssh_check_dma(serdev);
