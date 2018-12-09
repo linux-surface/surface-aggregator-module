@@ -1,17 +1,17 @@
-#include <linux/acpi.h>
-#include <linux/kernel.h>
-#include <linux/serdev.h>
-#include <linux/crc-ccitt.h>
-#include <linux/spinlock.h>
-#include <linux/mutex.h>
-#include <linux/jiffies.h>
-#include <linux/kfifo.h>
-#include <linux/workqueue.h>
-#include <linux/completion.h>
-#include <linux/refcount.h>
-#include <linux/dmaengine.h>
-#include <linux/pm.h>
 #include <asm/unaligned.h>
+#include <linux/acpi.h>
+#include <linux/completion.h>
+#include <linux/crc-ccitt.h>
+#include <linux/dmaengine.h>
+#include <linux/jiffies.h>
+#include <linux/kernel.h>
+#include <linux/kfifo.h>
+#include <linux/mutex.h>
+#include <linux/pm.h>
+#include <linux/refcount.h>
+#include <linux/serdev.h>
+#include <linux/spinlock.h>
+#include <linux/workqueue.h>
 
 #include "surfacegen5_acpi_notify_ssh.h"
 
@@ -537,8 +537,8 @@ inline static void surfacegen5_ssh_receiver_restart(struct surfacegen5_ec *ec,
 	spin_lock_irqsave(&ec->receiver.lock, flags);
 	reinit_completion(&ec->receiver.signal);
 	ec->receiver.state = SG5_RCV_CONTROL;
-	ec->receiver.expect.pld  = rqst->snc;
-	ec->receiver.expect.seq  = ec->counter.seq;
+	ec->receiver.expect.pld = rqst->snc;
+	ec->receiver.expect.seq = ec->counter.seq;
 	ec->receiver.expect.rqid = surfacegen5_rqid_to_rqst(ec->counter.rqid);
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
