@@ -214,6 +214,11 @@ static struct surfacegen5_ec surfacegen5_ec = {
 };
 
 
+static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
+                                 struct surfacegen5_rqst *rqst,
+				 struct surfacegen5_buf *result);
+
+
 inline static struct surfacegen5_ec *surfacegen5_ec_acquire(void)
 {
 	struct surfacegen5_ec *ec = &surfacegen5_ec;
@@ -280,46 +285,111 @@ inline static bool surfacegen5_rqid_is_event(u16 rqid) {
 
 int surfacegen5_ec_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
+	struct surfacegen5_ec *ec;
+
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
+	u8 buf[1] = { 0x00 };
+
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
 		.iid = 0x00,
 		.cid = 0x0b,
-		.snc = 0x00,
+		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
 	};
+
+	struct surfacegen5_buf result = {
+		result.cap = ARRAY_SIZE(buf),
+		result.len = 0,
+		result.data = buf,
+	};
+
+	int status;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!surfacegen5_rqid_is_event(rqid)) {
 		return -EINVAL;
 	}
 
-	// TODO: make sure there actually is no response for this request
+	ec = surfacegen5_ec_acquire_init();
+	if (!ec) {
+		printk(KERN_WARNING SG5_RQST_TAG_FULL "embedded controller is uninitialized\n");
+		return -ENXIO;
+	}
 
-	return surfacegen5_ec_rqst(&rqst, NULL);
+	if (ec->state == SG5_EC_SUSPENDED) {
+		dev_warn(&ec->serdev->dev, SG5_RQST_TAG "embedded controller is suspended\n");
+
+		surfacegen5_ec_release(ec);
+		return -EPERM;
+	}
+
+	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+
+	if (buf[0] != 0x00) {
+		dev_warn(&ec->serdev->dev,
+		         "unexpected result while enabling event source: 0x%02x\n",
+			 buf[0]);
+	}
+
+	surfacegen5_ec_release(ec);
+	return status;
+
 }
 
 int surfacegen5_ec_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
+	struct surfacegen5_ec *ec;
+
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
+	u8 buf[1] = { 0x00 };
+
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
 		.iid = 0x00,
 		.cid = 0x0c,
-		.snc = 0x00,
+		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
 	};
+
+	struct surfacegen5_buf result = {
+		result.cap = ARRAY_SIZE(buf),
+		result.len = 0,
+		result.data = buf,
+	};
+
+	int status;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!surfacegen5_rqid_is_event(rqid)) {
 		return -EINVAL;
 	}
 
-	// TODO: make sure there actually is no response for this request
+	ec = surfacegen5_ec_acquire_init();
+	if (!ec) {
+		printk(KERN_WARNING SG5_RQST_TAG_FULL "embedded controller is uninitialized\n");
+		return -ENXIO;
+	}
 
-	return surfacegen5_ec_rqst(&rqst, NULL);
+	if (ec->state == SG5_EC_SUSPENDED) {
+		dev_warn(&ec->serdev->dev, SG5_RQST_TAG "embedded controller is suspended\n");
+
+		surfacegen5_ec_release(ec);
+		return -EPERM;
+	}
+
+	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+
+	if (buf[0] != 0x00) {
+		dev_warn(&ec->serdev->dev,
+		         "unexpected result while disabling event source: 0x%02x\n",
+			 buf[0]);
+	}
+
+	surfacegen5_ec_release(ec);
+	return status;
 }
 
 int surfacegen5_ec_set_delayed_event_handler(
@@ -661,7 +731,6 @@ int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *r
 static int surfacegen5_ssh_ec_resume(struct surfacegen5_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
-	int status;
 
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
@@ -678,7 +747,7 @@ static int surfacegen5_ssh_ec_resume(struct surfacegen5_ec *ec)
 		result.data = buf,
 	};
 
-	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+	int status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
 	if (status) {
 		return status;
 	}
@@ -695,7 +764,6 @@ static int surfacegen5_ssh_ec_resume(struct surfacegen5_ec *ec)
 static int surfacegen5_ssh_ec_suspend(struct surfacegen5_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
-	int status;
 
 	struct surfacegen5_rqst rqst = {
 		.tc  = 0x01,
@@ -712,7 +780,7 @@ static int surfacegen5_ssh_ec_suspend(struct surfacegen5_ec *ec)
 		result.data = buf,
 	};
 
-	status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
+	int status = surfacegen5_ec_rqst_unlocked(ec, &rqst, &result);
 	if (status) {
 		return status;
 	}
