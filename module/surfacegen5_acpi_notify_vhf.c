@@ -121,13 +121,22 @@ static int vhf_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
 	return 0;
 }
 
+static int vhf_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
+{
+	hid_dbg(hid, "%s\n", __func__);
+	print_hex_dump(KERN_DEBUG, "report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
+
+	return len;
+}
+
 static struct hid_ll_driver vhf_hid_ll_driver = {
-	.start       = vhf_hid_start,
-	.stop        = vhf_hid_stop,
-	.open        = vhf_hid_open,
-	.close       = vhf_hid_close,
-	.parse       = vhf_hid_parse,
-	.raw_request = vhf_hid_raw_request,
+	.start         = vhf_hid_start,
+	.stop          = vhf_hid_stop,
+	.open          = vhf_hid_open,
+	.close         = vhf_hid_close,
+	.parse         = vhf_hid_parse,
+	.raw_request   = vhf_hid_raw_request,
+	.output_report = vhf_hid_output_report,
 };
 
 
