@@ -31,3 +31,14 @@ To uninstall it, run `make dkms-uninstall`.
 
 [patches-linux-surface]: https://github.com/qzed/linux-surface/tree/master/patches/4.18
 [prebuilt-linux-surface]: https://github.com/qzed/linux-surface/releases/tag/v4.18.16-pre1
+
+
+## Donations
+
+_I can't really guarantee you anything._
+_I can't promise you the support you may want._
+_I'm doing this in my free time and I only have a Surface Book 2._
+_I'll try to do my best, but it may take a while or at worst, your issue may never get resolved._
+_Also please do not donate if you need the money, you probably need it more than me._
+If that can't stop you:
+https://www.paypal.me/maximilianluz
