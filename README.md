@@ -1,4 +1,4 @@
-# Linux ACPI Notify Driver for 5th Gen. Surface Devices
+# Linux ACPI (Platform) Driver for 5th Gen. Surface Devices
 
 Work in progress, use at your own risk.
 
