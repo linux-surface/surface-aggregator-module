@@ -207,7 +207,7 @@ static int surfacegen5_vhf_probe(struct platform_device *pdev)
 
 	status = hid_add_device(hid);
 	if (status) {
-		goto err_probe_hid;
+		goto err_add_hid;
 	}
 
 	drvdata->ec_link = ec_link;
@@ -224,12 +224,12 @@ static int surfacegen5_vhf_probe(struct platform_device *pdev)
 	                                          surfacegen5_vhf_handle_event,
 						  &drvdata->event_ctx);
 	if (status) {
-		goto err_event_handler;
+		goto err_add_hid;
 	}
 
 	return 0;
 
-err_event_handler:
+err_add_hid:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
 err_probe_hid:
