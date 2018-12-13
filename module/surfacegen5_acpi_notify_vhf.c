@@ -171,7 +171,7 @@ static int surfacegen5_vhf_handle_event(struct surfacegen5_event *event, void *d
 		return hid_input_report(ctx->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
 	}
 
-	dev_warn(ctx->dev, "sg5_vhf: unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
+	dev_warn(ctx->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
 	return 0;
 }
 
