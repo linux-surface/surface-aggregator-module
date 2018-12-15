@@ -159,8 +159,8 @@ struct surfacegen5_ec_event_handler {
 
 struct surfacegen5_ec_events {
 	spinlock_t lock;
-	struct workqueue_struct *queue_ack;		// TODO: move to system workqueue/don't use any at all?
-	struct workqueue_struct *queue_evt;		// TODO: move to system workqueue/don't use any at all?
+	struct workqueue_struct *queue_ack;
+	struct workqueue_struct *queue_evt;
 	struct surfacegen5_ec_event_handler handler[SG5_NUM_EVENT_TYPES];
 };
 
@@ -929,7 +929,6 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	pld_len = ctrl->len - SG5_BYTELEN_CMDFRAME;
 
-	// TODO: switch to GFP_KERNEL here?
 	work = kzalloc(sizeof(struct surfacegen5_event_work) + pld_len, GFP_ATOMIC);
 	if (!work) {
 		dev_warn(dev, SG5_EVENT_TAG "failed to allocate memory, dropping event\n");
