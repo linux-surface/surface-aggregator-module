@@ -159,8 +159,6 @@ struct surfacegen5_ec_event_handler {
 
 struct surfacegen5_ec_events {
 	spinlock_t lock;
-	struct workqueue_struct *queue_ack;		// TODO: move to system workqueue/don't use any at all?
-	struct workqueue_struct *queue_evt;		// TODO: move to system workqueue/don't use any at all?
 	struct surfacegen5_ec_event_handler handler[SG5_NUM_EVENT_TYPES];
 };
 
@@ -456,7 +454,7 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 	 * Make sure that the handler is not in use any more after we've
 	 * removed it.
 	 */
-	flush_workqueue(ec->events.queue_evt);
+	flush_workqueue(system_unbound_wq);
 
 	return 0;
 }
@@ -868,7 +866,7 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 
 static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 {
-	struct delayed_work *dwork = (struct delayed_work *)_work;
+	struct delayed_work *dwork = to_delayed_work(_work);
 	struct surfacegen5_event_work *work;
 	struct surfacegen5_event *event;
 	struct surfacegen5_ec *ec;
@@ -929,8 +927,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	pld_len = ctrl->len - SG5_BYTELEN_CMDFRAME;
 
-	// TODO: switch to GFP_KERNEL here?
-	work = kzalloc(sizeof(struct surfacegen5_event_work) + pld_len, GFP_ATOMIC);
+	work = kzalloc(sizeof(struct surfacegen5_event_work) + pld_len, GFP_KERNEL);
 	if (!work) {
 		dev_warn(dev, SG5_EVENT_TAG "failed to allocate memory, dropping event\n");
 		return;
@@ -952,7 +949,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	memcpy(work->event.pld, buf + SG5_FRAME_OFFS_CMD_PLD, pld_len);
 
-	queue_work(ec->events.queue_ack, &work->work_ack);
+	queue_work(system_wq, &work->work_ack);
 
 	spin_lock_irqsave(&ec->events.lock, flags);
 	handler_data = ec->events.handler[work->event.rqid - 1].data;
@@ -962,7 +959,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	}
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
-	queue_delayed_work(ec->events.queue_evt, &work->work_evt, delay);
+	queue_delayed_work(system_unbound_wq, &work->work_evt, delay);
 }
 
 static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,
@@ -1381,8 +1378,6 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
-	struct workqueue_struct *event_queue_ack;
-	struct workqueue_struct *event_queue_evt;
 	u8 *write_buf;
 	u8 *read_buf;
 	u8 *eval_buf;
@@ -1416,18 +1411,6 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 		goto err_probe_eval_buf;
 	}
 
-	event_queue_ack = create_singlethread_workqueue("sg5_ackq");
-	if (!event_queue_ack) {
-		status = -ENOMEM;
-		goto err_probe_ackq;
-	}
-
-	event_queue_evt = create_workqueue("sg5_evtq");
-	if (!event_queue_evt) {
-		status = -ENOMEM;
-		goto err_probe_evtq;
-	}
-
 	// set up EC
 	ec = surfacegen5_ec_acquire();
 	if (ec->state != SG5_EC_UNINITIALIZED) {
@@ -1448,10 +1431,6 @@ static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
 	ec->receiver.eval_buf.ptr = eval_buf;
 	ec->receiver.eval_buf.cap = SG5_EVAL_BUF_LEN;
 	ec->receiver.eval_buf.len = 0;
-
-	// initialize event handling
-	ec->events.queue_ack = event_queue_ack;
-	ec->events.queue_evt = event_queue_evt;
 
 	ec->state = SG5_EC_INITIALIZED;
 
@@ -1489,10 +1468,6 @@ err_probe_open:
 	serdev_device_set_drvdata(serdev, NULL);
 	surfacegen5_ec_release(ec);
 err_probe_busy:
-	destroy_workqueue(event_queue_evt);
-err_probe_evtq:
-	destroy_workqueue(event_queue_ack);
-err_probe_ackq:
 	kfree(eval_buf);
 err_probe_eval_buf:
 	kfree(read_buf);
@@ -1520,8 +1495,8 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 	}
 
 	// make sure all events (received up to now) have been properly handled
-	flush_workqueue(ec->events.queue_ack);
-	flush_workqueue(ec->events.queue_evt);
+	flush_workqueue(system_wq);
+	flush_workqueue(system_unbound_wq);
 
 	// remove event handlers
 	spin_lock_irqsave(&ec->events.lock, flags);
@@ -1541,18 +1516,18 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 	 * Flush any event that has not been processed yet to ensure we're not going to
 	 * use the serial device any more (e.g. for ACKing).
 	 */
-	flush_workqueue(ec->events.queue_ack);
-	flush_workqueue(ec->events.queue_evt);
+	flush_workqueue(system_wq);
+	flush_workqueue(system_unbound_wq);
 
 	serdev_device_close(serdev);
 
 	/*
-         * Only at this point, no new events can be received. Destroying the
-         * workqueue here flushes all remaining events. Those events will be
-         * silently ignored and neither ACKed nor any handler gets called.
+	 * Only at this point, no new events can be received. Events now in
+	 * the queue will be silently ignored and neither ACKed nor any
+	 * handler gets called.
 	 */
-	destroy_workqueue(ec->events.queue_ack);
-	destroy_workqueue(ec->events.queue_evt);
+	flush_workqueue(system_wq);
+	flush_workqueue(system_unbound_wq);
 
 	// free writer
 	kfree(ec->writer.data);
