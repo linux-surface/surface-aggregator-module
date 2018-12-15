@@ -4,7 +4,7 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
-#include "surfacegen5_acpi_notify_ssh.h"
+#include "surfacegen5_acpi_ssh.h"
 
 
 #define USB_VENDOR_ID_MICROSOFT		0x045e
@@ -184,7 +184,7 @@ static unsigned long surfacegen5_vhf_event_delay(struct surfacegen5_event *event
 	return 0;
 }
 
-static int surfacegen5_vhf_probe(struct platform_device *pdev)
+static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 {
 	struct surfacegen5_vhf_drvdata *drvdata;
 	struct device_link *ec_link;
@@ -250,7 +250,7 @@ err_probe_ec_link:
 	return status;
 }
 
-static int surfacegen5_vhf_remove(struct platform_device *pdev)
+static int surfacegen5_acpi_vhf_remove(struct platform_device *pdev)
 {
 	struct surfacegen5_vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
@@ -265,17 +265,17 @@ static int surfacegen5_vhf_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_vhf_match[] = {
+static const struct acpi_device_id surfacegen5_acpi_vhf_match[] = {
 	{ "MSHW0096" },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_vhf_match);
+MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_vhf_match);
 
-struct platform_driver surfacegen5_vhf = {
-	.probe = surfacegen5_vhf_probe,
-	.remove = surfacegen5_vhf_remove,
+struct platform_driver surfacegen5_acpi_vhf = {
+	.probe = surfacegen5_acpi_vhf_probe,
+	.remove = surfacegen5_acpi_vhf_remove,
 	.driver = {
-		.name = "surfacegen5_vhf",
-		.acpi_match_table = ACPI_PTR(surfacegen5_vhf_match),
+		.name = "surfacegen5_acpi_vhf",
+		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_vhf_match),
 	},
 };

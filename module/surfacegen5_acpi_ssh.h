@@ -1,5 +1,5 @@
-#ifndef _SURFACEGEN5_ACPI_NOTIFY_SSH_H
-#define _SURFACEGEN5_ACPI_NOTIFY_SSH_H
+#ifndef _SURFACEGEN5_ACPI_SSH_H
+#define _SURFACEGEN5_ACPI_SSH_H
 
 #include <linux/types.h>
 #include <linux/device.h>
@@ -64,4 +64,4 @@ int surfacegen5_ec_set_delayed_event_handler(u16 rqid,
 		surfacegen5_ec_event_handler_delay delay,
 		void *data);
 
-#endif /* _SURFACEGEN5_ACPI_NOTIFY_SSH_H */
+#endif /* _SURFACEGEN5_ACPI_SSH_H */

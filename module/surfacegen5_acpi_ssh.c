@@ -13,7 +13,7 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 
-#include "surfacegen5_acpi_notify_ssh.h"
+#include "surfacegen5_acpi_ssh.h"
 
 
 #define SG5_RQST_TAG_FULL		"surfacegen5_ec_rqst: "
@@ -1380,7 +1380,7 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 	.write_wakeup = serdev_device_write_wakeup,
 };
 
-static int surfacegen5_acpi_notify_ssh_probe(struct serdev_device *serdev)
+static int surfacegen5_acpi_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
 	struct workqueue_struct *event_queue_ack;
@@ -1504,7 +1504,7 @@ err_probe_write_buf:
 	return status;
 }
 
-static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
+static void surfacegen5_acpi_ssh_remove(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
 	unsigned long flags;
@@ -1577,18 +1577,18 @@ static void surfacegen5_acpi_notify_ssh_remove(struct serdev_device *serdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_notify_ssh_match[] = {
+static const struct acpi_device_id surfacegen5_acpi_ssh_match[] = {
 	{ "MSHW0084", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_ssh_match);
+MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_ssh_match);
 
-struct serdev_device_driver surfacegen5_acpi_notify_ssh = {
-	.probe = surfacegen5_acpi_notify_ssh_probe,
-	.remove = surfacegen5_acpi_notify_ssh_remove,
+struct serdev_device_driver surfacegen5_acpi_ssh = {
+	.probe = surfacegen5_acpi_ssh_probe,
+	.remove = surfacegen5_acpi_ssh_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_notify_ssh",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_ssh_match),
+		.name = "surfacegen5_acpi_ssh",
+		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_ssh_match),
 		.pm = &surfacegen5_ssh_pm_ops,
 	},
 };

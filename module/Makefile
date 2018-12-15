@@ -1,21 +1,21 @@
-MODULE_NAME := "surfacegen5_acpi_notify"
+MODULE_NAME := "surfacegen5_acpi"
 MODULE_VERSION := "0.1"
 
 KVERSION := "$(shell uname -r)"
 
-obj-m += surfacegen5_acpi_notify.o
-surfacegen5_acpi_notify-objs := surfacegen5_acpi_notify_base.o
-surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_ssh.o
-surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_san.o
-surfacegen5_acpi_notify-objs += surfacegen5_acpi_notify_vhf.o
+obj-m += surfacegen5_acpi.o
+surfacegen5_acpi-objs := surfacegen5_acpi_base.o
+surfacegen5_acpi-objs += surfacegen5_acpi_ssh.o
+surfacegen5_acpi-objs += surfacegen5_acpi_san.o
+surfacegen5_acpi-objs += surfacegen5_acpi_vhf.o
 
 sources := Makefile
 sources += dkms.conf
-sources += surfacegen5_acpi_notify_base.c
-sources += surfacegen5_acpi_notify_ssh.h
-sources += surfacegen5_acpi_notify_ssh.c
-sources += surfacegen5_acpi_notify_san.c
-sources += surfacegen5_acpi_notify_vhf.c
+sources += surfacegen5_acpi_base.c
+sources += surfacegen5_acpi_ssh.h
+sources += surfacegen5_acpi_ssh.c
+sources += surfacegen5_acpi_san.c
+sources += surfacegen5_acpi_vhf.c
 
 ccflags-y := -DDEBUG
 

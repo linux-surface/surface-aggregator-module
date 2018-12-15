@@ -3,7 +3,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
-#include "surfacegen5_acpi_notify_ssh.h"
+#include "surfacegen5_acpi_ssh.h"
 
 
 #define SG5_RQST_RETRY			5
@@ -564,7 +564,7 @@ static void surfacegen5_san_consumers_unlink(struct surfacegen5_san_consumers *c
 	consumers->links = NULL;
 }
 
-static int surfacegen5_acpi_notify_san_probe(struct platform_device *pdev)
+static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
 {
 	const struct surfacegen5_san_acpi_consumer *cons;
 	struct surfacegen5_san_drvdata *drvdata;
@@ -635,7 +635,7 @@ err_probe_ec_link:
 	return status;
 }
 
-static int surfacegen5_acpi_notify_san_remove(struct platform_device *pdev)
+static int surfacegen5_acpi_san_remove(struct platform_device *pdev)
 {
 	struct surfacegen5_san_drvdata *drvdata = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
@@ -661,17 +661,17 @@ static const struct surfacegen5_san_acpi_consumer surfacegen5_mshw0091_consumers
 	{ },
 };
 
-static const struct acpi_device_id surfacegen5_acpi_notify_san_match[] = {
+static const struct acpi_device_id surfacegen5_acpi_san_match[] = {
 	{ "MSHW0091", (long unsigned int) surfacegen5_mshw0091_consumers },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_notify_san_match);
+MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_san_match);
 
-struct platform_driver surfacegen5_acpi_notify_san = {
-	.probe = surfacegen5_acpi_notify_san_probe,
-	.remove = surfacegen5_acpi_notify_san_remove,
+struct platform_driver surfacegen5_acpi_san = {
+	.probe = surfacegen5_acpi_san_probe,
+	.remove = surfacegen5_acpi_san_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_notify_san",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_notify_san_match),
+		.name = "surfacegen5_acpi_san",
+		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_san_match),
 	},
 };
