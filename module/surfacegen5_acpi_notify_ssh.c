@@ -934,10 +934,6 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	}
 
 	refcount_set(&work->refcount, 2);
-
-	INIT_WORK(&work->work_ack, surfacegen5_event_work_ack_handler);
-	INIT_DELAYED_WORK(&work->work_evt, surfacegen5_event_work_evt_handler);
-
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
 	work->event.rqid = (cmd->rqid_hi << 8) | cmd->rqid_lo;
@@ -949,6 +945,7 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 
 	memcpy(work->event.pld, buf + SG5_FRAME_OFFS_CMD_PLD, pld_len);
 
+	INIT_WORK(&work->work_ack, surfacegen5_event_work_ack_handler);
 	queue_work(system_wq, &work->work_ack);
 
 	spin_lock_irqsave(&ec->events.lock, flags);
@@ -959,7 +956,13 @@ static void surfacegen5_ssh_handle_event(struct surfacegen5_ec *ec, const u8 *bu
 	}
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
-	queue_delayed_work(system_unbound_wq, &work->work_evt, delay);
+	// immediate execution for high priority events (e.g. keyboard)
+	if (delay == SURFACEGEN5_EVENT_IMMEDIATE) {
+		surfacegen5_event_work_evt_handler(&work->work_evt.work);
+	} else {
+		INIT_DELAYED_WORK(&work->work_evt, surfacegen5_event_work_evt_handler);
+		queue_delayed_work(system_unbound_wq, &work->work_evt, delay);
+	}
 }
 
 static int surfacegen5_ssh_receive_msg_ctrl(struct surfacegen5_ec *ec,

@@ -162,16 +162,25 @@ static struct hid_device *surfacegen5_vhf_create_hid_device(struct platform_devi
 	return hid;
 }
 
-static int surfacegen5_vhf_handle_event(struct surfacegen5_event *event, void *data)
+static int surfacegen5_vhf_event_handler(struct surfacegen5_event *event, void *data)
 {
 	struct surfacegen5_vhf_evtctx *ctx = (struct surfacegen5_vhf_evtctx *)data;
 
 	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04)) {
-		// TODO: check if interrupt flag is correct
 		return hid_input_report(ctx->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
 	}
 
 	dev_warn(ctx->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
+	return 0;
+}
+
+static unsigned long surfacegen5_vhf_event_delay(struct surfacegen5_event *event, void *data)
+{
+	// high priority immediate execution for keyboard events
+	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04)) {
+		return SURFACEGEN5_EVENT_IMMEDIATE;
+	}
+
 	return 0;
 }
 
@@ -220,9 +229,11 @@ static int surfacegen5_vhf_probe(struct platform_device *pdev)
          * Set event hanlder for VHF events. They seem to be enabled by
          * default, thus there should be no need to explicitly enable them.
 	 */
-	status = surfacegen5_ec_set_event_handler(SG5_VHF_RQID,
-	                                          surfacegen5_vhf_handle_event,
-						  &drvdata->event_ctx);
+	status = surfacegen5_ec_set_delayed_event_handler(
+			SG5_VHF_RQID,
+	                surfacegen5_vhf_event_handler,
+	                surfacegen5_vhf_event_delay,
+			&drvdata->event_ctx);
 	if (status) {
 		goto err_add_hid;
 	}
