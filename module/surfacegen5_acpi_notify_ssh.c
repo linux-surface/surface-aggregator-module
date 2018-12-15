@@ -574,8 +574,8 @@ inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
 	size_t len = writer->ptr - writer->data;
 
 	dev_dbg(&ec->serdev->dev, "sending message\n");
-	print_hex_dump(KERN_DEBUG, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
-	               writer->data, writer->ptr - writer->data, false);
+	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	                     writer->data, writer->ptr - writer->data, false);
 
 	return serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
 }
@@ -830,8 +830,8 @@ static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 	buf[9] = 0xff;
 
 	dev_dbg(&ec->serdev->dev, "sending message\n");
-	print_hex_dump(KERN_DEBUG, "send: ", DUMP_PREFIX_OFFSET, 16, 1,
-	               buf, SG5_MSG_LEN_CTRL, false);
+	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
+	                     buf, SG5_MSG_LEN_CTRL, false);
 
 	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
 }
@@ -1184,7 +1184,7 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	int used, n;
 
 	dev_dbg(&serdev->dev, SG5_RECV_TAG "received buffer (size: %zu)\n", size);
-	print_hex_dump(KERN_DEBUG, SG5_RECV_TAG, DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
+	print_hex_dump_debug(SG5_RECV_TAG, DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
 	/*
          * The battery _BIX message gets a bit long, thus we have to add some

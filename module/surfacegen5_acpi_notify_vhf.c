@@ -124,7 +124,7 @@ static int vhf_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
 static int vhf_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
 {
 	hid_dbg(hid, "%s\n", __func__);
-	print_hex_dump(KERN_DEBUG, "report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
+	print_hex_dump_debug("report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
 
 	return len;
 }
