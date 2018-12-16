@@ -42,3 +42,5 @@ _I'll try to do my best, but it may take a while or at worst, your issue may nev
 _Also please do not donate if you need the money, you probably need it more than me._
 If that can't stop you:
 https://www.paypal.me/maximilianluz
+Don't get me wrong though, I do appreciate your donations.
+Thank you for your support!
