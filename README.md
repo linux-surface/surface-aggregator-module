@@ -4,13 +4,15 @@ Linux embedded controller driver for 5th generation (and later) Surface devices 
 
 ## Supported Features and Devices
 
-| Device           | Supported Features          | Unconfirmed    | Known Issues/Missing Features |
-|------------------|-----------------------------|----------------|-------------------------------|
-| Surface Book 2   | lid status, battery status  | thermal events | #7                            |
-| Surface Laptop   | battery status, keyboard    |                | #8                            |
-| Surface Laptop 2 | battery status, keyboard    |                | #8                            |
-| Surface Pro 2017 | battery status              |                |                               |
-| Surface Pro 6    | battery status              |                |                               |
+| Device           | Supported Features          | Unconfirmed    | Known Issues/Missing Features                  |
+|------------------|-----------------------------|----------------|------------------------------------------------|
+| Surface Book 2   | lid status, battery status  | thermal events | proper clipboard detach events (#7)            |
+| Surface Laptop   | battery status, keyboard    |                | caps-lock indicator (#8)                       |
+| Surface Laptop 2 | battery status, keyboard    |                | caps-lock indicator (#8)                       |
+| Surface Pro 2017 | battery status              |                | keyboard backlight enabled during suspend (#4) |
+| Surface Pro 6    | battery status              |                | keyboard backlight enabled during suspend (#4) |
+
+If you think there's anything missing here, feel free to open an issue!
 
 ## Testing
 
