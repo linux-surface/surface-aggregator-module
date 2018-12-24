@@ -31,23 +31,23 @@
 
 #define SG5_MAX_WRITE (                 \
 	  SG5_BYTELEN_SYNC              \
-      	+ SG5_BYTELEN_CTRL              \
+  	+ SG5_BYTELEN_CTRL              \
 	+ SG5_BYTELEN_CRC               \
-      	+ SG5_BYTELEN_CMDFRAME          \
+	+ SG5_BYTELEN_CMDFRAME          \
 	+ SURFACEGEN5_MAX_RQST_PAYLOAD  \
 	+ SG5_BYTELEN_CRC               \
 )
 
 #define SG5_MSG_LEN_CTRL (              \
 	  SG5_BYTELEN_SYNC              \
-      	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CTRL              \
 	+ SG5_BYTELEN_CRC               \
 	+ SG5_BYTELEN_TERM              \
 )
 
 #define SG5_MSG_LEN_CMD_BASE (          \
 	  SG5_BYTELEN_SYNC              \
-      	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CTRL              \
 	+ SG5_BYTELEN_CRC               \
 	+ SG5_BYTELEN_CRC               \
 )	// without payload and command-frame
@@ -452,7 +452,7 @@ int surfacegen5_ec_remove_event_handler(u16 rqid)
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surfacegen5_ec_release(ec);
 
- 	/*
+	/*
 	 * Make sure that the handler is not in use any more after we've
 	 * removed it.
 	 */
@@ -846,7 +846,7 @@ static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
 	struct device *dev;
 	int status;
 
- 	work = container_of(_work, struct surfacegen5_event_work, work_ack);
+	work = container_of(_work, struct surfacegen5_event_work, work_ack);
 	event = &work->event;
 	ec = work->ec;
 	dev = &ec->serdev->dev;
@@ -880,7 +880,7 @@ static void surfacegen5_event_work_evt_handler(struct work_struct *_work)
 
 	int status = 0;
 
- 	work = container_of(dwork, struct surfacegen5_event_work, work_evt);
+	work = container_of(dwork, struct surfacegen5_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
 	dev = &ec->serdev->dev;
@@ -1189,8 +1189,8 @@ static int surfacegen5_ssh_receive_buf(struct serdev_device *serdev,
 	print_hex_dump_debug(SG5_RECV_TAG, DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
 	/*
-         * The battery _BIX message gets a bit long, thus we have to add some
-  	 * additional buffering here.
+	 * The battery _BIX message gets a bit long, thus we have to add some
+	 * additional buffering here.
 	 */
 
 	spin_lock_irqsave(&rcv->lock, flags);
@@ -1239,7 +1239,7 @@ surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *contex
 	uart = &resource->data.uart_serial_bus;
 
 	// set up serdev device
- 	serdev_device_set_baudrate(serdev, uart->default_baud_rate);
+	serdev_device_set_baudrate(serdev, uart->default_baud_rate);
 
 	// serdev currently only supports RTSCTS flow control
 	if (uart->flow_control & SG5_SUPPORTED_FLOW_CONTROL_MASK) {
