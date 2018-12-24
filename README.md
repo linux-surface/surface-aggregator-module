@@ -1,8 +1,16 @@
 # Linux ACPI (Platform) Drivers for 5th Gen. Surface Devices
 
-Work in progress, use at your own risk.
+Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
-Linux embedded controller driver for 5th gen. Surface devices (Surface Book 2, Surface Pro 2017, Surface Laptop), required for battery status and more.
+## Supported Features and Devices
+
+| Device           | Supported Features          | Unconfirmed    | Known Issues/Missing Features |
+|------------------|-----------------------------|----------------|-------------------------------|
+| Surface Book 2   | lid status, battery status  | thermal events | #7                            |
+| Surface Laptop   | battery status, keyboard    |                | #8                            |
+| Surface Laptop 2 | battery status, keyboard    |                | #8                            |
+| Surface Pro 2017 | battery status              |                |                               |
+| Surface Pro 6    | battery status              |                |                               |
 
 ## Testing
 
