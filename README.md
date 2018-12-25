@@ -32,7 +32,7 @@ If you have all the prequisites, you can
 ### Build/Test the module
 
 You can build the module with `make`.
-After that, you can load the module with `insmod surfacegen5_acpi`, and after testing remove it with `rmmod surfacegen5_acpi`.
+After that, you can load the module with `insmod surfacegen5_acpi.ko`, and after testing remove it with `rmmod surfacegen5_acpi`.
 
 ### Permanently install the module
 
