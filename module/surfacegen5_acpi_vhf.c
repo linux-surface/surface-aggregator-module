@@ -151,7 +151,7 @@ static struct hid_device *surfacegen5_vhf_create_hid_device(struct platform_devi
 
 	hid->dev.parent = &pdev->dev;
 
-	hid->bus     = BUS_USB;	// TODO: change to BUS_VIRTUAL (also in hid-microsoft.c)
+	hid->bus     = BUS_VIRTUAL;
 	hid->vendor  = USB_VENDOR_ID_MICROSOFT;
 	hid->product = USB_DEVICE_ID_MS_VHF;
 
