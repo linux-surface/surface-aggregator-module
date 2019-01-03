@@ -215,7 +215,7 @@ static struct surfacegen5_ec surfacegen5_ec = {
 
 
 static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
-                                 struct surfacegen5_rqst *rqst,
+                                 const struct surfacegen5_rqst *rqst,
 				 struct surfacegen5_buf *result);
 
 
@@ -506,7 +506,7 @@ inline static void surfacegen5_ssh_write_buf(struct surfacegen5_ec_writer *write
 }
 
 inline static void surfacegen5_ssh_write_hdr(struct surfacegen5_ec_writer *writer,
-                                             struct surfacegen5_rqst *rqst,
+                                             const struct surfacegen5_rqst *rqst,
                                              struct surfacegen5_ec *ec)
 {
 	struct surfacegen5_frame_ctrl *hdr = (struct surfacegen5_frame_ctrl *)writer->ptr;
@@ -523,7 +523,7 @@ inline static void surfacegen5_ssh_write_hdr(struct surfacegen5_ec_writer *write
 }
 
 inline static void surfacegen5_ssh_write_cmd(struct surfacegen5_ec_writer *writer,
-                                             struct surfacegen5_rqst *rqst,
+                                             const struct surfacegen5_rqst *rqst,
                                              struct surfacegen5_ec *ec)
 {
 	struct surfacegen5_frame_cmd *cmd = (struct surfacegen5_frame_cmd *)writer->ptr;
@@ -583,7 +583,7 @@ inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
 }
 
 inline static void surfacegen5_ssh_write_msg_cmd(struct surfacegen5_ec *ec,
-                                                 struct surfacegen5_rqst *rqst)
+                                                 const struct surfacegen5_rqst *rqst)
 {
 	surfacegen5_ssh_writer_reset(&ec->writer);
 	surfacegen5_ssh_write_syn(&ec->writer);
@@ -600,7 +600,7 @@ inline static void surfacegen5_ssh_write_msg_ack(struct surfacegen5_ec *ec, u8 s
 }
 
 inline static void surfacegen5_ssh_receiver_restart(struct surfacegen5_ec *ec,
-                                                    struct surfacegen5_rqst *rqst)
+                                                    const struct surfacegen5_rqst *rqst)
 {
 	unsigned long flags;
 
@@ -626,7 +626,7 @@ inline static void surfacegen5_ssh_receiver_discard(struct surfacegen5_ec *ec)
 }
 
 static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
-                                 struct surfacegen5_rqst *rqst,
+                                 const struct surfacegen5_rqst *rqst,
 				 struct surfacegen5_buf *result)
 {
 	struct device *dev = &ec->serdev->dev;
@@ -703,7 +703,7 @@ ec_rqst_out:
 	return status;
 }
 
-int surfacegen5_ec_rqst(struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
+int surfacegen5_ec_rqst(const struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result)
 {
 	struct surfacegen5_ec *ec;
 	int status;
