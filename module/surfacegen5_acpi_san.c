@@ -1,4 +1,5 @@
 #include <linux/acpi.h>
+#include <linux/delay.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
@@ -29,6 +30,8 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
 #define SG5_RQST_TAG            	"surfacegen5_ec_rqst: "
+
+#define SG5_QUIRK_BASE_STATE_DELAY	1000
 
 
 struct surfacegen5_san_acpi_consumer {
@@ -356,16 +359,30 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 		if (status != -EIO) break;
 	}
 
-	// TODO: handle base state suspend quirk?
+	if (rqst.tc == 0x11 && rqst.cid == 0x0D && status == -EPERM) {
+		/* Base state quirk:
+		 * The base state may be queried from ACPI when the EC is
+		 * still suspended. In this case it will return '-EPERM'.
+		 * Returning 0xff (unknown base status) here will suppress
+		 * error messages and cause an immediate re-query of the
+		 * state. Delay return to avoid spinning.
+		 */
 
-	if (!status) {
+		buffer->status          = 0x00;
+		buffer->len             = 0x03;
+		buffer->data.out.status = 0x00;
+		buffer->data.out.len    = 0x01;
+		buffer->data.out.pld[0] = 0xFF;
+		msleep(SG5_QUIRK_BASE_STATE_DELAY);
+
+	} else if (!status) {		// success
 		buffer->status          = 0x00;
 		buffer->len             = result.len + 2;
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = result.len;
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
 
-	} else {
+	} else {			// failure
 		dev_err(ctx->dev, SG5_RQST_TAG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
