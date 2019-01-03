@@ -653,7 +653,8 @@ static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
 
 		rem = wait_for_completion_timeout(&ec->receiver.signal, SG5_READ_TIMEOUT);
 		if (rem) {
-			kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
+			// completion assures valid packet, thus ignore returned length
+			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
 
 			if (packet.type == SG5_FRAME_TYPE_ACK) {
 				break;
@@ -675,14 +676,16 @@ static int surfacegen5_ec_rqst_unlocked(struct surfacegen5_ec *ec,
 	if (rqst->snc && result) {
 		rem = wait_for_completion_timeout(&ec->receiver.signal, SG5_READ_TIMEOUT);
 		if (rem) {
-			kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
+			// completion assures valid packet, thus ignore returned length
+			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
 
 			if (result->cap < packet.len) {
 				status = -EINVAL;
 				goto ec_rqst_out;
 			}
 
-			kfifo_out(&ec->receiver.fifo, result->data, packet.len);
+			// completion assures valid packet, thus ignore returned length
+			(void) !kfifo_out(&ec->receiver.fifo, result->data, packet.len);
 			result->len = packet.len;
 		} else {
 			dev_err(dev, SG5_RQST_TAG "communication timed out\n");
