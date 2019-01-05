@@ -14,5 +14,11 @@ The module can then be loaded via `insmod sb2_shps.ko` (and removed with `rmmod 
 
 ### Permanently Install the Module
 
+#### On Arch-Linux
+
+Simply run `makepkg -si` inside this folder.
+
+#### Via DKMS
+
 If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
 To uninstall it, run `make dkms-uninstall`.
