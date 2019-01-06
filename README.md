@@ -2,6 +2,8 @@
 
 Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
+_This has now been integrated into [jakeday/linux-surface](https://github.com/jakeday/linux-surface/)._
+
 ## Supported Features and Devices
 
 | Device           | Supported Features          | Unconfirmed    | Known Issues/Missing Features                  |
