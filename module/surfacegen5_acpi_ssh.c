@@ -572,6 +572,7 @@ inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
 {
 	struct surfacegen5_ec_writer *writer = &ec->writer;
 	struct serdev_device *serdev = ec->serdev;
+	int status;
 
 	size_t len = writer->ptr - writer->data;
 
@@ -579,7 +580,8 @@ inline static int surfacegen5_ssh_writer_flush(struct surfacegen5_ec *ec)
 	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
 	                     writer->data, writer->ptr - writer->data, false);
 
-	return serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
+	status = serdev_device_write(serdev, writer->data, len, SG5_WRITE_TIMEOUT);
+	return status >= 0 ? 0 : status;
 }
 
 inline static void surfacegen5_ssh_write_msg_cmd(struct surfacegen5_ec *ec,
@@ -817,6 +819,7 @@ inline static bool surfacegen5_ssh_is_valid_crc(const u8 *begin, const u8 *end)
 
 static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 {
+	int status;
 	u8 buf[SG5_MSG_LEN_CTRL];
 	u16 crc;
 
@@ -838,7 +841,8 @@ static int surfacegen5_ssh_send_ack(struct surfacegen5_ec *ec, u8 seq)
 	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
 	                     buf, SG5_MSG_LEN_CTRL, false);
 
-	return serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
+	status = serdev_device_write(ec->serdev, buf, SG5_MSG_LEN_CTRL, SG5_WRITE_TIMEOUT);
+	return status >= 0 ? 0 : status;
 }
 
 static void surfacegen5_event_work_ack_handler(struct work_struct *_work)
