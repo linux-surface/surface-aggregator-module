@@ -1387,6 +1387,10 @@ static const struct serdev_device_ops surfacegen5_ssh_device_ops = {
 	.write_wakeup = serdev_device_write_wakeup,
 };
 
+
+int surfacegen5_ssh_sysfs_register(struct device *dev);
+void surfacegen5_ssh_sysfs_unregister(struct device *dev);
+
 static int surfacegen5_acpi_ssh_probe(struct serdev_device *serdev)
 {
 	struct surfacegen5_ec *ec;
@@ -1486,7 +1490,13 @@ static int surfacegen5_acpi_ssh_probe(struct serdev_device *serdev)
 		goto err_probe_devinit;
 	}
 
+	status = surfacegen5_ssh_sysfs_register(&serdev->dev);
+	if (status) {
+		goto err_probe_devinit;
+	}
+
 	surfacegen5_ec_release(ec);
+
 	acpi_walk_dep_device_list(ssh);
 
 	return 0;
@@ -1521,6 +1531,8 @@ static void surfacegen5_acpi_ssh_remove(struct serdev_device *serdev)
 	if (!ec) {
 		return;
 	}
+
+	surfacegen5_ssh_sysfs_unregister(&serdev->dev);
 
 	// suspend EC and disable events
 	status = surfacegen5_ssh_ec_suspend(ec);

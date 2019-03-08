@@ -6,6 +6,7 @@ KVERSION := "$(shell uname -r)"
 obj-m += surfacegen5_acpi.o
 surfacegen5_acpi-objs := surfacegen5_acpi_base.o
 surfacegen5_acpi-objs += surfacegen5_acpi_ssh.o
+surfacegen5_acpi-objs += surfacegen5_acpi_ssh_sysfs.o
 surfacegen5_acpi-objs += surfacegen5_acpi_san.o
 surfacegen5_acpi-objs += surfacegen5_acpi_vhf.o
 
@@ -14,6 +15,7 @@ sources += dkms.conf
 sources += surfacegen5_acpi_base.c
 sources += surfacegen5_acpi_ssh.h
 sources += surfacegen5_acpi_ssh.c
+sources += surfacegen5_acpi_ssh_sysfs.c
 sources += surfacegen5_acpi_san.c
 sources += surfacegen5_acpi_vhf.c
 
