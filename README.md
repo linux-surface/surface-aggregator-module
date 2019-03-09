@@ -44,7 +44,51 @@ To uninstall it, run `make dkms-uninstall`.
 [patches-linux-surface]: https://github.com/qzed/linux-surface/tree/master/patches/4.18
 [prebuilt-linux-surface]: https://github.com/qzed/linux-surface/releases/tag/v4.18.16-pre1
 
+## Getting Windows Logs for Reverse Engineering
 
+1. Get the required software:
+   - [IRPMon (modified version from carrylook)][irpmon]
+   - [DbgView][dbgview]
+
+2. Set the component filter mask (as described [here][compflt]).
+   Specifically you need to set `DEFAULT` (or `Kd_DEFAULT_Mask`) to `0xffffffff`.
+   If you choose the second option, you need to do this after you have re-booted, i.e. after step 4.
+
+3. Enable kernel debugging via `bcdedit /debug on` on an elevated command prompt/powershell.
+
+4. Disable driver signature verification (required to get IRPmon working):
+
+   Hold shift while clicking on the restart button in the start menu.
+   Go through `Troubleshoot`, `Advanced Options`, `See more recovery options`, `Start-up Settings` and press `Restart`. 
+   Boot into windows.
+   On the screen appearing afterwards press `7` to `Disable driver signature enforcement`.
+
+   _Note: This step will re-boot your PC._
+
+5. Start IRPMon via `bin/x64/Debug/IRPMon.exe`.
+   
+   Select `Action`, `Select drivers / devices...` and search for `\Driver\iaLPSS2_UART2`.
+   Expand and right-click on the inner-most entry and select `Hooked`, then click `Ok` to close the selection window.
+
+   Make sure there is a check mark next to `Monitoring`, `Capture Events`.
+   If not activate this.
+
+6. Start `Dbgview.exe` as administrator.
+
+   Go to `Edit`, `Filter/Highlight...` and type `HOOK_DATA` next to `Include`, click on `Ok`.
+
+   Go to `Capture` and select `Capture Kernel`.
+
+7. Perform a/the task involving the EC (eg. detaching the clipboard on the SB2).
+   You should then see messages appearing in the window.
+   You can save those to a file using `File`, `Save As...` or clear the log via `Edit`, `Clear Display`.
+
+   Please only submit concise logs containing one test at a time, use `Clear Display` and `Save As...` to keep it contained.
+   Usually the messages should stop appearing after a short period of time and you can then assume that the exchange between Windows and the EC is complete.
+
+[irpmon]: https://github.com/carrylook/SurfacePro2017Notes/tree/master/IRPMon-Master
+[dbgview]: https://docs.microsoft.com/en-us/sysinternals/downloads/debugview
+[compflt]: https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/reading-and-filtering-debugging-messages#setting-the-component-filter-mask
 ## Donations
 
 _I can't really guarantee you anything._
