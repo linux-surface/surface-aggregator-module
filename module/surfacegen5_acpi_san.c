@@ -29,6 +29,10 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define SG5_EVENT_TEMP_RQID		0x0003
 #define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
+#define SG5_EVENT_CLIPBOARD_TC		0x11
+#define SG5_EVENT_CLIPBOARD_RQID	0x0011
+#define SG5_EVENT_CLIPBOARD_CID_BTN	0x0e
+
 #define SG5_RQST_TAG            	"surfacegen5_ec_rqst: "
 
 #define SG5_QUIRK_BASE_STATE_DELAY	1000
@@ -275,6 +279,28 @@ static int surfacegen5_evt_thermal(struct surfacegen5_event *event, void *data)
 }
 
 
+inline static int surfacegen5_evt_clipboard_btn(struct device *dev, struct surfacegen5_event *event)
+{
+	dev_err(dev, "unimplemented: clipboard button event\n");
+	return 0;
+}
+
+static int surfacegen5_evt_clipboard(struct surfacegen5_event *event, void *data)
+{
+	struct device *dev = (struct device *)data;
+
+	switch (event->cid) {
+	case SG5_EVENT_CLIPBOARD_CID_BTN:
+		return surfacegen5_evt_clipboard_btn(dev, event);
+
+	default:
+		dev_warn(dev, "unhandled clipboard event (cid = %x)\n", event->cid);
+	}
+
+	return 0;
+}
+
+
 static struct gsb_data_rqsx *surfacegen5_san_validate_rqsx(
 	struct device *dev, const char *type, struct gsb_buffer *buffer)
 {
@@ -466,6 +492,13 @@ static int surfacegen5_san_enable_events(struct device *dev)
 		goto err_event_handler_thermal;
 	}
 
+	status = surfacegen5_ec_set_event_handler(
+			SG5_EVENT_CLIPBOARD_RQID, surfacegen5_evt_clipboard,
+			dev);
+	if (status) {
+		goto err_event_handler_clipboard;
+	}
+
 	status = surfacegen5_ec_enable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
 	if (status) {
 		goto err_event_source_power;
@@ -476,11 +509,20 @@ static int surfacegen5_san_enable_events(struct device *dev)
 		goto err_event_source_thermal;
 	}
 
+	status = surfacegen5_ec_enable_event_source(SG5_EVENT_CLIPBOARD_TC, 0x01, SG5_EVENT_CLIPBOARD_RQID);
+	if (status) {
+		goto err_event_source_clipboard;
+	}
+
 	return 0;
 
+err_event_source_clipboard:
+	surfacegen5_ec_disable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
 err_event_source_thermal:
 	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
 err_event_source_power:
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_CLIPBOARD_RQID);
+err_event_handler_clipboard:
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
 err_event_handler_thermal:
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
@@ -490,8 +532,10 @@ err_event_handler_power:
 
 static void surfacegen5_san_disable_events(void)
 {
+	surfacegen5_ec_disable_event_source(SG5_EVENT_CLIPBOARD_TC, 0x01, SG5_EVENT_CLIPBOARD_RQID);
 	surfacegen5_ec_disable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
 	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_CLIPBOARD_RQID);
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
 }
