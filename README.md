@@ -3,18 +3,28 @@
 Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
 _This has now been integrated into [jakeday/linux-surface](https://github.com/jakeday/linux-surface/)._
+_If you have a Surface Book 2 you might also want to have a look at [this][dtx-daemon]._
 
 ## Supported Features and Devices
 
-| Device           | Supported Features          | Unconfirmed    | Known Issues/Missing Features                  |
-|------------------|-----------------------------|----------------|------------------------------------------------|
-| Surface Book 2   | lid status, battery status  | thermal events | proper clipboard detach events (#7)            |
-| Surface Laptop   | battery status, keyboard    |                | caps-lock indicator (#8)                       |
-| Surface Laptop 2 | battery status, keyboard    |                | caps-lock indicator (#8)                       |
-| Surface Pro 2017 | battery status              |                | keyboard backlight enabled during suspend (#4) |
-| Surface Pro 6    | battery status              |                | keyboard backlight enabled during suspend (#4) |
+| Device           | Supported Features                                  | Unconfirmed    | Known Issues/Missing Features                  |
+|------------------|-----------------------------------------------------|----------------|------------------------------------------------|
+| Surface Book 2   | lid status, battery status, clipboard detach events | thermal events | -                                              |
+| Surface Laptop   | battery status, keyboard                            |                | caps-lock indicator (#8)                       |
+| Surface Laptop 2 | battery status, keyboard                            |                | caps-lock indicator (#8)                       |
+| Surface Pro 2017 | battery status                                      |                | keyboard backlight enabled during suspend (#4) |
+| Surface Pro 6    | battery status                                      |                | keyboard backlight enabled during suspend (#4) |
 
 If you think there's anything missing here, feel free to open an issue!
+
+## Notes on the Surface Book 2
+
+This driver now has basic support for clipboard detachment handling (e.g. unmounting of devices attached to the base).
+The driver itself does not do anything more than sending an event to user-space and awaiting a reply.
+A separate daemon is required to handle these events.
+Have a look at [this][dtx-daemon] repository for a basic implementation of such a daemon.
+
+[dtx-daemon]: https://github.com/qzed/linux-surfacegen5-dtx-daemon
 
 ## Testing
 
