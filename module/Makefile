@@ -9,6 +9,7 @@ surfacegen5_acpi-objs += surfacegen5_acpi_ssh.o
 surfacegen5_acpi-objs += surfacegen5_acpi_ssh_sysfs.o
 surfacegen5_acpi-objs += surfacegen5_acpi_san.o
 surfacegen5_acpi-objs += surfacegen5_acpi_vhf.o
+surfacegen5_acpi-objs += surfacegen5_acpi_dtx.o
 
 sources := Makefile
 sources += dkms.conf
@@ -18,6 +19,7 @@ sources += surfacegen5_acpi_ssh.c
 sources += surfacegen5_acpi_ssh_sysfs.c
 sources += surfacegen5_acpi_san.c
 sources += surfacegen5_acpi_vhf.c
+sources += surfacegen5_acpi_dtx.c
 
 ccflags-y := -DDEBUG
 
