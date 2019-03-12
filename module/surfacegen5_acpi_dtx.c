@@ -12,25 +12,28 @@
 #include "surfacegen5_acpi_ssh.h"
 
 
-#define SURFACE_DTX_EVT_TYPE_DETACH             0x11
-#define SURFACE_DTX_EVT_CODE_DETACH_REQUEST     0x0e
-
-#define SURFACE_DTX_CMD_TYPE_DETACH             0x11
-#define SURFACE_DTX_CMD_DETACH_ABORT            0x08
-#define SURFACE_DTX_CMD_DETACH_COMMENCE         0x09
+#define SURFACE_DTX_CMD_TYPE_DETACH             	0x11
+#define SURFACE_DTX_CMD_DETACH_SAFEGUARD_ENGAGE		0x06
+#define SURFACE_DTX_CMD_DETACH_SAFEGUARD_DISENGAGE	0x07
+#define SURFACE_DTX_CMD_DETACH_ABORT            	0x08
+#define SURFACE_DTX_CMD_DETACH_COMMENCE         	0x09
 
 // Warning: This must always be a power of 2!
-#define SURFACE_DTX_CLIENT_BUF_SIZE             16
+#define SURFACE_DTX_CLIENT_BUF_SIZE             	16
 
-
-#define SG5_EVENT_CLIPBOARD_TC			0x11
-#define SG5_EVENT_CLIPBOARD_RQID		0x0011
-#define SG5_EVENT_CLIPBOARD_CID_BTN		0x0e
+#define SG5_EVENT_CLIPBOARD_TC				0x11
+#define SG5_EVENT_CLIPBOARD_RQID			0x0011
+#define SG5_EVENT_CLIPBOARD_CID_CONNECTION		0x0c
+#define SG5_EVENT_CLIPBOARD_CID_BUTTON			0x0e
+#define SG5_EVENT_CLIPBOARD_CID_TIMEDOUT		0x0f
+#define SG5_EVENT_CLIPBOARD_CID_NOTIFICATION		0x11
 
 
 struct surface_dtx_event {
 	u8 type;
 	u8 code;
+	u8 arg0;
+	u8 arg1;
 } __packed;
 
 struct surface_dtx_cmd {
@@ -65,8 +68,10 @@ static struct surface_dtx_dev surface_dtx_dev;
 static bool validate_dtx_cmd(struct surface_dtx_cmd *cmd)
 {
 	if (cmd->type == SURFACE_DTX_CMD_TYPE_DETACH) {
-		return cmd->code == SURFACE_DTX_CMD_DETACH_COMMENCE ||
-		       cmd->code == SURFACE_DTX_CMD_DETACH_ABORT;
+		return cmd->code == SURFACE_DTX_CMD_DETACH_SAFEGUARD_ENGAGE ||
+		       cmd->code == SURFACE_DTX_CMD_DETACH_SAFEGUARD_DISENGAGE ||
+		       cmd->code == SURFACE_DTX_CMD_DETACH_ABORT ||
+		       cmd->code == SURFACE_DTX_CMD_DETACH_COMMENCE;
 	}
 
 	return false;
@@ -82,9 +87,6 @@ static int surface_dtx_execute_command(struct surface_dtx_cmd *cmd)
 		.cdl = 0,
 		.pld = NULL,
 	};
-
-	printk(KERN_INFO "surface_dtx: received command (type: 0x%02x, code: 0x%02x)\n",
-	       cmd->type, cmd->code);
 
 	return surfacegen5_ec_rqst(&rqst, NULL);
 }
@@ -318,14 +320,25 @@ static int surface_dtx_evt_clipboard(struct surfacegen5_event *in_event, void *d
 	struct surface_dtx_event event;
 
 	switch (in_event->cid) {
-	case SG5_EVENT_CLIPBOARD_CID_BTN:
-		event.type = SURFACE_DTX_EVT_TYPE_DETACH;
-		event.code = SURFACE_DTX_EVT_CODE_DETACH_REQUEST;
+	case SG5_EVENT_CLIPBOARD_CID_CONNECTION:
+	case SG5_EVENT_CLIPBOARD_CID_BUTTON:
+	case SG5_EVENT_CLIPBOARD_CID_TIMEDOUT:
+	case SG5_EVENT_CLIPBOARD_CID_NOTIFICATION:
+		if (in_event->len > 2) {
+			printk(KERN_ERR "surface_dtx: unexpected payload size (cid: %x, len: %u)\n",
+			       in_event->cid, in_event->len);
+			return 0;
+		}
+
+		event.type = in_event->tc;
+		event.code = in_event->cid;
+		event.arg0 = in_event->len >= 1 ? in_event->pld[0] : 0x00;
+		event.arg1 = in_event->len >= 2 ? in_event->pld[1] : 0x00;
 		surface_dtx_push_event(&event);
 		break;
 
 	default:
-		printk(KERN_WARNING "surface_dtx: unhandled clipboard event (cid = %x)\n", in_event->cid);
+		printk(KERN_WARNING "surface_dtx: unhandled clipboard event (cid: %x)\n", in_event->cid);
 	}
 
 	return 0;
