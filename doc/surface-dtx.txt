@@ -1,0 +1,208 @@
+Surface DTX Driver
+================================================================================
+
+Description: Driver documentation for clipboard detachment system.
+Devices:     Surface Book 2.
+Date:        2019-03-12
+
+
+The DTX driver is responsible for proper clipboard detachment and
+re-attachment handling. To this end, it provides the `/dev/surface_dtx`
+device, through which it can interface with a user-space daemon. This daemon
+is then ultimately responsible for determining and taking necessary actions,
+such as unmounting devices attached to the base, unloading/reloading the
+grapics-driver, user-notifications, etc.
+
+This document describes the driver and its communication with the embedded
+controller (EC). See `surface-dtx-uapi.txt` for details regarding the
+user-space interface provided by this driver.
+
+
+Basics / Concepts / Nomenclature
+--------------------------------------------------------------------------------
+
+Clipboard:
+    The detachable upper part of the Surface Book, housing the screen and
+    CPU.
+
+Base:
+    The lower part of the Surface Book from which the clipboard can be
+    detached, housing the discrete GPU (dGPU).
+
+dGPU-Lock / detachment safeguard:
+    Software-safeguard of the EC to disallow detachment when the dGPU is in
+    use. This safeguard is engaged and disengaged explicitly via DTX API
+    requests, there is no "smart"/automatic detection of dGPU usage by the
+    EC itself (see command IDs 0x06, 0x07).
+
+    During a detachment-process, the state of the dGPU-lock can be seen on
+    the detachment-indicator LED (at the detach-button):
+
+      - If the dGPU-lock is engaged, the LED will be solid red.
+
+      - If the dGPU-lock is disengaged, the LED will blink green.
+
+    The dGPU-lock is _not_ internally counted by the EC, i.e. dGPU-lock
+    engagement commands have no effect if the dGPU-lock is already engaged,
+    and a single command is sufficient to disengage the lock.
+
+Silently ignored commands:
+    The command is accepted by the EC as a valid command and acknowledged
+    (following the standard communication protocol), but the EC does not act
+    upon it.
+
+
+Detachment Process
+--------------------------------------------------------------------------------
+
+The detachment process is started with the user pressing the "detach" button
+on the base of the device. Following that:
+
+ 1. The EC turns on the indicator LED (see dGPU-Lock) and sends a
+    detach-button-pressed event and awaits further instructions/commands.
+
+ 2. The event is, via this driver, relayed to user-space, where an
+    appropriate user-space daemon can handle the event and send instructions
+    back to the EC.
+
+    Valid responses are:
+
+      - Send "abort-detach" command (0x08). This will immediately abort the
+        detachment process. Furthermore, the EC will send a
+        detach-button-pressed event, similar to the user pressing the
+        detach-button to cancel said process (see point 4).
+
+      - Send "commence-detach" command (0x09). This will disengage the
+        hardware-lock, provided that the dGPU-lock is disengaged, after
+        which the user can separate clipboard and base.
+
+        If the dGPU-lock is engaged, the EC will immediately abort the
+        detachment process and send a detach-button-pressed event, similar
+        to the user pressing the detach-button to cancel said process (see
+        point 4).
+
+      - Send "disengage-safeguard" command (0x07). Provided the
+        dGPU-lock/safeguard is engaged, this will disengage the safeguard
+        and unlock the hardware-lock. No further "commence-detach" command
+        is required.
+
+        If the dGPU-lock is not active, this command will be silently
+        ignored.
+
+      - Do nothing (see point 3).
+
+    See Section "Commands" on the specification of these responses.
+
+ 3. The EC waits for instructions from user-space and acts according to them.
+
+    If the EC does not receive any instructions in a given period, it will
+    time out and continue as follows:
+
+      - If the dGPU-lock is disengaged, the EC will unlock the hardware-lock
+        and the clipboard can be detached from the base. This is the exact
+        behavior as without this driver or any user-space daemon.
+
+      - If the dGPU-lock is engaged, the EC will not unlock the
+        hardware-lock, meaning the clipboard cannot be detached from the
+        base. Furthermore, the EC sends an event detailing this (code 0x0f,
+        see section "Events" for details).
+
+ 4. If the user presses the detach button at any point when a detach event
+    is in process (i.e. after the the EC has sent the initial
+    detach-button-pressed event and before it received the corresponding
+    response), the detach process is cancled on the EC-level and an
+    identical event is being sent. Thus a detach-button-pressed event, by
+    itself, does not signal the start of the detachment process.
+
+
+Commands
+--------------------------------------------------------------------------------
+
+All commands below are standard Surface-EC commands with the following
+properties:
+
+    Field   Value   Note
+    ------------------------------------------------------------------------
+    TC      0x11
+    IID     0x00
+    CID     ....    See below.
+    SNC     0x00    No return-package.
+    CDL     0x00    No command payload.
+
+Command-Codes/IDs:
+
+    CID 0x06:
+        Engage detachment safegurad (dGPU-lock).
+
+        This command will be silently ignored if the safeguard is already
+        engaged.
+
+        Context:
+            Valid outside detachment-process (otherwise silently ignored).
+
+    CID 0x07:
+        Disengage detachment safeguard (dGPU-lock).
+
+        This command will be silently ignored if the safeguard is already
+        disengaged (even during detachment-process).
+
+        Context:
+            Valid in any context.
+
+            During detachment process with engaged safegurad, also acts as
+            "detach commence" signal.
+
+    CID 0x08:
+        Abort detachment process.
+
+        Context:
+            Valid during detachment-process (otherwise silently ignored).
+
+    CID 0x09:
+        Commence detachment process.
+
+        Context:
+            Valid during detachment-process (otherwise silently ignored).
+
+            If dGPU safeguard is active, this command will abort the
+            detachment process instead of unlocking the hardware-lock.
+
+
+Events
+--------------------------------------------------------------------------------
+
+Similar to commands, TC is 0x11 and IID is 0x00.
+
+Event Codes/IDs:
+
+    CID 0x0c:
+        Physical connection changed. This means real physical contact as in
+        clipboard separated from / inserted into base.
+
+        Payload: 2 bytes.
+            [0x00, 0x00]:   Disconnected.
+            [0x01, 0x0a]:   Connected.
+
+            The specific purpose of the second byte is (so far) unclear. It
+            might be related to the type of hardware/base that has been
+            attached (i.e. with/without dGPU).
+
+    CID 0x0e:
+        Detach button pressed. Depending on the context, can signal
+        initiation or abortion a detachment-process.
+
+        Payload: None
+
+    CID 0x0f:
+        Detach process timed out with GPU-lock active.
+
+        Payload: 1 byte (0x02).
+
+            The specific purpose of this payload is unclear.
+
+    CID 0x11:
+        Show/hide "Clipboard can be detached" notification.
+
+        Payload: 1 byte.
+            0x01:   Show notification.
+            0x00:   Hide notification.
