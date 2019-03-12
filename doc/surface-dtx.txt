@@ -227,7 +227,6 @@ Commands Structure:
     where `type` is currently fixed to `0x11`, and `CID` is the command ID
     as described above.
 
-
 Event Structure:
     Events consist of four consecutive bytes:
 
