@@ -1,9 +1,0 @@
-Surface DTX User-Space Daemon API
-================================================================================
-
-Description: User-space API documentation for clipboard detachment system.
-Devices:     Surface Book 2.
-Date:        2019-03-12
-
-
-To be done once the interface has stabilized.

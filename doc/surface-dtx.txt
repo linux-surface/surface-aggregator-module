@@ -3,7 +3,7 @@ Surface DTX Driver
 
 Description: Driver documentation for clipboard detachment system.
 Devices:     Surface Book 2.
-Date:        2019-03-12
+Date:        2019-03-13
 
 
 The DTX driver is responsible for proper clipboard detachment and
@@ -13,9 +13,12 @@ is then ultimately responsible for determining and taking necessary actions,
 such as unmounting devices attached to the base, unloading/reloading the
 grapics-driver, user-notifications, etc.
 
-This document describes the driver and its communication with the embedded
-controller (EC). See `surface-dtx-uapi.txt` for details regarding the
-user-space interface provided by this driver.
+There are two basic communication principles used in this driver: Commands
+(in other parts of the documentation also referred to as requests) and
+events. Commands are sent to the EC and may have a different implications in
+different a context. Events are sent by the EC upon some internal state
+change. Commands are always driver-initiated, whereas events are always
+initiated by the EC.
 
 
 Basics / Concepts / Nomenclature
@@ -206,3 +209,30 @@ Event Codes/IDs:
         Payload: 1 byte.
             0x01:   Show notification.
             0x00:   Hide notification.
+
+
+User-Space API
+--------------------------------------------------------------------------------
+
+The user-space interface is provided via `/dev/surface_dtx`. This is a basic
+`miscdevice`, from which events can be received via `read` / `poll` /
+`select` / fasync, and to which commands can be sent via `write`. Multiple
+clients may access this file at the same time.
+
+Commands Structure:
+    Commands consist of two consecutive bytes:
+
+        [type: u8, CID: u8]
+
+    where `type` is currently fixed to `0x11`, and `CID` is the command ID
+    as described above.
+
+
+Event Structure:
+    Events consist of four consecutive bytes:
+
+        [type: u8, CID: u8, arg0: u8, arg1: u8]
+
+    where `type` is currently fixed to `0x11`, `CID` is the event ID as
+    described above, and `arg0` and `arg1` are the first and second byte of
+    the event payload. If unused, `arg0` and `arg1` are set to zero.
