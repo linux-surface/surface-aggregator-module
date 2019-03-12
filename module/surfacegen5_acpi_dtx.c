@@ -28,6 +28,9 @@
 #define SG5_EVENT_CLIPBOARD_CID_TIMEDOUT		0x0f
 #define SG5_EVENT_CLIPBOARD_CID_NOTIFICATION		0x11
 
+#define DTX_ERR		KERN_ERR "surfacegen5_acpi_dtx: "
+#define DTX_WARN	KERN_WARNING "surfacegen5_acpi_dtx: "
+
 
 struct surface_dtx_event {
 	u8 type;
@@ -301,7 +304,7 @@ static void surface_dtx_push_event(struct surface_dtx_event *event)
 		client->buffer_head &= SURFACE_DTX_CLIENT_BUF_SIZE - 1;
 
 		if (unlikely(client->buffer_head == client->buffer_tail)) {
-			printk(KERN_WARNING "surface_dtx: event buffer overrun\n");
+			printk(DTX_WARN "event buffer overrun\n");
 			client->buffer_tail = (client->buffer_tail + 1) & (SURFACE_DTX_CLIENT_BUF_SIZE - 1);
 		}
 
@@ -325,7 +328,7 @@ static int surface_dtx_evt_clipboard(struct surfacegen5_event *in_event, void *d
 	case SG5_EVENT_CLIPBOARD_CID_TIMEDOUT:
 	case SG5_EVENT_CLIPBOARD_CID_NOTIFICATION:
 		if (in_event->len > 2) {
-			printk(KERN_ERR "surface_dtx: unexpected payload size (cid: %x, len: %u)\n",
+			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
 			       in_event->cid, in_event->len);
 			return 0;
 		}
@@ -338,7 +341,7 @@ static int surface_dtx_evt_clipboard(struct surfacegen5_event *in_event, void *d
 		break;
 
 	default:
-		printk(KERN_WARNING "surface_dtx: unhandled clipboard event (cid: %x)\n", in_event->cid);
+		printk(DTX_WARN "unhandled clipboard event (cid: %x)\n", in_event->cid);
 	}
 
 	return 0;
