@@ -1,5 +1,6 @@
 #include <linux/acpi.h>
 #include <linux/fs.h>
+#include <linux/ioctl.h>
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
@@ -12,21 +13,28 @@
 #include "surfacegen5_acpi_ssh.h"
 
 
-#define SURFACE_DTX_CMD_TYPE_DETACH             	0x11
-#define SURFACE_DTX_CMD_DETACH_SAFEGUARD_ENGAGE		0x06
-#define SURFACE_DTX_CMD_DETACH_SAFEGUARD_DISENGAGE	0x07
-#define SURFACE_DTX_CMD_DETACH_ABORT            	0x08
-#define SURFACE_DTX_CMD_DETACH_COMMENCE         	0x09
+#define DTX_CMD_DETACH_SAFEGUARD_ENGAGE			_IO(0x11, 0x01)
+#define DTX_CMD_DETACH_SAFEGUARD_DISENGAGE		_IO(0x11, 0x02)
+#define DTX_CMD_DETACH_ABORT				_IO(0x11, 0x03)
+#define DTX_CMD_DETACH_COMMENCE				_IO(0x11, 0x04)
+#define DTX_CMD_GET_OPMODE				_IOR(0x11, 0x05, int)
+
+#define SG5_RQST_DTX_TC					0x11
+#define SG5_RQST_DTX_CID_DETACH_SAFEGUARD_ENGAGE	0x06
+#define SG5_RQST_DTX_CID_DETACH_SAFEGUARD_DISENGAGE	0x07
+#define SG5_RQST_DTX_CID_DETACH_ABORT            	0x08
+#define SG5_RQST_DTX_CID_DETACH_COMMENCE         	0x09
+#define SG5_RQST_DTX_CID_GET_OPMODE         		0x0D
+
+#define SG5_EVENT_DTX_TC				0x11
+#define SG5_EVENT_DTX_RQID				0x0011
+#define SG5_EVENT_DTX_CID_CONNECTION			0x0c
+#define SG5_EVENT_DTX_CID_BUTTON			0x0e
+#define SG5_EVENT_DTX_CID_TIMEDOUT			0x0f
+#define SG5_EVENT_DTX_CID_NOTIFICATION			0x11
 
 // Warning: This must always be a power of 2!
 #define SURFACE_DTX_CLIENT_BUF_SIZE             	16
-
-#define SG5_EVENT_CLIPBOARD_TC				0x11
-#define SG5_EVENT_CLIPBOARD_RQID			0x0011
-#define SG5_EVENT_CLIPBOARD_CID_CONNECTION		0x0c
-#define SG5_EVENT_CLIPBOARD_CID_BUTTON			0x0e
-#define SG5_EVENT_CLIPBOARD_CID_TIMEDOUT		0x0f
-#define SG5_EVENT_CLIPBOARD_CID_NOTIFICATION		0x11
 
 #define DTX_ERR		KERN_ERR "surfacegen5_acpi_dtx: "
 #define DTX_WARN	KERN_WARNING "surfacegen5_acpi_dtx: "
@@ -37,11 +45,6 @@ struct surface_dtx_event {
 	u8 code;
 	u8 arg0;
 	u8 arg1;
-} __packed;
-
-struct surface_dtx_cmd {
-	u8 type;
-	u8 code;
 } __packed;
 
 struct surface_dtx_dev {
@@ -68,30 +71,54 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-static bool validate_dtx_cmd(struct surface_dtx_cmd *cmd)
-{
-	if (cmd->type == SURFACE_DTX_CMD_TYPE_DETACH) {
-		return cmd->code == SURFACE_DTX_CMD_DETACH_SAFEGUARD_ENGAGE ||
-		       cmd->code == SURFACE_DTX_CMD_DETACH_SAFEGUARD_DISENGAGE ||
-		       cmd->code == SURFACE_DTX_CMD_DETACH_ABORT ||
-		       cmd->code == SURFACE_DTX_CMD_DETACH_COMMENCE;
-	}
-
-	return false;
-}
-
-static int surface_dtx_execute_command(struct surface_dtx_cmd *cmd)
+static int dtx_cmd_simple(u8 cid)
 {
 	struct surfacegen5_rqst rqst = {
-		.tc  = cmd->type,
+		.tc  = SG5_RQST_DTX_TC,
 		.iid = 0,
-		.cid = cmd->code,
+		.cid = cid,
 		.snc = 0,
 		.cdl = 0,
 		.pld = NULL,
 	};
 
 	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+static int dtx_cmd_get_opmode(int __user *buf)
+{
+	u8 result_buf[1];
+	int status;
+
+	struct surfacegen5_rqst rqst = {
+		.tc  = SG5_RQST_DTX_TC,
+		.iid = 0,
+		.cid = SG5_RQST_DTX_CID_GET_OPMODE,
+		.snc = 1,
+		.cdl = 0,
+		.pld = NULL,
+	};
+
+	struct surfacegen5_buf result = {
+		.cap = 1,
+		.len = 0,
+		.data = result_buf,
+	};
+
+	status = surfacegen5_ec_rqst(&rqst, &result);
+	if (status) {
+		return status;
+	}
+
+	if (result.len != 1) {
+		return -EFAULT;
+	}
+
+	if (put_user((int) result.data[0], buf)) {
+		return -EACCES;
+	}
+
+	return 0;
 }
 
 
@@ -197,51 +224,6 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 	return read;
 }
 
-static ssize_t surface_dtx_write(struct file *file, const char __user *buf, size_t count, loff_t *offs)
-{
-	struct surface_dtx_client *client = file->private_data;
-	struct surface_dtx_dev *ddev = client->ddev;
-	struct surface_dtx_cmd command;
-	size_t sent = 0;
-	int status;
-
-	if (count != 0 && count < sizeof(struct surface_dtx_cmd)) {
-		return -EINVAL;
-	}
-
-	status = mutex_lock_interruptible(&ddev->mutex);
-	if (status) {
-		return status;
-	}
-
-	if (!ddev->active) {
-		mutex_unlock(&ddev->mutex);
-		return -ENODEV;
-	}
-
-	while (sent + sizeof(struct surface_dtx_cmd) <= count) {
-		if (copy_from_user(&command, buf + sent, sizeof(struct surface_dtx_cmd))) {
-			status = -EFAULT;
-			break;
-		}
-
-		if (!validate_dtx_cmd(&command)) {
-			status = -EINVAL;
-			break;
-		}
-
-		if(surface_dtx_execute_command(&command)) {
-			status = -EIO;
-			break;
-		}
-
-		sent += sizeof(struct surface_dtx_cmd);
-	}
-
-	mutex_unlock(&ddev->mutex);
-	return status < 0 ? status : sent;
-}
-
 static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt)
 {
 	struct surface_dtx_client *client = file->private_data;
@@ -269,16 +251,61 @@ static int surface_dtx_fasync(int fd, struct file *file, int on)
 	return fasync_helper(fd, file, on, &client->fasync);
 }
 
+static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+ 	struct surface_dtx_client *client = file->private_data;
+ 	struct surface_dtx_dev *ddev = client->ddev;
+	int status;
+
+ 	status = mutex_lock_interruptible(&ddev->mutex);
+ 	if (status) {
+ 		return status;
+ 	}
+
+ 	if (!ddev->active) {
+ 		mutex_unlock(&ddev->mutex);
+ 		return -ENODEV;
+ 	}
+
+	switch (cmd) {
+	case DTX_CMD_DETACH_SAFEGUARD_ENGAGE:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_SAFEGUARD_ENGAGE);
+		break;
+
+	case DTX_CMD_DETACH_SAFEGUARD_DISENGAGE:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_SAFEGUARD_DISENGAGE);
+		break;
+
+	case DTX_CMD_DETACH_ABORT:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_ABORT);
+		break;
+
+	case DTX_CMD_DETACH_COMMENCE:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_COMMENCE);
+		break;
+
+	case DTX_CMD_GET_OPMODE:
+		status = dtx_cmd_get_opmode((int __user *)arg);
+		break;
+
+	default:
+		status = -EINVAL;
+		break;
+	}
+
+ 	mutex_unlock(&ddev->mutex);
+	return status;
+}
+
 static const struct file_operations surface_dtx_fops = {
-	.owner   = THIS_MODULE,
-	.open    = surface_dtx_open,
-	.release = surface_dtx_release,
-	.read    = surface_dtx_read,
-	.write   = surface_dtx_write,
-	.poll    = surface_dtx_poll,
-	.fasync  = surface_dtx_fasync,
-	.llseek  = no_llseek,
-	// TODO: unlocked_ioctl, replace write with IOCTLs
+	.owner          = THIS_MODULE,
+	.open           = surface_dtx_open,
+	.release        = surface_dtx_release,
+	.read           = surface_dtx_read,
+	.poll           = surface_dtx_poll,
+	.fasync         = surface_dtx_fasync,
+	.unlocked_ioctl = surface_dtx_ioctl,
+	.llseek         = no_llseek,
 };
 
 static struct surface_dtx_dev surface_dtx_dev = {
@@ -320,15 +347,15 @@ static void surface_dtx_push_event(struct surface_dtx_event *event)
 }
 
 
-static int surface_dtx_evt_clipboard(struct surfacegen5_event *in_event, void *data)
+static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 {
 	struct surface_dtx_event event;
 
 	switch (in_event->cid) {
-	case SG5_EVENT_CLIPBOARD_CID_CONNECTION:
-	case SG5_EVENT_CLIPBOARD_CID_BUTTON:
-	case SG5_EVENT_CLIPBOARD_CID_TIMEDOUT:
-	case SG5_EVENT_CLIPBOARD_CID_NOTIFICATION:
+	case SG5_EVENT_DTX_CID_CONNECTION:
+	case SG5_EVENT_DTX_CID_BUTTON:
+	case SG5_EVENT_DTX_CID_TIMEDOUT:
+	case SG5_EVENT_DTX_CID_NOTIFICATION:
 		if (in_event->len > 2) {
 			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
 			       in_event->cid, in_event->len);
@@ -343,7 +370,7 @@ static int surface_dtx_evt_clipboard(struct surfacegen5_event *in_event, void *d
 		break;
 
 	default:
-		printk(DTX_WARN "unhandled clipboard event (cid: %x)\n", in_event->cid);
+		printk(DTX_WARN "unhandled dtx event (cid: %x)\n", in_event->cid);
 	}
 
 	return 0;
@@ -353,12 +380,12 @@ static int surface_dtx_events_setup(void)
 {
 	int status;
 
-	status = surfacegen5_ec_set_event_handler(SG5_EVENT_CLIPBOARD_RQID, surface_dtx_evt_clipboard, NULL);
+	status = surfacegen5_ec_set_event_handler(SG5_EVENT_DTX_RQID, surface_dtx_evt_dtx, NULL);
 	if (status) {
 		goto err_event_handler;
 	}
 
-	status = surfacegen5_ec_enable_event_source(SG5_EVENT_CLIPBOARD_TC, 0x01, SG5_EVENT_CLIPBOARD_RQID);
+	status = surfacegen5_ec_enable_event_source(SG5_EVENT_DTX_TC, 0x01, SG5_EVENT_DTX_RQID);
 	if (status) {
 		goto err_event_source;
 	}
@@ -366,15 +393,15 @@ static int surface_dtx_events_setup(void)
 	return 0;
 
 err_event_source:
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_CLIPBOARD_RQID);
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_DTX_RQID);
 err_event_handler:
 	return status;
 }
 
 static void surface_dtx_events_disable(void)
 {
-	surfacegen5_ec_disable_event_source(SG5_EVENT_CLIPBOARD_TC, 0x01, SG5_EVENT_CLIPBOARD_RQID);
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_CLIPBOARD_RQID);
+	surfacegen5_ec_disable_event_source(SG5_EVENT_DTX_TC, 0x01, SG5_EVENT_DTX_RQID);
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_DTX_RQID);
 }
 
 
