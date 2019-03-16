@@ -215,6 +215,7 @@ static ssize_t surface_dtx_write(struct file *file, const char __user *buf, size
 	}
 
 	if (!ddev->active) {
+		mutex_unlock(&ddev->mutex);
 		return -ENODEV;
 	}
 
@@ -277,6 +278,7 @@ static const struct file_operations surface_dtx_fops = {
 	.poll    = surface_dtx_poll,
 	.fasync  = surface_dtx_fasync,
 	.llseek  = no_llseek,
+	// TODO: unlocked_ioctl, replace write with IOCTLs
 };
 
 static struct surface_dtx_dev surface_dtx_dev = {
