@@ -117,6 +117,10 @@ on the base of the device. Following that:
     identical event is being sent. Thus a detach-button-pressed event, by
     itself, does not signal the start of the detachment process.
 
+Further notes: It seems that the dGPU-lock is taking effect when the dGPU is
+powered on. Sending a detach-commence command with engaged safeguard but
+dGPU powered-off disengages the safeguard and unlocks the base lock.
+
 
 Commands
 --------------------------------------------------------------------------------
