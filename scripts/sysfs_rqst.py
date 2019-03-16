@@ -14,14 +14,17 @@ def main(path):
     fd = os.open(path, os.O_RDWR | os.O_SYNC)
 
     #            [  TC,  IID,  CID,  SNC,  CDL]
-    data = bytes([0x11, 0x00, 0x09, 0x00, 0x00])
+    data = bytes([0x11, 0x00, 0x0D, 0x01, 0x00])
 
     os.write(fd, data)
-    data = os.read(fd, 255)
+
+    os.lseek(fd, 0, os.SEEK_SET)
+    length = os.read(fd, 1)[0]
+    data = os.read(fd, length)
 
     os.close(fd)
 
-    print(data)
+    print(' '.join(['{:02x}'.format(x) for x in data]))
 
 
 if __name__ == '__main__':

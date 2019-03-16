@@ -58,7 +58,10 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 		return status;
 	}
 
-	memset(memcpy(rqst_buf_sysfs, result.data, result.len), 0, RQST_IO_SIZE - result.len);
+    rqst_buf_sysfs[0] = result.len;
+	memcpy(rqst_buf_sysfs + 1, result.data, result.len);
+	memset(rqst_buf_sysfs + result.len + 1, 0, RQST_IO_SIZE - result.len);
+
 	return count;
 }
 
