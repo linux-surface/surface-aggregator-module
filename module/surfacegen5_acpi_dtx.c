@@ -1,4 +1,5 @@
 #include <linux/acpi.h>
+#include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/ioctl.h>
 #include <linux/kernel.h>
@@ -36,6 +37,8 @@
 // Warning: This must always be a power of 2!
 #define SURFACE_DTX_CLIENT_BUF_SIZE             	16
 
+#define SG5_DTX_CONNECT_OPMODE_DELAY			1000
+
 #define DTX_ERR		KERN_ERR "surfacegen5_acpi_dtx: "
 #define DTX_WARN	KERN_WARNING "surfacegen5_acpi_dtx: "
 
@@ -71,21 +74,7 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-static int dtx_cmd_simple(u8 cid)
-{
-	struct surfacegen5_rqst rqst = {
-		.tc  = SG5_RQST_DTX_TC,
-		.iid = 0,
-		.cid = cid,
-		.snc = 0,
-		.cdl = 0,
-		.pld = NULL,
-	};
-
-	return surfacegen5_ec_rqst(&rqst, NULL);
-}
-
-static int dtx_cmd_get_opmode(int __user *buf)
+static int sg5_ec_query_opmpde(void)
 {
 	u8 result_buf[1];
 	int status;
@@ -114,7 +103,32 @@ static int dtx_cmd_get_opmode(int __user *buf)
 		return -EFAULT;
 	}
 
-	if (put_user((int) result.data[0], buf)) {
+	return result.data[0];
+}
+
+
+static int dtx_cmd_simple(u8 cid)
+{
+	struct surfacegen5_rqst rqst = {
+		.tc  = SG5_RQST_DTX_TC,
+		.iid = 0,
+		.cid = cid,
+		.snc = 0,
+		.cdl = 0,
+		.pld = NULL,
+	};
+
+	return surfacegen5_ec_rqst(&rqst, NULL);
+}
+
+static int dtx_cmd_get_opmode(int __user *buf)
+{
+	int opmode = sg5_ec_query_opmpde();
+	if (opmode < 0) {
+		return opmode;
+	}
+
+	if (put_user(opmode, buf)) {
 		return -EACCES;
 	}
 
@@ -347,6 +361,24 @@ static void surface_dtx_push_event(struct surface_dtx_event *event)
 }
 
 
+static void surface_dtx_update_opmpde(void)
+{
+	struct surface_dtx_event event;
+	int opmode;
+
+	opmode = sg5_ec_query_opmpde();
+	if (opmode < 0) {
+		printk(DTX_ERR "EC request failed with error %d\n", opmode);
+	}
+
+	event.type = 0x11;
+	event.code = 0x0D;
+	event.arg0 = opmode;
+	event.arg1 = 0x00;
+
+	surface_dtx_push_event(&event);
+}
+
 static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 {
 	struct surface_dtx_event event;
@@ -371,6 +403,16 @@ static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 
 	default:
 		printk(DTX_WARN "unhandled dtx event (cid: %x)\n", in_event->cid);
+	}
+
+	// update device mode
+	if (in_event->cid == SG5_EVENT_DTX_CID_CONNECTION) {
+		if (in_event->pld[0]) {
+			// Note: we're already in a workqueue task
+			msleep(SG5_DTX_CONNECT_OPMODE_DELAY);
+		}
+
+		surface_dtx_update_opmpde();
 	}
 
 	return 0;
