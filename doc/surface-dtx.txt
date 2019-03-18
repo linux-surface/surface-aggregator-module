@@ -126,7 +126,7 @@ Commands
 --------------------------------------------------------------------------------
 
 All commands below are standard Surface-EC commands with the following
-properties:
+properties except where stated otherwise:
 
     Field   Value   Note
     ------------------------------------------------------------------------
@@ -174,6 +174,16 @@ Command-Codes/IDs:
             If dGPU safeguard is active, this command will abort the
             detachment process instead of unlocking the hardware-lock.
 
+    CID 0x0D, SNC 0x01:
+        Get device operation mode.
+
+        Returns a single byte containing the operatio mode. This can be one
+        of
+            0x00: Tablet Mode (tablet detached)
+            0x01: Laptop Mode (tablet attached normally)
+            0x02: Slate Mode (tablet attached but reversed, no keyboard)
+
+        Context
 
 Events
 --------------------------------------------------------------------------------
@@ -220,16 +230,8 @@ User-Space API
 
 The user-space interface is provided via `/dev/surface_dtx`. This is a basic
 `miscdevice`, from which events can be received via `read` / `poll` /
-`select` / fasync, and to which commands can be sent via `write`. Multiple
+`select` / fasync, and to which commands can be sent via `ioctl`. Multiple
 clients may access this file at the same time.
-
-Commands Structure:
-    Commands consist of two consecutive bytes:
-
-        [type: u8, CID: u8]
-
-    where `type` is currently fixed to `0x11`, and `CID` is the command ID
-    as described above.
 
 Event Structure:
     Events consist of four consecutive bytes:
@@ -239,3 +241,22 @@ Event Structure:
     where `type` is currently fixed to `0x11`, `CID` is the event ID as
     described above, and `arg0` and `arg1` are the first and second byte of
     the event payload. If unused, `arg0` and `arg1` are set to zero.
+
+Command IOCTLs:
+    All IOCTLs have type 0x11.
+
+    - Safeguard Engage (Nr. 0x01)
+        no parameters
+
+    - Safeguard Disengage (Nr. 0x02)
+        no parameters
+
+    - Detach Abort (Nr. 0x03)
+        no parameters
+
+    - Detach Commence (Nr: 0x04)
+        no parameters
+
+    - Get Operation Mode (Nr: 0x05)
+        Returns a single integer (int) containing the device operation mode
+        as described in the "Commands" section.
