@@ -1,6 +1,7 @@
 #include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/fs.h>
+#include <linux/input.h>
 #include <linux/ioctl.h>
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
@@ -12,6 +13,12 @@
 #include <linux/platform_device.h>
 
 #include "surfacegen5_acpi_ssh.h"
+
+
+#define USB_VENDOR_ID_MICROSOFT				0x045e
+#define USB_DEVICE_ID_MS_SURFACE_BASE_2_INTEGRATION	0x0922
+
+#define SG5_DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
 
 
 #define DTX_CMD_DETACH_SAFEGUARD_ENGAGE			_IO(0x11, 0x01)
@@ -58,6 +65,8 @@ struct surface_dtx_dev {
 	struct mutex mutex;
 	bool active;
 	struct device_link *ec_link;
+	spinlock_t input_lock;
+	struct input_dev *input_dev;
 };
 
 struct surface_dtx_client {
@@ -329,14 +338,14 @@ static struct surface_dtx_dev surface_dtx_dev = {
 		.fops = &surface_dtx_fops,
 	},
 	.client_lock = __SPIN_LOCK_UNLOCKED(),
+	.input_lock = __SPIN_LOCK_UNLOCKED(),
 	.mutex  = __MUTEX_INITIALIZER(surface_dtx_dev.mutex),
 	.active = false,
 };
 
 
-static void surface_dtx_push_event(struct surface_dtx_event *event)
+static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_dtx_event *event)
 {
-	struct surface_dtx_dev *ddev = &surface_dtx_dev;
 	struct surface_dtx_client *client;
 
 	rcu_read_lock();
@@ -361,26 +370,35 @@ static void surface_dtx_push_event(struct surface_dtx_event *event)
 }
 
 
-static void surface_dtx_update_opmpde(void)
+static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 {
 	struct surface_dtx_event event;
 	int opmode;
 
+	// get operation mode
 	opmode = sg5_ec_query_opmpde();
 	if (opmode < 0) {
 		printk(DTX_ERR "EC request failed with error %d\n", opmode);
 	}
 
+	// send DTX event
 	event.type = 0x11;
 	event.code = 0x0D;
 	event.arg0 = opmode;
 	event.arg1 = 0x00;
 
-	surface_dtx_push_event(&event);
+	surface_dtx_push_event(ddev, &event);
+
+	// send SW_TABLET_MODE event
+	spin_lock(&ddev->input_lock);
+	input_report_switch(ddev->input_dev, SW_TABLET_MODE, opmode == 0x00);
+	input_sync(ddev->input_dev);
+	spin_unlock(&ddev->input_lock);
 }
 
 static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 {
+	struct surface_dtx_dev *ddev = data;
 	struct surface_dtx_event event;
 
 	switch (in_event->cid) {
@@ -398,7 +416,7 @@ static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 		event.code = in_event->cid;
 		event.arg0 = in_event->len >= 1 ? in_event->pld[0] : 0x00;
 		event.arg1 = in_event->len >= 2 ? in_event->pld[1] : 0x00;
-		surface_dtx_push_event(&event);
+		surface_dtx_push_event(ddev, &event);
 		break;
 
 	default:
@@ -412,17 +430,17 @@ static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 			msleep(SG5_DTX_CONNECT_OPMODE_DELAY);
 		}
 
-		surface_dtx_update_opmpde();
+		surface_dtx_update_opmpde(ddev);
 	}
 
 	return 0;
 }
 
-static int surface_dtx_events_setup(void)
+static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
 {
 	int status;
 
-	status = surfacegen5_ec_set_event_handler(SG5_EVENT_DTX_RQID, surface_dtx_evt_dtx, NULL);
+	status = surfacegen5_ec_set_event_handler(SG5_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
 	if (status) {
 		goto err_event_handler;
 	}
@@ -447,10 +465,47 @@ static void surface_dtx_events_disable(void)
 }
 
 
+static struct input_dev *surface_dtx_register_inputdev(struct platform_device *pdev)
+{
+	struct input_dev *input_dev;
+	int status;
+
+	input_dev = input_allocate_device();
+	if (!input_dev) {
+		return ERR_PTR(-ENOMEM);
+	}
+
+	input_dev->name = SG5_DTX_INPUT_NAME;
+	input_dev->dev.parent = &pdev->dev;
+	input_dev->id.bustype = BUS_VIRTUAL;
+	input_dev->id.vendor  = USB_VENDOR_ID_MICROSOFT;
+	input_dev->id.product = USB_DEVICE_ID_MS_SURFACE_BASE_2_INTEGRATION;
+
+	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
+
+	status = sg5_ec_query_opmpde();
+	if (status < 0) {
+		input_free_device(input_dev);
+		return ERR_PTR(status);
+	}
+
+	input_report_switch(input_dev, SW_TABLET_MODE, status == 0x00);
+
+	status = input_register_device(input_dev);
+	if (status) {
+		input_unregister_device(input_dev);
+		return ERR_PTR(status);
+	}
+
+	return input_dev;
+}
+
+
 static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 {
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
 	struct device_link *ec_link;
+	struct input_dev *input_dev;
 	int status;
 
 	// link to ec
@@ -466,6 +521,12 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 		goto err_probe_ec_link;
 	}
 
+	input_dev = surface_dtx_register_inputdev(pdev);
+	if (IS_ERR(input_dev)) {
+		status = PTR_ERR(input_dev);
+		goto err_input_dev;
+	}
+
 	// initialize device
 	mutex_lock(&ddev->mutex);
 	if (ddev->active) {
@@ -478,6 +539,7 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
 	ddev->ec_link = ec_link;
+	ddev->input_dev = input_dev;
 	mutex_unlock(&ddev->mutex);
 
 	status = misc_register(&ddev->mdev);
@@ -486,7 +548,7 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 	}
 
 	// enable events
-	status = surface_dtx_events_setup();
+	status = surface_dtx_events_setup(ddev);
 	if (status) {
 		goto err_events_setup;
 	}
@@ -496,6 +558,8 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 err_events_setup:
 	misc_deregister(&ddev->mdev);
 err_register:
+	input_unregister_device(ddev->input_dev);
+err_input_dev:
 	surfacegen5_ec_consumer_remove(ec_link);
 err_probe_ec_link:
 	return status;
@@ -516,6 +580,7 @@ static int surfacegen5_acpi_dtx_remove(struct platform_device *pdev)
 	ddev->active = false;
 	mutex_unlock(&ddev->mutex);
 
+	// After this call we're guaranteed that no more input events will arive
 	surface_dtx_events_disable();
 
 	// wake up clients
@@ -527,7 +592,8 @@ static int surfacegen5_acpi_dtx_remove(struct platform_device *pdev)
 
 	wake_up_interruptible(&ddev->waitq);
 
-	// deregister device
+	// unregister user-space devices
+	input_unregister_device(ddev->input_dev);
 	misc_deregister(&ddev->mdev);
 
 	// unlink
