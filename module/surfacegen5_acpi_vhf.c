@@ -10,6 +10,8 @@
 #define USB_VENDOR_ID_MICROSOFT		0x045e
 #define USB_DEVICE_ID_MS_VHF		0xf001
 
+#define SG5_VHF_INPUT_NAME	"Microsoft Virtual HID Framework Device"
+
 /*
  * Request ID for VHF events. This value is based on the output of the Surface
  * EC and should not be changed.
@@ -157,7 +159,7 @@ static struct hid_device *surfacegen5_vhf_create_hid_device(struct platform_devi
 
 	hid->ll_driver = &vhf_hid_ll_driver;
 
-	sprintf(hid->name, "%s", "Microsoft Virtual HID Framework Device");
+	sprintf(hid->name, "%s", SG5_VHF_INPUT_NAME);
 
 	return hid;
 }
