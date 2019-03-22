@@ -7,7 +7,7 @@
 #include "surfacegen5_acpi_ssh.h"
 
 
-#define SG5_RQST_RETRY			5
+#define SG5_SAN_RQST_RETRY		5
 
 #define SG5_SAN_DSM_REVISION		0
 #define SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
@@ -29,7 +29,7 @@ static const guid_t SG5_SAN_DSM_UUID =
 #define SG5_EVENT_TEMP_RQID		0x0003
 #define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
-#define SG5_RQST_TAG            	"surfacegen5_ec_rqst: "
+#define SG5_SAN_RQST_TAG            	"surfacegen5_ec_rqst: "
 
 #define SG5_QUIRK_BASE_STATE_DELAY	1000
 
@@ -350,9 +350,9 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 		return AE_NO_MEMORY;
 	}
 
-	for (try = 0; try < SG5_RQST_RETRY; try++) {
+	for (try = 0; try < SG5_SAN_RQST_RETRY; try++) {
 		if (try) {
-			dev_warn(ctx->dev, SG5_RQST_TAG "IO error occured, trying again\n");
+			dev_warn(ctx->dev, SG5_SAN_RQST_TAG "IO error occured, trying again\n");
 		}
 
 		status = surfacegen5_ec_rqst(&rqst, &result);
@@ -383,7 +383,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
 
 	} else {			// failure
-		dev_err(ctx->dev, SG5_RQST_TAG "failed with error %d\n", status);
+		dev_err(ctx->dev, SG5_SAN_RQST_TAG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
 		buffer->data.out.status = 0x01;		// indicate _SSH error
