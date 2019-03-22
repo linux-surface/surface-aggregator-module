@@ -5,10 +5,7 @@
 #include "surfacegen5_acpi_ssh.h"
 
 
-#define RQST_IO_SIZE		256
-#define RQST_MAX_WRITE_LEN	SURFACEGEN5_MAX_RQST_PAYLOAD + 5
-
-static char rqst_buf_sysfs[RQST_IO_SIZE] = { 0 };
+static char rqst_buf_sysfs[SURFACEGEN5_MAX_RQST_RESPONSE + 1] = { 0 };
 static char rqst_buf_pld[SURFACEGEN5_MAX_RQST_PAYLOAD] = { 0 };
 static char rqst_buf_res[SURFACEGEN5_MAX_RQST_RESPONSE] = { 0 };
 
@@ -16,7 +13,7 @@ static char rqst_buf_res[SURFACEGEN5_MAX_RQST_RESPONSE] = { 0 };
 static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
                          char *buf, loff_t offs, size_t count)
 {
-	if (offs < 0 || count + offs > RQST_IO_SIZE) {
+	if (offs < 0 || count + offs > SURFACEGEN5_MAX_RQST_RESPONSE) {
 		return -EINVAL;
 	}
 
@@ -32,7 +29,7 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 	int status;
 
 	// check basic write constriants
-	if (offs != 0 || count > RQST_MAX_WRITE_LEN) {
+	if (offs != 0 || count > SURFACEGEN5_MAX_RQST_PAYLOAD + 5) {
 		return -EINVAL;
 	}
 
@@ -60,12 +57,12 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 
 	rqst_buf_sysfs[0] = result.len;
 	memcpy(rqst_buf_sysfs + 1, result.data, result.len);
-	memset(rqst_buf_sysfs + result.len + 1, 0, RQST_IO_SIZE - result.len);
+	memset(rqst_buf_sysfs + result.len + 1, 0, SURFACEGEN5_MAX_RQST_RESPONSE + 1 - result.len);
 
 	return count;
 }
 
-static const BIN_ATTR_RW(rqst, RQST_IO_SIZE);
+static const BIN_ATTR_RW(rqst, SURFACEGEN5_MAX_RQST_RESPONSE + 1);
 
 
 int surfacegen5_ssh_sysfs_register(struct device *dev)
