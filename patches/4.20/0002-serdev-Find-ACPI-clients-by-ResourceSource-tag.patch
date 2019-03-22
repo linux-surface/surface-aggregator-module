@@ -1,6 +1,6 @@
-From 824cfa6dd92a8aab5aa7397c4127dbe1b5bf508b Mon Sep 17 00:00:00 2001
+From 19c63ee9a51e48444dd89036eb06e1fa0b61d601 Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
-Date: Thu, 31 Jan 2019 22:13:26 +0100
+Date: Fri, 22 Mar 2019 22:05:20 +0100
 Subject: [PATCH 2/3] serdev: Find ACPI clients by ResourceSource tag
 
 If serdev can't find ACPI clients directly under the controller node,
@@ -12,10 +12,10 @@ controller's path.
  1 file changed, 88 insertions(+), 2 deletions(-)
 
 diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
-index 9db93f500b4e..2290d4f86ca4 100644
+index a0ac16ee6575..0dd242ff24d1 100644
 --- a/drivers/tty/serdev/core.c
 +++ b/drivers/tty/serdev/core.c
-@@ -502,8 +502,7 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
+@@ -558,8 +558,7 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
  	struct serdev_device *serdev = NULL;
  	int err;
  
@@ -25,7 +25,7 @@ index 9db93f500b4e..2290d4f86ca4 100644
  		return AE_OK;
  
  	serdev = serdev_device_alloc(ctrl);
-@@ -526,6 +525,81 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
+@@ -582,6 +581,81 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
  	return AE_OK;
  }
  
@@ -107,7 +107,7 @@ index 9db93f500b4e..2290d4f86ca4 100644
  static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
  				       void *data, void **return_value)
  {
-@@ -535,6 +609,9 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
+@@ -591,6 +665,9 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
  	if (acpi_bus_get_device(handle, &adev))
  		return AE_OK;
  
@@ -117,7 +117,7 @@ index 9db93f500b4e..2290d4f86ca4 100644
  	return acpi_serdev_register_device(ctrl, adev);
  }
  
-@@ -552,6 +629,15 @@ static int acpi_serdev_register_devices(struct serdev_controller *ctrl)
+@@ -608,6 +685,15 @@ static int acpi_serdev_register_devices(struct serdev_controller *ctrl)
  	if (ACPI_FAILURE(status))
  		dev_dbg(&ctrl->dev, "failed to enumerate serdev slaves\n");
  
@@ -134,5 +134,5 @@ index 9db93f500b4e..2290d4f86ca4 100644
  		return -ENODEV;
  
 -- 
-2.20.1
+2.21.0
 
