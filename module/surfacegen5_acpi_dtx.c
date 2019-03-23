@@ -276,19 +276,19 @@ static int surface_dtx_fasync(int fd, struct file *file, int on)
 
 static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
- 	struct surface_dtx_client *client = file->private_data;
- 	struct surface_dtx_dev *ddev = client->ddev;
+	struct surface_dtx_client *client = file->private_data;
+	struct surface_dtx_dev *ddev = client->ddev;
 	int status;
 
- 	status = mutex_lock_interruptible(&ddev->mutex);
- 	if (status) {
- 		return status;
- 	}
+	status = mutex_lock_interruptible(&ddev->mutex);
+	if (status) {
+		return status;
+	}
 
- 	if (!ddev->active) {
- 		mutex_unlock(&ddev->mutex);
- 		return -ENODEV;
- 	}
+	if (!ddev->active) {
+		mutex_unlock(&ddev->mutex);
+		return -ENODEV;
+	}
 
 	switch (cmd) {
 	case DTX_CMD_DETACH_SAFEGUARD_ENGAGE:
@@ -316,7 +316,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 	}
 
- 	mutex_unlock(&ddev->mutex);
+	mutex_unlock(&ddev->mutex);
 	return status;
 }
 
@@ -512,7 +512,7 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
 	if (IS_ERR_OR_NULL(ec_link)) {
 		if (PTR_ERR(ec_link) == -ENXIO) {
-	 		// Defer probe if the _SSH driver has not set up the controller yet.
+			// Defer probe if the _SSH driver has not set up the controller yet.
 			status = -EPROBE_DEFER;
 		} else {
 			status = -EFAULT;

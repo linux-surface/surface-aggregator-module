@@ -31,7 +31,7 @@
 
 #define SG5_MAX_WRITE (                 \
 	  SG5_BYTELEN_SYNC              \
-  	+ SG5_BYTELEN_CTRL              \
+	+ SG5_BYTELEN_CTRL              \
 	+ SG5_BYTELEN_CRC               \
 	+ SG5_BYTELEN_CMDFRAME          \
 	+ SURFACEGEN5_MAX_RQST_PAYLOAD  \
