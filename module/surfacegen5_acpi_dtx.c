@@ -21,25 +21,30 @@
 #define SG5_DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
 
 
-#define DTX_CMD_DETACH_SAFEGUARD_ENGAGE			_IO(0x11, 0x01)
-#define DTX_CMD_DETACH_SAFEGUARD_DISENGAGE		_IO(0x11, 0x02)
-#define DTX_CMD_DETACH_ABORT				_IO(0x11, 0x03)
-#define DTX_CMD_DETACH_COMMENCE				_IO(0x11, 0x04)
+#define DTX_CMD_LATCH_LOCK				_IO(0x11, 0x01)
+#define DTX_CMD_LATCH_UNLOCK				_IO(0x11, 0x02)
+#define DTX_CMD_LATCH_REQUEST				_IO(0x11, 0x03)
+#define DTX_CMD_LATCH_OPEN				_IO(0x11, 0x04)
 #define DTX_CMD_GET_OPMODE				_IOR(0x11, 0x05, int)
 
 #define SG5_RQST_DTX_TC					0x11
-#define SG5_RQST_DTX_CID_DETACH_SAFEGUARD_ENGAGE	0x06
-#define SG5_RQST_DTX_CID_DETACH_SAFEGUARD_DISENGAGE	0x07
-#define SG5_RQST_DTX_CID_DETACH_ABORT            	0x08
-#define SG5_RQST_DTX_CID_DETACH_COMMENCE         	0x09
+#define SG5_RQST_DTX_CID_LATCH_LOCK			0x06
+#define SG5_RQST_DTX_CID_LATCH_UNLOCK			0x07
+#define SG5_RQST_DTX_CID_LATCH_REQUEST            	0x08
+#define SG5_RQST_DTX_CID_LATCH_OPEN         		0x09
 #define SG5_RQST_DTX_CID_GET_OPMODE         		0x0D
 
 #define SG5_EVENT_DTX_TC				0x11
 #define SG5_EVENT_DTX_RQID				0x0011
 #define SG5_EVENT_DTX_CID_CONNECTION			0x0c
 #define SG5_EVENT_DTX_CID_BUTTON			0x0e
-#define SG5_EVENT_DTX_CID_TIMEDOUT			0x0f
-#define SG5_EVENT_DTX_CID_NOTIFICATION			0x11
+#define SG5_EVENT_DTX_CID_ERROR				0x0f
+#define SG5_EVENT_DTX_CID_LATCH_STATUS			0x11
+
+#define DTX_OPMODE_TABLET				0x00
+#define DTX_OPMODE_LAPTOP				0x01
+#define DTX_OPMODE_STUDIO				0x02
+
 
 // Warning: This must always be a power of 2!
 #define SURFACE_DTX_CLIENT_BUF_SIZE             	16
@@ -291,20 +296,20 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	}
 
 	switch (cmd) {
-	case DTX_CMD_DETACH_SAFEGUARD_ENGAGE:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_SAFEGUARD_ENGAGE);
+	case DTX_CMD_LATCH_LOCK:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_LOCK);
 		break;
 
-	case DTX_CMD_DETACH_SAFEGUARD_DISENGAGE:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_SAFEGUARD_DISENGAGE);
+	case DTX_CMD_LATCH_UNLOCK:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_UNLOCK);
 		break;
 
-	case DTX_CMD_DETACH_ABORT:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_ABORT);
+	case DTX_CMD_LATCH_REQUEST:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_REQUEST);
 		break;
 
-	case DTX_CMD_DETACH_COMMENCE:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_DETACH_COMMENCE);
+	case DTX_CMD_LATCH_OPEN:
+		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_OPEN);
 		break;
 
 	case DTX_CMD_GET_OPMODE:
@@ -404,8 +409,8 @@ static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 	switch (in_event->cid) {
 	case SG5_EVENT_DTX_CID_CONNECTION:
 	case SG5_EVENT_DTX_CID_BUTTON:
-	case SG5_EVENT_DTX_CID_TIMEDOUT:
-	case SG5_EVENT_DTX_CID_NOTIFICATION:
+	case SG5_EVENT_DTX_CID_ERROR:
+	case SG5_EVENT_DTX_CID_LATCH_STATUS:
 		if (in_event->len > 2) {
 			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
 			       in_event->cid, in_event->len);
