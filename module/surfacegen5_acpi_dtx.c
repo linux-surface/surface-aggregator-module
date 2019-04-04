@@ -45,6 +45,9 @@
 #define DTX_OPMODE_LAPTOP				0x01
 #define DTX_OPMODE_STUDIO				0x02
 
+#define DTX_LATCH_CLOSED				0x00
+#define DTX_LATCH_OPENED				0x01
+
 
 // Warning: This must always be a power of 2!
 #define SURFACE_DTX_CLIENT_BUF_SIZE             	16
