@@ -3,7 +3,7 @@ Surface DTX Driver
 
 Description: Driver documentation for clipboard detachment system.
 Devices:     Surface Book 2.
-Date:        2019-03-13
+Date:        2019-04-05
 
 
 The DTX driver is responsible for proper clipboard detachment and
@@ -16,7 +16,7 @@ grapics-driver, user-notifications, etc.
 There are two basic communication principles used in this driver: Commands
 (in other parts of the documentation also referred to as requests) and
 events. Commands are sent to the EC and may have a different implications in
-different a context. Events are sent by the EC upon some internal state
+different contexts. Events are sent by the EC upon some internal state
 change. Commands are always driver-initiated, whereas events are always
 initiated by the EC.
 
@@ -32,22 +32,33 @@ Base:
     The lower part of the Surface Book from which the clipboard can be
     detached, housing the discrete GPU (dGPU).
 
-dGPU-Lock / detachment safeguard:
-    Software-safeguard of the EC to disallow detachment when the dGPU is in
-    use. This safeguard is engaged and disengaged explicitly via DTX API
-    requests, there is no "smart"/automatic detection of dGPU usage by the
-    EC itself (see command IDs 0x06, 0x07).
+Latch:
+    The mechanism keeping the clipboard attached to the base.
 
-    During a detachment-process, the state of the dGPU-lock can be seen on
-    the detachment-indicator LED (at the detach-button):
+    The latch can be in one of three states, the default state is 'closed'.
+    If the latch is closed, the clipboard is (or can be) securely attached
+    to the base. If the latch is open, the clipboard can be detached from
+    the base.
 
-      - If the dGPU-lock is engaged, the LED will be solid red.
+    Note that the latch is also closed when the clipboard is separated from
+    the base. Putting them back together does not require the latch to be
+    open.
 
-      - If the dGPU-lock is disengaged, the LED will blink green.
+    Furthermore, the latch can be locked. For transitions in and out of this
+    state see command CIDs 0x06 and 0x07. If the latch is locked, any
+    detachment process not confirmed with a latch-open (CID 0x09) or a latch
+    unlock (CID 0x07) command will time out and not unlock and open the
+    latch. If the latch is not locked (i.e. closed) and the detachment
+    process times out, it will open automatically.
 
-    The dGPU-lock is _not_ internally counted by the EC, i.e. dGPU-lock
-    engagement commands have no effect if the dGPU-lock is already engaged,
-    and a single command is sufficient to disengage the lock.
+    During a detachment process, the LED on the detach-button will indicate
+    if the latch is locked (red) or if it is open (green, flashing).
+
+    The lock state is intended to as a measure to ensure that the base can
+    not be detached as long as the dGPU contained in it is in use. This,
+    however, is not automatically detected and enforced, but requires manual
+    action by keeping track of applications using the dGPU and calling the
+    afforementioned commands.
 
 Silently ignored commands:
     The command is accepted by the EC as a valid command and acknowledged
@@ -59,10 +70,14 @@ Detachment Process
 --------------------------------------------------------------------------------
 
 The detachment process is started with the user pressing the "detach" button
-on the base of the device. Following that:
+on the base of the device, or sending the latch-request command (CID 0x08).
+Following that:
 
- 1. The EC turns on the indicator LED (see dGPU-Lock) and sends a
-    detach-button-pressed event and awaits further instructions/commands.
+ 1. The EC turns on the indicator LED on the detach-button and sends a
+    detach-request event and awaits further instructions/commands.
+
+    The LED will be red if the latch is locked or flash green if it is
+    unlocked (see 'Latch').
 
  2. The event is, via this driver, relayed to user-space, where an
     appropriate user-space daemon can handle the event and send instructions
@@ -70,27 +85,24 @@ on the base of the device. Following that:
 
     Valid responses are:
 
-      - Send "abort-detach" command (0x08). This will immediately abort the
-        detachment process. Furthermore, the EC will send a
+      - Send "latch-request" command (0x08). This will immediately abort the
+        detachment process. Furthermore, the EC will send a detach-request
+        event, similar to the user pressing the detach-button to cancel said
+        process (see point 4).
+
+      - Send "latch-open" command (0x09). This will open the latch, after
+        which the user can separate clipboard and base.
+
+        If the latch is locked and the dGPU is in use, the EC will
+        immediately abort the detachment process and send a
         detach-button-pressed event, similar to the user pressing the
         detach-button to cancel said process (see point 4).
 
-      - Send "commence-detach" command (0x09). This will disengage the
-        hardware-lock, provided that the dGPU-lock is disengaged, after
-        which the user can separate clipboard and base.
-
-        If the dGPU-lock is engaged, the EC will immediately abort the
-        detachment process and send a detach-button-pressed event, similar
-        to the user pressing the detach-button to cancel said process (see
-        point 4).
-
-      - Send "disengage-safeguard" command (0x07). Provided the
-        dGPU-lock/safeguard is engaged, this will disengage the safeguard
-        and unlock the hardware-lock. No further "commence-detach" command
+      - Send "latch-unlock" command (0x07). Provided the latch is locked,
+        this will unlock and open the latch. No further "latch-open" command
         is required.
 
-        If the dGPU-lock is not active, this command will be silently
-        ignored.
+        If the latch is not locked, this command will be silently ignored.
 
       - Do nothing (see point 3).
 
@@ -101,25 +113,25 @@ on the base of the device. Following that:
     If the EC does not receive any instructions in a given period, it will
     time out and continue as follows:
 
-      - If the dGPU-lock is disengaged, the EC will unlock the hardware-lock
-        and the clipboard can be detached from the base. This is the exact
-        behavior as without this driver or any user-space daemon.
+      - If the latch is unlocked, the EC will open the latch and the
+        clipboard can be detached from the base. This is the exact behavior as
+        without this driver or any user-space daemon.
 
-      - If the dGPU-lock is engaged, the EC will not unlock the
-        hardware-lock, meaning the clipboard cannot be detached from the
-        base. Furthermore, the EC sends an event detailing this (code 0x0f,
-        see section "Events" for details).
+      - If the latch is locked, the EC will _not_ open the latch, meaning
+        the clipboard cannot be detached from the base. Furthermore, the EC
+        sends an event detailing this (code 0x0f with errnum 0x02, see
+        section "Events" for details).
 
  4. If the user presses the detach button at any point when a detach event
-    is in process (i.e. after the the EC has sent the initial
-    detach-button-pressed event and before it received the corresponding
-    response), the detach process is cancled on the EC-level and an
-    identical event is being sent. Thus a detach-button-pressed event, by
-    itself, does not signal the start of the detachment process.
+    is in process (i.e. after the the EC has sent the initial detach-request
+    event and before it received the corresponding response), the detach
+    process is cancled on the EC-level and an identical event is being sent.
+    Thus a detach-request event, by itself, does not signal the start of the
+    detachment process.
 
-Further notes: It seems that the dGPU-lock is taking effect when the dGPU is
-powered on. Sending a detach-commence command with engaged safeguard but
-dGPU powered-off disengages the safeguard and unlocks the base lock.
+Further notes: It seems that the latch-lock is only taking effect when the
+dGPU is actually powered on. Sending a latch-open command with locked latch
+but dGPU powered-off unlocks and opens the latch.
 
 
 Commands
@@ -139,40 +151,42 @@ properties except where stated otherwise:
 Command-Codes/IDs:
 
     CID 0x06:
-        Engage detachment safegurad (dGPU-lock).
+        Lock latch. Transfers the latch from 'closed' to 'locked' state.
 
-        This command will be silently ignored if the safeguard is already
-        engaged.
+        This command will be silently ignored if the latch is already
+        locked.
 
         Context:
-            Valid outside detachment-process (otherwise silently ignored).
+            Valid only outside detachment-process (otherwise silently ignored).
 
     CID 0x07:
-        Disengage detachment safeguard (dGPU-lock).
+        Unlock latch. Transfers the latch from 'locked' to 'closed'/unlocked
+        state. During a detachment process with locked latch, this also
+        opens the latch.
 
-        This command will be silently ignored if the safeguard is already
-        disengaged (even during detachment-process).
+        This command will be silently ignored if the lock is already
+        unlocked/closed (even during a detachment-process).
 
         Context:
             Valid in any context.
 
-            During detachment process with engaged safegurad, also acts as
-            "detach commence" signal.
-
     CID 0x08:
-        Abort detachment process.
+        Generic latch request. Behavior depends on the context: If no
+        detachment-process is active, requests detachment. Otherwise the
+        currently active detachment-process will be aborted.
 
         Context:
-            Valid during detachment-process (otherwise silently ignored).
+            Valid in any context, altough with different behavior.
 
     CID 0x09:
-        Commence detachment process.
+        Open latch.
 
         Context:
-            Valid during detachment-process (otherwise silently ignored).
+            Valid only during detachment-process (otherwise silently ignored).
 
-            If dGPU safeguard is active, this command will abort the
-            detachment process instead of unlocking the hardware-lock.
+            If the latch is locked _and_ the dGPU is active/consumes power,
+            this command will abort the detachment process instead of
+            unlocking the hardware-lock.
 
     CID 0x0D, SNC 0x01:
         Get device operation mode.
@@ -181,9 +195,8 @@ Command-Codes/IDs:
         of
             0x00: Tablet Mode (tablet detached)
             0x01: Laptop Mode (tablet attached normally)
-            0x02: Slate Mode (tablet attached but reversed, no keyboard)
+            0x02: Studio Mode (tablet attached but reversed, no keyboard)
 
-        Context
 
 Events
 --------------------------------------------------------------------------------
@@ -205,24 +218,28 @@ Event Codes/IDs:
             attached (i.e. with/without dGPU).
 
     CID 0x0e:
-        Detach button pressed. Depending on the context, can signal
-        initiation or abortion a detachment-process.
+        Generic detach-request event. Depending on the context, can signal
+        initiation or abortion of a detachment-process.
 
         Payload: None
 
     CID 0x0f:
-        Detach process timed out with GPU-lock active.
+        Generic error event.
 
         Payload: 1 byte (0x02).
+            0x02: The detachment-process timed out while the latch was
+                  locked. The latch has not been opened.
 
-            The specific purpose of this payload is unclear.
+            Other values are currently unknown.
 
     CID 0x11:
-        Show/hide "Clipboard can be detached" notification.
+        Latch status event. Signals change of the latch status, specifically
+        when it has been opened or closed. This can be used to indicate to
+        the user when the clipboard is ready to be separated from the base.
 
         Payload: 1 byte.
-            0x01:   Show notification.
-            0x00:   Hide notification.
+            0x01:   Latch has been opened.
+            0x00:   Latch has been closed.
 
 
 User-Space API
@@ -245,18 +262,21 @@ Event Structure:
 Command IOCTLs:
     All IOCTLs have type 0x11.
 
-    - Safeguard Engage (Nr. 0x01)
+    - Unlock latch (Nr. 0x01)
         no parameters
 
-    - Safeguard Disengage (Nr. 0x02)
+    - Lock latch (Nr. 0x02)
         no parameters
 
-    - Detach Abort (Nr. 0x03)
+    - Latch request (Nr. 0x03)
         no parameters
 
-    - Detach Commence (Nr: 0x04)
+    - Latch Open (Nr: 0x04)
         no parameters
 
     - Get Operation Mode (Nr: 0x05)
         Returns a single integer (int) containing the device operation mode
-        as described in the "Commands" section.
+        as described in the 'Commands' section.
+
+For extended descriptions and usage, see the 'Commands' and 'Detachment
+Process' sections.
