@@ -1,6 +1,7 @@
 #include <linux/acpi.h>
 #include <linux/gpio.h>
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
@@ -15,7 +16,7 @@ static const guid_t SB2_SHPS_DSM_UUID =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
 	          0x32, 0x0e, 0x10, 0x36, 0x0a);
 
-#define SB2_PARAM_PERM	(S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP)
+#define SB2_PARAM_PERM		(S_IRUGO | S_IWUSR)
 
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
@@ -36,15 +37,15 @@ static const struct acpi_gpio_mapping sb2_mshw0153_acpi_gpios[] = {
 };
 
 
-static bool sb2_dgpu_default_pwr = false;
-
-module_param_named(dgpu_pwr, sb2_dgpu_default_pwr, bool, SB2_PARAM_PERM);
-MODULE_PARM_DESC(dgpu_pwr, "dGPU power state (on/off)");
-
-
 enum sb2_dgpu_power {
 	SB2_DGPU_POWER_OFF = 0,
 	SB2_DGPU_POWER_ON  = 1,
+};
+
+enum sb2_param_dgpu_power {
+	SB2_PARAM_DGPU_POWER_OFF  = SB2_DGPU_POWER_OFF,
+	SB2_PARAM_DGPU_POWER_ON   = SB2_DGPU_POWER_ON,
+	SB2_PARAM_DGPU_POWER_ASIS = 2,
 };
 
 static const char* sb2_dgpu_power_str(enum sb2_dgpu_power power) {
@@ -120,6 +121,38 @@ static int sb2_shps_dgpu_force_power(struct platform_device *pdev, enum sb2_dgpu
 }
 
 
+static int param_dgpu_power_set(const char *val, const struct kernel_param *kp)
+{
+	int power = SB2_PARAM_DGPU_POWER_OFF;
+	int status;
+
+	status = kstrtoint(val, 0, &power);
+	if (status) {
+		return status;
+	}
+
+	if (power < SB2_PARAM_DGPU_POWER_ON || power > SB2_PARAM_DGPU_POWER_ASIS) {
+		return -EINVAL;
+	}
+
+	return param_set_int(val, kp);
+}
+
+static const struct kernel_param_ops param_dgpu_power_ops = {
+	.set = param_dgpu_power_set,
+	.get = param_get_int,
+};
+
+static int param_dgpu_power_init = SB2_PARAM_DGPU_POWER_OFF;
+static int param_dgpu_power_exit = SB2_PARAM_DGPU_POWER_OFF;
+
+module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SB2_PARAM_PERM);
+module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SB2_PARAM_PERM);
+
+MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 1: on / 2: as-is)");
+MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is)");
+
+
 static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr, char *data)
 {
 	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
@@ -155,8 +188,9 @@ const static DEVICE_ATTR_RW(dgpu_power);
 static int sb2_shps_resume(struct device *dev)
 {
 	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
+	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
-	return sb2_shps_dgpu_force_power(pdev, sb2_dgpu_default_pwr);
+	return sb2_shps_dgpu_force_power(pdev, drvdata->dgpu_power);
 }
 
 static int sb2_shps_probe(struct platform_device *pdev)
@@ -181,10 +215,10 @@ static int sb2_shps_probe(struct platform_device *pdev)
 	}
 
 	mutex_init(&drvdata->dgpu_power_lock);
-	drvdata->dgpu_power = sb2_dgpu_default_pwr ? SB2_DGPU_POWER_ON : SB2_DGPU_POWER_OFF;
+	drvdata->dgpu_power = SB2_DGPU_POWER_OFF;
 	platform_set_drvdata(pdev, drvdata);
 
-	status = sb2_shps_dgpu_force_power(pdev, sb2_dgpu_default_pwr);
+	status = sb2_shps_dgpu_force_power(pdev, param_dgpu_power_init);
 	if (status) {
 		goto err_set_power;
 	}
@@ -213,7 +247,7 @@ static int sb2_shps_remove(struct platform_device *pdev)
 
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_dgpu_power.attr);
 
-	sb2_shps_dgpu_force_power(pdev, SB2_DGPU_POWER_ON);
+	sb2_shps_dgpu_force_power(pdev, param_dgpu_power_exit);
 	acpi_dev_remove_driver_gpios(shps_dev);
 
 	platform_set_drvdata(pdev, NULL);
