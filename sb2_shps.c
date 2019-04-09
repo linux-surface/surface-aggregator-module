@@ -247,7 +247,7 @@ static int sb2_shps_remove(struct platform_device *pdev)
 
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_dgpu_power.attr);
 
-	sb2_shps_dgpu_force_power(pdev, param_dgpu_power_exit);
+	sb2_shps_dgpu_set_power(pdev, param_dgpu_power_exit);
 	acpi_dev_remove_driver_gpios(shps_dev);
 
 	platform_set_drvdata(pdev, NULL);
