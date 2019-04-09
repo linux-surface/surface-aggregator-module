@@ -2,10 +2,25 @@
 
 Linux Kernel Module for the Surface Hot-Plug System (`MSHW0153`).
 
-## Current Functionality
+## Setting the dGPU Power State
 
-- Enable/Disable dGPU power.
-  Currently this only works on loading the module and can be specified via the parameter `dgpu_pwr=0` (disable power, default) or `dgpu_pwr=1` (enable power).
+The dGPU power state can be accessed via
+```
+/sys/bus/acpi/devices/MSHW0153:00/physical_node/dgpu_power
+```
+i.e. it can be queried and set via this attribute using your standard boolean parameter strings (meaning one of `off`/`0`/`n` or `on`/`1`/`y`).
+
+## Module Parameters
+
+- `dgpu_power_init`:
+  - Description: The power-state to set when loading this module.
+  - Values: `0` (off), `1` (on), `2` (as is).
+  - Default: `0` (off).
+
+- `dgpu_power_exit`:
+  - Description: The power-state to set when unloading this module.
+  - Values: `0` (off), `1` (on), `2` (as is).
+  - Default: `0` (off).
 
 ## Building the Module
 
