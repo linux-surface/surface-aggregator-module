@@ -99,6 +99,10 @@ static int sb2_shps_dgpu_set_power(struct platform_device *pdev, enum sb2_dgpu_p
 	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status = 0;
 
+	if (power != SB2_DGPU_POWER_ON && power != SB2_DGPU_POWER_OFF) {
+		return -EINVAL;
+	}
+
 	mutex_lock(&drvdata->dgpu_power_lock);
 	if (power != drvdata->dgpu_power) {
 		status = __sb2_shps_dgpu_set_power(pdev, power);
@@ -112,6 +116,10 @@ static int sb2_shps_dgpu_force_power(struct platform_device *pdev, enum sb2_dgpu
 {
 	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
+
+	if (power != SB2_DGPU_POWER_ON && power != SB2_DGPU_POWER_OFF) {
+		return -EINVAL;
+	}
 
 	mutex_lock(&drvdata->dgpu_power_lock);
 	status = __sb2_shps_dgpu_set_power(pdev, power);
