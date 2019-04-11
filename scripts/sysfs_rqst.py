@@ -10,11 +10,15 @@ import os
 # detach ack     [0x11, 0x00, 0x09, 0x00, 0x00]
 
 
+def performance_state_request(state):
+    return bytes([0x03, 0x00, 0x03, 0x00, 0x04, state, 0x00, 0x00, 0x00])
+
+
 def main(path):
     fd = os.open(path, os.O_RDWR | os.O_SYNC)
 
-    #            [  TC,  IID,  CID,  SNC,  CDL]
-    data = bytes([0x11, 0x00, 0x0D, 0x01, 0x00])
+    #            [  TC,  IID,  CID,  SNC,  CDL, payload...]
+    data = bytes(performance_state_request(state=0x04))
 
     os.write(fd, data)
 
