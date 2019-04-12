@@ -30,6 +30,11 @@ Have a look at [this][dtx-daemon] repository for a basic implementation of such 
 
 ### Setting the Performance Mode
 
+The performance-mode controls the power-management strategy.
+It is currently unclear what exactly this includes, but one aspect is the fan-profile:
+On the default performance-mode it can happen that the dGPU (and possibly also CPU in models with a CPU fan) cannot reach it's full potential due to the fans not ramping up appropriately.
+Setting a higher performance-mode solves this problem.
+
 The performance-mode can be accessed via the `perf_mode` sysfs attribute on the  `MSHW0107` platform device, i.e. it can be set via
 ```
 echo <mode> | sudo tee /sys/devices/platform/MSHW0107:00/perf_mode
