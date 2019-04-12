@@ -172,7 +172,7 @@ static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr
 	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
 	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
-	return sprintf(data, "%s", sb2_dgpu_power_str(drvdata->dgpu_power));
+	return sprintf(data, "%s\n", sb2_dgpu_power_str(drvdata->dgpu_power));
 }
 
 static ssize_t dgpu_power_store(struct device *dev, struct device_attribute *attr,
