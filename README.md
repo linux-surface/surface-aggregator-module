@@ -19,12 +19,34 @@ If you think there's anything missing here, feel free to open an issue!
 
 ## Notes on the Surface Book 2
 
+### Clipboard Detachment
+
 This driver now has basic support for clipboard detachment handling (e.g. unmounting of devices attached to the base).
 The driver itself does not do anything more than sending an event to user-space and awaiting a reply.
 A separate daemon is required to handle these events.
 Have a look at [this][dtx-daemon] repository for a basic implementation of such a daemon.
 
 [dtx-daemon]: https://github.com/qzed/linux-surfacegen5-dtx-daemon
+
+### Setting the Performance Mode
+
+The performance-mode can be accessed via the `perf_mode` sysfs attribute on the  `MSHW0107` platform device, i.e. it can be set via
+```
+echo <mode> | sudo tee /sys/devices/platform/MSHW0107:00/perf_mode
+```
+where `<mode>` is the numeric value of the mode you want to set.
+Reading from this attribute will return the current mode.
+Valid performance-modes are:
+
+| Value | Name (Windows)     | Notes                                            |
+|-------|--------------------|--------------------------------------------------|
+| 1     | Recommended        | Default mode.                                    |
+| 2     | Battery Saver      | Only accessible on Windows when AC disconnected. |
+| 3     | Better Performance |                                                  |
+| 4     | Best Performance   |                                                  |
+
+You can also set the initial performance-mode (being applied when the module is loaded) using the `perf_mode_init` module-parameter, as well as the state being applied when it is unloaded using the `perf_mode_exit` parameter.
+In both cases, the special value of `0` will keep the performance-state as-is (this is the default behavior).
 
 ## Testing
 
