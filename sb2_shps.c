@@ -48,7 +48,7 @@ enum sb2_dgpu_power {
 enum sb2_param_dgpu_power {
 	SB2_PARAM_DGPU_POWER_OFF      = SB2_DGPU_POWER_OFF,
 	SB2_PARAM_DGPU_POWER_ON       = SB2_DGPU_POWER_ON,
-	SB2_PARAM_DGPU_POWER_ASIS     = 2,
+	SB2_PARAM_DGPU_POWER_AS_IS    = 2,
 
 	__SB2_PARAM_DGPU_POWER__START = 0,
 	__SB2_PARAM_DGPU_POWER__END   = 2,
@@ -232,7 +232,7 @@ static int sb2_shps_probe(struct platform_device *pdev)
 	drvdata->dgpu_power = SB2_DGPU_POWER_OFF;
 	platform_set_drvdata(pdev, drvdata);
 
-	if (param_dgpu_power_init != SB2_PARAM_DGPU_POWER_ASIS) {
+	if (param_dgpu_power_init != SB2_PARAM_DGPU_POWER_AS_IS) {
 		status = sb2_shps_dgpu_force_power(pdev, param_dgpu_power_init);
 		if (status) {
 			goto err_set_power;
@@ -263,7 +263,7 @@ static int sb2_shps_remove(struct platform_device *pdev)
 
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_dgpu_power.attr);
 
-	if (param_dgpu_power_exit != SB2_PARAM_DGPU_POWER_ASIS) {
+	if (param_dgpu_power_exit != SB2_PARAM_DGPU_POWER_AS_IS) {
 		sb2_shps_dgpu_set_power(pdev, param_dgpu_power_exit);
 	}
 	acpi_dev_remove_driver_gpios(shps_dev);
