@@ -38,14 +38,20 @@ static const struct acpi_gpio_mapping sb2_mshw0153_acpi_gpios[] = {
 
 
 enum sb2_dgpu_power {
-	SB2_DGPU_POWER_OFF = 0,
-	SB2_DGPU_POWER_ON  = 1,
+	SB2_DGPU_POWER_OFF      = 0,
+	SB2_DGPU_POWER_ON       = 1,
+
+	__SB2_DGPU_POWER__START = 0,
+	__SB2_DGPU_POWER__END   = 1,
 };
 
 enum sb2_param_dgpu_power {
-	SB2_PARAM_DGPU_POWER_OFF  = SB2_DGPU_POWER_OFF,
-	SB2_PARAM_DGPU_POWER_ON   = SB2_DGPU_POWER_ON,
-	SB2_PARAM_DGPU_POWER_ASIS = 2,
+	SB2_PARAM_DGPU_POWER_OFF      = SB2_DGPU_POWER_OFF,
+	SB2_PARAM_DGPU_POWER_ON       = SB2_DGPU_POWER_ON,
+	SB2_PARAM_DGPU_POWER_ASIS     = 2,
+
+	__SB2_PARAM_DGPU_POWER__START = 0,
+	__SB2_PARAM_DGPU_POWER__END   = 2,
 };
 
 static const char* sb2_dgpu_power_str(enum sb2_dgpu_power power) {
@@ -99,7 +105,7 @@ static int sb2_shps_dgpu_set_power(struct platform_device *pdev, enum sb2_dgpu_p
 	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status = 0;
 
-	if (power != SB2_DGPU_POWER_ON && power != SB2_DGPU_POWER_OFF) {
+	if (power < __SB2_DGPU_POWER__START || power > __SB2_DGPU_POWER__END) {
 		return -EINVAL;
 	}
 
@@ -117,7 +123,7 @@ static int sb2_shps_dgpu_force_power(struct platform_device *pdev, enum sb2_dgpu
 	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	if (power != SB2_DGPU_POWER_ON && power != SB2_DGPU_POWER_OFF) {
+	if (power < __SB2_DGPU_POWER__START || power > __SB2_DGPU_POWER__END) {
 		return -EINVAL;
 	}
 
@@ -139,7 +145,7 @@ static int param_dgpu_power_set(const char *val, const struct kernel_param *kp)
 		return status;
 	}
 
-	if (power < SB2_PARAM_DGPU_POWER_ON || power > SB2_PARAM_DGPU_POWER_ASIS) {
+	if (power < __SB2_PARAM_DGPU_POWER__START || power > __SB2_PARAM_DGPU_POWER__END) {
 		return -EINVAL;
 	}
 
