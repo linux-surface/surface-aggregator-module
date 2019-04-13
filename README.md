@@ -1,8 +1,11 @@
-# Linux Kernel Module for MSHW0153
+# Linux Driver for Surface Book 2 dGPU Hot-Plug System
 
-Linux Kernel Module for the Surface Hot-Plug System (`MSHW0153`).
+Allows powering on/off of the discrete GPU via sysfs.
 
-## Setting the dGPU Power State
+_This is not a complete replacement of bbswitch/prime, so you need to manually unload/re-load the driver modules before/after changing the power-state.
+Furthermore, you manually need to set the powerstate before running e.g. `optirun`._
+
+## Controlling the dGPU Power State
 
 The dGPU power state can be accessed via
 ```
@@ -10,7 +13,9 @@ The dGPU power state can be accessed via
 ```
 i.e. it can be queried and set via this attribute using your standard boolean parameter strings (meaning one of `off`/`0`/`n` or `on`/`1`/`y`).
 
-## Module Parameters
+### Via Module Parameters
+
+The dGPU power-state can also be automatically set when this module is loaded or unloaded via the following module parameters:
 
 - `dgpu_power_init`:
   - Description: The power-state to set when loading this module.
