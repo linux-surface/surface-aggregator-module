@@ -3,7 +3,7 @@
 Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
 _This has now been integrated into [jakeday/linux-surface](https://github.com/jakeday/linux-surface/)._
-_If you have a Surface Book 2 you might also want to have a look at [this][dtx-daemon]._
+_If you have a Surface Book 2 you might also want to have a look at the [dtx-daemon][dtx-daemon] and the [surface-control][surface-control] utility._
 
 ## Supported Features and Devices
 
@@ -27,6 +27,7 @@ A separate daemon is required to handle these events.
 Have a look at [this][dtx-daemon] repository for a basic implementation of such a daemon.
 
 [dtx-daemon]: https://github.com/qzed/linux-surfacegen5-dtx-daemon
+[surface-control]: https://github.com/qzed/linux-surface-control
 
 ### Setting the Performance Mode
 
@@ -35,7 +36,7 @@ It is currently unclear what exactly this includes, but one aspect is the fan-pr
 On the default performance-mode it can happen that the dGPU (and possibly also CPU in models with a CPU fan) cannot reach it's full potential due to the fans not ramping up appropriately.
 Setting a higher performance-mode solves this problem.
 
-The easiest way to set the performance-mode is to use the [surface-control](https://github.com/qzed/linux-surface-control) command line utility by running
+The easiest way to set the performance-mode is to use the [surface-control][surface-control] command line utility by running
 ```
 surface performance set <mode>
 ```
