@@ -35,12 +35,18 @@ It is currently unclear what exactly this includes, but one aspect is the fan-pr
 On the default performance-mode it can happen that the dGPU (and possibly also CPU in models with a CPU fan) cannot reach it's full potential due to the fans not ramping up appropriately.
 Setting a higher performance-mode solves this problem.
 
-The performance-mode can be accessed via the `perf_mode` sysfs attribute on the  `MSHW0107` platform device, i.e. it can be set via
+The easiest way to set the performance-mode is to use the [surface-control](https://github.com/qzed/linux-surface-control) command line utility by running
+```
+surface performance set <mode>
+```
+where the numeric mode-value (1-4) is described below.
+Alternatively, the performance-mode can also be accessed via the `perf_mode` sysfs attribute on the  `MSHW0107` platform device, i.e. it can be set via
 ```
 echo <mode> | sudo tee /sys/devices/platform/MSHW0107:00/perf_mode
 ```
 where `<mode>` is the numeric value of the mode you want to set.
 Reading from this attribute will return the current mode.
+
 Valid performance-modes are:
 
 | Value | Name (Windows)     | Notes                                            |
