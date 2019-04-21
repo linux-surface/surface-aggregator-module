@@ -1,6 +1,6 @@
-From 100df5b047e14a02b93f9405f932dded3ebb55d0 Mon Sep 17 00:00:00 2001
+From d9a088c6d06234dd74c6986a73301ab6ae2e7f71 Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
-Date: Thu, 4 Apr 2019 22:11:40 +0200
+Date: Sun, 21 Apr 2019 14:15:04 +0200
 Subject: [PATCH 2/3] serdev: Find ACPI clients by ResourceSource tag
 
 If serdev can't find ACPI clients directly under the controller node,

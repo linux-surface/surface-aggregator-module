@@ -1,6 +1,6 @@
-From 3bcb73931c661866a41a2f769afdfbfedf90779e Mon Sep 17 00:00:00 2001
+From d5d470b6d31be2892ac682ddc051ad86d61069c8 Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
-Date: Thu, 4 Apr 2019 22:10:36 +0200
+Date: Sun, 21 Apr 2019 14:13:59 +0200
 Subject: [PATCH 1/3] ACPI: Fix buffer/integer type mismatch
 
 This is actually not a bug in the kernel, but rather Microsoft not
@@ -11,7 +11,7 @@ conforming with the ACPI specification.
  2 files changed, 11 insertions(+), 17 deletions(-)
 
 diff --git a/drivers/acpi/acpica/dsopcode.c b/drivers/acpi/acpica/dsopcode.c
-index 78f9de260d5f..0cd858520f5b 100644
+index 2f4641e5ecde..beb22d7e245e 100644
 --- a/drivers/acpi/acpica/dsopcode.c
 +++ b/drivers/acpi/acpica/dsopcode.c
 @@ -123,7 +123,7 @@ acpi_ds_init_buffer_field(u16 aml_opcode,
