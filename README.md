@@ -26,7 +26,7 @@ The driver itself does not do anything more than sending an event to user-space 
 A separate daemon is required to handle these events.
 Have a look at [this][dtx-daemon] repository for a basic implementation of such a daemon.
 
-[dtx-daemon]: https://github.com/qzed/linux-surfacegen5-dtx-daemon
+[dtx-daemon]: https://github.com/qzed/linux-surface-dtx-daemon
 [surface-control]: https://github.com/qzed/linux-surface-control
 
 ### Setting the Performance Mode
