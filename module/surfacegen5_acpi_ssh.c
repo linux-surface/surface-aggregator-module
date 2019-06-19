@@ -1284,7 +1284,7 @@ surfacegen5_ssh_setup_from_resource(struct acpi_resource *resource, void *contex
 static bool surfacegen5_idma_filter(struct dma_chan *chan, void *param)
 {
 	// see dw8250_idma_filter
-	return param == chan->device->dev->parent;
+	return param == chan->device->dev;
 }
 
 static int surfacegen5_ssh_check_dma(struct serdev_device *serdev)
