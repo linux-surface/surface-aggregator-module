@@ -16,7 +16,8 @@
  * Request ID for VHF events. This value is based on the output of the Surface
  * EC and should not be changed.
  */
-#define SG5_VHF_RQID			0x0001
+#define SG5_EVENT_VHF_RQID		0x0001
+#define SG5_EVENT_VHF_TC		0x08
 
 
 struct surfacegen5_vhf_evtctx {
@@ -227,12 +228,8 @@ static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, drvdata);
 
-	/*
-         * Set event hanlder for VHF events. They seem to be enabled by
-         * default, thus there should be no need to explicitly enable them.
-	 */
 	status = surfacegen5_ec_set_delayed_event_handler(
-			SG5_VHF_RQID,
+			SG5_EVENT_VHF_RQID,
 	                surfacegen5_vhf_event_handler,
 	                surfacegen5_vhf_event_delay,
 			&drvdata->event_ctx);
@@ -240,8 +237,15 @@ static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 		goto err_add_hid;
 	}
 
+	status = surfacegen5_ec_enable_event_source(SG5_EVENT_VHF_TC, 0x01, SG5_EVENT_VHF_RQID);
+	if (status) {
+		goto err_event_source;
+	}
+
 	return 0;
 
+err_event_source:
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_VHF_RQID);
 err_add_hid:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
@@ -256,7 +260,8 @@ static int surfacegen5_acpi_vhf_remove(struct platform_device *pdev)
 {
 	struct surfacegen5_vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surfacegen5_ec_remove_event_handler(SG5_VHF_RQID);
+	surfacegen5_ec_disable_event_source(SG5_EVENT_VHF_TC, 0x01, SG5_EVENT_VHF_RQID);
+	surfacegen5_ec_remove_event_handler(SG5_EVENT_VHF_RQID);
 
 	hid_destroy_device(drvdata->event_ctx.hid);
 	surfacegen5_ec_consumer_remove(drvdata->ec_link);
