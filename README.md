@@ -1,5 +1,7 @@
 # Linux Driver for Surface Book 2 dGPU Hot-Plug System
 
+_Warning: In the latest version, the name of the module and Arch Linux package has been changed to `surfacebook2_dgpu_hps` and `surfacebook2-dgpu-hps` respectively._
+
 Allows powering on/off of the discrete GPU via sysfs.
 
 _This is not a complete replacement of bbswitch/prime, so you need to manually unload/re-load the driver modules before/after changing the power-state.
@@ -44,7 +46,7 @@ Keeping the dGPU disabled during this initialization phase avoids this problem, 
 ## Building the Module
 
 Run `make all` inside the `module` directory.
-The module can then be loaded via `insmod sb2_shps.ko` (and removed with `rmmod sb2_shps.ko`).
+The module can then be loaded via `insmod surfacebook2_dgpu_hps.ko` (and removed with `rmmod surfacebook2_dgpu_hps.ko`).
 
 ### Permanently Install the Module
 
