@@ -1,6 +1,6 @@
-From d9a088c6d06234dd74c6986a73301ab6ae2e7f71 Mon Sep 17 00:00:00 2001
-From: qzed <qzed@users.noreply.github.com>
-Date: Sun, 21 Apr 2019 14:15:04 +0200
+From 96a7519165f8e0a700df1a81f4808e6da3c05023 Mon Sep 17 00:00:00 2001
+From: Maximilian Luz <luzmaximilian@gmail.com>
+Date: Tue, 2 Jul 2019 20:53:01 +0200
 Subject: [PATCH 2/3] serdev: Find ACPI clients by ResourceSource tag
 
 If serdev can't find ACPI clients directly under the controller node,
@@ -134,5 +134,5 @@ index 9db93f500b4e..2290d4f86ca4 100644
  		return -ENODEV;
  
 -- 
-2.21.0
+2.22.0
 
