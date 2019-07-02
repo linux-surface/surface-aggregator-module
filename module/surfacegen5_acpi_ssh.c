@@ -244,30 +244,21 @@ inline static struct surfacegen5_ec *surfacegen5_ec_acquire_init(void)
 	return ec;
 }
 
-struct device_link *surfacegen5_ec_consumer_add(struct device *consumer, u32 flags)
+int surfacegen5_ec_consumer_register(struct device *consumer)
 {
+	u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
 	struct surfacegen5_ec *ec;
 	struct device_link *link;
 
 	ec = surfacegen5_ec_acquire_init();
 	if (!ec) {
-		return ERR_PTR(-ENXIO);
-	}
-
-	link = device_link_add(consumer, &ec->serdev->dev, flags);
-
-	surfacegen5_ec_release(ec);
-	return link;
-}
-
-int surfacegen5_ec_consumer_remove(struct device_link *link)
-{
-	struct surfacegen5_ec *ec = surfacegen5_ec_acquire_init();
-	if (!ec) {
 		return -ENXIO;
 	}
 
-	device_link_del(link);
+	link = device_link_add(consumer, &ec->serdev->dev, flags);
+	if (!link) {
+		return -EFAULT;
+	}
 
 	surfacegen5_ec_release(ec);
 	return 0;

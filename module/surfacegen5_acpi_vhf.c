@@ -26,7 +26,6 @@ struct surfacegen5_vhf_evtctx {
 };
 
 struct surfacegen5_vhf_drvdata {
-	struct device_link           *ec_link;
 	struct surfacegen5_vhf_evtctx event_ctx;
 };
 
@@ -190,25 +189,18 @@ static unsigned long surfacegen5_vhf_event_delay(struct surfacegen5_event *event
 static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 {
 	struct surfacegen5_vhf_drvdata *drvdata;
-	struct device_link *ec_link;
 	struct hid_device *hid;
 	int status;
+
+	// add device link to EC
+	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
+	}
 
 	drvdata = kzalloc(sizeof(struct surfacegen5_vhf_drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		return -ENOMEM;
-	}
-
-	// add device link to EC
-	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
-	if (IS_ERR_OR_NULL(ec_link)) {
-		if (PTR_ERR(ec_link) == -ENXIO) {
-			status = -EPROBE_DEFER;
-		} else {
-			status = -EFAULT;
-		}
-
-		goto err_probe_ec_link;
 	}
 
 	hid = surfacegen5_vhf_create_hid_device(pdev);
@@ -222,7 +214,6 @@ static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 		goto err_add_hid;
 	}
 
-	drvdata->ec_link = ec_link;
 	drvdata->event_ctx.dev = &pdev->dev;
 	drvdata->event_ctx.hid = hid;
 
@@ -250,8 +241,6 @@ err_add_hid:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
 err_probe_hid:
-	surfacegen5_ec_consumer_remove(drvdata->ec_link);
-err_probe_ec_link:
 	kfree(drvdata);
 	return status;
 }
@@ -264,7 +253,6 @@ static int surfacegen5_acpi_vhf_remove(struct platform_device *pdev)
 	surfacegen5_ec_remove_event_handler(SG5_EVENT_VHF_RQID);
 
 	hid_destroy_device(drvdata->event_ctx.hid);
-	surfacegen5_ec_consumer_remove(drvdata->ec_link);
 	kfree(drvdata);
 
 	platform_set_drvdata(pdev, NULL);

@@ -50,8 +50,7 @@ struct surfacegen5_event {
 typedef int (*surfacegen5_ec_event_handler_fn)(struct surfacegen5_event *event, void *data);
 typedef unsigned long (*surfacegen5_ec_event_handler_delay)(struct surfacegen5_event *event, void *data);
 
-struct device_link *surfacegen5_ec_consumer_add(struct device *consumer, u32 flags);
-int surfacegen5_ec_consumer_remove(struct device_link *link);
+int surfacegen5_ec_consumer_register(struct device *consumer);
 
 int surfacegen5_ec_rqst(const struct surfacegen5_rqst *rqst, struct surfacegen5_buf *result);
 

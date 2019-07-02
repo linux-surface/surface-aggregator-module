@@ -33,10 +33,6 @@ enum sg5_param_perf_mode {
 	__SG5_PARAM_PERF_MODE__END   = 4,
 };
 
-struct surface_sid_drvdata {
-	struct device_link *ec_link;
-};
-
 
 static int sg5_ec_perf_mode_get(void)
 {
@@ -174,37 +170,19 @@ const static DEVICE_ATTR_RW(perf_mode);
 
 static int surfacegen5_acpi_sid_probe(struct platform_device *pdev)
 {
-	struct surface_sid_drvdata *drvdata;
-	struct device_link *ec_link;
 	int status;
 
 	// link to ec
-	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
-	if (IS_ERR_OR_NULL(ec_link)) {
-		if (PTR_ERR(ec_link) == -ENXIO) {
-			// Defer probe if the _SSH driver has not set up the controller yet.
-			status = -EPROBE_DEFER;
-		} else {
-			status = -EFAULT;
-		}
-
-		goto err_probe_ec_link;
+	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
-
-	// set up driver data
-	drvdata = kzalloc(sizeof(struct surface_sid_drvdata), GFP_KERNEL);
-	if (!drvdata) {
-		status = -ENOMEM;
-		goto err_drvdata;
-	}
-	drvdata->ec_link = ec_link;
-	platform_set_drvdata(pdev, drvdata);
 
 	// set initial perf_mode
 	if (param_perf_mode_init != SG5_PARAM_PERF_MODE_AS_IS) {
 		status = sg5_ec_perf_mode_set(param_perf_mode_init);
 		if (status) {
-			goto err_set_perf;
+			return status;
 		}
 	}
 
@@ -218,29 +196,16 @@ static int surfacegen5_acpi_sid_probe(struct platform_device *pdev)
 
 err_sysfs:
 	sg5_ec_perf_mode_set(param_perf_mode_exit);
-err_set_perf:
-	platform_set_drvdata(pdev, NULL);
-	kfree(drvdata);
-err_drvdata:
-	surfacegen5_ec_consumer_remove(ec_link);
-err_probe_ec_link:
 	return status;
 }
 
 static int surfacegen5_acpi_sid_remove(struct platform_device *pdev)
 {
-	struct surface_sid_drvdata *drvdata = platform_get_drvdata(pdev);
-
 	// remove perf_mode attribute
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
 
 	// set exit perf_mode
 	sg5_ec_perf_mode_set(param_perf_mode_exit);
-
-	// remove consumer and clean up
-	surfacegen5_ec_consumer_remove(drvdata->ec_link);
-	platform_set_drvdata(pdev, NULL);
-	kfree(drvdata);
 
 	return 0;
 }

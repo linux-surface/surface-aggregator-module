@@ -45,15 +45,19 @@ struct surfacegen5_san_opreg_context {
 	struct device *dev;
 };
 
+struct surfacegen5_san_consumer_link {
+	const struct surfacegen5_san_acpi_consumer *properties;
+	struct device_link                         *link;
+};
+
 struct surfacegen5_san_consumers {
-	u32                  num;
-	struct device_link **links;
+	u32                                   num;
+	struct surfacegen5_san_consumer_link *links;
 };
 
 struct surfacegen5_san_drvdata {
 	struct surfacegen5_san_opreg_context opreg_ctx;
 	struct surfacegen5_san_consumers     consumers;
-	struct device_link                  *ec_link;
 };
 
 struct gsb_data_in {
@@ -502,7 +506,7 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
                                           struct surfacegen5_san_consumers *out)
 {
 	const struct surfacegen5_san_acpi_consumer *con;
-	struct device_link **links, **link;
+	struct surfacegen5_san_consumer_link *links, *link;
 	struct acpi_device *adev;
 	acpi_handle handle;
 	u32 max_links = 0;
@@ -518,7 +522,7 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 	}
 
 	// allocate
-	links = kzalloc(max_links * sizeof(struct device_link *), GFP_KERNEL);
+	links = kzalloc(max_links * sizeof(struct surfacegen5_san_consumer_link), GFP_KERNEL);
 	link = &links[0];
 
 	if (!links) {
@@ -542,11 +546,12 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 			goto consumers_link_cleanup;
 		}
 
-		*link = device_link_add(&adev->dev, &pdev->dev, con->flags);
-		if (!(*link)) {
+		link->link = device_link_add(&adev->dev, &pdev->dev, con->flags);
+		if (!(link->link)) {
 			status = -EFAULT;
 			goto consumers_link_cleanup;
 		}
+		link->properties = con;
 
 		link += 1;
 	}
@@ -558,7 +563,9 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 
 consumers_link_cleanup:
 	for (link = link - 1; link >= links; --link) {
-		device_link_del(*link);
+		if (link->properties->flags & DL_FLAG_STATELESS) {
+			device_link_del(link->link);
+		}
 	}
 
 	return status;
@@ -572,7 +579,9 @@ static void surfacegen5_san_consumers_unlink(struct surfacegen5_san_consumers *c
 	}
 
 	for (i = 0; i < consumers->num; ++i) {
-		device_link_del(consumers->links[i]);
+		if (consumers->links[i].properties->flags & DL_FLAG_STATELESS) {
+			device_link_del(consumers->links[i].link);
+		}
 	}
 
 	kfree(consumers->links);
@@ -585,14 +594,8 @@ static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
 {
 	const struct surfacegen5_san_acpi_consumer *cons;
 	struct surfacegen5_san_drvdata *drvdata;
-	struct device_link *ec_link;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	int status;
-
-	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
-	if (!drvdata) {
-		return -ENOMEM;
-	}
 
 	/*
 	 * Defer probe if the _SSH driver has not set up the controller yet. This
@@ -600,18 +603,16 @@ static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
 	 * which the battery does not get set up correctly). Otherwise register as
 	 * consumer to set up a device_link.
 	 */
-	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
-	if (IS_ERR_OR_NULL(ec_link)) {
-		if (PTR_ERR(ec_link) == -ENXIO) {
-			status = -EPROBE_DEFER;
-		} else {
-			status = -EFAULT;
-		}
-
-		goto err_probe_ec_link;
+	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
-	drvdata->ec_link = ec_link;
+	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
+	if (!drvdata) {
+		return -ENOMEM;
+	}
+
 	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
@@ -646,8 +647,6 @@ err_probe_install_handler:
 	platform_set_drvdata(san, NULL);
 	surfacegen5_san_consumers_unlink(&drvdata->consumers);
 err_probe_consumers:
-	surfacegen5_ec_consumer_remove(drvdata->ec_link);
-err_probe_ec_link:
 	kfree(drvdata);
 	return status;
 }
@@ -662,7 +661,6 @@ static int surfacegen5_acpi_san_remove(struct platform_device *pdev)
 	surfacegen5_san_disable_events();
 
 	surfacegen5_san_consumers_unlink(&drvdata->consumers);
-	surfacegen5_ec_consumer_remove(drvdata->ec_link);
 	kfree(drvdata);
 
 	platform_set_drvdata(pdev, NULL);

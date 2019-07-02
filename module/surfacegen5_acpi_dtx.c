@@ -72,7 +72,6 @@ struct surface_dtx_dev {
 	struct list_head client_list;
 	struct mutex mutex;
 	bool active;
-	struct device_link *ec_link;
 	spinlock_t input_lock;
 	struct input_dev *input_dev;
 };
@@ -512,27 +511,18 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 {
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
-	struct device_link *ec_link;
 	struct input_dev *input_dev;
 	int status;
 
 	// link to ec
-	ec_link = surfacegen5_ec_consumer_add(&pdev->dev, DL_FLAG_PM_RUNTIME);
-	if (IS_ERR_OR_NULL(ec_link)) {
-		if (PTR_ERR(ec_link) == -ENXIO) {
-			// Defer probe if the _SSH driver has not set up the controller yet.
-			status = -EPROBE_DEFER;
-		} else {
-			status = -EFAULT;
-		}
-
-		goto err_probe_ec_link;
+	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
 	input_dev = surface_dtx_register_inputdev(pdev);
 	if (IS_ERR(input_dev)) {
-		status = PTR_ERR(input_dev);
-		goto err_input_dev;
+		return PTR_ERR(input_dev);
 	}
 
 	// initialize device
@@ -546,7 +536,6 @@ static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
-	ddev->ec_link = ec_link;
 	ddev->input_dev = input_dev;
 	mutex_unlock(&ddev->mutex);
 
@@ -567,9 +556,6 @@ err_events_setup:
 	misc_deregister(&ddev->mdev);
 err_register:
 	input_unregister_device(ddev->input_dev);
-err_input_dev:
-	surfacegen5_ec_consumer_remove(ec_link);
-err_probe_ec_link:
 	return status;
 }
 
@@ -603,9 +589,6 @@ static int surfacegen5_acpi_dtx_remove(struct platform_device *pdev)
 	// unregister user-space devices
 	input_unregister_device(ddev->input_dev);
 	misc_deregister(&ddev->mdev);
-
-	// unlink
-	surfacegen5_ec_consumer_remove(ddev->ec_link);
 
 	return 0;
 }
