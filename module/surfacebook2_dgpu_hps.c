@@ -294,6 +294,6 @@ static struct platform_driver sb2_shps_driver = {
 };
 module_platform_driver(sb2_shps_driver);
 
-MODULE_AUTHOR("Maximilian Luz");
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Book 2 Hot-Plug System Driver");
 MODULE_LICENSE("GPL v2");
