@@ -43,16 +43,16 @@ Keeping the dGPU disabled during this initialization phase avoids this problem, 
 
 ## Building the Module
 
-Run `make all` inside this folder.
+Run `make all` inside the `module` directory.
 The module can then be loaded via `insmod sb2_shps.ko` (and removed with `rmmod sb2_shps.ko`).
 
 ### Permanently Install the Module
 
 #### On Arch-Linux
 
-Simply run `makepkg -si` inside this folder.
+Simply run `makepkg -si` inside the `module` directory.
 
 #### Via DKMS
 
-If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
+If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install` inside the `module` directory.
 To uninstall it, run `make dkms-uninstall`.
