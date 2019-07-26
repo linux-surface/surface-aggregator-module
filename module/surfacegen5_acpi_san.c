@@ -365,19 +365,25 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 
 	if (rqst.tc == 0x11 && rqst.cid == 0x0D && status == -EPERM) {
 		/* Base state quirk:
-		 * The base state may be queried from ACPI when the EC is
-		 * still suspended. In this case it will return '-EPERM'.
-		 * Returning 0xff (unknown base status) here will suppress
-		 * error messages and cause an immediate re-query of the
-		 * state. Delay return to avoid spinning.
+		 * The base state may be queried from ACPI when the EC is still
+		 * suspended. In this case it will return '-EPERM'. This query
+		 * will only be triggered from the ACPI lid GPE interrupt, thus
+		 * we are either in laptop or studio mode (base status 0x01 or
+		 * 0x02). Furthermore, we will only get here if the device (and
+		 * EC) have been suspended.
+		 *
+		 * We now assume that the device is in laptop mode (0x01). This
+		 * has the drawback that it will wake the device when unfolding
+		 * it in studio mode, but it also allows us to avoid actively
+		 * waiting for the EC to wake up, which may incur a notable
+		 * delay.
 		 */
 
 		buffer->status          = 0x00;
 		buffer->len             = 0x03;
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = 0x01;
-		buffer->data.out.pld[0] = 0xFF;
-		msleep(SG5_QUIRK_BASE_STATE_DELAY);
+		buffer->data.out.pld[0] = 0x01;
 
 	} else if (!status) {		// success
 		buffer->status          = 0x00;
