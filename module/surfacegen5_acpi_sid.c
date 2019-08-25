@@ -337,7 +337,12 @@ static const struct si_device_info si_device_pro = {
 	.lid_device = &lid_device_l17,
 };
 
-static const struct si_device_info si_device_book = {
+static const struct si_device_info si_device_book_1 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l17,
+};
+
+static const struct si_device_info si_device_book_2 = {
 	.has_perf_mode = true,
 	.lid_device = &lid_device_l17,
 };
@@ -349,8 +354,8 @@ static const struct si_device_info si_device_laptop = {
 
 static const struct acpi_device_id surfacegen5_acpi_sid_match[] = {
 	{ "MSHW0081", (unsigned long)&si_device_pro },     /* Surface Pro 4 and 5 */
-	{ "MSHW0080", (unsigned long)&si_device_book },    /* Surface Book 1 */
-	{ "MSHW0107", (unsigned long)&si_device_book },    /* Surface Book 2 */
+	{ "MSHW0080", (unsigned long)&si_device_book_1 },  /* Surface Book 1 */
+	{ "MSHW0107", (unsigned long)&si_device_book_2 },  /* Surface Book 2 */
 	{ "MSHW0086", (unsigned long)&si_device_laptop },  /* Surface Laptop 1 */
 	{ "MSHW0112", (unsigned long)&si_device_laptop },  /* Surface Laptop 2 */
 	{ },

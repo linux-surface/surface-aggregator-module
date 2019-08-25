@@ -1,6 +1,6 @@
-From 0a458af52f1e517819c0bfe3a049cbf89ce29b41 Mon Sep 17 00:00:00 2001
-From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Fri, 26 Jul 2019 03:05:44 +0200
+From ad5b06c8d96086188519ff72cfb5a5f350c8ca8f Mon Sep 17 00:00:00 2001
+From: qzed <qzed@users.noreply.github.com>
+Date: Mon, 26 Aug 2019 01:11:08 +0200
 Subject: [PATCH 1/3] ACPI: Fix buffer/integer type mismatch
 
 This is actually not a bug in the kernel, but rather Microsoft not
@@ -56,5 +56,5 @@ index d3d2dbfba680..0b7f617a6e9b 100644
  		buffer_desc = acpi_ut_create_buffer_object(buffer_length);
  		if (!buffer_desc) {
 -- 
-2.22.0
+2.23.0
 

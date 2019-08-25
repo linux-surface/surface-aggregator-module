@@ -1,6 +1,6 @@
-From dc3b6b988c23174603a7e98c9dc4e2c3872b77ce Mon Sep 17 00:00:00 2001
-From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Fri, 26 Jul 2019 03:06:33 +0200
+From b319918808cd8872f6f7325cc383e71c9267b0f6 Mon Sep 17 00:00:00 2001
+From: qzed <qzed@users.noreply.github.com>
+Date: Mon, 26 Aug 2019 01:12:35 +0200
 Subject: [PATCH 3/3] platform: Add gen5 MS Surface platform support
 
 Add platform/ACPI support for 5th generation Microsoft Surface devices.
@@ -11,12 +11,12 @@ the Surface Book 2 clipboard.
 ---
  drivers/platform/x86/Kconfig        |   97 +
  drivers/platform/x86/Makefile       |    1 +
- drivers/platform/x86/surface_acpi.c | 3908 +++++++++++++++++++++++++++
- 3 files changed, 4006 insertions(+)
+ drivers/platform/x86/surface_acpi.c | 3913 +++++++++++++++++++++++++++
+ 3 files changed, 4011 insertions(+)
  create mode 100644 drivers/platform/x86/surface_acpi.c
 
 diff --git a/drivers/platform/x86/Kconfig b/drivers/platform/x86/Kconfig
-index 5d5cc6111081..4fefae580dec 100644
+index 7c2fd1d72e18..c00cb830914a 100644
 --- a/drivers/platform/x86/Kconfig
 +++ b/drivers/platform/x86/Kconfig
 @@ -623,6 +623,103 @@ config THINKPAD_ACPI_HOTKEY_POLL
@@ -137,10 +137,10 @@ index 87b0069bd781..8b12c19dc165 100644
  obj-$(CONFIG_FUJITSU_TABLET)	+= fujitsu-tablet.o
 diff --git a/drivers/platform/x86/surface_acpi.c b/drivers/platform/x86/surface_acpi.c
 new file mode 100644
-index 000000000000..a17538905642
+index 000000000000..f62aecb0df69
 --- /dev/null
 +++ b/drivers/platform/x86/surface_acpi.c
-@@ -0,0 +1,3908 @@
+@@ -0,0 +1,3913 @@
 +#include <asm/unaligned.h>
 +#include <linux/acpi.h>
 +#include <linux/completion.h>
@@ -3932,7 +3932,12 @@ index 000000000000..a17538905642
 +	.lid_device = &lid_device_l17,
 +};
 +
-+static const struct si_device_info si_device_book = {
++static const struct si_device_info si_device_book_1 = {
++	.has_perf_mode = false,
++	.lid_device = &lid_device_l17,
++};
++
++static const struct si_device_info si_device_book_2 = {
 +	.has_perf_mode = true,
 +	.lid_device = &lid_device_l17,
 +};
@@ -3944,8 +3949,8 @@ index 000000000000..a17538905642
 +
 +static const struct acpi_device_id surfacegen5_acpi_sid_match[] = {
 +	{ "MSHW0081", (unsigned long)&si_device_pro },     /* Surface Pro 4 and 5 */
-+	{ "MSHW0080", (unsigned long)&si_device_book },    /* Surface Book 1 */
-+	{ "MSHW0107", (unsigned long)&si_device_book },    /* Surface Book 2 */
++	{ "MSHW0080", (unsigned long)&si_device_book_1 },  /* Surface Book 1 */
++	{ "MSHW0107", (unsigned long)&si_device_book_2 },  /* Surface Book 2 */
 +	{ "MSHW0086", (unsigned long)&si_device_laptop },  /* Surface Laptop 1 */
 +	{ "MSHW0112", (unsigned long)&si_device_laptop },  /* Surface Laptop 2 */
 +	{ },
@@ -4050,5 +4055,5 @@ index 000000000000..a17538905642
 +MODULE_DESCRIPTION("ACPI/Platform Drivers for Microsoft Surface Devices");
 +MODULE_LICENSE("GPL v2");
 -- 
-2.22.0
+2.23.0
 
