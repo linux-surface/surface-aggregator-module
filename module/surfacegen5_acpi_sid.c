@@ -213,40 +213,6 @@ err_sysfs:
 	return status;
 }
 
-static int sid_perf_mode_setup(struct platform_device *pdev, const struct si_device_info *info)
-{
-	int status;
-
-	if (!info->has_perf_mode)
-		return 0;
-
-	// link to ec
-	status = surfacegen5_ec_consumer_register(&pdev->dev);
-	if (status) {
-		return status == -ENXIO ? -EPROBE_DEFER : status;
-	}
-
-	// set initial perf_mode
-	if (param_perf_mode_init != SG5_PARAM_PERF_MODE_AS_IS) {
-		status = sg5_ec_perf_mode_set(param_perf_mode_init);
-		if (status) {
-			return status;
-		}
-	}
-
-	// register perf_mode attribute
-	status = sysfs_create_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
-	if (status) {
-		goto err_sysfs;
-	}
-
-	return 0;
-
-err_sysfs:
-	sg5_ec_perf_mode_set(param_perf_mode_exit);
-	return status;
-}
-
 static void sid_perf_mode_remove(struct platform_device *pdev, const struct si_device_info *info)
 {
 	if (!info->has_perf_mode)
