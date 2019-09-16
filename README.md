@@ -86,6 +86,8 @@ After that, you can load the module with `insmod surfacegen5_acpi.ko`, and after
 
 If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
 To uninstall it, run `make dkms-uninstall`.
+If you've installed a patched kernel already contiaining the in-kernel version of this module, you may want to keep it from loading by editing/creating `/etc/modprobe.d/surface-acpi.conf` and adding `blacklist surface_acpi`.
+Note that you will need to undo these changes when you want to use the in-kernel module again.
 
 [patches-linux-surface]: https://github.com/qzed/linux-surface/tree/master/patches/4.18
 [prebuilt-linux-surface]: https://github.com/qzed/linux-surface/releases/tag/v4.18.16-pre1
