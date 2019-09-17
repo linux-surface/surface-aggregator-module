@@ -1,4 +1,4 @@
-From 5fd2cf1af53c7a2912417d093e08f823e4c12f4a Mon Sep 17 00:00:00 2001
+From 22e3b4b2f1d31e02dc7e6a1e2ef21c9e0a41c81e Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
 Date: Mon, 26 Aug 2019 01:16:02 +0200
 Subject: [PATCH 2/3] serdev: Find ACPI clients by ResourceSource tag
@@ -8,24 +8,14 @@ search for (UART) devices in the whole ACPI tree by matching the
 ResourceSource tag of the corresponding resource descriptor to the
 controller's path.
 ---
- drivers/tty/serdev/core.c | 90 ++++++++++++++++++++++++++++++++++++++-
- 1 file changed, 88 insertions(+), 2 deletions(-)
+ drivers/tty/serdev/core.c | 87 +++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 87 insertions(+)
 
 diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
-index 9db93f500b4e..2290d4f86ca4 100644
+index 9db93f500b4e..9cfb5ffc034f 100644
 --- a/drivers/tty/serdev/core.c
 +++ b/drivers/tty/serdev/core.c
-@@ -502,8 +502,7 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
- 	struct serdev_device *serdev = NULL;
- 	int err;
- 
--	if (acpi_bus_get_status(adev) || !adev->status.present ||
--	    acpi_device_enumerated(adev))
-+	if (acpi_bus_get_status(adev) || !adev->status.present)
- 		return AE_OK;
- 
- 	serdev = serdev_device_alloc(ctrl);
-@@ -526,6 +525,81 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
+@@ -526,6 +526,81 @@ static acpi_status acpi_serdev_register_device(struct serdev_controller *ctrl,
  	return AE_OK;
  }
  
@@ -107,7 +97,7 @@ index 9db93f500b4e..2290d4f86ca4 100644
  static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
  				       void *data, void **return_value)
  {
-@@ -535,6 +609,9 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
+@@ -535,6 +610,9 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
  	if (acpi_bus_get_device(handle, &adev))
  		return AE_OK;
  
@@ -117,7 +107,7 @@ index 9db93f500b4e..2290d4f86ca4 100644
  	return acpi_serdev_register_device(ctrl, adev);
  }
  
-@@ -552,6 +629,15 @@ static int acpi_serdev_register_devices(struct serdev_controller *ctrl)
+@@ -552,6 +630,15 @@ static int acpi_serdev_register_devices(struct serdev_controller *ctrl)
  	if (ACPI_FAILURE(status))
  		dev_dbg(&ctrl->dev, "failed to enumerate serdev slaves\n");
  

@@ -1,4 +1,4 @@
-From b319918808cd8872f6f7325cc383e71c9267b0f6 Mon Sep 17 00:00:00 2001
+From 47e70737eeaa651552fad69340c6c10727ca38d7 Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
 Date: Mon, 26 Aug 2019 01:12:35 +0200
 Subject: [PATCH 3/3] platform: Add gen5 MS Surface platform support
