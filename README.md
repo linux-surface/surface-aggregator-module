@@ -58,3 +58,37 @@ Simply run `makepkg -si` inside the `module` directory.
 
 If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install` inside the `module` directory.
 To uninstall it, run `make dkms-uninstall`.
+
+## Setting-Up the dGPU for use with `bumblebee` and the Official Nvidia Driver on Arch Linux
+
+This should be similar on other distributions, as always, consult your respective help-pages and wikis.
+For this, I assume you have the [surface](https://github.com/qzed/linux-surface-control) command line utility installed.
+Alternatively, have a look above on how to turn on/off the dGPU manually via sysfs.
+
+To set-up the dGPU
+
+1. Install the nvidia driver (e.g. `nvidia-dkms`).
+   Note that, if you have a custom kernel, it is important you choose a locally compiled version (as usually indicated by the `-dkms` suffix).
+2. Install `bumblebee`.
+3. Add your user to the `bumblebee` group (e.g. `usermod -a -G bumblebee <yourusername>`).
+7. Enable `bumblebeed.service` (`systemctl enable bumblebeed.service`).
+   Alternatively, you can also start/stop the service before/after each use.
+4. Reboot.
+
+Now you can actually use the dGPU. I recommend putting the commands below into a simple wrapper script.
+
+5. Turn on dGPU, e.g. via `sudo surface dgpu set on`.
+6. Load the Nvidia modules (`sudo nvidia-modprobe`).
+7. If you encounter a message indicating that the Bumblebee daemon has not been startet yet, you may need to wait a bit for `bumblebeed.service` to become active or alternatively run `systemctl start bumblebeed.service`.
+8. Run your desired application on the dGPU with `optirun <application>`. To verify the Nvidia GPU is actually used, you can run `optirun glxgears -v`.
+
+To fully disable the dGPU (e.g. for power-savings)
+
+9. Close all applications using the dGPU.
+10. Unload the Nvidia driver modules (`sudo modprobe -r nvidia_modeset` followed by `sudo modprobe -r nvidia`).
+    If you encounter a message specifying that the `nvidia` module is in use, you either have other modules depending on the `nvidia` driver, which you need to unload, or applications using it, which you need to close.
+11. Turn off the dGPU, e.g. via `sudo surface dgpu set off`.
+
+Additionally, I recommend adjusting the performance mode of your device to your needs, e.g. by running `sudo surface performance set 4` to set the device to best-performance mode or `sudo surface performance set 1` to set the device to the default performance mode.
+This has a direct influence on the cooling strategy of the device.
+See the help-text printed when running `surface performance` for more details on this.
