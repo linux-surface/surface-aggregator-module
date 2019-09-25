@@ -261,7 +261,7 @@ static int sid_lid_device_setup(struct platform_device *pdev, const struct si_de
 	if (status)
 		return -EFAULT;
 
-	return sid_lid_enable_wakeup(info, true);
+	return sid_lid_enable_wakeup(info, false);
 }
 
 static void sid_lid_device_remove(struct platform_device *pdev, const struct si_device_info *info)
