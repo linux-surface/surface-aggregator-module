@@ -95,48 +95,36 @@ Note that you will need to undo these changes when you want to use the in-kernel
 ## Getting Windows Logs for Reverse Engineering
 
 1. Get the required software:
-   - [IRPMon (modified version from carrylook)][irpmon]
-   - [DbgView][dbgview]
+   - [IRPMon (beta)][irpmon]
 
-2. Set the component filter mask (as described [here][compflt]).
-   Specifically you need to set `DEFAULT` (or `Kd_DEFAULT_Mask`) to `0xffffffff`.
-   If you choose the second option, you need to do this after you have re-booted, i.e. after step 4.
-
-3. Enable kernel debugging via `bcdedit /debug on` on an elevated command prompt/powershell.
-
-4. Disable driver signature verification (required to get IRPmon working):
+2. Disable driver signature verification (required to get IRPmon working):
 
    Hold shift while clicking on the restart button in the start menu.
-   Go through `Troubleshoot`, `Advanced Options`, `See more recovery options`, `Start-up Settings` and press `Restart`. 
+   Go through `Troubleshoot`, `Advanced Options`, `See more recovery options`, `Start-up Settings` and press `Restart`.
    Boot into windows.
    On the screen appearing afterwards press `7` to `Disable driver signature enforcement`.
 
    _Note: This step will re-boot your PC._
 
-5. Start IRPMon via `bin/x64/Debug/IRPMon.exe`.
-   
+3. Start IRPMon via `x64/IRPMon.exe`.
+
    Select `Action`, `Select drivers / devices...` and search for `\Driver\iaLPSS2_UART2`.
-   Expand and right-click on the inner-most entry and select `Hooked`, then click `Ok` to close the selection window.
+   Expand and right-click on the inner-most entry and select `Hooked`.
+   Select the `Data` option while hooking, then click `Ok` to close the selection window.
 
    Make sure there is a check mark next to `Monitoring`, `Capture Events`.
    If not activate this.
 
-6. Start `Dbgview.exe` as administrator.
-
-   Go to `Edit`, `Filter/Highlight...` and type `HOOK_DATA` next to `Include`, click on `Ok`.
-
-   Go to `Capture` and select `Capture Kernel`.
-
-7. Perform a/the task involving the EC (eg. detaching the clipboard on the SB2).
+4. Perform a/the task involving the EC (eg. detaching the clipboard on the SB2).
    You should then see messages appearing in the window.
-   You can save those to a file using `File`, `Save As...` or clear the log via `Edit`, `Clear Display`.
+   You can see which items have data in the "Associated Data" column and look at the data under `Request`, `Details`, `Hexer`.
+   You can save those to a file via `Action`, `Save`.
 
-   Please only submit concise logs containing one test at a time, use `Clear Display` and `Save As...` to keep it contained.
+   Please try to submit concise logs containing one test at a time.
    Usually the messages should stop appearing after a short period of time and you can then assume that the exchange between Windows and the EC is complete.
 
-[irpmon]: https://github.com/carrylook/SurfacePro2017Notes/tree/master/IRPMon-Master
-[dbgview]: https://docs.microsoft.com/en-us/sysinternals/downloads/debugview
-[compflt]: https://docs.microsoft.com/en-us/windows-hardware/drivers/devtest/reading-and-filtering-debugging-messages#setting-the-component-filter-mask
+[irpmon]: https://github.com/MartinDrab/IRPMon/releases/tag/v0.9-beta
+
 ## Donations
 
 _I can't really guarantee you anything._
