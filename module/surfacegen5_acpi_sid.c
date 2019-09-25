@@ -1,5 +1,6 @@
 #include <asm/unaligned.h>
 #include <linux/acpi.h>
+#include <linux/dmi.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
@@ -20,8 +21,120 @@ struct si_device_info {
 };
 
 
-#define SG5_PARAM_PERM		(S_IRUGO | S_IWUSR)
+static const struct si_lid_device lid_device_l17 = {
+	.acpi_path = "\\_SB.LID0",
+	.gpe_number = 0x17,
+};
 
+static const struct si_lid_device lid_device_l57 = {
+	.acpi_path = "\\_SB.LID0",
+	.gpe_number = 0x57,
+};
+
+static const struct si_lid_device lid_device_l4F = {
+	.acpi_path = "\\_SB.LID0",
+	.gpe_number = 0x57,
+};
+
+
+static const struct si_device_info si_device_pro_4 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l17,
+};
+
+static const struct si_device_info si_device_pro_5 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l4F,
+};
+
+static const struct si_device_info si_device_pro_6 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l4F,
+};
+
+static const struct si_device_info si_device_book_1 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l17,
+};
+
+static const struct si_device_info si_device_book_2 = {
+	.has_perf_mode = true,
+	.lid_device = &lid_device_l17,
+};
+
+static const struct si_device_info si_device_laptop_1 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l57,
+};
+
+static const struct si_device_info si_device_laptop_2 = {
+	.has_perf_mode = false,
+	.lid_device = &lid_device_l57,
+};
+
+
+static const struct dmi_system_id dmi_lid_device_table[] = {
+	{
+		.ident = "Surface Pro 4",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 4"),
+		},
+		.driver_data = (void *)&si_device_pro_4,
+	},
+	{
+		.ident = "Surface Pro 5",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 2017"),
+		},
+		.driver_data = (void *)&si_device_pro_5,
+	},
+	{
+		.ident = "Surface Pro 6",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 6"),
+		},
+		.driver_data = (void *)&si_device_pro_6,
+	},
+	{
+		.ident = "Surface Book 1",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book"),
+		},
+		.driver_data = (void *)&si_device_book_1,
+	},
+	{
+		.ident = "Surface Book 2",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book 2"),
+		},
+		.driver_data = (void *)&si_device_book_2,
+	},
+	{
+		.ident = "Surface Laptop 1",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop"),
+		},
+		.driver_data = (void *)&si_device_laptop_1,
+	},
+	{
+		.ident = "Surface Laptop 2",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop 2"),
+		},
+		.driver_data = (void *)&si_device_laptop_2,
+	},
+	{ }
+};
+
+
+#define SG5_PARAM_PERM		(S_IRUGO | S_IWUSR)
 
 enum sg5_perf_mode {
 	SG5_PERF_MODE_NORMAL   = 1,
@@ -241,7 +354,7 @@ static int sid_lid_enable_wakeup(const struct si_device_info *info, bool enable)
 	return 0;
 }
 
-static int sid_lid_device_setup(struct platform_device *pdev, const struct si_device_info *info)
+static int sid_lid_device_setup(const struct si_device_info *info)
 {
 	acpi_handle lid_handle;
 	int status;
@@ -264,7 +377,7 @@ static int sid_lid_device_setup(struct platform_device *pdev, const struct si_de
 	return sid_lid_enable_wakeup(info, false);
 }
 
-static void sid_lid_device_remove(struct platform_device *pdev, const struct si_device_info *info)
+static void sid_lid_device_remove(const struct si_device_info *info)
 {
 	/* restore default behavior without this module */
 	sid_lid_enable_wakeup(info, false);
@@ -288,19 +401,23 @@ static SIMPLE_DEV_PM_OPS(surfacegen5_acpi_sid_pm, surfacegen5_acpi_sid_suspend, 
 
 static int surfacegen5_acpi_sid_probe(struct platform_device *pdev)
 {
-	const struct si_device_info *info;
+	const struct dmi_system_id *dmi_match;
+	struct si_device_info *info;
 	int status;
 
-	info = acpi_device_get_match_data(&pdev->dev);
-	if (!info)
+	dmi_match = dmi_first_match(dmi_lid_device_table);
+	if (!dmi_match)
 		return -ENODEV;
-	platform_set_drvdata(pdev, (void *)info);
+
+	info = dmi_match->driver_data;
+
+	platform_set_drvdata(pdev, info);
 
 	status = sid_perf_mode_setup(pdev, info);
 	if (status)
 		goto err_perf_mode;
 
-	status = sid_lid_device_setup(pdev, info);
+	status = sid_lid_device_setup(info);
 	if (status)
 		goto err_lid;
 
@@ -317,48 +434,19 @@ static int surfacegen5_acpi_sid_remove(struct platform_device *pdev)
 	const struct si_device_info *info = platform_get_drvdata(pdev);
 
 	sid_perf_mode_remove(pdev, info);
-	sid_lid_device_remove(pdev, info);
+	sid_lid_device_remove(info);
 
+	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 
 
-static const struct si_lid_device lid_device_l17 = {
-	.acpi_path = "\\_SB.LID0",
-	.gpe_number = 0x17,
-};
-
-static const struct si_lid_device lid_device_l57 = {
-	.acpi_path = "\\_SB.LID0",
-	.gpe_number = 0x57,
-};
-
-static const struct si_device_info si_device_pro = {
-	.has_perf_mode = false,
-	.lid_device = &lid_device_l17,
-};
-
-static const struct si_device_info si_device_book_1 = {
-	.has_perf_mode = false,
-	.lid_device = &lid_device_l17,
-};
-
-static const struct si_device_info si_device_book_2 = {
-	.has_perf_mode = true,
-	.lid_device = &lid_device_l17,
-};
-
-static const struct si_device_info si_device_laptop = {
-	.has_perf_mode = false,
-	.lid_device = &lid_device_l57,
-};
-
 static const struct acpi_device_id surfacegen5_acpi_sid_match[] = {
-	{ "MSHW0081", (unsigned long)&si_device_pro },     /* Surface Pro 4 and 5 */
-	{ "MSHW0080", (unsigned long)&si_device_book_1 },  /* Surface Book 1 */
-	{ "MSHW0107", (unsigned long)&si_device_book_2 },  /* Surface Book 2 */
-	{ "MSHW0086", (unsigned long)&si_device_laptop },  /* Surface Laptop 1 */
-	{ "MSHW0112", (unsigned long)&si_device_laptop },  /* Surface Laptop 2 */
+	{ "MSHW0081", },	/* Surface Pro 4, 5, and 6 */
+	{ "MSHW0080", },	/* Surface Book 1 */
+	{ "MSHW0107", },	/* Surface Book 2 */
+	{ "MSHW0086", },	/* Surface Laptop 1 */
+	{ "MSHW0112", },	/* Surface Laptop 2 */
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_sid_match);
