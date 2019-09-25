@@ -67,6 +67,6 @@ void __exit surfacegen5_acpi_exit(void)
 module_init(surfacegen5_acpi_init)
 module_exit(surfacegen5_acpi_exit)
 
-MODULE_AUTHOR("Maximilian Luz");
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("ACPI/Platform Drivers for 5th Generation Surface Devices");
 MODULE_LICENSE("GPL v2");
