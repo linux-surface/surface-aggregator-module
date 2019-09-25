@@ -266,6 +266,7 @@ static int sid_lid_device_setup(struct platform_device *pdev, const struct si_de
 
 static void sid_lid_device_remove(struct platform_device *pdev, const struct si_device_info *info)
 {
+	/* restore default behavior without this module */
 	sid_lid_enable_wakeup(info, false);
 }
 
