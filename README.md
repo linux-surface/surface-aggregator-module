@@ -125,6 +125,22 @@ Note that you will need to undo these changes when you want to use the in-kernel
 
 [irpmon]: https://github.com/MartinDrab/IRPMon/releases/tag/v0.9-beta
 
+## Notes on the Hardware
+
+From what I can figure out, the (newer) Surface devices use two different ARM chips:
+
+- [Kinetis K22F](http://cache.freescale.com/files/microcontrollers/doc/data_sheet/K22P121M120SF7.pdf) on Surface Book 2, Surface Pro 5, Surface Pro 6, ..?
+- [Kinetis KL17](http://cache.freescale.com/files/32bit/doc/data_sheet/KL17P64M48SF6.pdf?fsrch=1&sr=1&pageNum=1) on Surface Pro 4, Surface Book 1, ..?
+
+In addition to these two chips, there are also two different communication interfaces:
+
+- The Surface Book 2, Surface Pro 5, Surface Pro 6, Surface Laptop 1, and Surface Laptop 2 use a UART serial bus.
+
+- The Surface Book 1 and Surface Pro 4 use HID-over-I2C.
+
+Currently only the first interface is supported, meaning this module does currently not support the Surface Book 1 and Surface Pro 4.
+ 
+
 ## Donations
 
 _I can't really guarantee you anything._
