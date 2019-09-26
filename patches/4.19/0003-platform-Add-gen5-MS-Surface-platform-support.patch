@@ -3624,12 +3624,12 @@ index 000000000000..54cf6806daaf
 +	.gpe_number = 0x17,
 +};
 +
-+static const struct si_lid_device lid_device_l57 = {
++static const struct si_lid_device lid_device_l4F = {
 +	.acpi_path = "\\_SB.LID0",
-+	.gpe_number = 0x57,
++	.gpe_number = 0x4F,
 +};
 +
-+static const struct si_lid_device lid_device_l4F = {
++static const struct si_lid_device lid_device_l57 = {
 +	.acpi_path = "\\_SB.LID0",
 +	.gpe_number = 0x57,
 +};
