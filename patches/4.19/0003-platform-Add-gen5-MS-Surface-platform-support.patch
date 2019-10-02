@@ -1,4 +1,4 @@
-From d03b235de85f1391a773af0b879f4b188b0472bd Mon Sep 17 00:00:00 2001
+From 6ce72a26f827068661c416d4e8436d204b0b5950 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Wed, 25 Sep 2019 22:57:32 +0200
 Subject: [PATCH 3/3] platform: Add gen5 MS Surface platform support
@@ -11,8 +11,8 @@ the Surface Book 2 clipboard.
 ---
  drivers/platform/x86/Kconfig        |   97 +
  drivers/platform/x86/Makefile       |    1 +
- drivers/platform/x86/surface_acpi.c | 4000 +++++++++++++++++++++++++++
- 3 files changed, 4098 insertions(+)
+ drivers/platform/x86/surface_acpi.c | 4010 +++++++++++++++++++++++++++
+ 3 files changed, 4108 insertions(+)
  create mode 100644 drivers/platform/x86/surface_acpi.c
 
 diff --git a/drivers/platform/x86/Kconfig b/drivers/platform/x86/Kconfig
@@ -137,10 +137,10 @@ index dc29af4d8e2f..2250a32a5527 100644
  obj-$(CONFIG_FUJITSU_TABLET)	+= fujitsu-tablet.o
 diff --git a/drivers/platform/x86/surface_acpi.c b/drivers/platform/x86/surface_acpi.c
 new file mode 100644
-index 000000000000..54cf6806daaf
+index 000000000000..5dbf48a3d9b3
 --- /dev/null
 +++ b/drivers/platform/x86/surface_acpi.c
-@@ -0,0 +1,4000 @@
+@@ -0,0 +1,4010 @@
 +#include <asm/unaligned.h>
 +#include <linux/acpi.h>
 +#include <linux/completion.h>
@@ -3683,8 +3683,18 @@ index 000000000000..54cf6806daaf
 +	{
 +		.ident = "Surface Pro 5",
 +		.matches = {
++			/* match for SKU here due to generic product name "Surface Pro" */
 +			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
-+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 2017"),
++			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1796"),
++		},
++		.driver_data = (void *)&si_device_pro_5,
++	},
++	{
++		.ident = "Surface Pro 5 (LTE)",
++		.matches = {
++			/* match for SKU here due to generic product name "Surface Pro" */
++			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1807"),
 +		},
 +		.driver_data = (void *)&si_device_pro_5,
 +	},
