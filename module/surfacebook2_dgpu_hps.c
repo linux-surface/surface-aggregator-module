@@ -46,12 +46,12 @@ enum sb2_dgpu_power {
 };
 
 enum sb2_param_dgpu_power {
+	SB2_PARAM_DGPU_POWER_AS_IS    = -1,
 	SB2_PARAM_DGPU_POWER_OFF      = SB2_DGPU_POWER_OFF,
 	SB2_PARAM_DGPU_POWER_ON       = SB2_DGPU_POWER_ON,
-	SB2_PARAM_DGPU_POWER_AS_IS    = 2,
 
-	__SB2_PARAM_DGPU_POWER__START = 0,
-	__SB2_PARAM_DGPU_POWER__END   = 2,
+	__SB2_PARAM_DGPU_POWER__START = -1,
+	__SB2_PARAM_DGPU_POWER__END   = 1,
 };
 
 static const char* sb2_dgpu_power_str(enum sb2_dgpu_power power) {
@@ -163,8 +163,8 @@ static int param_dgpu_power_exit = SB2_PARAM_DGPU_POWER_OFF;
 module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SB2_PARAM_PERM);
 module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SB2_PARAM_PERM);
 
-MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 1: on / 2: as-is)");
-MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is)");
+MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (-1 as-is, 0: off [default], 1: on)");
+MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (-1 as-is, 0: off [default], 1: on)");
 
 
 static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr, char *data)

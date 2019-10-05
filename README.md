@@ -28,13 +28,13 @@ The dGPU power-state can also be automatically set when this module is loaded or
 
 - `dgpu_power_init`:
   - Description: The power-state to set when loading this module.
-  - Values: `0` (off), `1` (on), `2` (as is).
+  - Values: `0` (off), `1` (on), `-1` (as is).
   - Default: `0` (off).
 
 
 - `dgpu_power_exit`:
   - Description: The power-state to set when unloading this module.
-  - Values: `0` (off), `1` (on), `2` (as is).
+  - Values: `0` (off), `1` (on), `-1` (as is).
   - Default: `0` (off).
 
 _Warning:_
