@@ -7,7 +7,6 @@
 #include <linux/sysfs.h>
 
 
-// TODO: guard set_power methods with check against current state
 // TODO: turn off dGPU Root Port when dgpu_presence changes to 'not-present'
 // TODO: restore previous power state when dgpu_presence changes to 'present'?
 // TODO: check dGPU presence before attempting any operations?
@@ -65,14 +64,24 @@ struct shps_driver_data {
 };
 
 
-static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
+static int shps_dgpu_dsm_get_power(struct platform_device *pdev)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct gpio_desc *gpio = drvdata->gpio_dgpu_power;
+	int status;
+
+	status = gpiod_get_value_cansleep(gpio);
+	if (status < 0)
+		return status;
+
+	return status == 0 ? SHPS_DGPU_POWER_OFF : SHPS_DGPU_POWER_ON;
+}
+
+static int __shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
 	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
 	union acpi_object *result;
 	union acpi_object param;
-
-	if (power != SHPS_DGPU_POWER_ON && power != SHPS_DGPU_POWER_OFF)
-		return -EINVAL;
 
 	dev_info(&pdev->dev, "shps: setting dGPU direct power to \'%s\'\n", shps_dgpu_power_str(power));
 
@@ -95,27 +104,41 @@ static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_
 	return 0;
 }
 
-static int shps_dgpu_dsm_get_power(struct platform_device *pdev)
+static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	struct gpio_desc *gpio = drvdata->gpio_dgpu_power;
-	int status;
-
-	status = gpiod_get_value_cansleep(gpio);
-	if (status < 0)
-		return status;
-
-	return status == 0 ? SHPS_DGPU_POWER_OFF : SHPS_DGPU_POWER_ON;
-}
-
-static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
-{
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	struct pci_dev *rp = drvdata->dgpu_root_port;
 	int status;
 
 	if (power != SHPS_DGPU_POWER_ON && power != SHPS_DGPU_POWER_OFF)
 		return -EINVAL;
+
+	status = shps_dgpu_dsm_get_power(pdev);
+	if (status < 0)
+		return status;
+	if (status == power)
+		return 0;
+
+	return __shps_dgpu_dsm_set_power(pdev, power);
+}
+
+
+static int shps_dgpu_rp_get_power(struct platform_device *pdev)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+
+	if (rp->current_state == PCI_D3hot || rp->current_state == PCI_D3cold)
+		return SHPS_DGPU_POWER_OFF;
+	else if (rp->current_state == PCI_UNKNOWN || rp->current_state == PCI_POWER_ERROR)
+		return SHPS_DGPU_POWER_UNKNOWN;
+	else
+		return SHPS_DGPU_POWER_ON;
+}
+
+static int __shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+	int status;
 
 	dev_info(&pdev->dev, "shps: setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
@@ -138,17 +161,20 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 	return 0;
 }
 
-static int shps_dgpu_rp_get_power(struct platform_device *pdev)
+static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	struct pci_dev *rp = drvdata->dgpu_root_port;
+	int status;
 
-	if (rp->current_state == PCI_D3hot || rp->current_state == PCI_D3cold)
-		return SHPS_DGPU_POWER_OFF;
-	else if (rp->current_state == PCI_UNKNOWN || rp->current_state == PCI_POWER_ERROR)
-		return SHPS_DGPU_POWER_UNKNOWN;
-	else
-		return SHPS_DGPU_POWER_ON;
+	if (power != SHPS_DGPU_POWER_ON && power != SHPS_DGPU_POWER_OFF)
+		return -EINVAL;
+
+	status = shps_dgpu_rp_get_power(pdev);
+	if (status < 0)
+		return status;
+	if (status == power)
+		return 0;
+
+	return __shps_dgpu_rp_set_power(pdev, power);
 }
 
 
