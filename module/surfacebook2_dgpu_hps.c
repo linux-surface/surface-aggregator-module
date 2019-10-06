@@ -61,6 +61,8 @@ static const char* shps_dgpu_power_str(enum shps_dgpu_power power) {
 struct shps_driver_data {
 	struct pci_dev *dgpu_root_port;
 	struct gpio_desc *gpio_dgpu_power;
+	struct gpio_desc *gpio_dgpu_presence;
+	struct gpio_desc *gpio_base_presence;
 };
 
 
@@ -247,6 +249,16 @@ static struct attribute *shps_power_attrs[] = {
 ATTRIBUTE_GROUPS(shps_power);
 
 
+static int shps_suspend(struct device *dev)
+{
+	return 0;	// TODO: set state on suspend?
+}
+
+static int shps_resume(struct device *dev)
+{
+	return 0;	// TODO: set state on resume?
+}
+
 
 static struct pci_dev *shps_find_dgpu(void)
 {
@@ -276,14 +288,85 @@ static struct pci_dev *shps_find_dgpu_root_port(void)
 	return root_port;
 }
 
-static int shps_suspend(struct device *dev)
+static int shps_gpios_setup(struct platform_device *pdev, struct shps_driver_data *drvdata)
 {
-	return 0;	// TODO: set state on suspend?
+	struct gpio_desc *gpio_dgpu_power;
+	struct gpio_desc *gpio_dgpu_presence;
+	struct gpio_desc *gpio_base_presence;
+	int status;
+
+	// get GPIOs
+	gpio_dgpu_power = devm_gpiod_get(&pdev->dev, "dgpu_power", GPIOD_IN);
+	if (IS_ERR(gpio_dgpu_power)) {
+		status = PTR_ERR(gpio_dgpu_power);
+		goto err_out;
+	}
+
+	gpio_dgpu_presence = devm_gpiod_get(&pdev->dev, "dgpu_presence", GPIOD_IN);
+	if (IS_ERR(gpio_dgpu_presence)) {
+		status = PTR_ERR(gpio_dgpu_presence);
+		goto err_out;
+	}
+
+	gpio_base_presence = devm_gpiod_get(&pdev->dev, "base_presence", GPIOD_IN);
+	if (IS_ERR(gpio_base_presence)) {
+		status = PTR_ERR(gpio_base_presence);
+		goto err_out;
+	}
+
+	// export GPIOs
+	status = gpiod_export(gpio_dgpu_power, false);
+	if (status)
+		goto err_out;
+
+	status = gpiod_export(gpio_dgpu_presence, false);
+	if (status)
+		goto err_export_dgpu_presence;
+
+	status = gpiod_export(gpio_base_presence, false);
+	if (status)
+		goto err_export_base_presence;
+
+	// create sysfs links
+	status = gpiod_export_link(&pdev->dev, "gpio-dgpu_power", gpio_dgpu_power);
+	if (status)
+		goto err_link_dgpu_power;
+
+	status = gpiod_export_link(&pdev->dev, "gpio-dgpu_presence", gpio_dgpu_presence);
+	if (status)
+		goto err_link_dgpu_presence;
+
+	status = gpiod_export_link(&pdev->dev, "gpio-base_presence", gpio_base_presence);
+	if (status)
+		goto err_link_base_presence;
+
+	drvdata->gpio_dgpu_power = gpio_dgpu_power;
+	drvdata->gpio_dgpu_presence = gpio_dgpu_presence;
+	drvdata->gpio_base_presence = gpio_base_presence;
+	return 0;
+
+err_link_base_presence:
+	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_presence");
+err_link_dgpu_presence:
+	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_power");
+err_link_dgpu_power:
+	gpiod_unexport(gpio_base_presence);
+err_export_base_presence:
+	gpiod_unexport(gpio_dgpu_presence);
+err_export_dgpu_presence:
+	gpiod_unexport(gpio_dgpu_power);
+err_out:
+	return status;
 }
 
-static int shps_resume(struct device *dev)
+static void shps_gpios_remove(struct platform_device *pdev, struct shps_driver_data *drvdata)
 {
-	return 0;	// TODO: set state on resume?
+	sysfs_remove_link(&pdev->dev.kobj, "gpio-base_presence");
+	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_presence");
+	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_power");
+	gpiod_unexport(drvdata->gpio_base_presence);
+	gpiod_unexport(drvdata->gpio_dgpu_presence);
+	gpiod_unexport(drvdata->gpio_dgpu_power);
 }
 
 static int shps_probe(struct platform_device *pdev)
@@ -311,11 +394,9 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_rp_lookup;
 	}
 
-	drvdata->gpio_dgpu_power = gpiod_get(&pdev->dev, "dgpu_power", GPIOD_IN);
-	if (IS_ERR(drvdata->gpio_dgpu_power)) {
-		status = PTR_ERR(drvdata->gpio_dgpu_power);
+	status = shps_gpios_setup(pdev, drvdata);
+	if (status)
 		goto err_gpio;
-	}
 
 	status = device_add_groups(&pdev->dev, shps_power_groups);
 	if (status)
@@ -325,7 +406,7 @@ static int shps_probe(struct platform_device *pdev)
 	return 0;
 
 err_devattr:
-	gpiod_put(drvdata->gpio_dgpu_power);
+	shps_gpios_remove(pdev, drvdata);
 err_gpio:
 	pci_dev_put(drvdata->dgpu_root_port);
 err_rp_lookup:
@@ -342,7 +423,7 @@ static int shps_remove(struct platform_device *pdev)
 
 	device_remove_groups(&pdev->dev, shps_power_groups);
 
-	gpiod_put(drvdata->gpio_dgpu_power);
+	shps_gpios_remove(pdev, drvdata);
 	pci_dev_put(drvdata->dgpu_root_port);
 	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
