@@ -2,21 +2,25 @@
 #include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/platform_device.h>
+#include <linux/pci.h>
 #include <linux/sysfs.h>
 
-#include <linux/uaccess.h>
+
+// TODO: guard set_power methods with check against current state
+// TODO: turn off dGPU Root Port when dgpu_presence changes to 'not-present'
+// TODO: restore previous power state when dgpu_presence changes to 'present'?
+// TODO: check dGPU presence before attempting any operations?
+// TODO: proper suspend/resume power-state handling
+// TODO: vgaswitcheroo integration
+// TODO: module parameters?
 
 
-#define SB2_SHPS_DSM_REVISION	1
-#define SB2_SHPS_DSM_GPU_STATE	0x05
-
-static const guid_t SB2_SHPS_DSM_UUID =
+#define SHPS_DSM_REVISION	1
+#define SHPS_DSM_GPU_POWER	0x05
+static const guid_t SHPS_DSM_UUID =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
 	          0x32, 0x0e, 0x10, 0x36, 0x0a);
-
-#define SB2_PARAM_PERM		(S_IRUGO | S_IWUSR)
 
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
@@ -26,7 +30,7 @@ static const struct acpi_gpio_params gpio_dgpu_power        = { 3, 0, false };
 static const struct acpi_gpio_params gpio_dgpu_presence_int = { 4, 0, false };
 static const struct acpi_gpio_params gpio_dgpu_presence     = { 5, 0, false };
 
-static const struct acpi_gpio_mapping sb2_mshw0153_acpi_gpios[] = {
+static const struct acpi_gpio_mapping shps_acpi_gpios[] = {
 	{ "base_presence-int-gpio", &gpio_base_presence_int, 1 },
 	{ "base_presence-gpio",     &gpio_base_presence,     1 },
 	{ "dgpu_power-int-gpio",    &gpio_dgpu_power_int,    1 },
@@ -37,263 +41,310 @@ static const struct acpi_gpio_mapping sb2_mshw0153_acpi_gpios[] = {
 };
 
 
-enum sb2_dgpu_power {
-	SB2_DGPU_POWER_OFF      = 0,
-	SB2_DGPU_POWER_ON       = 1,
-
-	__SB2_DGPU_POWER__START = 0,
-	__SB2_DGPU_POWER__END   = 1,
+enum shps_dgpu_power {
+	SHPS_DGPU_POWER_OFF      = 0,
+	SHPS_DGPU_POWER_ON       = 1,
+	SHPS_DGPU_POWER_UNKNOWN  = 2,
 };
 
-enum sb2_param_dgpu_power {
-	SB2_PARAM_DGPU_POWER_AS_IS    = -1,
-	SB2_PARAM_DGPU_POWER_OFF      = SB2_DGPU_POWER_OFF,
-	SB2_PARAM_DGPU_POWER_ON       = SB2_DGPU_POWER_ON,
-
-	__SB2_PARAM_DGPU_POWER__START = -1,
-	__SB2_PARAM_DGPU_POWER__END   = 1,
-};
-
-static const char* sb2_dgpu_power_str(enum sb2_dgpu_power power) {
-	if (power == SB2_DGPU_POWER_OFF) {
+static const char* shps_dgpu_power_str(enum shps_dgpu_power power) {
+	if (power == SHPS_DGPU_POWER_OFF)
 		return "off";
-	} else if (power == SB2_DGPU_POWER_ON) {
+	else if (power == SHPS_DGPU_POWER_ON)
 		return "on";
-	} else {
+	else if (power == SHPS_DGPU_POWER_UNKNOWN)
+		return "unknown";
+	else
 		return "<invalid>";
-	}
 }
 
 
-struct sb2_shps_driver_data {
-	struct mutex dgpu_power_lock;
-	enum sb2_dgpu_power dgpu_power;
+struct shps_driver_data {
+	struct pci_dev *dgpu_root_port;
+	struct gpio_desc *gpio_dgpu_power;
 };
 
 
-static int __sb2_shps_dgpu_set_power(struct platform_device *pdev, enum sb2_dgpu_power power)
+static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
 	union acpi_object *result;
 	union acpi_object param;
 
+	if (power != SHPS_DGPU_POWER_ON && power != SHPS_DGPU_POWER_OFF)
+		return -EINVAL;
+
+	dev_info(&pdev->dev, "shps: setting dGPU direct power to \'%s\'\n", shps_dgpu_power_str(power));
+
 	param.type = ACPI_TYPE_INTEGER;
-	param.integer.value = power == SB2_DGPU_POWER_ON;
+	param.integer.value = power == SHPS_DGPU_POWER_ON;
 
-	result = acpi_evaluate_dsm_typed(handle, &SB2_SHPS_DSM_UUID, SB2_SHPS_DSM_REVISION,
-	                                 SB2_SHPS_DSM_GPU_STATE, &param, ACPI_TYPE_BUFFER);
+	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
+	                                 SHPS_DSM_GPU_POWER, &param, ACPI_TYPE_BUFFER);
 
-	if (IS_ERR_OR_NULL(result)) {
-		return result ? PTR_ERR(result) : -EFAULT;
-	}
+	if (IS_ERR_OR_NULL(result))
+		return result ? PTR_ERR(result) : -EIO;
 
+	// check for the expected result
 	if (result->buffer.length != 1 || result->buffer.pointer[0] != 0) {
+		ACPI_FREE(result);
 		return -EIO;
 	}
-
-	drvdata->dgpu_power = power;
-
-	printk(KERN_INFO "sb2_shps: dGPU power state set to \'%s\'\n", sb2_dgpu_power_str(power));
 
 	ACPI_FREE(result);
 	return 0;
 }
 
-static int sb2_shps_dgpu_set_power(struct platform_device *pdev, enum sb2_dgpu_power power)
+static int shps_dgpu_dsm_get_power(struct platform_device *pdev)
 {
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	int status = 0;
-
-	if (power < __SB2_DGPU_POWER__START || power > __SB2_DGPU_POWER__END) {
-		return -EINVAL;
-	}
-
-	mutex_lock(&drvdata->dgpu_power_lock);
-	if (power != drvdata->dgpu_power) {
-		status = __sb2_shps_dgpu_set_power(pdev, power);
-	}
-	mutex_unlock(&drvdata->dgpu_power_lock);
-
-	return status;
-}
-
-static int sb2_shps_dgpu_force_power(struct platform_device *pdev, enum sb2_dgpu_power power)
-{
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct gpio_desc *gpio = drvdata->gpio_dgpu_power;
 	int status;
 
-	if (power < __SB2_DGPU_POWER__START || power > __SB2_DGPU_POWER__END) {
-		return -EINVAL;
-	}
-
-	mutex_lock(&drvdata->dgpu_power_lock);
-	status = __sb2_shps_dgpu_set_power(pdev, power);
-	mutex_unlock(&drvdata->dgpu_power_lock);
-
-	return status;
-}
-
-
-static int param_dgpu_power_set(const char *val, const struct kernel_param *kp)
-{
-	int power = SB2_PARAM_DGPU_POWER_OFF;
-	int status;
-
-	status = kstrtoint(val, 0, &power);
-	if (status) {
+	status = gpiod_get_value_cansleep(gpio);
+	if (status < 0)
 		return status;
-	}
 
-	if (power < __SB2_PARAM_DGPU_POWER__START || power > __SB2_PARAM_DGPU_POWER__END) {
-		return -EINVAL;
-	}
-
-	return param_set_int(val, kp);
+	return status == 0 ? SHPS_DGPU_POWER_OFF : SHPS_DGPU_POWER_ON;
 }
 
-static const struct kernel_param_ops param_dgpu_power_ops = {
-	.set = param_dgpu_power_set,
-	.get = param_get_int,
-};
+static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+	int status;
 
-static int param_dgpu_power_init = SB2_PARAM_DGPU_POWER_OFF;
-static int param_dgpu_power_exit = SB2_PARAM_DGPU_POWER_OFF;
+	if (power != SHPS_DGPU_POWER_ON && power != SHPS_DGPU_POWER_OFF)
+		return -EINVAL;
 
-module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SB2_PARAM_PERM);
-module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SB2_PARAM_PERM);
+	dev_info(&pdev->dev, "shps: setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
-MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (-1 as-is, 0: off [default], 1: on)");
-MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (-1 as-is, 0: off [default], 1: on)");
+	if (power == SHPS_DGPU_POWER_ON) {
+		pci_set_power_state(rp, PCI_D0);
+		pci_restore_state(rp);
+
+		status = pci_enable_device(rp);
+		if (status)
+			return status;
+
+		pci_set_master(rp);
+	} else {
+		pci_save_state(rp);
+		pci_clear_master(rp);
+		pci_disable_device(rp);
+		pci_set_power_state(rp, PCI_D3cold);
+	}
+
+	return 0;
+}
+
+static int shps_dgpu_rp_get_power(struct platform_device *pdev)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+
+	if (rp->current_state == PCI_D3hot || rp->current_state == PCI_D3cold)
+		return SHPS_DGPU_POWER_OFF;
+	else if (rp->current_state == PCI_UNKNOWN || rp->current_state == PCI_POWER_ERROR)
+		return SHPS_DGPU_POWER_UNKNOWN;
+	else
+		return SHPS_DGPU_POWER_ON;
+}
 
 
 static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr, char *data)
 {
-	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct platform_device *pdev = to_platform_device(dev);
+	int power = shps_dgpu_rp_get_power(pdev);
 
-	return sprintf(data, "%s\n", sb2_dgpu_power_str(drvdata->dgpu_power));
+	if (power < 0)
+		return power;
+
+	return sprintf(data, "%s\n", shps_dgpu_power_str(power));
 }
 
 static ssize_t dgpu_power_store(struct device *dev, struct device_attribute *attr,
                                 const char *data, size_t count)
 {
-	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
-	bool power = false;
+	struct platform_device *pdev = to_platform_device(dev);
+	enum shps_dgpu_power power;
+	bool b = false;
 	int status;
 
-	status = kstrtobool(data, &power);
-	if (status) {
+	status = kstrtobool(data, &b);
+	if (status)
 		return status;
-	}
 
-	if (power) {
-		status = sb2_shps_dgpu_set_power(pdev, SB2_DGPU_POWER_ON);
-	} else {
-		status = sb2_shps_dgpu_set_power(pdev, SB2_DGPU_POWER_OFF);
-	}
+	power = b ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
+	status = shps_dgpu_rp_set_power(pdev, power);
 
 	return status < 0 ? status : count;
 }
 
-const static DEVICE_ATTR_RW(dgpu_power);
-
-
-static int sb2_shps_resume(struct device *dev)
+static ssize_t dgpu_power_dsm_show(struct device *dev, struct device_attribute *attr, char *data)
 {
-	struct platform_device *pdev = container_of(dev, struct platform_device, dev);
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct platform_device *pdev = to_platform_device(dev);
+	int power = shps_dgpu_dsm_get_power(pdev);
 
-	return sb2_shps_dgpu_force_power(pdev, drvdata->dgpu_power);
+	if (power < 0)
+		return power;
+
+	return sprintf(data, "%s\n", shps_dgpu_power_str(power));
 }
 
-static int sb2_shps_probe(struct platform_device *pdev)
+static ssize_t dgpu_power_dsm_store(struct device *dev, struct device_attribute *attr,
+                                    const char *data, size_t count)
 {
-	struct sb2_shps_driver_data *drvdata;
-	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
-	int status = 0;
+	struct platform_device *pdev = to_platform_device(dev);
+	enum shps_dgpu_power power;
+	bool b = false;
+	int status;
 
-	if (gpiod_count(&pdev->dev, NULL) < 0) {
-		return -ENODEV;
-	}
-
-	status = acpi_dev_add_driver_gpios(shps_dev, sb2_mshw0153_acpi_gpios);
-	if (status) {
+	status = kstrtobool(data, &b);
+	if (status)
 		return status;
-	}
 
-	drvdata = kzalloc(sizeof(struct sb2_shps_driver_data), GFP_KERNEL);
-	if (!drvdata) {
-		status = -ENOMEM;
-		goto err_alloc_drvdata;
-	}
+	power = b ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
+	status = shps_dgpu_dsm_set_power(pdev, power);
 
-	mutex_init(&drvdata->dgpu_power_lock);
-	drvdata->dgpu_power = SB2_DGPU_POWER_OFF;
-	platform_set_drvdata(pdev, drvdata);
+	return status < 0 ? status : count;
+}
 
-	if (param_dgpu_power_init != SB2_PARAM_DGPU_POWER_AS_IS) {
-		status = sb2_shps_dgpu_force_power(pdev, param_dgpu_power_init);
-		if (status) {
-			goto err_set_power;
+static DEVICE_ATTR_RW(dgpu_power);
+static DEVICE_ATTR_RW(dgpu_power_dsm);
+
+static struct attribute *shps_power_attrs[] = {
+	&dev_attr_dgpu_power.attr,
+	&dev_attr_dgpu_power_dsm.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(shps_power);
+
+
+
+static struct pci_dev *shps_find_dgpu(void)
+{
+	struct pci_dev *dev = NULL;
+	int class = PCI_CLASS_DISPLAY_3D << 8;
+
+	while ((dev = pci_get_class(class, dev)) != NULL) {
+		if (dev->vendor == PCI_VENDOR_ID_NVIDIA) {
+			break;
 		}
 	}
 
-	status = sysfs_create_file(&pdev->dev.kobj, &dev_attr_dgpu_power.attr);
-	if (status) {
-		goto err_sysfs;
+	return dev;
+}
+
+static struct pci_dev *shps_find_dgpu_root_port(void)
+{
+	struct pci_dev *dgpu, *root_port;
+
+	dgpu = shps_find_dgpu();
+	if (!dgpu)
+		return NULL;
+
+	root_port = pci_find_pcie_root_port(dgpu);
+	pci_dev_put(dgpu);
+
+	return root_port;
+}
+
+static int shps_suspend(struct device *dev)
+{
+	return 0;	// TODO: set state on suspend?
+}
+
+static int shps_resume(struct device *dev)
+{
+	return 0;	// TODO: set state on resume?
+}
+
+static int shps_probe(struct platform_device *pdev)
+{
+	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
+	struct shps_driver_data *drvdata;
+	int status = 0;
+
+	if (gpiod_count(&pdev->dev, NULL) < 0)
+		return -ENODEV;
+
+	status = acpi_dev_add_driver_gpios(shps_dev, shps_acpi_gpios);
+	if (status)
+		return status;
+
+	drvdata = kzalloc(sizeof(struct shps_driver_data), GFP_KERNEL);
+	if (!drvdata) {
+		status = -ENOMEM;
+		goto err_drvdata;
 	}
 
+	drvdata->dgpu_root_port = shps_find_dgpu_root_port();
+	if (!drvdata->dgpu_root_port) {
+		status = -ENODEV;
+		goto err_rp_lookup;
+	}
+
+	drvdata->gpio_dgpu_power = gpiod_get(&pdev->dev, "dgpu_power", GPIOD_IN);
+	if (IS_ERR(drvdata->gpio_dgpu_power)) {
+		status = PTR_ERR(drvdata->gpio_dgpu_power);
+		goto err_gpio;
+	}
+
+	status = device_add_groups(&pdev->dev, shps_power_groups);
+	if (status)
+		goto err_devattr;
+
+	platform_set_drvdata(pdev, drvdata);
 	return 0;
 
-err_sysfs:
-	sb2_shps_dgpu_force_power(pdev, SB2_DGPU_POWER_OFF);
-err_set_power:
-	platform_set_drvdata(pdev, NULL);
+err_devattr:
+	gpiod_put(drvdata->gpio_dgpu_power);
+err_gpio:
+	pci_dev_put(drvdata->dgpu_root_port);
+err_rp_lookup:
 	kfree(drvdata);
-err_alloc_drvdata:
+err_drvdata:
 	acpi_dev_remove_driver_gpios(shps_dev);
 	return status;
 }
 
-static int sb2_shps_remove(struct platform_device *pdev)
+static int shps_remove(struct platform_device *pdev)
 {
-	struct sb2_shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
-	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_dgpu_power.attr);
+	device_remove_groups(&pdev->dev, shps_power_groups);
 
-	if (param_dgpu_power_exit != SB2_PARAM_DGPU_POWER_AS_IS) {
-		sb2_shps_dgpu_set_power(pdev, param_dgpu_power_exit);
-	}
-	acpi_dev_remove_driver_gpios(shps_dev);
-
+	gpiod_put(drvdata->gpio_dgpu_power);
+	pci_dev_put(drvdata->dgpu_root_port);
 	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
 
+	acpi_dev_remove_driver_gpios(shps_dev);
 	return 0;
 }
 
 
-static SIMPLE_DEV_PM_OPS(sb2_shps_pm_ops, NULL, sb2_shps_resume);
+static SIMPLE_DEV_PM_OPS(shps_pm_ops, shps_suspend, shps_resume);
 
-static const struct acpi_device_id sb2_shps_acpi_match[] = {
+static const struct acpi_device_id shps_acpi_match[] = {
 	{ "MSHW0153", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, sb2_shps_acpi_match);
+MODULE_DEVICE_TABLE(acpi, shps_acpi_match);
 
-static struct platform_driver sb2_shps_driver = {
-	.probe = sb2_shps_probe,
-	.remove = sb2_shps_remove,
+static struct platform_driver shps_driver = {
+	.probe = shps_probe,
+	.remove = shps_remove,
 	.driver = {
-		.name = "sb2_shps",
-		.acpi_match_table = ACPI_PTR(sb2_shps_acpi_match),
-		.pm = &sb2_shps_pm_ops,
+		.name = "surface_dgpu_hps",
+		.acpi_match_table = ACPI_PTR(shps_acpi_match),
+		.pm = &shps_pm_ops,
 	},
 };
-module_platform_driver(sb2_shps_driver);
+module_platform_driver(shps_driver);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Book 2 Hot-Plug System Driver");
+MODULE_DESCRIPTION("Surface Book 2 dGPU Hot-Plug System Driver");
 MODULE_LICENSE("GPL v2");
