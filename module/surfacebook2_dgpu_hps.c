@@ -8,6 +8,7 @@
 #include <linux/sysfs.h>
 
 
+// TODO: allow driver to load when base is detached / dGPU cannot be found
 // TODO: restore previous power state when dgpu_presence changes to 'present'?
 // TODO: check dGPU presence before attempting any operations?
 // TODO: proper suspend/resume power-state handling
