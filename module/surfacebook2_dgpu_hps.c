@@ -7,7 +7,7 @@
 #include <linux/sysfs.h>
 
 
-// TODO: turn off dGPU Root Port when dgpu_presence changes to 'not-present'
+// TODO: guard set_power/get_power methods with mutex?
 // TODO: restore previous power state when dgpu_presence changes to 'present'?
 // TODO: check dGPU presence before attempting any operations?
 // TODO: proper suspend/resume power-state handling
@@ -63,6 +63,7 @@ struct shps_driver_data {
 	struct gpio_desc *gpio_dgpu_power;
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
+	unsigned int irq_dgpu_presence;
 };
 
 
@@ -259,6 +260,25 @@ static int shps_resume(struct device *dev)
 	return 0;	// TODO: set state on resume?
 }
 
+static irqreturn_t shps_dgpu_removed_irq(int irq, void *data)
+{
+	return IRQ_WAKE_THREAD;
+}
+
+static irqreturn_t shps_dgpu_removed_irq_fn(int irq, void *data)
+{
+	struct platform_device *pdev = data;
+	int status;
+
+	dev_info(&pdev->dev, "dGPU has been physically removed\n");
+
+	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	if (status)
+		dev_warn(&pdev->dev, "failed to set dGPU power state to 'off'\n");
+
+	return IRQ_HANDLED;
+}
+
 
 static struct pci_dev *shps_find_dgpu(void)
 {
@@ -288,8 +308,9 @@ static struct pci_dev *shps_find_dgpu_root_port(void)
 	return root_port;
 }
 
-static int shps_gpios_setup(struct platform_device *pdev, struct shps_driver_data *drvdata)
+static int shps_gpios_setup(struct platform_device *pdev)
 {
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct gpio_desc *gpio_dgpu_power;
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
@@ -359,14 +380,41 @@ err_out:
 	return status;
 }
 
-static void shps_gpios_remove(struct platform_device *pdev, struct shps_driver_data *drvdata)
+static void shps_gpios_remove(struct platform_device *pdev)
 {
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+
 	sysfs_remove_link(&pdev->dev.kobj, "gpio-base_presence");
 	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_presence");
 	sysfs_remove_link(&pdev->dev.kobj, "gpio-dgpu_power");
 	gpiod_unexport(drvdata->gpio_base_presence);
 	gpiod_unexport(drvdata->gpio_dgpu_presence);
 	gpiod_unexport(drvdata->gpio_dgpu_power);
+}
+
+static int shps_gpios_setup_irq(struct platform_device *pdev)
+{
+	const int irq_flags = IRQF_SHARED | IRQF_TRIGGER_FALLING;
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status;
+
+	status = gpiod_to_irq(drvdata->gpio_dgpu_presence);
+	if (status < 0)
+		return status;
+
+	drvdata->irq_dgpu_presence = (unsigned)status;
+
+	status = request_threaded_irq(drvdata->irq_dgpu_presence,
+								  shps_dgpu_removed_irq,
+								  shps_dgpu_removed_irq_fn,
+								  irq_flags, "shps_dgpu_presence_irq", pdev);
+	return status;
+}
+
+static void shps_gpios_remove_irq(struct platform_device *pdev)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	free_irq(drvdata->irq_dgpu_presence, pdev);
 }
 
 static int shps_probe(struct platform_device *pdev)
@@ -387,6 +435,7 @@ static int shps_probe(struct platform_device *pdev)
 		status = -ENOMEM;
 		goto err_drvdata;
 	}
+	platform_set_drvdata(pdev, drvdata);
 
 	drvdata->dgpu_root_port = shps_find_dgpu_root_port();
 	if (!drvdata->dgpu_root_port) {
@@ -394,22 +443,28 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_rp_lookup;
 	}
 
-	status = shps_gpios_setup(pdev, drvdata);
+	status = shps_gpios_setup(pdev);
 	if (status)
 		goto err_gpio;
+
+	status = shps_gpios_setup_irq(pdev);
+	if (status)
+		goto err_gpio_irqs;
 
 	status = device_add_groups(&pdev->dev, shps_power_groups);
 	if (status)
 		goto err_devattr;
 
-	platform_set_drvdata(pdev, drvdata);
 	return 0;
 
 err_devattr:
-	shps_gpios_remove(pdev, drvdata);
+	shps_gpios_remove_irq(pdev);
+err_gpio_irqs:
+	shps_gpios_remove(pdev);
 err_gpio:
 	pci_dev_put(drvdata->dgpu_root_port);
 err_rp_lookup:
+	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
 err_drvdata:
 	acpi_dev_remove_driver_gpios(shps_dev);
@@ -422,8 +477,8 @@ static int shps_remove(struct platform_device *pdev)
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
 	device_remove_groups(&pdev->dev, shps_power_groups);
-
-	shps_gpios_remove(pdev, drvdata);
+	shps_gpios_remove_irq(pdev);
+	shps_gpios_remove(pdev);
 	pci_dev_put(drvdata->dgpu_root_port);
 	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
