@@ -86,7 +86,7 @@ static int __shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgp
 	union acpi_object *result;
 	union acpi_object param;
 
-	dev_info(&pdev->dev, "shps: setting dGPU direct power to \'%s\'\n", shps_dgpu_power_str(power));
+	dev_info(&pdev->dev, "setting dGPU direct power to \'%s\'\n", shps_dgpu_power_str(power));
 
 	param.type = ACPI_TYPE_INTEGER;
 	param.integer.value = power == SHPS_DGPU_POWER_ON;
@@ -143,7 +143,7 @@ static int __shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu
 	struct pci_dev *rp = drvdata->dgpu_root_port;
 	int status;
 
-	dev_info(&pdev->dev, "shps: setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
+	dev_info(&pdev->dev, "setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
 	if (power == SHPS_DGPU_POWER_ON) {
 		pci_set_power_state(rp, PCI_D0);
