@@ -554,6 +554,7 @@ static int shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata;
+	struct device_link *link;
 	int status = 0;
 
 	if (gpiod_count(&pdev->dev, NULL) < 0)
@@ -589,8 +590,15 @@ static int shps_probe(struct platform_device *pdev)
 	if (status)
 		goto err_devattr;
 
+	link = device_link_add(&pdev->dev, &drvdata->dgpu_root_port->dev,
+	                       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
+	if (!link)
+		goto err_devlink;
+
 	return 0;
 
+err_devlink:
+	device_remove_groups(&pdev->dev, shps_power_groups);
 err_devattr:
 	shps_gpios_remove_irq(pdev);
 err_gpio_irqs:
