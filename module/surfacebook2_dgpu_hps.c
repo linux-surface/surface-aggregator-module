@@ -8,9 +8,7 @@
 #include <linux/sysfs.h>
 
 
-// TODO: get dGPU and Root Port PCIe devices via _DSM (via MRGT)
 // TODO: proper suspend/resume implementation
-// TODO: allow driver to load when base is detached / dGPU cannot be found
 // TODO: improve handling when dGPU is not present / detached
 // TODO: restore previous power state when dGPU is re-attached?
 // TODO: restore previous power state when resuming
@@ -19,6 +17,7 @@
 
 
 #define SHPS_DSM_REVISION	1
+#define SHPS_DSM_GPU_ADDRS	0x02
 #define SHPS_DSM_GPU_POWER	0x05
 static const guid_t SHPS_DSM_UUID =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
@@ -69,6 +68,74 @@ struct shps_driver_data {
 	struct gpio_desc *gpio_base_presence;
 	unsigned int irq_dgpu_presence;
 };
+
+
+static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char* entry)
+{
+	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+	union acpi_object *result;
+	union acpi_object *e0;
+	union acpi_object *e1;
+	union acpi_object *e2;
+	u64 device_addr = 0;
+	u8 bus, dev, fun;
+	int i;
+
+	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
+	                                 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
+
+	if (IS_ERR_OR_NULL(result))
+		return result ? PTR_ERR(result) : -EIO;
+
+	// three entries per device: name, address, <integer>
+	for (i = 0; i + 2 < result->package.count; i += 3) {
+		e0 = &result->package.elements[i];
+		e1 = &result->package.elements[i + 1];
+		e2 = &result->package.elements[i + 2];
+
+		if (e0->type != ACPI_TYPE_STRING) {
+			ACPI_FREE(result);
+			return -EIO;
+		}
+
+		if (e1->type != ACPI_TYPE_INTEGER) {
+			ACPI_FREE(result);
+			return -EIO;
+		}
+
+		if (e2->type != ACPI_TYPE_INTEGER) {
+			ACPI_FREE(result);
+			return -EIO;
+		}
+
+		if (strncmp(e0->string.pointer, entry, 64) == 0)
+			device_addr = e1->integer.value;
+	}
+
+	ACPI_FREE(result);
+	if (device_addr == 0)
+		return -ENODEV;
+
+	// convert address
+	bus = (device_addr & 0x0FF00000) >> 20;
+	dev = (device_addr & 0x000F8000) >> 15;
+	fun = (device_addr & 0x00007000) >> 12;
+
+	return bus << 8 | PCI_DEVFN(dev, fun);
+}
+
+static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev, const char* entry)
+{
+	struct pci_dev *dev;
+	int addr;
+
+	addr = shps_dgpu_dsm_get_pci_addr(pdev, entry);
+	if (addr < 0)
+		return ERR_PTR(addr);
+
+	dev = pci_get_domain_bus_and_slot(0, (addr & 0xFF00) >> 8, addr & 0xFF);
+	return dev ? dev : ERR_PTR(-ENODEV);
+}
 
 
 static int shps_dgpu_dsm_get_power_unlocked(struct platform_device *pdev)
@@ -343,34 +410,6 @@ static irqreturn_t shps_dgpu_removed_irq_fn(int irq, void *data)
 }
 
 
-static struct pci_dev *shps_find_dgpu(void)
-{
-	struct pci_dev *dev = NULL;
-	int class = PCI_CLASS_DISPLAY_3D << 8;
-
-	while ((dev = pci_get_class(class, dev)) != NULL) {
-		if (dev->vendor == PCI_VENDOR_ID_NVIDIA) {
-			break;
-		}
-	}
-
-	return dev;
-}
-
-static struct pci_dev *shps_find_dgpu_root_port(void)
-{
-	struct pci_dev *dgpu, *root_port;
-
-	dgpu = shps_find_dgpu();
-	if (!dgpu)
-		return NULL;
-
-	root_port = pci_find_pcie_root_port(dgpu);
-	pci_dev_put(dgpu);
-
-	return root_port;
-}
-
 static int shps_gpios_setup(struct platform_device *pdev)
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
@@ -501,9 +540,9 @@ static int shps_probe(struct platform_device *pdev)
 	mutex_init(&drvdata->pm_mutex);
 	platform_set_drvdata(pdev, drvdata);
 
-	drvdata->dgpu_root_port = shps_find_dgpu_root_port();
-	if (!drvdata->dgpu_root_port) {
-		status = -ENODEV;
+	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, "RP5_PCIE");
+	if (IS_ERR(drvdata->dgpu_root_port)) {
+		status = PTR_ERR(drvdata->dgpu_root_port);
 		goto err_rp_lookup;
 	}
 
