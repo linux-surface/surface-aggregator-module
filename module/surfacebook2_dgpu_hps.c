@@ -8,10 +8,12 @@
 #include <linux/sysfs.h>
 
 
+// TODO: get dGPU and Root Port PCIe devices via _DSM (via MRGT)
+// TODO: proper suspend/resume implementation
 // TODO: allow driver to load when base is detached / dGPU cannot be found
-// TODO: restore previous power state when dgpu_presence changes to 'present'?
-// TODO: check dGPU presence before attempting any operations?
-// TODO: proper suspend/resume power-state handling
+// TODO: improve handling when dGPU is not present / detached
+// TODO: restore previous power state when dGPU is re-attached?
+// TODO: restore previous power state when resuming
 // TODO: vgaswitcheroo integration
 // TODO: module parameters?
 
@@ -313,12 +315,12 @@ ATTRIBUTE_GROUPS(shps_power);
 
 static int shps_suspend(struct device *dev)
 {
-	return 0;	// TODO: set state on suspend?
+	return 0;
 }
 
 static int shps_resume(struct device *dev)
 {
-	return 0;	// TODO: set state on resume?
+	return 0;
 }
 
 static irqreturn_t shps_dgpu_removed_irq(int irq, void *data)
