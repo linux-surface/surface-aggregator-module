@@ -312,6 +312,13 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 }
 
 
+static int shps_dgpu_is_present(struct platform_device *pdev)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	return gpiod_get_value_cansleep(drvdata->gpio_dgpu_presence);
+}
+
+
 static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr, char *data)
 {
 	struct platform_device *pdev = to_platform_device(dev);
@@ -391,21 +398,44 @@ static int shps_resume(struct device *dev)
 	return 0;
 }
 
-static irqreturn_t shps_dgpu_removed_irq(int irq, void *data)
+static int shps_dgpu_detached(struct platform_device *pdev)
+{
+	return shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+}
+
+static int shps_dgpu_attached(struct platform_device *pdev)
+{
+	return 0;
+}
+
+
+static irqreturn_t shps_dgpu_presence_irq(int irq, void *data)
 {
 	return IRQ_WAKE_THREAD;
 }
 
-static irqreturn_t shps_dgpu_removed_irq_fn(int irq, void *data)
+static irqreturn_t shps_dgpu_presence_irq_fn(int irq, void *data)
 {
 	struct platform_device *pdev = data;
+	bool dgpu_present;
 	int status;
 
-	dev_info(&pdev->dev, "dGPU has been physically removed\n");
+	status = shps_dgpu_is_present(pdev);
+	if (status < 0) {
+		dev_warn(&pdev->dev, "failed to check physical dGPU presence: %d\n", status);
+		return IRQ_HANDLED;
+	}
 
-	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	dgpu_present = status != 0;
+	dev_info(&pdev->dev, "dGPU physically %s\n", dgpu_present ? "attached" : "detached");
+
+	if (dgpu_present)
+		status = shps_dgpu_attached(pdev);
+	else
+		status = shps_dgpu_detached(pdev);
+
 	if (status)
-		dev_warn(&pdev->dev, "failed to set dGPU power state to 'off'\n");
+		dev_warn(&pdev->dev, "error handling dGPU interrupt: %d\n", status);
 
 	return IRQ_HANDLED;
 }
@@ -497,7 +527,7 @@ static void shps_gpios_remove(struct platform_device *pdev)
 
 static int shps_gpios_setup_irq(struct platform_device *pdev)
 {
-	const int irq_flags = IRQF_SHARED | IRQF_TRIGGER_FALLING;
+	const int irqf = IRQF_SHARED | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
@@ -508,9 +538,9 @@ static int shps_gpios_setup_irq(struct platform_device *pdev)
 	drvdata->irq_dgpu_presence = (unsigned)status;
 
 	status = request_threaded_irq(drvdata->irq_dgpu_presence,
-								  shps_dgpu_removed_irq,
-								  shps_dgpu_removed_irq_fn,
-								  irq_flags, "shps_dgpu_presence_irq", pdev);
+								  shps_dgpu_presence_irq,
+								  shps_dgpu_presence_irq_fn,
+								  irqf, "shps_dgpu_presence_irq", pdev);
 	return status;
 }
 
