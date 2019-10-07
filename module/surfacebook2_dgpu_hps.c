@@ -159,6 +159,17 @@ static int __shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu
 		pci_clear_master(rp);
 		pci_disable_device(rp);
 		pci_set_power_state(rp, PCI_D3cold);
+
+		/*
+		 * It seems that in some instances, the initial power-off of the dGPU
+		 * does not actually cut power to the device. Putting the Root Port
+		 * into D3cold should normally cut power to the dGPU, which will be
+		 * indicated by the corresponding GPIO. Do this explicitly. This is a
+		 * no-op if the GPIO already indicates that the dGPU has no power.
+		 */
+		status = shps_dgpu_dsm_set_power(pdev, SHPS_DGPU_POWER_OFF);
+		if (status)
+			return status;
 	}
 
 	return 0;
