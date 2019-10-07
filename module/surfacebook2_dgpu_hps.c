@@ -14,6 +14,7 @@
 // TODO: restore previous power state when resuming
 // TODO: vgaswitcheroo integration
 // TODO: module parameters?
+// TODO: check that module re-loading works properly
 
 
 #define SHPS_DSM_REVISION	1
