@@ -274,7 +274,7 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 		if (status)
 			return status;
 
-		msleep(50);
+		msleep(150);
 
 		pci_clear_master(rp);
 		pci_disable_device(rp);
