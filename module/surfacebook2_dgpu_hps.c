@@ -1,4 +1,5 @@
 #include <linux/acpi.h>
+#include <linux/delay.h>
 #include <linux/gpio.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -264,20 +265,20 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 		pci_set_master(rp);
 	} else {
 		pci_save_state(rp);
-		pci_clear_master(rp);
-		pci_disable_device(rp);
-		pci_set_power_state(rp, PCI_D3cold);
 
 		/*
-		 * It seems that in some instances, the initial power-off of the dGPU
-		 * does not actually cut power to the device. Putting the Root Port
-		 * into D3cold should normally cut power to the dGPU, which will be
-		 * indicated by the corresponding GPIO. Do this explicitly. This is a
-		 * no-op if the GPIO already indicates that the dGPU has no power.
+		 * To properly update the hot-plug system we need to "remove" the dGPU
+		 * before disabling it and sending it to D3cold.
 		 */
 		status = shps_dgpu_dsm_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
 		if (status)
 			return status;
+
+		msleep(50);
+
+		pci_clear_master(rp);
+		pci_disable_device(rp);
+		pci_set_power_state(rp, PCI_D3cold);
 	}
 
 	return 0;
