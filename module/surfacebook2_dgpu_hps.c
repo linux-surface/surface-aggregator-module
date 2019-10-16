@@ -389,14 +389,75 @@ static struct attribute *shps_power_attrs[] = {
 ATTRIBUTE_GROUPS(shps_power);
 
 
-static int shps_suspend(struct device *dev)
+static int shps_pm_prepare(struct device *dev)
 {
+	struct platform_device *pdev = to_platform_device(dev);
+	enum shps_dgpu_power power_dsm;
+	enum shps_dgpu_power power_rp;
+	int status;
+
+	status = shps_dgpu_rp_get_power(pdev);
+	if (status < 0)
+		return status;
+	power_rp = status;
+
+	status = shps_dgpu_dsm_get_power(pdev);
+	if (status < 0)
+		return status;
+	power_dsm = status;
+
+	// TODO
+	dev_warn(&pdev->dev, "shps_pm_prepare: root-port power state: %d", power_rp);
+	dev_warn(&pdev->dev, "shps_pm_prepare: direct power state:    %d", power_dsm);
+
+	// TEMPORARY: turn dGPU off
+	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
+	if (status) {
+		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+		return status;
+	}
+
 	return 0;
 }
 
-static int shps_resume(struct device *dev)
+static void shps_pm_complete(struct device *dev)
 {
-	return 0;
+	struct platform_device *pdev = to_platform_device(dev);
+	enum shps_dgpu_power power_dsm;
+	enum shps_dgpu_power power_rp;
+	int status;
+
+	status = shps_dgpu_rp_get_power(pdev);
+	if (status < 0) {
+		dev_warn(&pdev->dev, "failed to get dGPU root port power state: %d\n", status);
+		return;
+	}
+	power_rp = status;
+
+	status = shps_dgpu_dsm_get_power(pdev);
+	if (status < 0) {
+		dev_warn(&pdev->dev, "failed to get direct dGPU power state: %d\n", status);
+		return;
+	}
+	power_dsm = status;
+
+	// TODO
+	dev_warn(&pdev->dev, "shps_pm_complete: root-port power state: %d", power_rp);
+	dev_warn(&pdev->dev, "shps_pm_complete: direct power state:    %d", power_dsm);
+
+	// TEMPORARY: synchronize power state
+	status = __shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_ON);
+	if (status) {
+		dev_warn(&pdev->dev, "failed to power on dGPU: %d\n", status);
+		return;
+	}
+
+	// TEMPORARY: turn off dGPU
+	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
+	if (status) {
+		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+		return;
+	}
 }
 
 static int shps_dgpu_detached(struct platform_device *pdev)
@@ -631,7 +692,10 @@ static int shps_remove(struct platform_device *pdev)
 }
 
 
-static SIMPLE_DEV_PM_OPS(shps_pm_ops, shps_suspend, shps_resume);
+static const struct dev_pm_ops shps_pm_ops = {
+	.prepare = shps_pm_prepare,
+	.complete = shps_pm_complete,
+};
 
 static const struct acpi_device_id shps_acpi_match[] = {
 	{ "MSHW0153", 0 },
