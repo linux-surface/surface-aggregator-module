@@ -23,7 +23,7 @@
 #define SHPS_DSM_GPU_POWER	0x05
 static const guid_t SHPS_DSM_UUID =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
-	          0x32, 0x0e, 0x10, 0x36, 0x0a);
+		  0x32, 0x0e, 0x10, 0x36, 0x0a);
 
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
@@ -84,7 +84,7 @@ static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char* 
 	int i;
 
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
-	                                 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
+					 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
 
 	if (IS_ERR_OR_NULL(result))
 		return result ? PTR_ERR(result) : -EIO;
@@ -332,7 +332,7 @@ static ssize_t dgpu_power_show(struct device *dev, struct device_attribute *attr
 }
 
 static ssize_t dgpu_power_store(struct device *dev, struct device_attribute *attr,
-                                const char *data, size_t count)
+				const char *data, size_t count)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	enum shps_dgpu_power power;
@@ -361,7 +361,7 @@ static ssize_t dgpu_power_dsm_show(struct device *dev, struct device_attribute *
 }
 
 static ssize_t dgpu_power_dsm_store(struct device *dev, struct device_attribute *attr,
-                                    const char *data, size_t count)
+				    const char *data, size_t count)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	enum shps_dgpu_power power;
@@ -614,9 +614,9 @@ static int shps_gpios_setup_irq(struct platform_device *pdev)
 	drvdata->irq_dgpu_presence = (unsigned)status;
 
 	status = request_threaded_irq(drvdata->irq_dgpu_presence,
-								  shps_dgpu_presence_irq,
-								  shps_dgpu_presence_irq_fn,
-								  irqf, "shps_dgpu_presence_irq", pdev);
+				      shps_dgpu_presence_irq,
+				      shps_dgpu_presence_irq_fn,
+				      irqf, "shps_dgpu_presence_irq", pdev);
 	return status;
 }
 
@@ -667,7 +667,7 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_devattr;
 
 	link = device_link_add(&pdev->dev, &drvdata->dgpu_root_port->dev,
-	                       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
+			       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
 	if (!link)
 		goto err_devlink;
 
