@@ -460,6 +460,20 @@ static void shps_pm_complete(struct device *dev)
 	}
 }
 
+static void shps_shutdown(struct platform_device *pdev)
+{
+	int status;
+
+	/*
+	 * Turn on dGPU before shutting down. This allows the core drivers to
+	 * properly shut down the device. If we don't do this, the pcieport driver
+	 * will complain that the device has already been disabled.
+	 */
+	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_ON);
+	if (status)
+		dev_warn(&pdev->dev, "failed to turn on dGPU: %d\n", status);
+}
+
 static int shps_dgpu_detached(struct platform_device *pdev)
 {
 	return shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
@@ -706,6 +720,7 @@ MODULE_DEVICE_TABLE(acpi, shps_acpi_match);
 static struct platform_driver shps_driver = {
 	.probe = shps_probe,
 	.remove = shps_remove,
+	.shutdown = shps_shutdown,
 	.driver = {
 		.name = "surface_dgpu_hps",
 		.acpi_match_table = ACPI_PTR(shps_acpi_match),
