@@ -1,3 +1,7 @@
+/*
+ * Detachment system (DTX) driver for Microsoft Surface Book 2.
+ */
+
 #include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/fs.h>
@@ -12,13 +16,14 @@
 #include <linux/spinlock.h>
 #include <linux/platform_device.h>
 
-#include "surfacegen5_acpi_ssh.h"
+#include "surface_sam_ssh.h"
 
 
 #define USB_VENDOR_ID_MICROSOFT				0x045e
 #define USB_DEVICE_ID_MS_SURFACE_BASE_2_INTEGRATION	0x0922
 
-#define SG5_DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
+// name copied from MS device manager
+#define DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
 
 
 #define DTX_CMD_LATCH_LOCK				_IO(0x11, 0x01)
@@ -27,19 +32,19 @@
 #define DTX_CMD_LATCH_OPEN				_IO(0x11, 0x04)
 #define DTX_CMD_GET_OPMODE				_IOR(0x11, 0x05, int)
 
-#define SG5_RQST_DTX_TC					0x11
-#define SG5_RQST_DTX_CID_LATCH_LOCK			0x06
-#define SG5_RQST_DTX_CID_LATCH_UNLOCK			0x07
-#define SG5_RQST_DTX_CID_LATCH_REQUEST			0x08
-#define SG5_RQST_DTX_CID_LATCH_OPEN			0x09
-#define SG5_RQST_DTX_CID_GET_OPMODE			0x0D
+#define SAM_RQST_DTX_TC					0x11
+#define SAM_RQST_DTX_CID_LATCH_LOCK			0x06
+#define SAM_RQST_DTX_CID_LATCH_UNLOCK			0x07
+#define SAM_RQST_DTX_CID_LATCH_REQUEST			0x08
+#define SAM_RQST_DTX_CID_LATCH_OPEN			0x09
+#define SAM_RQST_DTX_CID_GET_OPMODE			0x0D
 
-#define SG5_EVENT_DTX_TC				0x11
-#define SG5_EVENT_DTX_RQID				0x0011
-#define SG5_EVENT_DTX_CID_CONNECTION			0x0c
-#define SG5_EVENT_DTX_CID_BUTTON			0x0e
-#define SG5_EVENT_DTX_CID_ERROR				0x0f
-#define SG5_EVENT_DTX_CID_LATCH_STATUS			0x11
+#define SAM_EVENT_DTX_TC				0x11
+#define SAM_EVENT_DTX_RQID				0x0011
+#define SAM_EVENT_DTX_CID_CONNECTION			0x0c
+#define SAM_EVENT_DTX_CID_BUTTON			0x0e
+#define SAM_EVENT_DTX_CID_ERROR				0x0f
+#define SAM_EVENT_DTX_CID_LATCH_STATUS			0x11
 
 #define DTX_OPMODE_TABLET				0x00
 #define DTX_OPMODE_LAPTOP				0x01
@@ -50,12 +55,12 @@
 
 
 // Warning: This must always be a power of 2!
-#define SURFACE_DTX_CLIENT_BUF_SIZE             	16
+#define DTX_CLIENT_BUF_SIZE             		16
 
-#define SG5_DTX_CONNECT_OPMODE_DELAY			1000
+#define DTX_CONNECT_OPMODE_DELAY			1000
 
-#define DTX_ERR		KERN_ERR "surfacegen5_acpi_dtx: "
-#define DTX_WARN	KERN_WARNING "surfacegen5_acpi_dtx: "
+#define DTX_ERR		KERN_ERR "surface_sam_dtx: "
+#define DTX_WARN	KERN_WARNING "surface_sam_dtx: "
 
 
 struct surface_dtx_event {
@@ -83,34 +88,34 @@ struct surface_dtx_client {
 	spinlock_t buffer_lock;
 	unsigned int buffer_head;
 	unsigned int buffer_tail;
-	struct surface_dtx_event buffer[SURFACE_DTX_CLIENT_BUF_SIZE];
+	struct surface_dtx_event buffer[DTX_CLIENT_BUF_SIZE];
 };
 
 
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-static int sg5_ec_query_opmpde(void)
+static int surface_sam_query_opmpde(void)
 {
 	u8 result_buf[1];
 	int status;
 
-	struct surfacegen5_rqst rqst = {
-		.tc  = SG5_RQST_DTX_TC,
+	struct surface_sam_ssh_rqst rqst = {
+		.tc  = SAM_RQST_DTX_TC,
 		.iid = 0,
-		.cid = SG5_RQST_DTX_CID_GET_OPMODE,
+		.cid = SAM_RQST_DTX_CID_GET_OPMODE,
 		.snc = 1,
 		.cdl = 0,
 		.pld = NULL,
 	};
 
-	struct surfacegen5_buf result = {
+	struct surface_sam_ssh_buf result = {
 		.cap = 1,
 		.len = 0,
 		.data = result_buf,
 	};
 
-	status = surfacegen5_ec_rqst(&rqst, &result);
+	status = surface_sam_ssh_rqst(&rqst, &result);
 	if (status) {
 		return status;
 	}
@@ -125,8 +130,8 @@ static int sg5_ec_query_opmpde(void)
 
 static int dtx_cmd_simple(u8 cid)
 {
-	struct surfacegen5_rqst rqst = {
-		.tc  = SG5_RQST_DTX_TC,
+	struct surface_sam_ssh_rqst rqst = {
+		.tc  = SAM_RQST_DTX_TC,
 		.iid = 0,
 		.cid = cid,
 		.snc = 0,
@@ -134,12 +139,12 @@ static int dtx_cmd_simple(u8 cid)
 		.pld = NULL,
 	};
 
-	return surfacegen5_ec_rqst(&rqst, NULL);
+	return surface_sam_ssh_rqst(&rqst, NULL);
 }
 
 static int dtx_cmd_get_opmode(int __user *buf)
 {
-	int opmode = sg5_ec_query_opmpde();
+	int opmode = surface_sam_query_opmpde();
 	if (opmode < 0) {
 		return opmode;
 	}
@@ -240,7 +245,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 
 		// get one event
 		event = client->buffer[client->buffer_tail];
-		client->buffer_tail = (client->buffer_tail + 1) & (SURFACE_DTX_CLIENT_BUF_SIZE - 1);
+		client->buffer_tail = (client->buffer_tail + 1) & (DTX_CLIENT_BUF_SIZE - 1);
 		spin_unlock_irq(&client->buffer_lock);
 
 		// copy to userspace
@@ -299,19 +304,19 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	switch (cmd) {
 	case DTX_CMD_LATCH_LOCK:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_LOCK);
+		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_LOCK);
 		break;
 
 	case DTX_CMD_LATCH_UNLOCK:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_UNLOCK);
+		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_UNLOCK);
 		break;
 
 	case DTX_CMD_LATCH_REQUEST:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_REQUEST);
+		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_REQUEST);
 		break;
 
 	case DTX_CMD_LATCH_OPEN:
-		status = dtx_cmd_simple(SG5_RQST_DTX_CID_LATCH_OPEN);
+		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_OPEN);
 		break;
 
 	case DTX_CMD_GET_OPMODE:
@@ -360,11 +365,11 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 		spin_lock(&client->buffer_lock);
 
 		client->buffer[client->buffer_head++] = *event;
-		client->buffer_head &= SURFACE_DTX_CLIENT_BUF_SIZE - 1;
+		client->buffer_head &= DTX_CLIENT_BUF_SIZE - 1;
 
 		if (unlikely(client->buffer_head == client->buffer_tail)) {
 			printk(DTX_WARN "event buffer overrun\n");
-			client->buffer_tail = (client->buffer_tail + 1) & (SURFACE_DTX_CLIENT_BUF_SIZE - 1);
+			client->buffer_tail = (client->buffer_tail + 1) & (DTX_CLIENT_BUF_SIZE - 1);
 		}
 
 		spin_unlock(&client->buffer_lock);
@@ -383,7 +388,7 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 	int opmode;
 
 	// get operation mode
-	opmode = sg5_ec_query_opmpde();
+	opmode = surface_sam_query_opmpde();
 	if (opmode < 0) {
 		printk(DTX_ERR "EC request failed with error %d\n", opmode);
 	}
@@ -403,16 +408,16 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 	spin_unlock(&ddev->input_lock);
 }
 
-static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
+static int surface_dtx_evt_dtx(struct surface_sam_ssh_event *in_event, void *data)
 {
 	struct surface_dtx_dev *ddev = data;
 	struct surface_dtx_event event;
 
 	switch (in_event->cid) {
-	case SG5_EVENT_DTX_CID_CONNECTION:
-	case SG5_EVENT_DTX_CID_BUTTON:
-	case SG5_EVENT_DTX_CID_ERROR:
-	case SG5_EVENT_DTX_CID_LATCH_STATUS:
+	case SAM_EVENT_DTX_CID_CONNECTION:
+	case SAM_EVENT_DTX_CID_BUTTON:
+	case SAM_EVENT_DTX_CID_ERROR:
+	case SAM_EVENT_DTX_CID_LATCH_STATUS:
 		if (in_event->len > 2) {
 			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
 			       in_event->cid, in_event->len);
@@ -431,10 +436,10 @@ static int surface_dtx_evt_dtx(struct surfacegen5_event *in_event, void *data)
 	}
 
 	// update device mode
-	if (in_event->cid == SG5_EVENT_DTX_CID_CONNECTION) {
+	if (in_event->cid == SAM_EVENT_DTX_CID_CONNECTION) {
 		if (in_event->pld[0]) {
 			// Note: we're already in a workqueue task
-			msleep(SG5_DTX_CONNECT_OPMODE_DELAY);
+			msleep(DTX_CONNECT_OPMODE_DELAY);
 		}
 
 		surface_dtx_update_opmpde(ddev);
@@ -447,12 +452,12 @@ static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
 {
 	int status;
 
-	status = surfacegen5_ec_set_event_handler(SG5_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
+	status = surface_sam_ssh_set_event_handler(SAM_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
 	if (status) {
 		goto err_event_handler;
 	}
 
-	status = surfacegen5_ec_enable_event_source(SG5_EVENT_DTX_TC, 0x01, SG5_EVENT_DTX_RQID);
+	status = surface_sam_ssh_enable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
 	if (status) {
 		goto err_event_source;
 	}
@@ -460,15 +465,15 @@ static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
 	return 0;
 
 err_event_source:
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_DTX_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_DTX_RQID);
 err_event_handler:
 	return status;
 }
 
 static void surface_dtx_events_disable(void)
 {
-	surfacegen5_ec_disable_event_source(SG5_EVENT_DTX_TC, 0x01, SG5_EVENT_DTX_RQID);
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_DTX_RQID);
+	surface_sam_ssh_disable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_DTX_RQID);
 }
 
 
@@ -482,7 +487,7 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 		return ERR_PTR(-ENOMEM);
 	}
 
-	input_dev->name = SG5_DTX_INPUT_NAME;
+	input_dev->name = DTX_INPUT_NAME;
 	input_dev->dev.parent = &pdev->dev;
 	input_dev->id.bustype = BUS_VIRTUAL;
 	input_dev->id.vendor  = USB_VENDOR_ID_MICROSOFT;
@@ -490,7 +495,7 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 
 	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
 
-	status = sg5_ec_query_opmpde();
+	status = surface_sam_query_opmpde();
 	if (status < 0) {
 		input_free_device(input_dev);
 		return ERR_PTR(status);
@@ -508,14 +513,14 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 }
 
 
-static int surfacegen5_acpi_dtx_probe(struct platform_device *pdev)
+static int surface_sam_dtx_probe(struct platform_device *pdev)
 {
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
 	struct input_dev *input_dev;
 	int status;
 
 	// link to ec
-	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	status = surface_sam_ssh_consumer_register(&pdev->dev);
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
@@ -559,7 +564,7 @@ err_register:
 	return status;
 }
 
-static int surfacegen5_acpi_dtx_remove(struct platform_device *pdev)
+static int surface_sam_dtx_remove(struct platform_device *pdev)
 {
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
 	struct surface_dtx_client *client;
@@ -594,17 +599,17 @@ static int surfacegen5_acpi_dtx_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_dtx_match[] = {
+static const struct acpi_device_id surface_sam_dtx_match[] = {
 	{ "MSHW0133", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_dtx_match);
+MODULE_DEVICE_TABLE(acpi, surface_sam_dtx_match);
 
-struct platform_driver surfacegen5_acpi_dtx = {
-	.probe = surfacegen5_acpi_dtx_probe,
-	.remove = surfacegen5_acpi_dtx_remove,
+struct platform_driver surface_sam_dtx = {
+	.probe = surface_sam_dtx_probe,
+	.remove = surface_sam_dtx_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_dtx",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_dtx_match),
+		.name = "surface_sam_dtx",
+		.acpi_match_table = ACPI_PTR(surface_sam_dtx_match),
 	},
 };

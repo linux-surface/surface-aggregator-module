@@ -4,60 +4,60 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
-#include "surfacegen5_acpi_ssh.h"
+#include "surface_sam_ssh.h"
 
 
-#define SG5_SAN_RQST_RETRY		5
+#define SAN_RQST_RETRY				5
 
-#define SG5_SAN_DSM_REVISION		0
-#define SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
+#define SAN_DSM_REVISION			0
+#define SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
 
-static const guid_t SG5_SAN_DSM_UUID =
+static const guid_t SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 	          0x48, 0x7c, 0x91, 0xab, 0x3c);
 
-#define SG5_EVENT_DELAY_POWER		msecs_to_jiffies(5000)
+#define SAM_EVENT_DELAY_PWR_STATE	msecs_to_jiffies(5000)
 
-#define SG5_EVENT_PWR_TC		0x02
-#define SG5_EVENT_PWR_RQID		0x0002
-#define SG5_EVENT_PWR_CID_HWCHANGE	0x15
-#define SG5_EVENT_PWR_CID_CHARGING	0x16
-#define SG5_EVENT_PWR_CID_ADAPTER	0x17
-#define SG5_EVENT_PWR_CID_STATE		0x4f
+#define SAM_EVENT_PWR_TC		0x02
+#define SAM_EVENT_PWR_RQID		0x0002
+#define SAM_EVENT_PWR_CID_HWCHANGE	0x15
+#define SAM_EVENT_PWR_CID_CHARGING	0x16
+#define SAM_EVENT_PWR_CID_ADAPTER	0x17
+#define SAM_EVENT_PWR_CID_STATE		0x4f
 
-#define SG5_EVENT_TEMP_TC		0x03
-#define SG5_EVENT_TEMP_RQID		0x0003
-#define SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
+#define SAM_EVENT_TEMP_TC		0x03
+#define SAM_EVENT_TEMP_RQID		0x0003
+#define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
-#define SG5_SAN_RQST_TAG            	"surfacegen5_ec_rqst: "
+#define SAN_RQST_TAG            	"surface_sam_san_rqst: "
 
-#define SG5_QUIRK_BASE_STATE_DELAY	1000
+#define SAN_QUIRK_BASE_STATE_DELAY	1000
 
 
-struct surfacegen5_san_acpi_consumer {
+struct san_acpi_consumer {
 	char *path;
 	bool  required;
 	u32   flags;
 };
 
-struct surfacegen5_san_opreg_context {
+struct san_opreg_context {
 	struct acpi_connection_info connection;
 	struct device *dev;
 };
 
-struct surfacegen5_san_consumer_link {
-	const struct surfacegen5_san_acpi_consumer *properties;
+struct san_consumer_link {
+	const struct san_acpi_consumer *properties;
 	struct device_link                         *link;
 };
 
-struct surfacegen5_san_consumers {
+struct san_consumers {
 	u32                                   num;
-	struct surfacegen5_san_consumer_link *links;
+	struct san_consumer_link *links;
 };
 
-struct surfacegen5_san_drvdata {
-	struct surfacegen5_san_opreg_context opreg_ctx;
-	struct surfacegen5_san_consumers     consumers;
+struct san_drvdata {
+	struct san_opreg_context opreg_ctx;
+	struct san_consumers     consumers;
 };
 
 struct gsb_data_in {
@@ -103,22 +103,22 @@ struct gsb_buffer {
 } __packed;
 
 
-enum surfacegen5_pwr_event {
-	SURFACEGEN5_PWR_EVENT_BAT1_STAT	= 0x03,
-	SURFACEGEN5_PWR_EVENT_BAT1_INFO	= 0x04,
-	SURFACEGEN5_PWR_EVENT_ADP1_STAT	= 0x05,
-	SURFACEGEN5_PWR_EVENT_ADP1_INFO	= 0x06,
-	SURFACEGEN5_PWR_EVENT_BAT2_STAT	= 0x07,
-	SURFACEGEN5_PWR_EVENT_BAT2_INFO	= 0x08,
+enum san_pwr_event {
+	SAN_PWR_EVENT_BAT1_STAT	= 0x03,
+	SAN_PWR_EVENT_BAT1_INFO	= 0x04,
+	SAN_PWR_EVENT_ADP1_STAT	= 0x05,
+	SAN_PWR_EVENT_ADP1_INFO	= 0x06,
+	SAN_PWR_EVENT_BAT2_STAT	= 0x07,
+	SAN_PWR_EVENT_BAT2_INFO	= 0x08,
 };
 
 
-static int surfacegen5_acpi_notify_power_event(struct device *dev, enum surfacegen5_pwr_event event)
+static int san_acpi_notify_power_event(struct device *dev, enum san_pwr_event event)
 {
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
 
-	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
+	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
 	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
 
 	if (IS_ERR_OR_NULL(obj)) {
@@ -134,7 +134,7 @@ static int surfacegen5_acpi_notify_power_event(struct device *dev, enum surfaceg
 	return 0;
 }
 
-static int surfacegen5_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
+static int san_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
 {
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
@@ -143,8 +143,8 @@ static int surfacegen5_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
 	param.type = ACPI_TYPE_INTEGER;
 	param.integer.value = iid;
 
-	obj = acpi_evaluate_dsm_typed(san, &SG5_SAN_DSM_UUID, SG5_SAN_DSM_REVISION,
-	                              SG5_SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT,
+	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
+	                              SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT,
 				      &param, ACPI_TYPE_BUFFER);
 
 	if (IS_ERR_OR_NULL(obj)) {
@@ -161,11 +161,11 @@ static int surfacegen5_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
 }
 
 
-inline static int surfacegen5_evt_power_adapter(struct device *dev, struct surfacegen5_event *event)
+inline static int san_evt_power_adapter(struct device *dev, struct surface_sam_ssh_event *event)
 {
 	int status;
 
-	status = surfacegen5_acpi_notify_power_event(dev, SURFACEGEN5_PWR_EVENT_ADP1_STAT);
+	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_ADP1_STAT);
 	if (status) {
 		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
 		return status;
@@ -174,18 +174,18 @@ inline static int surfacegen5_evt_power_adapter(struct device *dev, struct surfa
 	return 0;
 }
 
-inline static int surfacegen5_evt_power_hwchange(struct device *dev, struct surfacegen5_event *event)
+inline static int san_evt_power_hwchange(struct device *dev, struct surface_sam_ssh_event *event)
 {
-	enum surfacegen5_pwr_event evcode;
+	enum san_pwr_event evcode;
 	int status;
 
 	if (event->iid == 0x02) {
-		evcode = SURFACEGEN5_PWR_EVENT_BAT2_INFO;
+		evcode = SAN_PWR_EVENT_BAT2_INFO;
 	} else {
-		evcode = SURFACEGEN5_PWR_EVENT_BAT1_INFO;
+		evcode = SAN_PWR_EVENT_BAT1_INFO;
 	}
 
-	status = surfacegen5_acpi_notify_power_event(dev, evcode);
+	status = san_acpi_notify_power_event(dev, evcode);
 	if (status) {
 		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
 		return status;
@@ -194,17 +194,17 @@ inline static int surfacegen5_evt_power_hwchange(struct device *dev, struct surf
 	return 0;
 }
 
-inline static int surfacegen5_evt_power_state(struct device *dev, struct surfacegen5_event *event)
+inline static int san_evt_power_state(struct device *dev, struct surface_sam_ssh_event *event)
 {
 	int status;
 
-	status = surfacegen5_acpi_notify_power_event(dev, SURFACEGEN5_PWR_EVENT_BAT1_STAT);
+	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT1_STAT);
 	if (status) {
 		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
 		return status;
 	}
 
-	status = surfacegen5_acpi_notify_power_event(dev, SURFACEGEN5_PWR_EVENT_BAT2_STAT);
+	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT2_STAT);
 	if (status) {
 		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
 		return status;
@@ -213,34 +213,34 @@ inline static int surfacegen5_evt_power_state(struct device *dev, struct surface
 	return 0;
 }
 
-static unsigned long surfacegen5_evt_power_delay(struct surfacegen5_event *event, void *data)
+static unsigned long san_evt_power_delay(struct surface_sam_ssh_event *event, void *data)
 {
 	switch (event->cid) {
-	case SG5_EVENT_PWR_CID_CHARGING:
-	case SG5_EVENT_PWR_CID_STATE:
-		return SG5_EVENT_DELAY_POWER;
+	case SAM_EVENT_PWR_CID_CHARGING:
+	case SAM_EVENT_PWR_CID_STATE:
+		return SAM_EVENT_DELAY_PWR_STATE;
 
-	case SG5_EVENT_PWR_CID_ADAPTER:
-	case SG5_EVENT_PWR_CID_HWCHANGE:
+	case SAM_EVENT_PWR_CID_ADAPTER:
+	case SAM_EVENT_PWR_CID_HWCHANGE:
 	default:
 		return 0;
 	}
 }
 
-static int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
+static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
 {
 	struct device *dev = (struct device *)data;
 
 	switch (event->cid) {
-	case SG5_EVENT_PWR_CID_HWCHANGE:
-		return surfacegen5_evt_power_hwchange(dev, event);
+	case SAM_EVENT_PWR_CID_HWCHANGE:
+		return san_evt_power_hwchange(dev, event);
 
-	case SG5_EVENT_PWR_CID_ADAPTER:
-		return surfacegen5_evt_power_adapter(dev, event);
+	case SAM_EVENT_PWR_CID_ADAPTER:
+		return san_evt_power_adapter(dev, event);
 
-	case SG5_EVENT_PWR_CID_CHARGING:
-	case SG5_EVENT_PWR_CID_STATE:
-		return surfacegen5_evt_power_state(dev, event);
+	case SAM_EVENT_PWR_CID_CHARGING:
+	case SAM_EVENT_PWR_CID_STATE:
+		return san_evt_power_state(dev, event);
 
 	default:
 		dev_warn(dev, "unhandled power event (cid = %x)\n", event->cid);
@@ -250,11 +250,11 @@ static int surfacegen5_evt_power(struct surfacegen5_event *event, void *data)
 }
 
 
-inline static int surfacegen5_evt_thermal_notify(struct device *dev, struct surfacegen5_event *event)
+inline static int san_evt_thermal_notify(struct device *dev, struct surface_sam_ssh_event *event)
 {
 	int status;
 
-	status = surfacegen5_acpi_notify_sensor_trip_point(dev, event->iid);
+	status = san_acpi_notify_sensor_trip_point(dev, event->iid);
 	if (status) {
 		dev_err(dev, "error handling thermal event (cid = %x)\n", event->cid);
 		return status;
@@ -263,13 +263,13 @@ inline static int surfacegen5_evt_thermal_notify(struct device *dev, struct surf
 	return 0;
 }
 
-static int surfacegen5_evt_thermal(struct surfacegen5_event *event, void *data)
+static int san_evt_thermal(struct surface_sam_ssh_event *event, void *data)
 {
 	struct device *dev = (struct device *)data;
 
 	switch (event->cid) {
-	case SG5_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
-		return surfacegen5_evt_thermal_notify(dev, event);
+	case SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
+		return san_evt_thermal_notify(dev, event);
 
 	default:
 		dev_warn(dev, "unhandled thermal event (cid = %x)\n", event->cid);
@@ -279,8 +279,8 @@ static int surfacegen5_evt_thermal(struct surfacegen5_event *event, void *data)
 }
 
 
-static struct gsb_data_rqsx *surfacegen5_san_validate_rqsx(
-	struct device *dev, const char *type, struct gsb_buffer *buffer)
+static struct gsb_data_rqsx
+*san_validate_rqsx(struct device *dev, const char *type, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *rqsx = &buffer->data.rqsx;
 
@@ -306,7 +306,7 @@ static struct gsb_data_rqsx *surfacegen5_san_validate_rqsx(
 }
 
 static acpi_status
-surfacegen5_san_etwl(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffer *buffer)
+san_etwl(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 {
 	struct gsb_data_etwl *etwl = &buffer->data.etwl;
 
@@ -327,11 +327,11 @@ surfacegen5_san_etwl(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 }
 
 static acpi_status
-surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffer *buffer)
+san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *gsb_rqst = surfacegen5_san_validate_rqsx(ctx->dev, "RQST", buffer);
-	struct surfacegen5_rqst rqst = {};
-	struct surfacegen5_buf result = {};
+	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(ctx->dev, "RQST", buffer);
+	struct surface_sam_ssh_rqst rqst = {};
+	struct surface_sam_ssh_buf result = {};
 	int status = 0;
 	int try;
 
@@ -346,7 +346,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 	rqst.cdl = gsb_rqst->cdl;
 	rqst.pld = &gsb_rqst->pld[0];
 
-	result.cap  = SURFACEGEN5_MAX_RQST_RESPONSE;
+	result.cap  = SURFACE_SAM_SSH_MAX_RQST_RESPONSE;
 	result.len  = 0;
 	result.data = kzalloc(result.cap, GFP_KERNEL);
 
@@ -354,12 +354,12 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 		return AE_NO_MEMORY;
 	}
 
-	for (try = 0; try < SG5_SAN_RQST_RETRY; try++) {
+	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try) {
-			dev_warn(ctx->dev, SG5_SAN_RQST_TAG "IO error occured, trying again\n");
+			dev_warn(ctx->dev, SAN_RQST_TAG "IO error occured, trying again\n");
 		}
 
-		status = surfacegen5_ec_rqst(&rqst, &result);
+		status = surface_sam_ssh_rqst(&rqst, &result);
 		if (status != -EIO) break;
 	}
 
@@ -393,7 +393,7 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
 
 	} else {			// failure
-		dev_err(ctx->dev, SG5_SAN_RQST_TAG "failed with error %d\n", status);
+		dev_err(ctx->dev, SAN_RQST_TAG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
 		buffer->data.out.status = 0x01;		// indicate _SSH error
@@ -406,9 +406,9 @@ surfacegen5_san_rqst(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 }
 
 static acpi_status
-surfacegen5_san_rqsg(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffer *buffer)
+san_rqsg(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *rqsg = surfacegen5_san_validate_rqsx(ctx->dev, "RQSG", buffer);
+	struct gsb_data_rqsx *rqsg = san_validate_rqsx(ctx->dev, "RQSG", buffer);
 
 	if (!rqsg) {
 		return AE_OK;
@@ -424,11 +424,11 @@ surfacegen5_san_rqsg(struct surfacegen5_san_opreg_context *ctx, struct gsb_buffe
 
 
 static acpi_status
-surfacegen5_san_opreg_handler(u32 function, acpi_physical_address command,
-                              u32 bits, u64 *value64,
-                              void *opreg_context, void *region_context)
+san_opreg_handler(u32 function, acpi_physical_address command,
+		  u32 bits, u64 *value64,
+		  void *opreg_context, void *region_context)
 {
-	struct surfacegen5_san_opreg_context *context = opreg_context;
+	struct san_opreg_context *context = opreg_context;
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
 	int accessor_type = (0xFFFF0000 & function) >> 16;
 
@@ -449,39 +449,39 @@ surfacegen5_san_opreg_handler(u32 function, acpi_physical_address command,
 	}
 
 	switch (buffer->data.in.cv) {
-	case 0x01:  return surfacegen5_san_rqst(context, buffer);
-	case 0x02:  return surfacegen5_san_etwl(context, buffer);
-	case 0x03:  return surfacegen5_san_rqsg(context, buffer);
+	case 0x01:  return san_rqst(context, buffer);
+	case 0x02:  return san_etwl(context, buffer);
+	case 0x03:  return san_rqsg(context, buffer);
 	}
 
 	dev_warn(context->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
 	return AE_OK;
 }
 
-static int surfacegen5_san_enable_events(struct device *dev)
+static int san_enable_events(struct device *dev)
 {
 	int status;
 
-	status = surfacegen5_ec_set_delayed_event_handler(
-			SG5_EVENT_PWR_RQID, surfacegen5_evt_power,
-			surfacegen5_evt_power_delay, dev);
+	status = surface_sam_ssh_set_delayed_event_handler(
+			SAM_EVENT_PWR_RQID, san_evt_power,
+			san_evt_power_delay, dev);
 	if (status) {
 		goto err_event_handler_power;
 	}
 
-	status = surfacegen5_ec_set_event_handler(
-			SG5_EVENT_TEMP_RQID, surfacegen5_evt_thermal,
+	status = surface_sam_ssh_set_event_handler(
+			SAM_EVENT_TEMP_RQID, san_evt_thermal,
 			dev);
 	if (status) {
 		goto err_event_handler_thermal;
 	}
 
-	status = surfacegen5_ec_enable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
 	if (status) {
 		goto err_event_source_power;
 	}
 
-	status = surfacegen5_ec_enable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
+	status = surface_sam_ssh_enable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
 	if (status) {
 		goto err_event_source_thermal;
 	}
@@ -489,30 +489,30 @@ static int surfacegen5_san_enable_events(struct device *dev)
 	return 0;
 
 err_event_source_thermal:
-	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
+	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
 err_event_source_power:
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
 err_event_handler_thermal:
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
 err_event_handler_power:
 	return status;
 }
 
-static void surfacegen5_san_disable_events(void)
+static void san_disable_events(void)
 {
-	surfacegen5_ec_disable_event_source(SG5_EVENT_TEMP_TC, 0x01, SG5_EVENT_TEMP_RQID);
-	surfacegen5_ec_disable_event_source(SG5_EVENT_PWR_TC, 0x01, SG5_EVENT_PWR_RQID);
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_TEMP_RQID);
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_PWR_RQID);
+	surface_sam_ssh_disable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
+	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
 }
 
 
-static int surfacegen5_san_consumers_link(struct platform_device *pdev,
-                                          const struct surfacegen5_san_acpi_consumer *cons,
-                                          struct surfacegen5_san_consumers *out)
+static int san_consumers_link(struct platform_device *pdev,
+			      const struct san_acpi_consumer *cons,
+			      struct san_consumers *out)
 {
-	const struct surfacegen5_san_acpi_consumer *con;
-	struct surfacegen5_san_consumer_link *links, *link;
+	const struct san_acpi_consumer *con;
+	struct san_consumer_link *links, *link;
 	struct acpi_device *adev;
 	acpi_handle handle;
 	u32 max_links = 0;
@@ -528,7 +528,7 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 	}
 
 	// allocate
-	links = kzalloc(max_links * sizeof(struct surfacegen5_san_consumer_link), GFP_KERNEL);
+	links = kzalloc(max_links * sizeof(struct san_consumer_link), GFP_KERNEL);
 	link = &links[0];
 
 	if (!links) {
@@ -541,7 +541,7 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 		if (status) {
 			if (con->required || status != AE_NOT_FOUND) {
 				status = -ENXIO;
-				goto consumers_link_cleanup;
+				goto cleanup;
 			} else {
 				continue;
 			}
@@ -549,13 +549,13 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 
 		status = acpi_bus_get_device(handle, &adev);
 		if (status) {
-			goto consumers_link_cleanup;
+			goto cleanup;
 		}
 
 		link->link = device_link_add(&adev->dev, &pdev->dev, con->flags);
 		if (!(link->link)) {
 			status = -EFAULT;
-			goto consumers_link_cleanup;
+			goto cleanup;
 		}
 		link->properties = con;
 
@@ -567,7 +567,7 @@ static int surfacegen5_san_consumers_link(struct platform_device *pdev,
 
 	return 0;
 
-consumers_link_cleanup:
+cleanup:
 	for (link = link - 1; link >= links; --link) {
 		if (link->properties->flags & DL_FLAG_STATELESS) {
 			device_link_del(link->link);
@@ -577,7 +577,7 @@ consumers_link_cleanup:
 	return status;
 }
 
-static void surfacegen5_san_consumers_unlink(struct surfacegen5_san_consumers *consumers) {
+static void san_consumers_unlink(struct san_consumers *consumers) {
 	u32 i;
 
 	if (!consumers) {
@@ -596,10 +596,10 @@ static void surfacegen5_san_consumers_unlink(struct surfacegen5_san_consumers *c
 	consumers->links = NULL;
 }
 
-static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
+static int surface_sam_san_probe(struct platform_device *pdev)
 {
-	const struct surfacegen5_san_acpi_consumer *cons;
-	struct surfacegen5_san_drvdata *drvdata;
+	const struct san_acpi_consumer *cons;
+	struct san_drvdata *drvdata;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	int status;
 
@@ -609,12 +609,12 @@ static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
 	 * which the battery does not get set up correctly). Otherwise register as
 	 * consumer to set up a device_link.
 	 */
-	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	status = surface_sam_ssh_consumer_register(&pdev->dev);
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
-	drvdata = kzalloc(sizeof(struct surfacegen5_san_drvdata), GFP_KERNEL);
+	drvdata = kzalloc(sizeof(struct san_drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		return -ENOMEM;
 	}
@@ -622,51 +622,51 @@ static int surfacegen5_acpi_san_probe(struct platform_device *pdev)
 	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
-	status = surfacegen5_san_consumers_link(pdev, cons, &drvdata->consumers);
+	status = san_consumers_link(pdev, cons, &drvdata->consumers);
 	if (status) {
-		goto err_probe_consumers;
+		goto err_consumers;
 	}
 
 	platform_set_drvdata(pdev, drvdata);
 
 	status = acpi_install_address_space_handler(san,
 			ACPI_ADR_SPACE_GSBUS,
-			&surfacegen5_san_opreg_handler,
+			&san_opreg_handler,
 			NULL, &drvdata->opreg_ctx);
 
 	if (ACPI_FAILURE(status)) {
 		status = -ENODEV;
-		goto err_probe_install_handler;
+		goto err_install_handler;
 	}
 
-	status = surfacegen5_san_enable_events(&pdev->dev);
+	status = san_enable_events(&pdev->dev);
 	if (status) {
-		goto err_probe_enable_events;
+		goto err_enable_events;
 	}
 
 	acpi_walk_dep_device_list(san);
 	return 0;
 
-err_probe_enable_events:
-	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_opreg_handler);
-err_probe_install_handler:
+err_enable_events:
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
+err_install_handler:
 	platform_set_drvdata(san, NULL);
-	surfacegen5_san_consumers_unlink(&drvdata->consumers);
-err_probe_consumers:
+	san_consumers_unlink(&drvdata->consumers);
+err_consumers:
 	kfree(drvdata);
 	return status;
 }
 
-static int surfacegen5_acpi_san_remove(struct platform_device *pdev)
+static int surface_sam_san_remove(struct platform_device *pdev)
 {
-	struct surfacegen5_san_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
-	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &surfacegen5_san_opreg_handler);
-	surfacegen5_san_disable_events();
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
+	san_disable_events();
 
-	surfacegen5_san_consumers_unlink(&drvdata->consumers);
+	san_consumers_unlink(&drvdata->consumers);
 	kfree(drvdata);
 
 	platform_set_drvdata(pdev, NULL);
@@ -674,7 +674,7 @@ static int surfacegen5_acpi_san_remove(struct platform_device *pdev)
 }
 
 
-static const struct surfacegen5_san_acpi_consumer surfacegen5_mshw0091_consumers[] = {
+static const struct san_acpi_consumer san_mshw0091_consumers[] = {
 	{ "\\_SB.SRTC", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\ADP1",     true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\_SB.BAT1", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
@@ -682,17 +682,17 @@ static const struct surfacegen5_san_acpi_consumer surfacegen5_mshw0091_consumers
 	{ },
 };
 
-static const struct acpi_device_id surfacegen5_acpi_san_match[] = {
-	{ "MSHW0091", (long unsigned int) surfacegen5_mshw0091_consumers },
+static const struct acpi_device_id surface_sam_san_match[] = {
+	{ "MSHW0091", (long unsigned int) san_mshw0091_consumers },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_san_match);
+MODULE_DEVICE_TABLE(acpi, surface_sam_san_match);
 
-struct platform_driver surfacegen5_acpi_san = {
-	.probe = surfacegen5_acpi_san_probe,
-	.remove = surfacegen5_acpi_san_remove,
+struct platform_driver surface_sam_san = {
+	.probe = surface_sam_san_probe,
+	.remove = surface_sam_san_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_san",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_san_match),
+		.name = "surface_sam_san",
+		.acpi_match_table = ACPI_PTR(surface_sam_san_match),
 	},
 };

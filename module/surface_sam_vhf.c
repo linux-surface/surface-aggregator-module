@@ -4,29 +4,29 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
-#include "surfacegen5_acpi_ssh.h"
+#include "surface_sam_ssh.h"
 
 
 #define USB_VENDOR_ID_MICROSOFT		0x045e
 #define USB_DEVICE_ID_MS_VHF		0xf001
 
-#define SG5_VHF_INPUT_NAME	"Microsoft Virtual HID Framework Device"
+#define VHF_INPUT_NAME			"Microsoft Virtual HID Framework Device"
 
 /*
  * Request ID for VHF events. This value is based on the output of the Surface
  * EC and should not be changed.
  */
-#define SG5_EVENT_VHF_RQID		0x0001
-#define SG5_EVENT_VHF_TC		0x08
+#define SAM_EVENT_VHF_RQID		0x0001
+#define SAM_EVENT_VHF_TC		0x08
 
 
-struct surfacegen5_vhf_evtctx {
+struct vhf_evtctx {
 	struct device     *dev;
 	struct hid_device *hid;
 };
 
-struct surfacegen5_vhf_drvdata {
-	struct surfacegen5_vhf_evtctx event_ctx;
+struct vhf_drvdata {
+	struct vhf_evtctx event_ctx;
 };
 
 
@@ -142,7 +142,7 @@ static struct hid_ll_driver vhf_hid_ll_driver = {
 };
 
 
-static struct hid_device *surfacegen5_vhf_create_hid_device(struct platform_device *pdev)
+static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 {
 	struct hid_device *hid;
 
@@ -159,14 +159,14 @@ static struct hid_device *surfacegen5_vhf_create_hid_device(struct platform_devi
 
 	hid->ll_driver = &vhf_hid_ll_driver;
 
-	sprintf(hid->name, "%s", SG5_VHF_INPUT_NAME);
+	sprintf(hid->name, "%s", VHF_INPUT_NAME);
 
 	return hid;
 }
 
-static int surfacegen5_vhf_event_handler(struct surfacegen5_event *event, void *data)
+static int vhf_event_handler(struct surface_sam_ssh_event *event, void *data)
 {
-	struct surfacegen5_vhf_evtctx *ctx = (struct surfacegen5_vhf_evtctx *)data;
+	struct vhf_evtctx *ctx = (struct vhf_evtctx *)data;
 
 	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04)) {
 		return hid_input_report(ctx->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
@@ -176,34 +176,34 @@ static int surfacegen5_vhf_event_handler(struct surfacegen5_event *event, void *
 	return 0;
 }
 
-static unsigned long surfacegen5_vhf_event_delay(struct surfacegen5_event *event, void *data)
+static unsigned long vhf_event_delay(struct surface_sam_ssh_event *event, void *data)
 {
 	// high priority immediate execution for keyboard events
 	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04)) {
-		return SURFACEGEN5_EVENT_IMMEDIATE;
+		return SURFACE_SAM_SSH_EVENT_IMMEDIATE;
 	}
 
 	return 0;
 }
 
-static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
+static int surface_sam_vhf_probe(struct platform_device *pdev)
 {
-	struct surfacegen5_vhf_drvdata *drvdata;
+	struct vhf_drvdata *drvdata;
 	struct hid_device *hid;
 	int status;
 
 	// add device link to EC
-	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	status = surface_sam_ssh_consumer_register(&pdev->dev);
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
-	drvdata = kzalloc(sizeof(struct surfacegen5_vhf_drvdata), GFP_KERNEL);
+	drvdata = kzalloc(sizeof(struct vhf_drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		return -ENOMEM;
 	}
 
-	hid = surfacegen5_vhf_create_hid_device(pdev);
+	hid = vhf_create_hid_device(pdev);
 	if (IS_ERR(hid)) {
 		status = PTR_ERR(hid);
 		goto err_probe_hid;
@@ -219,16 +219,16 @@ static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, drvdata);
 
-	status = surfacegen5_ec_set_delayed_event_handler(
-			SG5_EVENT_VHF_RQID,
-	                surfacegen5_vhf_event_handler,
-	                surfacegen5_vhf_event_delay,
+	status = surface_sam_ssh_set_delayed_event_handler(
+			SAM_EVENT_VHF_RQID,
+	                vhf_event_handler,
+	                vhf_event_delay,
 			&drvdata->event_ctx);
 	if (status) {
 		goto err_add_hid;
 	}
 
-	status = surfacegen5_ec_enable_event_source(SG5_EVENT_VHF_TC, 0x01, SG5_EVENT_VHF_RQID);
+	status = surface_sam_ssh_enable_event_source(SAM_EVENT_VHF_TC, 0x01, SAM_EVENT_VHF_RQID);
 	if (status) {
 		goto err_event_source;
 	}
@@ -236,7 +236,7 @@ static int surfacegen5_acpi_vhf_probe(struct platform_device *pdev)
 	return 0;
 
 err_event_source:
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_VHF_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_VHF_RQID);
 err_add_hid:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
@@ -245,12 +245,12 @@ err_probe_hid:
 	return status;
 }
 
-static int surfacegen5_acpi_vhf_remove(struct platform_device *pdev)
+static int surface_sam_vhf_remove(struct platform_device *pdev)
 {
-	struct surfacegen5_vhf_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surfacegen5_ec_disable_event_source(SG5_EVENT_VHF_TC, 0x01, SG5_EVENT_VHF_RQID);
-	surfacegen5_ec_remove_event_handler(SG5_EVENT_VHF_RQID);
+	surface_sam_ssh_disable_event_source(SAM_EVENT_VHF_TC, 0x01, SAM_EVENT_VHF_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_VHF_RQID);
 
 	hid_destroy_device(drvdata->event_ctx.hid);
 	kfree(drvdata);
@@ -260,17 +260,17 @@ static int surfacegen5_acpi_vhf_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_vhf_match[] = {
+static const struct acpi_device_id surface_sam_vhf_match[] = {
 	{ "MSHW0096" },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_vhf_match);
+MODULE_DEVICE_TABLE(acpi, surface_sam_vhf_match);
 
-struct platform_driver surfacegen5_acpi_vhf = {
-	.probe = surfacegen5_acpi_vhf_probe,
-	.remove = surfacegen5_acpi_vhf_remove,
+struct platform_driver surface_sam_vhf = {
+	.probe = surface_sam_vhf_probe,
+	.remove = surface_sam_vhf_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_vhf",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_vhf_match),
+		.name = "surface_sam_vhf",
+		.acpi_match_table = ACPI_PTR(surface_sam_vhf_match),
 	},
 };

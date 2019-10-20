@@ -1,27 +1,27 @@
-MODULE_NAME := "surfacegen5_acpi"
+MODULE_NAME := "surface_sam"
 MODULE_VERSION := "0.1"
 
 KVERSION := "$(shell uname -r)"
 
-obj-m += surfacegen5_acpi.o
-surfacegen5_acpi-objs := surfacegen5_acpi_base.o
-surfacegen5_acpi-objs += surfacegen5_acpi_ssh.o
-surfacegen5_acpi-objs += surfacegen5_acpi_ssh_sysfs.o
-surfacegen5_acpi-objs += surfacegen5_acpi_san.o
-surfacegen5_acpi-objs += surfacegen5_acpi_vhf.o
-surfacegen5_acpi-objs += surfacegen5_acpi_dtx.o
-surfacegen5_acpi-objs += surfacegen5_acpi_sid.o
+obj-m += surface_sam.o
+surface_sam-objs := surface_sam_base.o
+surface_sam-objs += surface_sam_ssh.o
+surface_sam-objs += surface_sam_ssh_sysfs.o
+surface_sam-objs += surface_sam_san.o
+surface_sam-objs += surface_sam_vhf.o
+surface_sam-objs += surface_sam_dtx.o
+surface_sam-objs += surface_sam_sid.o
 
 sources := Makefile
 sources += dkms.conf
-sources += surfacegen5_acpi_base.c
-sources += surfacegen5_acpi_ssh.h
-sources += surfacegen5_acpi_ssh.c
-sources += surfacegen5_acpi_ssh_sysfs.c
-sources += surfacegen5_acpi_san.c
-sources += surfacegen5_acpi_vhf.c
-sources += surfacegen5_acpi_dtx.c
-sources += surfacegen5_acpi_sid.c
+sources += surface_sam_base.c
+sources += surface_sam_ssh.h
+sources += surface_sam_ssh.c
+sources += surface_sam_ssh_sysfs.c
+sources += surface_sam_san.c
+sources += surface_sam_vhf.c
+sources += surface_sam_dtx.c
+sources += surface_sam_sid.c
 
 ccflags-y := -DDEBUG
 

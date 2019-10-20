@@ -7,67 +7,67 @@
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
 
-#include "surfacegen5_acpi_ssh.h"
+#include "surface_sam_ssh.h"
 
 
-struct si_lid_device {
+struct sid_lid_device {
 	const char *acpi_path;
 	const u32 gpe_number;
 };
 
-struct si_device_info {
+struct sid_device_info {
 	const bool has_perf_mode;
-	const struct si_lid_device *lid_device;
+	const struct sid_lid_device *lid_device;
 };
 
 
-static const struct si_lid_device lid_device_l17 = {
+static const struct sid_lid_device lid_device_l17 = {
 	.acpi_path = "\\_SB.LID0",
 	.gpe_number = 0x17,
 };
 
-static const struct si_lid_device lid_device_l4F = {
+static const struct sid_lid_device lid_device_l4F = {
 	.acpi_path = "\\_SB.LID0",
 	.gpe_number = 0x4F,
 };
 
-static const struct si_lid_device lid_device_l57 = {
+static const struct sid_lid_device lid_device_l57 = {
 	.acpi_path = "\\_SB.LID0",
 	.gpe_number = 0x57,
 };
 
 
-static const struct si_device_info si_device_pro_4 = {
+static const struct sid_device_info si_device_pro_4 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l17,
 };
 
-static const struct si_device_info si_device_pro_5 = {
+static const struct sid_device_info si_device_pro_5 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l4F,
 };
 
-static const struct si_device_info si_device_pro_6 = {
+static const struct sid_device_info si_device_pro_6 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l4F,
 };
 
-static const struct si_device_info si_device_book_1 = {
+static const struct sid_device_info si_device_book_1 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l17,
 };
 
-static const struct si_device_info si_device_book_2 = {
+static const struct sid_device_info si_device_book_2 = {
 	.has_perf_mode = true,
 	.lid_device = &lid_device_l17,
 };
 
-static const struct si_device_info si_device_laptop_1 = {
+static const struct sid_device_info si_device_laptop_1 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l57,
 };
 
-static const struct si_device_info si_device_laptop_2 = {
+static const struct sid_device_info si_device_laptop_2 = {
 	.has_perf_mode = false,
 	.lid_device = &lid_device_l57,
 };
@@ -144,36 +144,36 @@ static const struct dmi_system_id dmi_lid_device_table[] = {
 };
 
 
-#define SG5_PARAM_PERM		(S_IRUGO | S_IWUSR)
+#define SID_PARAM_PERM		(S_IRUGO | S_IWUSR)
 
-enum sg5_perf_mode {
-	SG5_PERF_MODE_NORMAL   = 1,
-	SG5_PERF_MODE_BATTERY  = 2,
-	SG5_PERF_MODE_PERF1    = 3,
-	SG5_PERF_MODE_PERF2    = 4,
+enum sam_perf_mode {
+	SAM_PERF_MODE_NORMAL   = 1,
+	SAM_PERF_MODE_BATTERY  = 2,
+	SAM_PERF_MODE_PERF1    = 3,
+	SAM_PERF_MODE_PERF2    = 4,
 
-	__SG5_PERF_MODE__START = 1,
-	__SG5_PERF_MODE__END   = 4,
+	__SAM_PERF_MODE__START = 1,
+	__SAM_PERF_MODE__END   = 4,
 };
 
-enum sg5_param_perf_mode {
-	SG5_PARAM_PERF_MODE_AS_IS    = 0,
-	SG5_PARAM_PERF_MODE_NORMAL   = SG5_PERF_MODE_NORMAL,
-	SG5_PARAM_PERF_MODE_BATTERY  = SG5_PERF_MODE_BATTERY,
-	SG5_PARAM_PERF_MODE_PERF1    = SG5_PERF_MODE_PERF1,
-	SG5_PARAM_PERF_MODE_PERF2    = SG5_PERF_MODE_PERF2,
+enum sid_param_perf_mode {
+	SID_PARAM_PERF_MODE_AS_IS    = 0,
+	SID_PARAM_PERF_MODE_NORMAL   = SAM_PERF_MODE_NORMAL,
+	SID_PARAM_PERF_MODE_BATTERY  = SAM_PERF_MODE_BATTERY,
+	SID_PARAM_PERF_MODE_PERF1    = SAM_PERF_MODE_PERF1,
+	SID_PARAM_PERF_MODE_PERF2    = SAM_PERF_MODE_PERF2,
 
-	__SG5_PARAM_PERF_MODE__START = 0,
-	__SG5_PARAM_PERF_MODE__END   = 4,
+	__SID_PARAM_PERF_MODE__START = 0,
+	__SID_PARAM_PERF_MODE__END   = 4,
 };
 
 
-static int sg5_ec_perf_mode_get(void)
+static int surface_sam_perf_mode_get(void)
 {
 	u8 result_buf[8] = { 0 };
 	int status;
 
-	struct surfacegen5_rqst rqst = {
+	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x03,
 		.iid = 0x00,
 		.cid = 0x02,
@@ -182,13 +182,13 @@ static int sg5_ec_perf_mode_get(void)
 		.pld = NULL,
 	};
 
-	struct surfacegen5_buf result = {
+	struct surface_sam_ssh_buf result = {
 		.cap = ARRAY_SIZE(result_buf),
 		.len = 0,
 		.data = result_buf,
 	};
 
-	status = surfacegen5_ec_rqst(&rqst, &result);
+	status = surface_sam_ssh_rqst(&rqst, &result);
 	if (status) {
 		return status;
 	}
@@ -200,11 +200,11 @@ static int sg5_ec_perf_mode_get(void)
 	return get_unaligned_le32(&result.data[0]);
 }
 
-static int sg5_ec_perf_mode_set(int perf_mode)
+static int surface_sam_perf_mode_set(int perf_mode)
 {
 	u8 payload[4] = { 0 };
 
-	struct surfacegen5_rqst rqst = {
+	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x03,
 		.iid = 0x00,
 		.cid = 0x03,
@@ -213,12 +213,12 @@ static int sg5_ec_perf_mode_set(int perf_mode)
 		.pld = payload,
 	};
 
-	if (perf_mode < __SG5_PERF_MODE__START || perf_mode > __SG5_PERF_MODE__END) {
+	if (perf_mode < __SAM_PERF_MODE__START || perf_mode > __SAM_PERF_MODE__END) {
 		return -EINVAL;
 	}
 
 	put_unaligned_le32(perf_mode, &rqst.pld[0]);
-	return surfacegen5_ec_rqst(&rqst, NULL);
+	return surface_sam_ssh_rqst(&rqst, NULL);
 }
 
 
@@ -232,7 +232,7 @@ static int param_perf_mode_set(const char *val, const struct kernel_param *kp)
 		return status;
 	}
 
-	if (perf_mode < __SG5_PARAM_PERF_MODE__START || perf_mode > __SG5_PARAM_PERF_MODE__END) {
+	if (perf_mode < __SID_PARAM_PERF_MODE__START || perf_mode > __SID_PARAM_PERF_MODE__END) {
 		return -EINVAL;
 	}
 
@@ -244,11 +244,11 @@ static const struct kernel_param_ops param_perf_mode_ops = {
 	.get = param_get_int,
 };
 
-static int param_perf_mode_init = SG5_PARAM_PERF_MODE_AS_IS;
-static int param_perf_mode_exit = SG5_PARAM_PERF_MODE_AS_IS;
+static int param_perf_mode_init = SID_PARAM_PERF_MODE_AS_IS;
+static int param_perf_mode_exit = SID_PARAM_PERF_MODE_AS_IS;
 
-module_param_cb(perf_mode_init, &param_perf_mode_ops, &param_perf_mode_init, SG5_PARAM_PERM);
-module_param_cb(perf_mode_exit, &param_perf_mode_ops, &param_perf_mode_exit, SG5_PARAM_PERM);
+module_param_cb(perf_mode_init, &param_perf_mode_ops, &param_perf_mode_init, SID_PARAM_PERM);
+module_param_cb(perf_mode_exit, &param_perf_mode_ops, &param_perf_mode_exit, SID_PARAM_PERM);
 
 MODULE_PARM_DESC(perf_mode_init, "Performance-mode to be set on module initialization");
 MODULE_PARM_DESC(perf_mode_exit, "Performance-mode to be set on module exit");
@@ -258,7 +258,7 @@ static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr,
 {
 	int perf_mode;
 
-	perf_mode = sg5_ec_perf_mode_get();
+	perf_mode = surface_sam_perf_mode_get();
 	if (perf_mode < 0) {
 		dev_err(dev, "failed to get current performance mode: %d", perf_mode);
 		return -EIO;
@@ -278,7 +278,7 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 		return status;
 	}
 
-	status = sg5_ec_perf_mode_set(perf_mode);
+	status = surface_sam_perf_mode_set(perf_mode);
 	if (status) {
 		return status;
 	}
@@ -302,7 +302,7 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 const static DEVICE_ATTR_RW(perf_mode);
 
 
-static int sid_perf_mode_setup(struct platform_device *pdev, const struct si_device_info *info)
+static int sid_perf_mode_setup(struct platform_device *pdev, const struct sid_device_info *info)
 {
 	int status;
 
@@ -310,14 +310,14 @@ static int sid_perf_mode_setup(struct platform_device *pdev, const struct si_dev
 		return 0;
 
 	// link to ec
-	status = surfacegen5_ec_consumer_register(&pdev->dev);
+	status = surface_sam_ssh_consumer_register(&pdev->dev);
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
 	// set initial perf_mode
-	if (param_perf_mode_init != SG5_PARAM_PERF_MODE_AS_IS) {
-		status = sg5_ec_perf_mode_set(param_perf_mode_init);
+	if (param_perf_mode_init != SID_PARAM_PERF_MODE_AS_IS) {
+		status = surface_sam_perf_mode_set(param_perf_mode_init);
 		if (status) {
 			return status;
 		}
@@ -332,11 +332,11 @@ static int sid_perf_mode_setup(struct platform_device *pdev, const struct si_dev
 	return 0;
 
 err_sysfs:
-	sg5_ec_perf_mode_set(param_perf_mode_exit);
+	surface_sam_perf_mode_set(param_perf_mode_exit);
 	return status;
 }
 
-static void sid_perf_mode_remove(struct platform_device *pdev, const struct si_device_info *info)
+static void sid_perf_mode_remove(struct platform_device *pdev, const struct sid_device_info *info)
 {
 	if (!info->has_perf_mode)
 		return;
@@ -345,11 +345,11 @@ static void sid_perf_mode_remove(struct platform_device *pdev, const struct si_d
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
 
 	// set exit perf_mode
-	sg5_ec_perf_mode_set(param_perf_mode_exit);
+	surface_sam_perf_mode_set(param_perf_mode_exit);
 }
 
 
-static int sid_lid_enable_wakeup(const struct si_device_info *info, bool enable)
+static int sid_lid_enable_wakeup(const struct sid_device_info *info, bool enable)
 {
 	int action = enable ? ACPI_GPE_ENABLE : ACPI_GPE_DISABLE;
 	int status;
@@ -364,7 +364,7 @@ static int sid_lid_enable_wakeup(const struct si_device_info *info, bool enable)
 	return 0;
 }
 
-static int sid_lid_device_setup(const struct si_device_info *info)
+static int sid_lid_device_setup(const struct sid_device_info *info)
 {
 	acpi_handle lid_handle;
 	int status;
@@ -387,32 +387,32 @@ static int sid_lid_device_setup(const struct si_device_info *info)
 	return sid_lid_enable_wakeup(info, false);
 }
 
-static void sid_lid_device_remove(const struct si_device_info *info)
+static void sid_lid_device_remove(const struct sid_device_info *info)
 {
 	/* restore default behavior without this module */
 	sid_lid_enable_wakeup(info, false);
 }
 
 
-static int surfacegen5_acpi_sid_suspend(struct device *dev)
+static int surface_sam_sid_suspend(struct device *dev)
 {
-	const struct si_device_info *info = dev_get_drvdata(dev);
+	const struct sid_device_info *info = dev_get_drvdata(dev);
 	return sid_lid_enable_wakeup(info, true);
 }
 
-static int surfacegen5_acpi_sid_resume(struct device *dev)
+static int surface_sam_sid_resume(struct device *dev)
 {
-	const struct si_device_info *info = dev_get_drvdata(dev);
+	const struct sid_device_info *info = dev_get_drvdata(dev);
 	return sid_lid_enable_wakeup(info, false);
 }
 
-static SIMPLE_DEV_PM_OPS(surfacegen5_acpi_sid_pm, surfacegen5_acpi_sid_suspend, surfacegen5_acpi_sid_resume);
+static SIMPLE_DEV_PM_OPS(surface_sam_sid_pm, surface_sam_sid_suspend, surface_sam_sid_resume);
 
 
-static int surfacegen5_acpi_sid_probe(struct platform_device *pdev)
+static int surface_sam_sid_probe(struct platform_device *pdev)
 {
 	const struct dmi_system_id *dmi_match;
-	struct si_device_info *info;
+	struct sid_device_info *info;
 	int status;
 
 	dmi_match = dmi_first_match(dmi_lid_device_table);
@@ -439,9 +439,9 @@ err_perf_mode:
 	return status;
 }
 
-static int surfacegen5_acpi_sid_remove(struct platform_device *pdev)
+static int surface_sam_sid_remove(struct platform_device *pdev)
 {
-	const struct si_device_info *info = platform_get_drvdata(pdev);
+	const struct sid_device_info *info = platform_get_drvdata(pdev);
 
 	sid_perf_mode_remove(pdev, info);
 	sid_lid_device_remove(info);
@@ -451,7 +451,7 @@ static int surfacegen5_acpi_sid_remove(struct platform_device *pdev)
 }
 
 
-static const struct acpi_device_id surfacegen5_acpi_sid_match[] = {
+static const struct acpi_device_id surface_sam_sid_match[] = {
 	{ "MSHW0081", },	/* Surface Pro 4, 5, and 6 */
 	{ "MSHW0080", },	/* Surface Book 1 */
 	{ "MSHW0107", },	/* Surface Book 2 */
@@ -459,14 +459,14 @@ static const struct acpi_device_id surfacegen5_acpi_sid_match[] = {
 	{ "MSHW0112", },	/* Surface Laptop 2 */
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surfacegen5_acpi_sid_match);
+MODULE_DEVICE_TABLE(acpi, surface_sam_sid_match);
 
-struct platform_driver surfacegen5_acpi_sid = {
-	.probe = surfacegen5_acpi_sid_probe,
-	.remove = surfacegen5_acpi_sid_remove,
+struct platform_driver surface_sam_sid = {
+	.probe = surface_sam_sid_probe,
+	.remove = surface_sam_sid_remove,
 	.driver = {
-		.name = "surfacegen5_acpi_sid",
-		.acpi_match_table = ACPI_PTR(surfacegen5_acpi_sid_match),
-		.pm = &surfacegen5_acpi_sid_pm,
+		.name = "surface_sam_sid",
+		.acpi_match_table = ACPI_PTR(surface_sam_sid_match),
+		.pm = &surface_sam_sid_pm,
 	},
 };
