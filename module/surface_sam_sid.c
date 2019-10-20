@@ -1,3 +1,9 @@
+/*
+ * Surface/System Integration Device (SID) driver.
+ * Intended for device-dependent configuration and minor functionality.
+ * Handles performance-modes and wakeup via lid open.
+ */
+
 #include <asm/unaligned.h>
 #include <linux/acpi.h>
 #include <linux/dmi.h>

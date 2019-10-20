@@ -1,3 +1,8 @@
+/*
+ * Surface Serial Hub (SSH) driver for communication with the Surface/System
+ * Aggregator Module.
+ */
+
 #include <asm/unaligned.h>
 #include <linux/acpi.h>
 #include <linux/completion.h>

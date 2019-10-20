@@ -1,3 +1,8 @@
+/*
+ * Virtual HID Framwork (VHF) driver for input events via SAM.
+ * Used for keyboard input events on the Surface Laptops.
+ */
+
 #include <linux/acpi.h>
 #include <linux/hid.h>
 #include <linux/input.h>

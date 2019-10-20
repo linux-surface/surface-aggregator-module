@@ -1,3 +1,8 @@
+/*
+ * Surface ACPI Notify (SAN) and ACPI integration driver for SAM.
+ * Translates communication from ACPI to SSH and back.
+ */
+
 #include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
