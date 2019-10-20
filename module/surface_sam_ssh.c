@@ -108,8 +108,8 @@ struct ssh_frame_ctrl {
 struct ssh_frame_cmd {
 	u8 type;
 	u8 tc;
-	u8 unknown1;
-	u8 unknown2;
+	u8 outgoing;		// assumed to be 0x01 for SSH to SAM messages, 0x00 otherwise
+	u8 incoming;		// assumed to be 0x01 for SAM to SSH messages, 0x00 otherwise
 	u8 iid;
 	u8 rqid_lo;		// id for request/response matching (low byte)
 	u8 rqid_hi;		// id for request/response matching (high byte)
@@ -530,8 +530,8 @@ inline static void ssh_write_cmd(struct ssh_writer *writer,
 
 	cmd->type     = SSH_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
-	cmd->unknown1 = 0x01;
-	cmd->unknown2 = 0x00;
+	cmd->outgoing = 0x01;
+	cmd->incoming = 0x00;
 	cmd->iid      = rqst->iid;
 	cmd->rqid_lo  = rqid_lo;
 	cmd->rqid_hi  = rqid_hi;
