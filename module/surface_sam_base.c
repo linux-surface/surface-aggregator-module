@@ -17,40 +17,40 @@ int __init surface_sam_init(void)
 
 	status = serdev_device_driver_register(&surface_sam_ssh);
 	if (status) {
-		goto err_init_ssh;
+		goto err_ssh;
 	}
 
 	status = platform_driver_register(&surface_sam_san);
 	if (status) {
-		goto err_init_san;
+		goto err_san;
 	}
 
 	status = platform_driver_register(&surface_sam_vhf);
 	if (status) {
-		goto err_init_vhf;
+		goto err_vhf;
 	}
 
 	status = platform_driver_register(&surface_sam_dtx);
 	if (status) {
-		goto err_init_dtx;
+		goto err_dtx;
 	}
 
 	status = platform_driver_register(&surface_sam_sid);
 	if (status) {
-		goto err_init_sid;
+		goto err_sid;
 	}
 
 	return 0;
 
-err_init_sid:
+err_sid:
 	platform_driver_unregister(&surface_sam_dtx);
-err_init_dtx:
+err_dtx:
 	platform_driver_unregister(&surface_sam_vhf);
-err_init_vhf:
+err_vhf:
 	platform_driver_unregister(&surface_sam_san);
-err_init_san:
+err_san:
 	serdev_device_driver_unregister(&surface_sam_ssh);
-err_init_ssh:
+err_ssh:
 	return status;
 }
 

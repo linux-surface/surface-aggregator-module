@@ -640,7 +640,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	for (try = 0; try < SSH_NUM_RETRY; try++) {
 		status = ssh_writer_flush(ec);
 		if (status) {
-			goto ec_rqst_out;
+			goto out;
 		}
 
 		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_READ_TIMEOUT);
@@ -658,7 +658,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	if (try >= SSH_NUM_RETRY) {
 		dev_err(dev, SSH_RQST_TAG "communication failed %d times, giving up\n", try);
 		status = -EIO;
-		goto ec_rqst_out;
+		goto out;
 	}
 
 	ec->counter.seq  += 1;
@@ -673,7 +673,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 			if (result->cap < packet.len) {
 				status = -EINVAL;
-				goto ec_rqst_out;
+				goto out;
 			}
 
 			// completion assures valid packet, thus ignore returned length
@@ -682,18 +682,18 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 		} else {
 			dev_err(dev, SSH_RQST_TAG "communication timed out\n");
 			status = -EIO;
-			goto ec_rqst_out;
+			goto out;
 		}
 
 		// send ACK
 		ssh_write_msg_ack(ec, packet.seq);
 		status = ssh_writer_flush(ec);
 		if (status) {
-			goto ec_rqst_out;
+			goto out;
 		}
 	}
 
-ec_rqst_out:
+out:
 	ssh_receiver_discard(ec);
 	return status;
 }
@@ -1402,31 +1402,31 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	write_buf = kzalloc(SSH_WRITE_BUF_LEN, GFP_KERNEL);
 	if (!write_buf) {
 		status = -ENOMEM;
-		goto err_probe_write_buf;
+		goto err_write_buf;
 	}
 
 	read_buf = kzalloc(SSH_READ_BUF_LEN, GFP_KERNEL);
 	if (!read_buf) {
 		status = -ENOMEM;
-		goto err_probe_read_buf;
+		goto err_read_buf;
 	}
 
 	eval_buf = kzalloc(SSH_EVAL_BUF_LEN, GFP_KERNEL);
 	if (!eval_buf) {
 		status = -ENOMEM;
-		goto err_probe_eval_buf;
+		goto err_eval_buf;
 	}
 
 	event_queue_ack = create_singlethread_workqueue("sg5_ackq");
 	if (!event_queue_ack) {
 		status = -ENOMEM;
-		goto err_probe_ackq;
+		goto err_ackq;
 	}
 
 	event_queue_evt = create_workqueue("sg5_evtq");
 	if (!event_queue_evt) {
 		status = -ENOMEM;
-		goto err_probe_evtq;
+		goto err_evtq;
 	}
 
 	// set up EC
@@ -1436,7 +1436,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		surface_sam_ssh_release(ec);
 
 		status = -EBUSY;
-		goto err_probe_busy;
+		goto err_busy;
 	}
 
 	ec->serdev      = serdev;
@@ -1464,23 +1464,23 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	serdev_device_set_client_ops(serdev, &surfacegen5_ssh_device_ops);
 	status = serdev_device_open(serdev);
 	if (status) {
-		goto err_probe_open;
+		goto err_open;
 	}
 
 	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
 	                             ssh_setup_from_resource, serdev);
 	if (ACPI_FAILURE(status)) {
-		goto err_probe_devinit;
+		goto err_devinit;
 	}
 
 	status = surfacegen5_ssh_ec_resume(ec);
 	if (status) {
-		goto err_probe_devinit;
+		goto err_devinit;
 	}
 
 	status = surface_sam_ssh_sysfs_register(&serdev->dev);
 	if (status) {
-		goto err_probe_devinit;
+		goto err_devinit;
 	}
 
 	surface_sam_ssh_release(ec);
@@ -1489,23 +1489,23 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	return 0;
 
-err_probe_devinit:
+err_devinit:
 	serdev_device_close(serdev);
-err_probe_open:
+err_open:
 	ec->state = SSH_EC_UNINITIALIZED;
 	serdev_device_set_drvdata(serdev, NULL);
 	surface_sam_ssh_release(ec);
-err_probe_busy:
+err_busy:
 	destroy_workqueue(event_queue_evt);
-err_probe_evtq:
+err_evtq:
 	destroy_workqueue(event_queue_ack);
-err_probe_ackq:
+err_ackq:
 	kfree(eval_buf);
-err_probe_eval_buf:
+err_eval_buf:
 	kfree(read_buf);
-err_probe_read_buf:
+err_read_buf:
 	kfree(write_buf);
-err_probe_write_buf:
+err_write_buf:
 	return status;
 }
 

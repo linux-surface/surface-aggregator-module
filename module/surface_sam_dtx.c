@@ -454,19 +454,19 @@ static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
 
 	status = surface_sam_ssh_set_event_handler(SAM_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
 	if (status) {
-		goto err_event_handler;
+		goto err_handler;
 	}
 
 	status = surface_sam_ssh_enable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
 	if (status) {
-		goto err_event_source;
+		goto err_source;
 	}
 
 	return 0;
 
-err_event_source:
+err_source:
 	surface_sam_ssh_remove_event_handler(SAM_EVENT_DTX_RQID);
-err_event_handler:
+err_handler:
 	return status;
 }
 
