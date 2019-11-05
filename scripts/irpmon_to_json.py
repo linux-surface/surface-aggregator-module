@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import print_function
 import sys
+import codecs
 import json
 
 
@@ -154,7 +155,7 @@ def parse_commands(data):
 
 
 def main(in_file):
-    with open(in_file, 'r') as fd:
+    with codecs.open(in_file, 'r', encoding='utf-8', errors='ignore') as fd:
         data = parse_file(fd)
 
     print(json.dumps(parse_commands(data)))
