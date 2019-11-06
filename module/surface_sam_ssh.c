@@ -219,11 +219,6 @@ static struct sam_ssh_ec ssh_ec = {
 };
 
 
-static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
-					 const struct surface_sam_ssh_rqst *rqst,
-					 struct surface_sam_ssh_buf *result);
-
-
 inline static struct sam_ssh_ec *surface_sam_ssh_acquire(void)
 {
 	struct sam_ssh_ec *ec = &ssh_ec;
@@ -282,8 +277,6 @@ inline static bool sam_rqid_is_event(u16 rqid) {
 
 int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
-	struct sam_ssh_ec *ec;
-
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
 
@@ -310,28 +303,14 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 		return -EINVAL;
 	}
 
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec) {
-		printk(KERN_WARNING SSH_RQST_TAG_FULL "embedded controller is uninitialized\n");
-		return -ENXIO;
-	}
-
-	if (ec->state == SSH_EC_SUSPENDED) {
-		dev_warn(&ec->serdev->dev, SSH_RQST_TAG "embedded controller is suspended\n");
-
-		surface_sam_ssh_release(ec);
-		return -EPERM;
-	}
-
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = surface_sam_ssh_rqst(&rqst, &result);
 
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev,
-		         "unexpected result while enabling event source: 0x%02x\n",
-			 buf[0]);
+		printk(KERN_WARNING SSH_RQST_TAG_FULL
+		       "unexpected result while enabling event source: 0x%02x\n",
+		       buf[0]);
 	}
 
-	surface_sam_ssh_release(ec);
 	return status;
 
 }
@@ -339,8 +318,6 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_enable_event_source);
 
 int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
-	struct sam_ssh_ec *ec;
-
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
 
@@ -367,28 +344,14 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 		return -EINVAL;
 	}
 
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec) {
-		printk(KERN_WARNING SSH_RQST_TAG_FULL "embedded controller is uninitialized\n");
-		return -ENXIO;
-	}
-
-	if (ec->state == SSH_EC_SUSPENDED) {
-		dev_warn(&ec->serdev->dev, SSH_RQST_TAG "embedded controller is suspended\n");
-
-		surface_sam_ssh_release(ec);
-		return -EPERM;
-	}
-
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = surface_sam_ssh_rqst(&rqst, &result);
 
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev,
-		         "unexpected result while disabling event source: 0x%02x\n",
-			 buf[0]);
+		printk(KERN_WARNING SSH_RQST_TAG_FULL
+		       "unexpected result while disabling event source: 0x%02x\n",
+		       buf[0]);
 	}
 
-	surface_sam_ssh_release(ec);
 	return status;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_disable_event_source);
