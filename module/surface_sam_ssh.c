@@ -393,6 +393,11 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_disable_event_source);
 
+static unsigned long sam_event_default_delay(struct surface_sam_ssh_event *event, void *data)
+{
+	return event->pri == SURFACE_SAM_PRIORITY_HIGH ? SURFACE_SAM_SSH_EVENT_IMMEDIATE : 0;
+}
+
 int surface_sam_ssh_set_delayed_event_handler(
 		u16 rqid, surface_sam_ssh_event_handler_fn fn,
 		surface_sam_ssh_event_handler_delay delay,
@@ -408,6 +413,10 @@ int surface_sam_ssh_set_delayed_event_handler(
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec) {
 		return -ENXIO;
+	}
+
+	if (!delay) {
+		delay = sam_event_default_delay;
 	}
 
 	spin_lock_irqsave(&ec->events.lock, flags);
@@ -960,10 +969,8 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 
 	spin_lock_irqsave(&ec->events.lock, flags);
 	handler_data = ec->events.handler[work->event.rqid - 1].data;
-	delay_fn     = ec->events.handler[work->event.rqid - 1].delay;
-	if (delay_fn) {
-		delay = delay_fn(&work->event, handler_data);
-	}
+	delay_fn = ec->events.handler[work->event.rqid - 1].delay;
+	delay = delay_fn(&work->event, handler_data);
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	// immediate execution for high priority events (e.g. keyboard)
