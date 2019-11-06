@@ -1,0 +1,118 @@
+List of Know EC Requests
+================================================================================
+
+
+Basics / Concepts / Nomenclature
+--------------------------------------------------------------------------------
+
+Requests consist of the following bytes:
+
+- TC:  Target category. The category of the command.
+- CID: Command ID. The ID of the command.
+- IID: Instance ID. In case of multiple devices with the same functionality,
+       this is non-zero and indicates the device.
+- PRI: Priority. 0x01 for normal, 0x02 for hihg. High priority events and
+       requests have only been found on input devices.
+
+These four bytes uniquely define a command. In addition, commands can have a
+payload and return a response.
+
+Additionally, we differentiate between requests (sent from hosts to EC,
+potentially prompting a response) and events (sent by the EC without any
+direct prior request, may need to be set up).
+
+
+List of Target Categories:
+--------------------------------------------------------------------------------
+
+      TC  Name/Function
+    -----------------------------------------------------------------------
+    0x01  Generic system functionality and real-time clock
+    0x02  Battery/Power-subsystem
+    0x03  Thermal subsystem, temperature probes
+    0x11  Detachment system and discrete graphics (Surface Book 2)
+
+
+List of System Requests (TC = 0x01)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x15  0x00  0x01  yes      yes       Suspend EC             log
+    0x16  0x00  0x01  yes      yes       Resume EC              log
+
+    0x0b  0x00  0x01  yes      yes       Enable event source    log
+    0x0c  0x00  0x01  no       yes       Disable event source   log
+
+    0x1a  0x00  0x01  yes      yes       RTC: ACPI/_STV         dsdt
+    0x1b  0x00  0x01  yes      yes       RTC: ACPI/_GWS         dsdt
+    0x1c  0x00  0x01  yes      yes       RTC: ACPI/_CWS         dsdt
+    0x1d  0x00  0x01  yes      yes       RTC: ACPI/_TIV         dsdt
+
+    0x1f  0x00  0x01  no       yes       RTC: ACPI/_GRT         dsdt
+    0x20  0x00  0x01  yes      yes       RTC: ACPI/_SRT         dsdt
+
+
+List of Power Subsystem Requests (TC = 0x02)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x01  #BAT  0x01  no       yes       ACPI/_STA              dsdt
+    0x02  #BAT  0x01  no       yes       ACPI/_BIX              dsdt
+    0x03  #BAT  0x01  no       yes       ACPI/_BST              dsdt
+    0x04  #BAT  0x01  yes      no        ACPI/_BTP              dsdt
+
+    0x0b  #BAT  0x01  no       yes       ACPI/PMAX              dsdt
+    0x0c  #BAT  0x01  no       yes       ACPI/PSOC              dsdt
+    0x0d  #BAT  0x01  no       yes       ACPI/PSRC              dsdt
+    0x0e  #BAT  0x01  yes      no        ACPI/CHGI              dsdt
+    0x0f  #BAT  0x01  no       yes       ACPI/ARTG              dsdt
+
+Note: CID 0x0b to 0x0f are Intel DPTF commands.
+
+
+List of Power Subsystem Events (TC = 0x02)
+--------------------------------------------------------------------------------
+
+# TODO
+
+
+List of Thermal Subsystem Requests (TC = 0x03)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x01  #SEN  0x01  no       yes       ACPI/_TMP              dsdt
+    0x02  0x00  0x01  no       yes       Get performance mode   log
+    0x03  0x00  0x01  yes      no        Set performance mode   log
+    0x04  0x00  0x01  no       yes       Get available sensors  dsdt
+
+    0x09  #SEN  0x01  yes      yes       Set sensor trip point  dsdt
+
+Note: CID 0x09 is an Intel DPTF command.
+
+
+List of Thermal Subsystem Events (TC = 0x03)
+--------------------------------------------------------------------------------
+
+# TODO
+
+
+List of Detachment System Requests (TC = 0x11)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x06  0x00  0x01  no       no        Lock latch             dsdt
+    0x07  0x00  0x01  no       no        Unlock latch           dsdt
+    0x08  0x00  0x01  no       no        Request latch open     log
+    0x09  0x00  0x01  no       no        Confirm latch open     log
+
+    0x0d  0x00  0x01  no       no        Get device OpMode      dsdt
+
+
+List of Detachment System Events (TC = 0x11)
+--------------------------------------------------------------------------------
+
+# TODO
