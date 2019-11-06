@@ -65,9 +65,10 @@
 #define SSH_READ_BUF_LEN		512		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
-#define SSH_FRAME_TYPE_CMD		0x80
-#define SSH_FRAME_TYPE_ACK		0x40
-#define SSH_FRAME_TYPE_RETRY		0x04
+#define SSH_FRAME_TYPE_CMD_NOACK	0x00	// request/event that does not to be ACKed
+#define SSH_FRAME_TYPE_CMD		0x80	// request/event
+#define SSH_FRAME_TYPE_ACK		0x40	// ACK for request/event
+#define SSH_FRAME_TYPE_RETRY		0x04	// error or retry indicator
 
 #define SSH_FRAME_OFFS_CTRL		SSH_BYTELEN_SYNC
 #define SSH_FRAME_OFFS_CTRL_CRC		(SSH_FRAME_OFFS_CTRL + SSH_BYTELEN_CTRL)
@@ -665,10 +666,12 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 		}
 
 		// send ACK
-		ssh_write_msg_ack(ec, packet.seq);
-		status = ssh_writer_flush(ec);
-		if (status) {
-			goto out;
+		if (packet.type == SSH_FRAME_TYPE_CMD) {
+			ssh_write_msg_ack(ec, packet.seq);
+			status = ssh_writer_flush(ec);
+			if (status) {
+				goto out;
+			}
 		}
 	}
 
@@ -914,7 +917,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 		return;
 	}
 
-	refcount_set(&work->refcount, 2);
+	refcount_set(&work->refcount, 1);
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
 	work->event.rqid = (cmd->rqid_hi << 8) | cmd->rqid_lo;
@@ -927,8 +930,12 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 
 	memcpy(work->event.pld, buf + SSH_FRAME_OFFS_CMD_PLD, pld_len);
 
-	INIT_WORK(&work->work_ack, surface_sam_ssh_event_work_ack_handler);
-	queue_work(ec->events.queue_ack, &work->work_ack);
+	// queue ACK for if required
+	if (ctrl->type == SSH_FRAME_TYPE_CMD) {
+		refcount_set(&work->refcount, 2);
+		INIT_WORK(&work->work_ack, surface_sam_ssh_event_work_ack_handler);
+		queue_work(ec->events.queue_ack, &work->work_ack);
+	}
 
 	spin_lock_irqsave(&ec->events.lock, flags);
 	handler_data = ec->events.handler[work->event.rqid - 1].data;
@@ -999,7 +1006,7 @@ static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t siz
 	} else {
 		dev_warn(dev, SSH_RECV_TAG
 			 "dropping frame: not enough space in fifo (type = %d)\n",
-			 SSH_FRAME_TYPE_CMD);
+			 ctrl->type);
 
 		return SSH_MSG_LEN_CTRL;	// discard message
 	}
@@ -1107,7 +1114,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	} else {
 		dev_warn(dev, SSH_RECV_TAG
 			 "dropping frame: not enough space in fifo (type = %d)\n",
-			 SSH_FRAME_TYPE_CMD);
+			 ctrl->type);
 
 		return SSH_MSG_LEN_CTRL;	// discard message
 	}
@@ -1143,6 +1150,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 		return ssh_receive_msg_ctrl(ec, buf, size);
 
 	case SSH_FRAME_TYPE_CMD:
+	case SSH_FRAME_TYPE_CMD_NOACK:
 		return ssh_receive_msg_cmd(ec, buf, size);
 
 	default:
