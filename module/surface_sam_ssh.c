@@ -108,8 +108,8 @@ struct ssh_frame_ctrl {
 struct ssh_frame_cmd {
 	u8 type;
 	u8 tc;
-	u8 outgoing;		// assumed to be 0x01 for SSH to SAM messages, 0x00 otherwise
-	u8 incoming;		// assumed to be 0x01 for SAM to SSH messages, 0x00 otherwise
+	u8 pri_out;
+	u8 pri_in;
 	u8 iid;
 	u8 rqid_lo;		// id for request/response matching (low byte)
 	u8 rqid_hi;		// id for request/response matching (high byte)
@@ -289,8 +289,9 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
-		.iid = 0x00,
 		.cid = 0x0b,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
@@ -345,8 +346,9 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
-		.iid = 0x00,
 		.cid = 0x0c,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
@@ -530,8 +532,8 @@ inline static void ssh_write_cmd(struct ssh_writer *writer,
 
 	cmd->type     = SSH_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
-	cmd->outgoing = 0x01;
-	cmd->incoming = 0x00;
+	cmd->pri_out  = rqst->pri;
+	cmd->pri_in   = 0x00;
 	cmd->iid      = rqst->iid;
 	cmd->rqid_lo  = rqid_lo;
 	cmd->rqid_hi  = rqid_hi;
@@ -735,8 +737,9 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
-		.iid = 0x00,
 		.cid = 0x16,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -768,8 +771,9 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
-		.iid = 0x00,
 		.cid = 0x15,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -943,8 +947,9 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	work->seq        = ctrl->seq;
 	work->event.rqid = (cmd->rqid_hi << 8) | cmd->rqid_lo;
 	work->event.tc   = cmd->tc;
-	work->event.iid  = cmd->iid;
 	work->event.cid  = cmd->cid;
+	work->event.iid  = cmd->iid;
+	work->event.pri  = cmd->pri_in;
 	work->event.len  = pld_len;
 	work->event.pld  = ((u8*) work) + sizeof(struct ssh_event_work);
 

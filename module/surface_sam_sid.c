@@ -181,8 +181,9 @@ static int surface_sam_perf_mode_get(void)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x03,
-		.iid = 0x00,
 		.cid = 0x02,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -212,8 +213,9 @@ static int surface_sam_perf_mode_set(int perf_mode)
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x03,
-		.iid = 0x00,
 		.cid = 0x03,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
 		.snc = 0x00,
 		.cdl = ARRAY_SIZE(payload),
 		.pld = payload,

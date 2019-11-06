@@ -10,6 +10,17 @@ static char sam_ssh_debug_rqst_buf_pld[SURFACE_SAM_SSH_MAX_RQST_PAYLOAD] = { 0 }
 static char sam_ssh_debug_rqst_buf_res[SURFACE_SAM_SSH_MAX_RQST_RESPONSE] = { 0 };
 
 
+struct sysfs_rqst {
+	u8 tc;
+	u8 cid;
+	u8 iid;
+	u8 pri;
+	u8 snc;
+	u8 cdl;
+	u8 pld[0];
+} __packed;
+
+
 static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
                          char *buf, loff_t offs, size_t count)
 {
@@ -24,27 +35,35 @@ static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attrib
 static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
 			  char *buf, loff_t offs, size_t count)
 {
+	struct sysfs_rqst *input;
 	struct surface_sam_ssh_rqst rqst = {};
 	struct surface_sam_ssh_buf result = {};
 	int status;
 
 	// check basic write constriants
-	if (offs != 0 || count > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD + 5) {
+	if (offs != 0 || count > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD + sizeof(struct sysfs_rqst)) {
 		return -EINVAL;
 	}
+
+	if (count < sizeof(struct sysfs_rqst)) {
+		return -EINVAL;
+	}
+
+	input = (struct sysfs_rqst *)buf;
 
 	// payload length should be consistent with data provided
-	if (buf[4] + 5 != count) {
+	if (input->cdl + sizeof(struct sysfs_rqst) != count) {
 		return -EINVAL;
 	}
 
-	rqst.tc  = buf[0];
-	rqst.iid = buf[1];
-	rqst.cid = buf[2];
-	rqst.snc = buf[3];
-	rqst.cdl = buf[4];
+	rqst.tc  = input->tc;
+	rqst.cid = input->cid;
+	rqst.iid = input->iid;
+	rqst.pri = input->pri;
+	rqst.snc = input->snc;
+	rqst.cdl = input->cdl;
 	rqst.pld = sam_ssh_debug_rqst_buf_pld;
-	memcpy(sam_ssh_debug_rqst_buf_pld, buf + 5, count - 5);
+	memcpy(sam_ssh_debug_rqst_buf_pld, &input->pld[0], input->cdl);
 
 	result.cap = SURFACE_SAM_SSH_MAX_RQST_RESPONSE;
 	result.len = 0;
