@@ -30,6 +30,7 @@ List of Target Categories:
     0x01  Generic system functionality and real-time clock
     0x02  Battery/Power-subsystem
     0x03  Thermal subsystem, temperature probes
+    0x08  Laptop 1/Laptop 2 keyboard
     0x11  Detachment system and discrete graphics (Surface Book 2)
 
 
@@ -65,7 +66,7 @@ List of Power Subsystem Requests (TC = 0x02)
 
     0x0b  #BAT  0x01  no       yes       ACPI/PMAX              dsdt
     0x0c  #BAT  0x01  no       yes       ACPI/PSOC              dsdt
-    0x0d  #BAT  0x01  no       yes       ACPI/PSRC              dsdt
+    0x0d  #BAT  0x01  no       yes       ACPI/PSRC, ACPI/_PSR   dsdt
     0x0e  #BAT  0x01  yes      no        ACPI/CHGI              dsdt
     0x0f  #BAT  0x01  no       yes       ACPI/ARTG              dsdt
 
@@ -75,7 +76,13 @@ Note: CID 0x0b to 0x0f are Intel DPTF commands.
 List of Power Subsystem Events (TC = 0x02)
 --------------------------------------------------------------------------------
 
-# TODO
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x15  #BAT  0x01  no       Battery hardware changed         log(+dsdt)
+    0x16  #BAT  0x01  no       Battery charging state changed   log(+dsdt)
+    0x17  0x01  0x01  no       Power adapter status changed     log(+dsdt)
+
+    0x4f  0x00  0x01  yes      Power state changed (?)          log(+dsdt)
 
 
 List of Thermal Subsystem Requests (TC = 0x03)
@@ -96,7 +103,17 @@ Note: CID 0x09 is an Intel DPTF command.
 List of Thermal Subsystem Events (TC = 0x03)
 --------------------------------------------------------------------------------
 
-# TODO
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x0b  #SEN  0x01  ?        Notify sensor trip-point         log+dsdt
+
+
+List of SL1/SL2 Keyboard Events (TC = 0x08)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x03  0x00  0x02  yes      Keyboard HID input               log
 
 
 List of Detachment System Requests (TC = 0x11)
@@ -115,4 +132,11 @@ List of Detachment System Requests (TC = 0x11)
 List of Detachment System Events (TC = 0x11)
 --------------------------------------------------------------------------------
 
-# TODO
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x0c  0x00  0x01  yes      connection                       log
+
+    0x0e  0x00  0x01  no       button/request                   log
+    0x0f  0x00  0x01  yes      error/timeout                    log
+
+    0x11  0x00  0x01  yes      latch status                     log
