@@ -59,20 +59,24 @@ class FrameCmd:
 
 
 def parse_file(file):
+    function = 'NONE'
     data = False
     lines = []
     cmddata = []
 
     for line in file:
-        if line.startswith("Data (Hexer)"):
+        if line.startswith("Major function ="):
+            function = line.split('=', 1)[1].strip()
+        elif line.startswith("Data (Hexer)"):
             data = True
         elif data and line.startswith("  "):
             lines.append(line.strip())
         elif data:
-            for l in lines:
-                strdata = l.split("\t")[1]
-                bytedata = [int(x, 16) for x in strdata.split()]
-                cmddata += bytedata
+            if function == 'Read' or function == 'Write':
+                for l in lines:
+                    strdata = l.split("\t")[1]
+                    bytedata = [int(x, 16) for x in strdata.split()]
+                    cmddata += bytedata
 
             data = False
             lines = []
@@ -149,6 +153,7 @@ def parse_commands(data):
             data = parse_ter(data)
             records.append({"ctrl": ctrl.to_dict()})
         elif ctrl.type == 0x04:
+            data = parse_ter(data)
             records.append({"ctrl": ctrl.to_dict()})
 
     return records
