@@ -2,6 +2,8 @@
 import sys
 import os
 
+PATH_DEV_RQST = '/sys/bus/serial/devices/serial0-0/rqst'
+
 
 # commands       [  TC,  CID,  IID,  PRI,  SNC,  CDL]
 # detach lock    [0x11, 0x06, 0x00, 0x01, 0x00, 0x00]
@@ -14,8 +16,8 @@ def performance_state_request(state):
     return bytes([0x03, 0x03, 0x00, 0x01, 0x00, 0x04, state, 0x00, 0x00, 0x00])
 
 
-def main(path):
-    fd = os.open(path, os.O_RDWR | os.O_SYNC)
+def main():
+    fd = os.open(PATH_DEV_RQST, os.O_RDWR | os.O_SYNC)
 
     #            [  TC,  CID,  IID,  PRI,  SNC,  CDL, payload...]
     data = bytes(performance_state_request(state=0x04))
@@ -32,4 +34,4 @@ def main(path):
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main()
