@@ -16,6 +16,11 @@ static const struct sid_lid_device lid_device_l17 = {
 	.gpe_number = 0x17,
 };
 
+static const struct sid_lid_device lid_device_l4D = {
+	.acpi_path = "\\_SB.LID0",
+	.gpe_number = 0x4D,
+};
+
 static const struct sid_lid_device lid_device_l4F = {
 	.acpi_path = "\\_SB.LID0",
 	.gpe_number = 0x4F,
@@ -61,6 +66,14 @@ static const struct dmi_system_id dmi_lid_device_table[] = {
 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 6"),
 		},
 		.driver_data = (void *)&lid_device_l4F,
+	},
+	{
+		.ident = "Surface Pro 7",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 7"),
+		},
+		.driver_data = (void *)&lid_device_l4D,
 	},
 	{
 		.ident = "Surface Book 1",

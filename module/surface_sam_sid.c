@@ -10,6 +10,11 @@ static const struct mfd_cell sid_devs_sp4[] = {
 	{ },
 };
 
+static const struct mfd_cell sid_devs_sp7[] = {
+	{ .name = "surface_sam_sid_gpelid", .id = -1 },
+	{ },
+};
+
 static const struct mfd_cell sid_devs_sb1[] = {
 	{ .name = "surface_sam_sid_gpelid", .id = -1 },
 	{ },
@@ -33,6 +38,7 @@ static const struct mfd_cell sid_devs_sl2[] = {
 
 static const struct acpi_device_id surface_sam_sid_match[] = {
 	{ "MSHW0081", (unsigned long)sid_devs_sp4 },	/* Surface Pro 4, 5, and 6 */
+	{ "MSHW0116", (unsigned long)sid_devs_sp7 },	/* Surface Pro 7 */
 	{ "MSHW0080", (unsigned long)sid_devs_sb1 },	/* Surface Book 1 */
 	{ "MSHW0107", (unsigned long)sid_devs_sb2 },	/* Surface Book 2 */
 	{ "MSHW0086", (unsigned long)sid_devs_sl1 },	/* Surface Laptop 1 */
