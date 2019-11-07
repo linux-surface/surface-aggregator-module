@@ -37,6 +37,7 @@ static const struct mfd_cell sid_devs_sl2[] = {
 };
 
 static const struct mfd_cell sid_devs_sl3_13[] = {
+	{ .name = "surface_sam_sid_gpelid", .id = -1 },
 	{ },
 };
 

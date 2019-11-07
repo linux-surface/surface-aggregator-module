@@ -107,6 +107,14 @@ static const struct dmi_system_id dmi_lid_device_table[] = {
 		},
 		.driver_data = (void *)&lid_device_l57,
 	},
+	{
+		.ident = "Surface Laptop 3 (13\")",
+		.matches = {
+			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Laptop_3_1867:1868"),
+		},
+		.driver_data = (void *)&lid_device_l4D,
+	},
 	{ }
 };
 
