@@ -36,6 +36,14 @@ static const struct mfd_cell sid_devs_sl2[] = {
 	{ },
 };
 
+static const struct mfd_cell sid_devs_sl3_13[] = {
+	{ },
+};
+
+static const struct mfd_cell sid_devs_sl3_15[] = {
+	{ },
+};
+
 static const struct acpi_device_id surface_sam_sid_match[] = {
 	{ "MSHW0081", (unsigned long)sid_devs_sp4 },	/* Surface Pro 4, 5, and 6 */
 	{ "MSHW0116", (unsigned long)sid_devs_sp7 },	/* Surface Pro 7 */
@@ -43,6 +51,8 @@ static const struct acpi_device_id surface_sam_sid_match[] = {
 	{ "MSHW0107", (unsigned long)sid_devs_sb2 },	/* Surface Book 2 */
 	{ "MSHW0086", (unsigned long)sid_devs_sl1 },	/* Surface Laptop 1 */
 	{ "MSHW0112", (unsigned long)sid_devs_sl2 },	/* Surface Laptop 2 */
+	{ "MSHW0114", (unsigned long)sid_devs_sl3_13 },	/* Surface Laptop 3 (13") */
+	{ "MSHW0110", (unsigned long)sid_devs_sl3_15 },	/* Surface Laptop 3 (15") */	// TODO: verify
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_sid_match);
@@ -64,6 +74,9 @@ static int surface_sam_sid_probe(struct platform_device *pdev)
 	for (p = cells; p->name; ++p) {
 		/* just count */
 	}
+
+	if (p == cells)
+		return -ENODEV;
 
 	return mfd_add_devices(&pdev->dev, 0, cells, p - cells, NULL, 0, NULL);
 }
