@@ -142,6 +142,28 @@ List of Detachment System Events (TC = 0x11)
     0x11  0x00  0x01  yes      latch status                     log
 
 
+List of Input System Requests (TC = 0x15)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x01  any   0x02  yes      no        output report          log
+    0x02  any   0x02  yes      no        set feature report     log
+    0x03  any   0x02  yes      yes       get feature report     log
+    0x04  #ID   0x02  yes      yes       subdevice meta (HID)   log
+
+Note: #ID can be any device ID plus 0 which represents all of the device data
+accumulated.
+
+
+List of Input System Events (TC = 0x15)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x00  #ID   0x02  yes      input report (touchpad)          log
+
+Note: Keyboard events are sent over IID 0.
 
 List of Unknown EC Requests
 ================================================================================
@@ -152,6 +174,15 @@ awaiting a response. It is also unclear if and what kind of payload these
 commands take. Furthermore, Some commands that we assume are undefined (e.g.
 TC=2, CID=1, IID=6) can lead to unexpected behavior (in this case turning
 off the system), which might be undefined.
+
+
+List of System Requests (TC = 0x01)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Function/Behavior      Source
+    ------------------------------------------------------------------------
+    0x33  0x00  0x01  no       yes       ???                    log
+    0x34  0x00  0x01  no       yes       ???                    log
 
 
 List of Unknown Power Subsystem Requests (TC = 0x02)
@@ -216,4 +247,14 @@ List of Unknown Category 4 Requests (TC = 0x04)
     0x06  0x00  0x01  ?        yes       ?                      probing
     0x07  0x00  0x01  ?        yes       ?                      probing
 
+List of ?? System Requests (TC = 0x21)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x02  0x00  0x02  yes      yes       ?? (possibly toggle)   log
+
+
 Note: This list may not be exhaustive.
+
+
