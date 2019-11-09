@@ -39,11 +39,11 @@ List of System Requests (TC = 0x01)
 
      CID   IID   PRI  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
-    0x15  0x00  0x01  yes      yes       Suspend EC             log
-    0x16  0x00  0x01  yes      yes       Resume EC              log
-
     0x0b  0x00  0x01  yes      yes       Enable event source    log
     0x0c  0x00  0x01  no       yes       Disable event source   log
+
+    0x15  0x00  0x01  yes      yes       Suspend EC             log
+    0x16  0x00  0x01  yes      yes       Resume EC              log
 
     0x1a  0x00  0x01  yes      yes       RTC: ACPI/_STV         dsdt
     0x1b  0x00  0x01  yes      yes       RTC: ACPI/_GWS         dsdt
