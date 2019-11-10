@@ -53,7 +53,7 @@ static const struct acpi_device_id surface_sam_sid_match[] = {
 	{ "MSHW0086", (unsigned long)sid_devs_sl1 },	/* Surface Laptop 1 */
 	{ "MSHW0112", (unsigned long)sid_devs_sl2 },	/* Surface Laptop 2 */
 	{ "MSHW0114", (unsigned long)sid_devs_sl3_13 },	/* Surface Laptop 3 (13") */
-	{ "MSHW0110", (unsigned long)sid_devs_sl3_15 },	/* Surface Laptop 3 (15") */	// TODO: verify
+	{ "MSHW0110", (unsigned long)sid_devs_sl3_15 },	/* Surface Laptop 3 (15") */
 	{ },
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_sid_match);
