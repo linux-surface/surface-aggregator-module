@@ -55,7 +55,7 @@
 
 
 // Warning: This must always be a power of 2!
-#define DTX_CLIENT_BUF_SIZE             		16
+#define DTX_CLIENT_BUF_SIZE				16
 
 #define DTX_CONNECT_OPMODE_DELAY			1000
 

@@ -93,7 +93,7 @@
  * Response Message:		sync cmd-hdr crc(cmd-hdr) cmd-resp-frame crc(cmd-resp-frame)
  *
  * Command Header:		80 LEN 00 SEQ
- * Ack:                 	40 00 00 SEQ
+ * Ack:				40 00 00 SEQ
  * Retry:			04 00 00 00
  * Command Request Frame:	80 RTC 01 00 RIID RQID RCID PLD
  * Command Response Frame:	80 RTC 00 01 RIID RQID RCID PLD

@@ -34,7 +34,7 @@ static const guid_t SAN_DSM_UUID =
 #define SAM_EVENT_TEMP_RQID		0x0003
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
-#define SAN_RQST_TAG            	"surface_sam_san_rqst: "
+#define SAN_RQST_TAG			"surface_sam_san_rqst: "
 
 #define SAN_QUIRK_BASE_STATE_DELAY	1000
 
