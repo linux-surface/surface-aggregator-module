@@ -384,6 +384,11 @@ int surface_sam_ssh_set_delayed_event_handler(
 	}
 
 	spin_lock_irqsave(&ec->events.lock, flags);
+	// check if we already have a handler
+	if (ec->events.handler[rqid - 1].handler) {
+		spin_unlock_irqrestore(&ec->events.lock, flags);
+		return -EINVAL;
+	}
 
 	// 0 is not a valid event RQID
 	ec->events.handler[rqid - 1].handler = fn;
