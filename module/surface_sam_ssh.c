@@ -909,7 +909,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 
 	surface_sam_ssh_event_handler_delay delay_fn;
 	void *handler_data;
-	unsigned long delay = 0;
+	unsigned long delay;
 
 	ctrl = (const struct ssh_frame_ctrl *)(buf + SSH_FRAME_OFFS_CTRL);
 	cmd  = (const struct ssh_frame_cmd  *)(buf + SSH_FRAME_OFFS_CMD);
@@ -945,7 +945,12 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	spin_lock_irqsave(&ec->events.lock, flags);
 	handler_data = ec->events.handler[work->event.rqid - 1].data;
 	delay_fn = ec->events.handler[work->event.rqid - 1].delay;
-	delay = delay_fn(&work->event, handler_data);
+
+	/* Note:
+	 * We need to check delay_fn here: This may have never been set as we
+	 * can't guarantee that events only occur when they have been enabled.
+	 */
+	delay = delay_fn ? delay_fn(&work->event, handler_data) : 0;
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	// immediate execution for high priority events (e.g. keyboard)
