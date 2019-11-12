@@ -13,6 +13,7 @@ surface_sam-objs += surface_sam_dtx.o
 surface_sam-objs += surface_sam_sid.o
 surface_sam-objs += surface_sam_sid_gpelid.o
 surface_sam-objs += surface_sam_sid_perfmode.o
+surface_sam-objs += surface_sam_sid_vhf.o
 
 sources := Makefile
 sources += dkms.conf
@@ -26,6 +27,7 @@ sources += surface_sam_dtx.c
 sources += surface_sam_sid.c
 sources += surface_sam_sid_gpelid.c
 sources += surface_sam_sid_perfmode.c
+sources += surface_sam_sid_vhf.c
 
 ccflags-y := -DDEBUG
 
