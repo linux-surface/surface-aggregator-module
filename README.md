@@ -7,13 +7,16 @@ _If you have a Surface Book 2 you might also want to have a look at the [dtx-dae
 
 ## Supported Features and Devices
 
-| Device           | Supported Features                                                     | Known Issues/Missing Features                                           |
-|------------------|------------------------------------------------------------------------|-------------------------------------------------------------------------|
-| Surface Book 2   | lid status, battery status, clipboard detach events, performance-modes | -                                                                       |
-| Surface Laptop   | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18)                       |
-| Surface Laptop 2 | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18)                       |
-| Surface Pro 2017 | battery status                                                         | keyboard backlight enabled during suspend (#4), performance-modes (#18) |
-| Surface Pro 6    | battery status                                                         | keyboard backlight enabled during suspend (#4), performance-modes (#18) |
+| Device                 | Supported Features                                                     | Known Issues/Missing Features                                           |
+|------------------------|------------------------------------------------------------------------|-------------------------------------------------------------------------|
+| Surface Book 2         | lid status, battery status, clipboard detach events, performance-modes | -                                                                       |
+| Surface Laptop         | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18)                       |
+| Surface Laptop 2       | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18)                       |
+| Surface Laptop 3 (13") | keyboard                                                               | battery status (#21), ..?                                               |
+| Surface Laptop 3 (15") | keyboard                                                               | battery status (#21), ..?                                               |
+| Surface Pro 2017       | battery status                                                         | keyboard backlight enabled during suspend (#4), performance-modes (#18) |
+| Surface Pro 6          | battery status                                                         | keyboard backlight enabled during suspend (#4), performance-modes (#18) |
+| Surface Pro 7          |                                                                        | battery status (#21), ..?                                               |
 
 If you want to help out, have a look at the corresponding issues.
 In most cases, we just need a bit of information from someone who owns such a device.
