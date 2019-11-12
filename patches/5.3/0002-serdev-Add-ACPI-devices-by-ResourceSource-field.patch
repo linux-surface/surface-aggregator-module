@@ -1,4 +1,4 @@
-From 7381cd62a0cb9326e1277526e77598c7477fbe8f Mon Sep 17 00:00:00 2001
+From bd43cb18da0efd5b7c76e69a2ebff0422e5fd199 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Tue, 24 Sep 2019 17:38:12 +0200
 Subject: [PATCH 2/3] serdev: Add ACPI devices by ResourceSource field
@@ -179,5 +179,5 @@ index a0ac16ee6575..226adeec2aed 100644
  	if (!ctrl->serdev)
  		return -ENODEV;
 -- 
-2.23.0
+2.24.0
 
