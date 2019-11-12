@@ -7,17 +7,149 @@
 
 /*
  * Common Power-Subsystem Interface.
- */ 
+ */
 
-struct sid_power_subsystem {
+enum spwr_battery_id {
+	SID_BAT1,
+	SID_BAT2,
+	__SID_NUM_BAT,
+};
+
+struct spwr_battery_device {
+	struct platform_device *pdev;
+	u8 iid;
+	// TODO
+};
+
+struct spwr_ac_device {
+	struct platform_device *pdev;
+	// TODO
+};
+
+struct spwr_subsystem {
 	struct mutex lock;
+
+	unsigned refcount;
+	struct spwr_ac_device *ac;
+	struct spwr_battery_device *battery[__SID_NUM_BAT];
+
 	// TODO
 };
 
-static struct sid_power_subsystem sid_power_subsystem = {
-	.lock   = __MUTEX_INITIALIZER(sid_power_subsystem.lock),
+static struct spwr_subsystem spwr_subsystem = {
+	.lock   = __MUTEX_INITIALIZER(spwr_subsystem.lock),
 	// TODO
 };
+
+
+static int spwr_subsys_init_unlocked(void)
+{
+	// TODO
+}
+
+static int spwr_subsys_deinit_unlocked(void)
+{
+	// TODO
+}
+
+static inline int spwr_subsys_ref_unlocked(void)
+{
+	int status = 0;
+
+	if (!spwr_subsystem.refcount)
+		status = spwr_subsys_init_unlocked();
+
+	spwr_subsystem.refcount += 1;
+	return status;
+}
+
+static inline int spwr_subsys_unref_unlocked(void)
+{
+	int status = 0;
+
+	if (spwr_subsystem.refcount)
+		spwr_subsystem.refcount -= 1;
+
+	if (!spwr_subsystem.refcount)
+		status = spwr_subsys_deinit_unlocked();
+
+	return status;
+}
+
+
+static int spwr_register_ac(struct spwr_ac_device *ac)
+{
+	int status;
+
+	mutex_lock(&spwr_subsystem.lock);
+	if (spwr_subsystem.ac) {
+		mutex_unlock(&spwr_subsystem.lock);
+		return -EEXIST;
+	}
+
+	spwr_subsystem.ac = ac;
+	status = spwr_subsys_ref_unlocked();
+	mutex_unlock(&spwr_subsystem.lock);
+
+	return status;
+}
+
+static int spwr_deregister_ac(struct spwr_ac_device *ac)
+{
+	int status;
+
+	mutex_lock(&spwr_subsystem.lock);
+	if (spwr_subsystem.ac != ac) {
+		mutex_unlock(&spwr_subsystem.lock);
+		return -EINVAL;
+	}
+
+	spwr_subsystem.ac = NULL;
+	status = spwr_subsys_unref_unlocked();
+	mutex_unlock(&spwr_subsystem.lock);
+
+	return status;
+}
+
+static int spwr_register_battery(struct spwr_battery_device *bat)
+{
+	int status;
+
+	if (bat->iid < 1 || bat->iid > __SID_NUM_BAT + 1)
+		return -EINVAL ;
+
+	mutex_lock(&spwr_subsystem.lock);
+	if (spwr_subsystem.battery[bat->iid - 1]) {
+		mutex_unlock(&spwr_subsystem.lock);
+		return -EEXIST;
+	}
+
+	spwr_subsystem.battery[bat->iid - 1] = bat;
+	status = spwr_subsys_ref_unlocked();
+	mutex_unlock(&spwr_subsystem.lock);
+
+	return status;
+}
+
+static int spwr_deregister_battery(struct spwr_battery_device *bat)
+{
+	int status;
+
+	if (bat->iid < 1 || bat->iid > __SID_NUM_BAT + 1)
+		return -EINVAL ;
+
+	mutex_lock(&spwr_subsystem.lock);
+	if (spwr_subsystem.battery[bat->iid - 1] != bat) {
+		mutex_unlock(&spwr_subsystem.lock);
+		return -EINVAL;
+	}
+
+	spwr_subsystem.battery[bat->iid - 1] = NULL;
+	status = spwr_subsys_unref_unlocked();
+	mutex_unlock(&spwr_subsystem.lock);
+
+	return status;
+}
 
 // TODO: power-subsystem/event handler interface
 
@@ -41,7 +173,7 @@ static struct sid_power_subsystem sid_power_subsystem = {
 
 
 /* Equivalent to data returned in ACPI _BIX method */
-struct sid_bix {
+struct spwr_bix {
 	u8  revision;
 	u32 power_unit;
 	u32 design_cap;
@@ -65,7 +197,7 @@ struct sid_bix {
 } __packed;
 
 /* Equivalent to data returned in ACPI _BST method */
-struct sid_bst {
+struct spwr_bst {
 	u32 state;
 	u32 present_rate;
 	u32 remaining_cap;
@@ -108,7 +240,7 @@ static int sam_psy_get_bix(u8 iid, struct sid_bix *bix)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(struct sid_bix);
+	result.cap = sizeof(struct spwr_bix);
 	result.len = 0;
 	result.data = (u8 *)bix;
 
@@ -129,7 +261,7 @@ static int sam_psy_get_bst(u8 iid, struct sid_bst *bst)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(struct sid_bst);
+	result.cap = sizeof(struct spwr_bst);
 	result.len = 0;
 	result.data = (u8 *)bst;
 
@@ -254,65 +386,35 @@ static int sam_psy_set_chgi(u8 iid, u32 chgi)
 }
 
 
-// To be removed...
-static int test(u8 iid)
-{
-	struct sid_bix bix;
-	struct sid_bst bst;
-	u32 sta;
-	int status;
-	int percentage;
-
-	status = sam_psy_get_sta(iid, &sta);
-	if (status < 0) {
-		printk(KERN_WARNING "sid_psy: sam_psy_get_sta failed with %d\n", status);
-		return status;
-	}
-	printk(KERN_WARNING "sid_psy: sam_psy_get_sta returned 0x%x\n", status);
-
-	status = sam_psy_get_bix(iid, &bix);
-	if (status < 0) {
-		printk(KERN_WARNING "sid_psy: sam_psy_get_bix failed with %d\n", status);
-		return status;
-	}
-
-	status = sam_psy_get_bst(iid, &bst);
-	if (status < 0) {
-		printk(KERN_WARNING "sid_psy: sam_psy_get_bst failed with %d\n", status);
-		return status;
-	}
-
-	printk(KERN_WARNING "sid_psy[%d]: bix: model: %s\n", iid, bix.model);
-	printk(KERN_WARNING "sid_psy[%d]: bix: serial: %s\n", iid, bix.serial);
-	printk(KERN_WARNING "sid_psy[%d]: bix: type: %s\n", iid, bix.type);
-	printk(KERN_WARNING "sid_psy[%d]: bix: oem_info: %s\n", iid, bix.oem_info);
-
-	printk(KERN_WARNING "sid_psy[%d]: bix: last_full_charge_cap: %d\n", iid, bix.last_full_charge_cap);
-	printk(KERN_WARNING "sid_psy[%d]: bix: remaining_cap: %d\n", iid, bst.remaining_cap);
-
-	percentage = (100 * bst.remaining_cap) / bix.last_full_charge_cap;
-	printk(KERN_WARNING "sid_psy[%d]: remaining capacity: %d%%\n", iid, percentage);
-
-	return 0;
-}
-
-
 static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 {
 	int status;
+	struct spwr_battery_device *bat;
 
 	// link to ec
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
-	if (status) {
+	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
-	}
 
-	return test(pdev->id);	// TODO
+	bat = devm_kzalloc(&pdev->dev, sizeof(struct spwr_battery_device), GFP_KERNEL);
+	if (!bat)
+		return -ENOMEM;
+
+	bat->pdev = pdev;
+	bat->iid = pdev->id;
+
+	status = spwr_register_battery(bat);
+	if (status)
+		return status;
+
+	platform_set_drvdata(pdev, bat);
+	return 0;
 }
 
 static int surface_sam_sid_battery_remove(struct platform_device *pdev)
 {
-	return 0;	// TODO
+	struct spwr_battery_device *bat = platform_get_drvdata(pdev);
+	return spwr_deregister_battery(bat);
 }
 
 struct platform_driver surface_sam_sid_battery = {
@@ -332,19 +434,31 @@ struct platform_driver surface_sam_sid_battery = {
 static int surface_sam_sid_ac_probe(struct platform_device *pdev)
 {
 	int status;
+	struct spwr_ac_device *ac;
 
 	// link to ec
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
-	if (status) {
+	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
-	}
 
-	return 0;	// TODO
+	ac = devm_kzalloc(&pdev->dev, sizeof(struct spwr_ac_device), GFP_KERNEL);
+	if (!ac)
+		return -ENOMEM;
+
+	ac->pdev = pdev;
+
+	status = spwr_register_ac(ac);
+	if (status)
+		return status;
+
+	platform_set_drvdata(pdev, ac);
+	return 0;
 }
 
 static int surface_sam_sid_ac_remove(struct platform_device *pdev)
 {
-	return 0;	// TODO
+	struct spwr_ac_device *ac = platform_get_drvdata(pdev);
+	return spwr_deregister_ac(ac);
 }
 
 struct platform_driver surface_sam_sid_ac = {
