@@ -429,5 +429,6 @@ struct platform_driver surface_sam_sid_vhf = {
 	.remove = surface_sam_sid_vhf_remove,
 	.driver = {
 		.name = "surface_sam_sid_vhf",
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

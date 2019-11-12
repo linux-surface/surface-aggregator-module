@@ -266,5 +266,6 @@ struct platform_driver surface_sam_vhf = {
 	.driver = {
 		.name = "surface_sam_vhf",
 		.acpi_match_table = ACPI_PTR(surface_sam_vhf_match),
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
