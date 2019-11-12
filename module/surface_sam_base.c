@@ -90,8 +90,17 @@ void __exit surface_sam_exit(void)
 	serdev_device_driver_unregister(&surface_sam_ssh);
 }
 
-
-module_init(surface_sam_init)
+/*
+ * Ensure that the driver is loaded late due to some issues with the UART
+ * communication. Specifically, we want to ensure that DMA is ready and being
+ * used. Not using DMA can result in spurious communication failures,
+ * especially during boot, which among other things will result in wrong
+ * battery information (via ACPI _BIX) being displayed. Using a late init_call
+ * instead of the normal module_init gives the DMA subsystem time to
+ * initialize and via that results in a more stable communication, avoiding
+ * such failures.
+ */
+late_initcall(surface_sam_init)
 module_exit(surface_sam_exit)
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
