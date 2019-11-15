@@ -78,11 +78,11 @@ List of Power Subsystem Events (TC = 0x02)
 
      CID   IID   PRI  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
-    0x15  #BAT  0x01  no       Battery hardware changed         log(+dsdt)
-    0x16  #BAT  0x01  no       Battery charging state changed   log(+dsdt)
+    0x15  #BAT  0x01  no       _BIX data changed                log(+dsdt)
+    0x16  #BAT  0x01  no       _BST data changed                log(+dsdt)
     0x17  0x01  0x01  no       Power adapter status changed     log(+dsdt)
 
-    0x4f  0x00  0x01  yes      Power state changed (?)          log(+dsdt)
+    0x4f  0x00  0x01  yes      DPTF notification (?)            log(+dsdt)
 
 
 List of Thermal Subsystem Requests (TC = 0x03)
