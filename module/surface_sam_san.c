@@ -21,14 +21,15 @@ static const guid_t SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 	          0x48, 0x7c, 0x91, 0xab, 0x3c);
 
-#define SAM_EVENT_DELAY_PWR_STATE	msecs_to_jiffies(5000)
+#define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
+#define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
 #define SAM_EVENT_PWR_TC		0x02
 #define SAM_EVENT_PWR_RQID		0x0002
-#define SAM_EVENT_PWR_CID_HWCHANGE	0x15
-#define SAM_EVENT_PWR_CID_CHARGING	0x16
+#define SAM_EVENT_PWR_CID_BIX		0x15
+#define SAM_EVENT_PWR_CID_BST		0x16
 #define SAM_EVENT_PWR_CID_ADAPTER	0x17
-#define SAM_EVENT_PWR_CID_STATE		0x4f
+#define SAM_EVENT_PWR_CID_DPTF		0x4f
 
 #define SAM_EVENT_TEMP_TC		0x03
 #define SAM_EVENT_TEMP_RQID		0x0003
@@ -123,6 +124,7 @@ static int san_acpi_notify_power_event(struct device *dev, enum san_pwr_event ev
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
 
+	dev_dbg(dev, "notify power event 0x%02x\n", event);
 	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
 	                              (u8) event, NULL, ACPI_TYPE_BUFFER);
 
@@ -176,10 +178,29 @@ inline static int san_evt_power_adapter(struct device *dev, struct surface_sam_s
 		return status;
 	}
 
+	/*
+	 * Enusre that the battery states get updated correctly.
+	 * When the battery is fully charged and an adapter is plugged in, it
+	 * sometimes is not updated correctly, instead showing it as charging.
+	 * Explicitly trigger battery updates to fix this.
+	 */
+
+	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT1_STAT);
+	if (status) {
+		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
+	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT2_STAT);
+	if (status) {
+		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
+		return status;
+	}
+
 	return 0;
 }
 
-inline static int san_evt_power_hwchange(struct device *dev, struct surface_sam_ssh_event *event)
+inline static int san_evt_power_bix(struct device *dev, struct surface_sam_ssh_event *event)
 {
 	enum san_pwr_event evcode;
 	int status;
@@ -199,17 +220,18 @@ inline static int san_evt_power_hwchange(struct device *dev, struct surface_sam_
 	return 0;
 }
 
-inline static int san_evt_power_state(struct device *dev, struct surface_sam_ssh_event *event)
+inline static int san_evt_power_bst(struct device *dev, struct surface_sam_ssh_event *event)
 {
+	enum san_pwr_event evcode;
 	int status;
 
-	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT1_STAT);
-	if (status) {
-		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
-		return status;
+	if (event->iid == 0x02) {
+		evcode = SAN_PWR_EVENT_BAT2_STAT;
+	} else {
+		evcode = SAN_PWR_EVENT_BAT1_STAT;
 	}
 
-	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT2_STAT);
+	status = san_acpi_notify_power_event(dev, evcode);
 	if (status) {
 		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
 		return status;
@@ -221,12 +243,20 @@ inline static int san_evt_power_state(struct device *dev, struct surface_sam_ssh
 static unsigned long san_evt_power_delay(struct surface_sam_ssh_event *event, void *data)
 {
 	switch (event->cid) {
-	case SAM_EVENT_PWR_CID_CHARGING:
-	case SAM_EVENT_PWR_CID_STATE:
-		return SAM_EVENT_DELAY_PWR_STATE;
-
 	case SAM_EVENT_PWR_CID_ADAPTER:
-	case SAM_EVENT_PWR_CID_HWCHANGE:
+		/*
+		 * Wait for battery state to update before signalling adapter change.
+		 */
+		return SAM_EVENT_DELAY_PWR_ADAPTER;
+
+	case SAM_EVENT_PWR_CID_BST:
+		/*
+		 * Ensure we do not miss anything important due to caching.
+		 */
+		return SAM_EVENT_DELAY_PWR_BST;
+
+	case SAM_EVENT_PWR_CID_BIX:
+	case SAM_EVENT_PWR_CID_DPTF:
 	default:
 		return 0;
 	}
@@ -237,15 +267,25 @@ static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
 	struct device *dev = (struct device *)data;
 
 	switch (event->cid) {
-	case SAM_EVENT_PWR_CID_HWCHANGE:
-		return san_evt_power_hwchange(dev, event);
+	case SAM_EVENT_PWR_CID_BIX:
+		return san_evt_power_bix(dev, event);
+
+	case SAM_EVENT_PWR_CID_BST:
+		return san_evt_power_bst(dev, event);
 
 	case SAM_EVENT_PWR_CID_ADAPTER:
 		return san_evt_power_adapter(dev, event);
 
-	case SAM_EVENT_PWR_CID_CHARGING:
-	case SAM_EVENT_PWR_CID_STATE:
-		return san_evt_power_state(dev, event);
+	case SAM_EVENT_PWR_CID_DPTF:
+		/*
+		 * Ignored for now.
+		 * This signals a change in Intel DPTF PMAX, and possibly other
+		 * fields. Ignore for now as there is no corresponding _DSM call and
+		 * DPTF is implemented via a separate INT3407 device.
+		 * 
+		 * The payload of this event is: [u32 PMAX, unknown...].
+		 */
+		return 0;
 
 	default:
 		dev_warn(dev, "unhandled power event (cid = %x)\n", event->cid);
