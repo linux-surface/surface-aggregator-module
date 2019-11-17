@@ -508,12 +508,12 @@ static int san_enable_events(struct device *dev)
 {
 	int status;
 
-	status = surface_sam_ssh_set_delayed_event_handler(
-			SAM_EVENT_PWR_RQID, san_evt_power,
-			san_evt_power_delay, dev);
-	if (status) {
-		goto err_handler_power;
-	}
+//	status = surface_sam_ssh_set_delayed_event_handler(
+//			SAM_EVENT_PWR_RQID, san_evt_power,
+//			san_evt_power_delay, dev);
+//	if (status) {
+//		goto err_handler_power;
+//	}
 
 	status = surface_sam_ssh_set_event_handler(
 			SAM_EVENT_TEMP_RQID, san_evt_thermal,
@@ -522,10 +522,10 @@ static int san_enable_events(struct device *dev)
 		goto err_handler_thermal;
 	}
 
-	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-	if (status) {
-		goto err_source_power;
-	}
+//	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
+//	if (status) {
+//		goto err_source_power;
+//	}
 
 	status = surface_sam_ssh_enable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
 	if (status) {
@@ -535,12 +535,12 @@ static int san_enable_events(struct device *dev)
 	return 0;
 
 err_source_thermal:
-	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-err_source_power:
+//	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
+//err_source_power:
 	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
 err_handler_thermal:
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
-err_handler_power:
+//	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
+//err_handler_power:
 	return status;
 }
 
