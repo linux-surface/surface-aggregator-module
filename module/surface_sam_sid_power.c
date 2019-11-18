@@ -11,7 +11,7 @@
 
 // TODO: (comm) error handling strategy
 // TODO: caching
-// TODO: eheck BIX/BST for unknown/unsupported 0xffffffff entries
+// TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
 // TODO: alarm/_BTP
 // TODO: DPTF?
 // TODO: other properties?
@@ -46,6 +46,8 @@
 #define SAM_BATTERY_STATE_DISCHARGING	0x01
 #define SAM_BATTERY_STATE_CHARGING	0x02
 #define SAM_BATTERY_STATE_CRITICAL	0x04
+
+#define SAM_BATTERY_POWER_UNIT_MA	1
 
 
 /* Equivalent to data returned in ACPI _BIX method */
@@ -389,9 +391,85 @@ inline static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 	return sam_psy_get_bst(bat->id + 1, &bat->bst);
 }
 
-inline static int spwr_ac_update(struct spwr_ac_device *ac)
+
+inline static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
+{
+	int status;
+
+	// TODO: caching
+
+	status = spwr_battery_load_sta(bat);
+	if (status)
+		return status;
+
+	status = spwr_battery_load_bst(bat);
+	if (status)
+		return status;
+
+	// TODO: update bst cache timer
+	//       set to zero if battery is not present?
+
+	return 0;
+}
+
+static int spwr_battery_update_bst(struct spwr_battery_device *bat, bool cached)
+{
+	int status;
+
+	mutex_lock(&bat->lock);
+	status = spwr_battery_update_bst_unlocked(bat, cached);
+	mutex_unlock(&bat->lock);
+
+	return status;
+}
+
+inline static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
+{
+	int status;
+
+	status = spwr_battery_load_sta(bat);
+	if (status)
+		return status;
+
+	status = spwr_battery_load_bix(bat);
+	if (status)
+		return status;
+
+	status = spwr_battery_load_bst(bat);
+	if (status)
+		return status;
+
+	// TODO: update bst cache timer
+	//       set to zero if battery is not present?
+
+	return 0;
+}
+
+static int spwr_battery_update_bix(struct spwr_battery_device *bat)
+{
+	int status;
+
+	mutex_lock(&bat->lock);
+	status = spwr_battery_update_bix_unlocked(bat);
+	mutex_unlock(&bat->lock);
+
+	return status;
+}
+
+inline static int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
 	return sam_psy_get_psrc(0x00, &ac->state);
+}
+
+static int spwr_ac_update(struct spwr_ac_device *ac)
+{
+	int status;
+
+	mutex_lock(&ac->lock);
+	status = spwr_ac_update_unlocked(ac);
+	mutex_unlock(&ac->lock);
+
+	return status;
 }
 
 
@@ -410,26 +488,11 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 
 	bat = spwr_subsystem.battery[bat_id];
 	if (bat) {
-		mutex_lock(&bat->lock);
-
-		status = spwr_battery_load_sta(bat);
-		if (status)
-			goto out;
-
-		status = spwr_battery_load_bix(bat);
-		if (status)
-			goto out;
-
-		status = spwr_battery_load_bst(bat);
-		if (status)
-			goto out;
-
-		power_supply_changed(bat->psy);
+		status = spwr_battery_update_bix(bat);
+		if (!status)
+			power_supply_changed(bat->psy);
 	}
 
-out:
-	if (bat)
-		mutex_unlock(&bat->lock);
 	mutex_unlock(&spwr_subsystem.lock);
 	return status;
 }
@@ -449,22 +512,11 @@ static int spwr_handle_event_bst(struct surface_sam_ssh_event *event)
 
 	bat = spwr_subsystem.battery[bat_id];
 	if (bat) {
-		mutex_lock(&bat->lock);
-
-		status = spwr_battery_load_sta(bat);
-		if (status)
-			goto out;
-
-		status = spwr_battery_load_bst(bat);
-		if (status)
-			goto out;
-
-		power_supply_changed(bat->psy);
+		status = spwr_battery_update_bst(bat, false);
+		if (!status)
+			power_supply_changed(bat->psy);
 	}
 
-out:
-	if (bat)
-		mutex_unlock(&bat->lock);
 	mutex_unlock(&spwr_subsystem.lock);
 	return status;
 }
@@ -482,7 +534,6 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 
 	ac = spwr_subsystem.ac;
 	if (ac) {
-		mutex_lock(&ac->lock);
 		status = spwr_ac_update(ac);
 		if (status)
 			goto out;
@@ -492,13 +543,7 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 
 	bat1 = spwr_subsystem.battery[SPWR_BAT1];
 	if (bat1) {
-		mutex_lock(&bat1->lock);
-
-		status = spwr_battery_load_sta(bat1);
-		if (status)
-			goto out;
-
-		status = spwr_battery_load_bst(bat1);
+		status = spwr_battery_update_bst(bat1, false);
 		if (status)
 			goto out;
 
@@ -507,13 +552,7 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 
 	bat2 = spwr_subsystem.battery[SPWR_BAT2];
 	if (bat2) {
-		mutex_lock(&bat2->lock);
-
-		status = spwr_battery_load_sta(bat2);
-		if (status)
-			goto out;
-
-		status = spwr_battery_load_bst(bat2);
+		status = spwr_battery_update_bst(bat2, false);
 		if (status)
 			goto out;
 
@@ -521,12 +560,6 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 	}
 
 out:
-	if (bat2)
-		mutex_unlock(&bat2->lock);
-	if (bat1)
-		mutex_unlock(&bat1->lock);
-	if (ac)
-		mutex_unlock(&ac->lock);
 	mutex_unlock(&spwr_subsystem.lock);
 	return status;
 }
@@ -625,7 +658,7 @@ static int spwr_ac_get_property(struct power_supply *psy,
 
 	mutex_lock(&ac->lock);
 
-	status = spwr_ac_update(ac);
+	status = spwr_ac_update_unlocked(ac);
 	if (status)
 		goto out;
 
@@ -653,17 +686,7 @@ static int spwr_battery_get_property(struct power_supply *psy,
 
 	mutex_lock(&bat->lock);
 
-	// TODO: caching
-
-	status = spwr_battery_load_sta(bat);
-	if (status)
-		goto out;
-
-	status = spwr_battery_load_bix(bat);
-	if (status)
-		goto out;
-
-	status = spwr_battery_load_bst(bat);
+	status = spwr_battery_update_bst_unlocked(bat, true);
 	if (status)
 		goto out;
 
@@ -902,6 +925,10 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	bat->id = id != SPWR_BAT_SINGLE ? id : SPWR_BAT1;
 	mutex_init(&bat->lock);
 
+	status = spwr_battery_update_bix_unlocked(bat);
+	if (status)
+		return status;
+
 	if (id == SPWR_BAT_SINGLE)
 		snprintf(bat->name, ARRAY_SIZE(bat->name), "surface_bat");
 	else
@@ -910,9 +937,16 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
-	// TODO: switch battery props based on units
-	bat->psy_desc.properties = spwr_battery_props_eng;
-	bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_eng);
+	// FIXME: When the battery is not present, _BIX will not get loaded. Thus
+	// we assume energy-based battery or old state here (power_unit value
+	// 0x00). Thus the unit may change when an actual battery is connected.
+	if (bat->bix.power_unit == SAM_BATTERY_POWER_UNIT_MA) {
+		bat->psy_desc.properties = spwr_battery_props_chg;
+		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
+	} else {
+		bat->psy_desc.properties = spwr_battery_props_eng;
+		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_eng);
+	}
 
 	bat->psy_desc.get_property = spwr_battery_get_property;
 
