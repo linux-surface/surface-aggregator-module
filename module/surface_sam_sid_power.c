@@ -914,19 +914,16 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	if ((id < 0 || id >= __SPWR_NUM_BAT) && id != SPWR_BAT_SINGLE)
 		return -EINVAL;
 
+	bat->pdev = pdev;
+	bat->id = id != SPWR_BAT_SINGLE ? id : SPWR_BAT1;
+
 	// make sure the device is there and functioning properly
-	status = sam_psy_get_sta(id + 1, &sta);
+	status = sam_psy_get_sta(bat->id + 1, &sta);
 	if (status)
 		return status;
 
 	if ((sta & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
 		return -ENODEV;
-
-	psy_cfg.drv_data = bat;
-
-	bat->pdev = pdev;
-	bat->id = id != SPWR_BAT_SINGLE ? id : SPWR_BAT1;
-	mutex_init(&bat->lock);
 
 	status = spwr_battery_update_bix_unlocked(bat);
 	if (status)
@@ -952,6 +949,9 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	}
 
 	bat->psy_desc.get_property = spwr_battery_get_property;
+
+	mutex_init(&bat->lock);
+	psy_cfg.drv_data = bat;
 
 	mutex_lock(&spwr_subsystem.lock);
 	if (spwr_subsystem.battery[bat->id]) {
