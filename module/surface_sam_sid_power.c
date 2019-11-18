@@ -10,11 +10,13 @@
 
 
 // TODO: (comm) error handling strategy
-// TODO: caching
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
 // TODO: alarm/_BTP
 // TODO: DPTF?
 // TODO: other properties?
+
+
+#define SPWR_CACHE_TIME		1000	// TODO: make this a module parameter
 
 
 /*
@@ -290,9 +292,8 @@ struct spwr_battery_device {
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;
 
-	// TODO: caching
-
 	struct mutex lock;
+	unsigned long timestamp;
 
 	u32 sta;
 	struct spwr_bix bix;
@@ -394,9 +395,11 @@ inline static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 
 inline static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
 {
+	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(SPWR_CACHE_TIME);
 	int status;
 
-	// TODO: caching
+	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
+		return 0;
 
 	status = spwr_battery_load_sta(bat);
 	if (status)
@@ -406,9 +409,7 @@ inline static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *b
 	if (status)
 		return status;
 
-	// TODO: update bst cache timer
-	//       set to zero if battery is not present?
-
+	bat->timestamp = jiffies;
 	return 0;
 }
 
@@ -439,9 +440,7 @@ inline static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *b
 	if (status)
 		return status;
 
-	// TODO: update bst cache timer
-	//       set to zero if battery is not present?
-
+	bat->timestamp = jiffies;
 	return 0;
 }
 
