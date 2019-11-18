@@ -368,12 +368,12 @@ inline static bool spwr_battery_present(struct spwr_battery_device *bat)
 }
 
 
-inline static int spwr_battery_update_sta(struct spwr_battery_device *bat)
+inline static int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
 	return sam_psy_get_sta(bat->id + 1, &bat->sta);
 }
 
-inline static int spwr_battery_update_bix(struct spwr_battery_device *bat)
+inline static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 {
 	if (!spwr_battery_present(bat))
 		return 0;
@@ -381,7 +381,7 @@ inline static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 	return sam_psy_get_bix(bat->id + 1, &bat->bix);
 }
 
-inline static int spwr_battery_update_bst(struct spwr_battery_device *bat)
+inline static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 {
 	if (!spwr_battery_present(bat))
 		return 0;
@@ -412,15 +412,15 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 	if (bat) {
 		mutex_lock(&bat->lock);
 
-		status = spwr_battery_update_sta(bat);
+		status = spwr_battery_load_sta(bat);
 		if (status)
 			goto out;
 
-		status = spwr_battery_update_bix(bat);
+		status = spwr_battery_load_bix(bat);
 		if (status)
 			goto out;
 
-		status = spwr_battery_update_bst(bat);
+		status = spwr_battery_load_bst(bat);
 		if (status)
 			goto out;
 
@@ -451,11 +451,11 @@ static int spwr_handle_event_bst(struct surface_sam_ssh_event *event)
 	if (bat) {
 		mutex_lock(&bat->lock);
 
-		status = spwr_battery_update_sta(bat);
+		status = spwr_battery_load_sta(bat);
 		if (status)
 			goto out;
 
-		status = spwr_battery_update_bst(bat);
+		status = spwr_battery_load_bst(bat);
 		if (status)
 			goto out;
 
@@ -494,11 +494,11 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 	if (bat1) {
 		mutex_lock(&bat1->lock);
 
-		status = spwr_battery_update_sta(bat1);
+		status = spwr_battery_load_sta(bat1);
 		if (status)
 			goto out;
 
-		status = spwr_battery_update_bst(bat1);
+		status = spwr_battery_load_bst(bat1);
 		if (status)
 			goto out;
 
@@ -509,11 +509,11 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 	if (bat2) {
 		mutex_lock(&bat2->lock);
 
-		status = spwr_battery_update_sta(bat2);
+		status = spwr_battery_load_sta(bat2);
 		if (status)
 			goto out;
 
-		status = spwr_battery_update_bst(bat2);
+		status = spwr_battery_load_bst(bat2);
 		if (status)
 			goto out;
 
@@ -655,15 +655,15 @@ static int spwr_battery_get_property(struct power_supply *psy,
 
 	// TODO: caching
 
-	status = spwr_battery_update_sta(bat);
+	status = spwr_battery_load_sta(bat);
 	if (status)
 		goto out;
 
-	status = spwr_battery_update_bix(bat);
+	status = spwr_battery_load_bix(bat);
 	if (status)
 		goto out;
 
-	status = spwr_battery_update_bst(bat);
+	status = spwr_battery_load_bst(bat);
 	if (status)
 		goto out;
 
