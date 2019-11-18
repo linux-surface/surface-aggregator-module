@@ -8,6 +8,7 @@
 #include "surface_sam_ssh.h"
 
 #define SPWR_WARN	KERN_WARNING KBUILD_MODNAME ": "
+#define SPWR_DEBUG	KERN_DEBUG KBUILD_MODNAME ": "
 
 
 // TODO: (comm) error handling strategy
@@ -573,7 +574,7 @@ static int spwr_handle_event_dptf(struct surface_sam_ssh_event *event)
 
 static int spwr_handle_event(struct surface_sam_ssh_event *event, void *data)
 {
-	printk(SPWR_WARN "power event (cid = 0x%02x)\n", event->cid);
+	printk(SPWR_DEBUG "power event (cid = 0x%02x)\n", event->cid);
 
 	switch (event->cid) {
 	case SAM_EVENT_PWR_CID_BIX:
