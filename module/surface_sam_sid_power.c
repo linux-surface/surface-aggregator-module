@@ -1,5 +1,6 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
+#include <linux/jiffies.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
@@ -16,7 +17,9 @@
 // TODO: other properties?
 
 
-#define SPWR_CACHE_TIME		1000	// TODO: make this a module parameter
+static unsigned int cache_time = 1000;
+module_param(cache_time, uint, 0644);
+MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [default: 1000]");
 
 
 /*
@@ -395,7 +398,7 @@ inline static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 
 inline static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
 {
-	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(SPWR_CACHE_TIME);
+	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
 	int status;
 
 	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
