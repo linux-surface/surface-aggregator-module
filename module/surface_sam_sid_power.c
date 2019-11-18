@@ -531,8 +531,6 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 	struct spwr_ac_device *ac;
 	int status = 0;
 
-	msleep(1000);		// TODO FIXME: trigger async battery update instead
-
 	mutex_lock(&spwr_subsystem.lock);
 
 	ac = spwr_subsystem.ac;
@@ -546,20 +544,24 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 
 	bat1 = spwr_subsystem.battery[SPWR_BAT1];
 	if (bat1) {
-		status = spwr_battery_update_bst(bat1, false);
-		if (status)
-			goto out;
+//		status = spwr_battery_update_bst(bat1, false);
+//		if (status)
+//			goto out;
+//
+//		power_supply_changed(bat1->psy);
 
-		power_supply_changed(bat1->psy);
+		printk(SPWR_WARN "adapter: %x, %d, %d", bat1->bst.state, bat1->bst.remaining_cap, bat1->bix.last_full_charge_cap);
 	}
 
 	bat2 = spwr_subsystem.battery[SPWR_BAT2];
 	if (bat2) {
-		status = spwr_battery_update_bst(bat2, false);
-		if (status)
-			goto out;
+//		status = spwr_battery_update_bst(bat2, false);
+//		if (status)
+//			goto out;
+//
+//		power_supply_changed(bat2->psy);
 
-		power_supply_changed(bat2->psy);
+		printk(SPWR_WARN "adapter: %x, %d, %d", bat2->bst.state, bat2->bst.remaining_cap, bat2->bix.last_full_charge_cap);
 	}
 
 out:
