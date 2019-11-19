@@ -4,6 +4,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
+#include <linux/workqueue.h>
 
 #include "surface_sam_ssh.h"
 
@@ -21,6 +22,8 @@
 static unsigned int cache_time = 1000;
 module_param(cache_time, uint, 0644);
 MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [default: 1000]");
+
+#define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
 
 
 /*
@@ -296,6 +299,8 @@ struct spwr_battery_device {
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;
 
+	struct delayed_work update_work;
+
 	struct mutex lock;
 	unsigned long timestamp;
 
@@ -542,27 +547,21 @@ static int spwr_handle_event_adapter(struct surface_sam_ssh_event *event)
 		power_supply_changed(ac->psy);
 	}
 
-	bat1 = spwr_subsystem.battery[SPWR_BAT1];
-	if (bat1) {
-//		status = spwr_battery_update_bst(bat1, false);
-//		if (status)
-//			goto out;
-//
-//		power_supply_changed(bat1->psy);
+	/*
+	 * Handle battery update quirk:
+	 * When the battery is fully charged and the adapter is plugged in or
+	 * removed, the EC does not send a separate event for the state
+	 * (charging/discharging) change. Furthermore it may take some time until
+	 * the state is updated on the battery. Schedule an update to solve this.
+	 */
 
-		printk(SPWR_WARN "adapter: %x, %d, %d", bat1->bst.state, bat1->bst.remaining_cap, bat1->bix.last_full_charge_cap);
-	}
+	bat1 = spwr_subsystem.battery[SPWR_BAT1];
+	if (bat1 && bat1->bst.remaining_cap >= bat1->bix.last_full_charge_cap)
+		schedule_delayed_work(&bat1->update_work, SPWR_AC_BAT_UPDATE_DELAY);
 
 	bat2 = spwr_subsystem.battery[SPWR_BAT2];
-	if (bat2) {
-//		status = spwr_battery_update_bst(bat2, false);
-//		if (status)
-//			goto out;
-//
-//		power_supply_changed(bat2->psy);
-
-		printk(SPWR_WARN "adapter: %x, %d, %d", bat2->bst.state, bat2->bst.remaining_cap, bat2->bix.last_full_charge_cap);
-	}
+	if (bat2 && bat2->bst.remaining_cap >= bat2->bix.last_full_charge_cap)
+		schedule_delayed_work(&bat2->update_work, SPWR_AC_BAT_UPDATE_DELAY);
 
 out:
 	mutex_unlock(&spwr_subsystem.lock);
@@ -595,6 +594,20 @@ static int spwr_handle_event(struct surface_sam_ssh_event *event, void *data)
 		printk(SPWR_WARN "unhandled power event (cid = 0x%02x)\n", event->cid);
 		return 0;
 	}
+}
+
+static void spwr_battery_update_bst_workfn(struct work_struct *work)
+{
+	struct delayed_work *dwork = to_delayed_work(work);
+	struct spwr_battery_device *bat = container_of(dwork, struct spwr_battery_device, update_work);
+	int status;
+
+	status = spwr_battery_update_bst(bat, false);
+	if (!status)
+		power_supply_changed(bat->psy);
+
+	if (status)
+		dev_err(&bat->pdev->dev, "failed to update battery state: %d\n", status);
 }
 
 
@@ -648,7 +661,7 @@ inline static int spwr_battery_prop_capacity_level(struct spwr_battery_device *b
 	if (bat->bst.state & SAM_BATTERY_STATE_CRITICAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 
-	if (bat->bix.last_full_charge_cap == bat->bst.remaining_cap)
+	if (bat->bst.remaining_cap >= bat->bix.last_full_charge_cap)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 
 	return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
@@ -955,6 +968,8 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	mutex_init(&bat->lock);
 	psy_cfg.drv_data = bat;
 
+	INIT_DELAYED_WORK(&bat->update_work, spwr_battery_update_bst_workfn);
+
 	mutex_lock(&spwr_subsystem.lock);
 	if (spwr_subsystem.battery[bat->id]) {
 		status = -EEXIST;
@@ -996,10 +1011,12 @@ static int spwr_battery_unregister(struct spwr_battery_device *bat)
 	}
 
 	spwr_subsystem.battery[bat->id] = NULL;
-	power_supply_unregister(bat->psy);
 
 	status = spwr_subsys_unref_unlocked();
 	mutex_unlock(&spwr_subsystem.lock);
+
+	cancel_delayed_work_sync(&bat->update_work);
+	power_supply_unregister(bat->psy);
 
 	mutex_destroy(&bat->lock);
 	return status;
