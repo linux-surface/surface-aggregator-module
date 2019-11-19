@@ -863,7 +863,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *p
 	ac->pdev = pdev;
 	mutex_init(&ac->lock);
 
-	snprintf(ac->name, ARRAY_SIZE(ac->name), "surface_adp");
+	snprintf(ac->name, ARRAY_SIZE(ac->name), "ADP0");
 
 	ac->psy_desc.name = ac->name;
 	ac->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
@@ -944,11 +944,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	if (status)
 		return status;
 
-	if (id == SPWR_BAT_SINGLE)
-		snprintf(bat->name, ARRAY_SIZE(bat->name), "surface_bat");
-	else
-		snprintf(bat->name, ARRAY_SIZE(bat->name), "surface_bat%d", id);
-
+	snprintf(bat->name, ARRAY_SIZE(bat->name), "BAT%d", bat->id);
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
