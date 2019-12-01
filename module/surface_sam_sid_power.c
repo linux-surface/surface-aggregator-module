@@ -12,9 +12,9 @@
 #define SPWR_DEBUG	KERN_DEBUG KBUILD_MODNAME ": "
 
 
-// TODO: (comm) error handling strategy
+// TODO: check for unit changes after battery re-attachment
+// TODO: suspend/resume
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
-// TODO: alarm/_BTP
 // TODO: DPTF?
 // TODO: other properties?
 
@@ -310,6 +310,7 @@ struct spwr_battery_device {
 	u32 sta;
 	struct spwr_bix bix;
 	struct spwr_bst bst;
+	u32 alarm;
 };
 
 struct spwr_ac_device {
@@ -405,6 +406,23 @@ inline static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 }
 
 
+inline static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
+{
+	bat->alarm = value;
+	return sam_psy_set_btp(bat->id + 1, bat->alarm);
+}
+
+inline static int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
+{
+	int status;
+
+	mutex_lock(&bat->lock);
+	status = spwr_battery_set_alarm_unlocked(bat, value);
+	mutex_unlock(&bat->lock);
+
+	return status;
+}
+
 inline static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
 {
 	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
@@ -488,6 +506,7 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 {
 	struct spwr_battery_device *bat;
 	enum spwr_battery_id bat_id = event->iid - 1;
+	bool present;
 	int status = 0;
 
 	if (bat_id < 0 || bat_id >= __SPWR_NUM_BAT) {
@@ -496,14 +515,25 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 	}
 
 	mutex_lock(&spwr_subsystem.lock);
-
 	bat = spwr_subsystem.battery[bat_id];
 	if (bat) {
+		present = spwr_battery_present(bat);
+
 		status = spwr_battery_update_bix(bat);
-		if (!status)
-			power_supply_changed(bat->psy);
+		if (status)
+			goto out;
+
+		// if battery has been attached, (re-)initialize alarm
+		if (!present && spwr_battery_present(bat)) {
+			status = spwr_battery_set_alarm(bat, bat->bix.design_cap_warn);
+			if (status)
+				goto out;
+		}
+
+		power_supply_changed(bat->psy);
 	}
 
+out:
 	mutex_unlock(&spwr_subsystem.lock);
 	return status;
 }
@@ -667,6 +697,9 @@ inline static int spwr_battery_prop_capacity_level(struct spwr_battery_device *b
 	if (bat->bst.remaining_cap >= bat->bix.last_full_charge_cap)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 
+	if (bat->bst.remaining_cap <= bat->alarm)
+		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
+
 	return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 }
 
@@ -791,6 +824,46 @@ out:
 	mutex_unlock(&bat->lock);
 	return status;
 }
+
+
+static ssize_t spwr_battery_alarm_show(struct device *dev,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	struct power_supply *psy = dev_get_drvdata(dev);
+	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
+
+	return sprintf(buf, "%d\n", bat->alarm * 1000);
+}
+
+static ssize_t spwr_battery_alarm_store(struct device *dev,
+					struct device_attribute *attr,
+					const char *buf, size_t count)
+{
+	struct power_supply *psy = dev_get_drvdata(dev);
+	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
+	unsigned long value;
+	int status;
+
+	status = kstrtoul(buf, 0, &value);
+	if (status)
+		return status;
+
+	if (!spwr_battery_present(bat))
+		return -ENODEV;
+
+	status = spwr_battery_set_alarm(bat, value / 1000);
+	if (status)
+		return status;
+
+	return count;
+}
+
+static const struct device_attribute alarm_attr = {
+	.attr = {.name = "alarm", .mode = 0644},
+	.show = spwr_battery_alarm_show,
+	.store = spwr_battery_alarm_store,
+};
 
 
 static int spwr_subsys_init_unlocked(void)
@@ -947,6 +1020,12 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	if (status)
 		return status;
 
+	if (spwr_battery_present(bat)) {
+		status = spwr_battery_set_alarm_unlocked(bat, bat->bix.design_cap_warn);
+		if (status)
+			return status;
+	}
+
 	snprintf(bat->name, ARRAY_SIZE(bat->name), "BAT%d", bat->id);
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
@@ -985,10 +1064,16 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 		goto err_unref;
 	}
 
+	status = device_create_file(&bat->psy->dev, &alarm_attr);
+	if (status)
+		goto err_dereg;
+
 	spwr_subsystem.battery[bat->id] = bat;
 	mutex_unlock(&spwr_subsystem.lock);
 	return 0;
 
+err_dereg:
+	power_supply_unregister(bat->psy);
 err_unref:
 	spwr_subsys_unref_unlocked();
 err:
@@ -1015,6 +1100,7 @@ static int spwr_battery_unregister(struct spwr_battery_device *bat)
 	mutex_unlock(&spwr_subsystem.lock);
 
 	cancel_delayed_work_sync(&bat->update_work);
+	device_remove_file(&bat->psy->dev, &alarm_attr);
 	power_supply_unregister(bat->psy);
 
 	mutex_destroy(&bat->lock);
@@ -1040,12 +1126,8 @@ static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 	if (!bat)
 		return -ENOMEM;
 
-	status = spwr_battery_register(bat, pdev, pdev->id);
-	if (status)
-		return status;
-
 	platform_set_drvdata(pdev, bat);
-	return 0;
+	return spwr_battery_register(bat, pdev, pdev->id);
 }
 
 static int surface_sam_sid_battery_remove(struct platform_device *pdev)
