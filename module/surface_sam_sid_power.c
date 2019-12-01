@@ -12,7 +12,6 @@
 #define SPWR_DEBUG	KERN_DEBUG KBUILD_MODNAME ": "
 
 
-// TODO: check for unit changes after battery re-attachment
 // TODO: suspend/resume
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
 // TODO: DPTF?
@@ -378,6 +377,12 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 };
 
 
+static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev,
+				 enum spwr_battery_id id);
+
+static int spwr_battery_unregister(struct spwr_battery_device *bat);
+
+
 inline static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
 	return bat->sta & SAM_BATTERY_STA_PRESENT;
@@ -507,6 +512,7 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 	struct spwr_battery_device *bat;
 	enum spwr_battery_id bat_id = event->iid - 1;
 	bool present;
+	u32 unit;
 	int status = 0;
 
 	if (bat_id < 0 || bat_id >= __SPWR_NUM_BAT) {
@@ -518,6 +524,7 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 	bat = spwr_subsystem.battery[bat_id];
 	if (bat) {
 		present = spwr_battery_present(bat);
+		unit = bat->bix.power_unit;
 
 		status = spwr_battery_update_bix(bat);
 		if (status)
@@ -528,6 +535,18 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 			status = spwr_battery_set_alarm(bat, bat->bix.design_cap_warn);
 			if (status)
 				goto out;
+		}
+
+		// if the unit has changed, re-add the battery
+		if (unit != bat->bix.power_unit) {
+			mutex_unlock(&spwr_subsystem.lock);
+
+			status = spwr_battery_unregister(bat);
+			if (status)
+				goto out;
+
+			status = spwr_battery_register(bat, bat->pdev, bat_id);
+			goto out;	// unconditionally
 		}
 
 		power_supply_changed(bat->psy);
@@ -1030,9 +1049,6 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
-	// FIXME: When the battery is not present, _BIX will not get loaded. Thus
-	// we assume energy-based battery or old state here (power_unit value
-	// 0x00). Thus the unit may change when an actual battery is connected.
 	if (bat->bix.power_unit == SAM_BATTERY_POWER_UNIT_MA) {
 		bat->psy_desc.properties = spwr_battery_props_chg;
 		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
