@@ -181,6 +181,7 @@ struct sam_ssh_ec {
 	struct ssh_receiver receiver;
 	struct ssh_events events;
 	int irq;
+	bool irq_wakeup_enabled;
 };
 
 struct ssh_fifo_packet {
@@ -1255,10 +1256,6 @@ static int surface_sam_setup_irq(struct serdev_device *serdev)
 	if (irq < 0)
 		return irq;
 
-	status = enable_irq_wake(irq);
-	if (status)
-		return status;
-
 	status = request_threaded_irq(irq, surface_sam_irq_handler,
 				      surface_sam_irq_handler_th,
 				      irqf, "surface_sam_wakeup", serdev);
@@ -1327,7 +1324,7 @@ ssh_setup_from_resource(struct acpi_resource *resource, void *context)
 static int surface_sam_ssh_suspend(struct device *dev)
 {
 	struct sam_ssh_ec *ec;
-	int status = 0;
+	int status;
 
 	dev_dbg(dev, "suspending\n");
 
@@ -1335,20 +1332,33 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	if (ec) {
 		status = surface_sam_ssh_ec_suspend(ec);
 		if (status) {
-			dev_err(dev, "failed to suspend EC: %d\n", status);
+			surface_sam_ssh_release(ec);
+			return status;
+		}
+
+		if (device_may_wakeup(dev)) {
+			status = enable_irq_wake(ec->irq);
+			if (status) {
+				surface_sam_ssh_release(ec);
+				return status;
+			}
+
+			ec->irq_wakeup_enabled = true;
+		} else {
+			ec->irq_wakeup_enabled = false;
 		}
 
 		ec->state = SSH_EC_SUSPENDED;
 		surface_sam_ssh_release(ec);
 	}
 
-	return status;
+	return 0;
 }
 
 static int surface_sam_ssh_resume(struct device *dev)
 {
 	struct sam_ssh_ec *ec;
-	int status = 0;
+	int status;
 
 	dev_dbg(dev, "resuming\n");
 
@@ -1356,15 +1366,26 @@ static int surface_sam_ssh_resume(struct device *dev)
 	if (ec) {
 		ec->state = SSH_EC_INITIALIZED;
 
+		if (ec->irq_wakeup_enabled) {
+			status = disable_irq_wake(ec->irq);
+			if (status) {
+				surface_sam_ssh_release(ec);
+				return status;
+			}
+
+			ec->irq_wakeup_enabled = false;
+		}
+
 		status = surface_sam_ssh_ec_resume(ec);
 		if (status) {
-			dev_err(dev, "failed to resume EC: %d\n", status);
+			surface_sam_ssh_release(ec);
+			return status;
 		}
 
 		surface_sam_ssh_release(ec);
 	}
 
-	return status;
+	return 0;
 }
 
 static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend, surface_sam_ssh_resume);
@@ -1494,6 +1515,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	surface_sam_ssh_release(ec);
 
+	device_init_wakeup(&serdev->dev, true);
 	acpi_walk_dep_device_list(ssh);
 
 	return 0;
@@ -1591,6 +1613,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
+	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
 	surface_sam_ssh_release(ec);
 }
