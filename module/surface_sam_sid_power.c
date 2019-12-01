@@ -178,27 +178,6 @@ static int sam_psy_set_btp(u8 iid, u32 btp)
 	return surface_sam_ssh_rqst(&rqst, NULL);
 }
 
-/* Get maximum platform power for battery (DPTF PMAX) */
-static int sam_psy_get_pmax(u8 iid, u32 *pmax)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SAM_PWR_TC;
-	rqst.cid = SAM_RQST_PWR_CID_PMAX;
-	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(u32);
-	result.len = 0;
-	result.data = (u8 *)pmax;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
-
 /* Get platform power soruce for battery (DPTF PSRC) */
 static int sam_psy_get_psrc(u8 iid, u32 *psrc)
 {
@@ -220,7 +199,30 @@ static int sam_psy_get_psrc(u8 iid, u32 *psrc)
 	return surface_sam_ssh_rqst(&rqst, &result);
 }
 
+/* Get maximum platform power for battery (DPTF PMAX) */
+__always_unused
+static int sam_psy_get_pmax(u8 iid, u32 *pmax)
+{
+	struct surface_sam_ssh_rqst rqst;
+	struct surface_sam_ssh_buf result;
+
+	rqst.tc  = SAM_PWR_TC;
+	rqst.cid = SAM_RQST_PWR_CID_PMAX;
+	rqst.iid = iid;
+	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.snc = 0x01;
+	rqst.cdl = 0x00;
+	rqst.pld = NULL;
+
+	result.cap = sizeof(u32);
+	result.len = 0;
+	result.data = (u8 *)pmax;
+
+	return surface_sam_ssh_rqst(&rqst, &result);
+}
+
 /* Get adapter rating (DPTF ARTG) */
+__always_unused
 static int sam_psy_get_artg(u8 iid, u32 *artg)
 {
 	struct surface_sam_ssh_rqst rqst;
@@ -241,8 +243,8 @@ static int sam_psy_get_artg(u8 iid, u32 *artg)
 	return surface_sam_ssh_rqst(&rqst, &result);
 }
 
-
 /* Unknown (DPTF PSOC) */
+__always_unused
 static int sam_psy_get_psoc(u8 iid, u32 *psoc)
 {
 	struct surface_sam_ssh_rqst rqst;
@@ -264,6 +266,7 @@ static int sam_psy_get_psoc(u8 iid, u32 *psoc)
 }
 
 /* Unknown (DPTF CHGI/ INT3403 SPPC) */
+__always_unused
 static int sam_psy_set_chgi(u8 iid, u32 chgi)
 {
 	struct surface_sam_ssh_rqst rqst;
