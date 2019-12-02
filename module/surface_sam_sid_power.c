@@ -13,7 +13,7 @@
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
-// TODO: DPTF?
+// TODO: DPTF (/SAN notifications)?
 // TODO: other properties?
 
 
