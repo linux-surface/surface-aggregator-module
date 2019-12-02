@@ -12,7 +12,6 @@
 #define SPWR_DEBUG	KERN_DEBUG KBUILD_MODNAME ": "
 
 
-// TODO: suspend/resume
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
 // TODO: DPTF?
 // TODO: other properties?
@@ -507,12 +506,42 @@ static int spwr_ac_update(struct spwr_ac_device *ac)
 }
 
 
+static int spwr_battery_recheck(struct spwr_battery_device *bat)
+{
+	bool present = spwr_battery_present(bat);
+	u32 unit = bat->bix.power_unit;
+	int status;
+
+	status = spwr_battery_update_bix(bat);
+	if (status)
+		return status;
+
+	// if battery has been attached, (re-)initialize alarm
+	if (!present && spwr_battery_present(bat)) {
+		status = spwr_battery_set_alarm(bat, bat->bix.design_cap_warn);
+		if (status)
+			return status;
+	}
+
+	// if the unit has changed, re-add the battery
+	if (unit != bat->bix.power_unit) {
+		mutex_unlock(&spwr_subsystem.lock);
+
+		status = spwr_battery_unregister(bat);
+		if (status)
+			return status;
+
+		status = spwr_battery_register(bat, bat->pdev, bat->id);
+	}
+
+	return status;
+}
+
+
 static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 {
 	struct spwr_battery_device *bat;
 	enum spwr_battery_id bat_id = event->iid - 1;
-	bool present;
-	u32 unit;
 	int status = 0;
 
 	if (bat_id < 0 || bat_id >= __SPWR_NUM_BAT) {
@@ -523,36 +552,11 @@ static int spwr_handle_event_bix(struct surface_sam_ssh_event *event)
 	mutex_lock(&spwr_subsystem.lock);
 	bat = spwr_subsystem.battery[bat_id];
 	if (bat) {
-		present = spwr_battery_present(bat);
-		unit = bat->bix.power_unit;
-
-		status = spwr_battery_update_bix(bat);
-		if (status)
-			goto out;
-
-		// if battery has been attached, (re-)initialize alarm
-		if (!present && spwr_battery_present(bat)) {
-			status = spwr_battery_set_alarm(bat, bat->bix.design_cap_warn);
-			if (status)
-				goto out;
-		}
-
-		// if the unit has changed, re-add the battery
-		if (unit != bat->bix.power_unit) {
-			mutex_unlock(&spwr_subsystem.lock);
-
-			status = spwr_battery_unregister(bat);
-			if (status)
-				goto out;
-
-			status = spwr_battery_register(bat, bat->pdev, bat_id);
-			goto out;	// unconditionally
-		}
-
-		power_supply_changed(bat->psy);
+		status = spwr_battery_recheck(bat);
+		if (!status)
+			power_supply_changed(bat->psy);
 	}
 
-out:
 	mutex_unlock(&spwr_subsystem.lock);
 	return status;
 }
@@ -1128,6 +1132,18 @@ static int spwr_battery_unregister(struct spwr_battery_device *bat)
  * Battery Driver.
  */
 
+#ifdef CONFIG_PM_SLEEP
+static int surface_sam_sid_battery_resume(struct device *dev)
+{
+	struct spwr_battery_device *bat = dev_get_drvdata(dev);
+	return spwr_battery_recheck(bat);
+}
+#else
+#define surface_sam_sid_battery_resume NULL
+#endif
+
+SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm, NULL, surface_sam_sid_battery_resume);
+
 static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 {
 	int status;
@@ -1157,6 +1173,7 @@ struct platform_driver surface_sam_sid_battery = {
 	.remove = surface_sam_sid_battery_remove,
 	.driver = {
 		.name = "surface_sam_sid_battery",
+		.pm = &surface_sam_sid_battery_pm,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
