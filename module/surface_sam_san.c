@@ -64,6 +64,7 @@ struct san_consumers {
 struct san_drvdata {
 	struct san_opreg_context opreg_ctx;
 	struct san_consumers     consumers;
+	bool has_power_events;
 };
 
 struct gsb_data_in {
@@ -282,7 +283,7 @@ static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
 		 * This signals a change in Intel DPTF PMAX, and possibly other
 		 * fields. Ignore for now as there is no corresponding _DSM call and
 		 * DPTF is implemented via a separate INT3407 device.
-		 * 
+		 *
 		 * The payload of this event is: [u32 PMAX, unknown...].
 		 */
 		return 0;
@@ -504,52 +505,92 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 	return AE_OK;
 }
 
-static int san_enable_events(struct device *dev)
+static int san_enable_power_events(struct platform_device *pdev)
 {
 	int status;
 
-//	status = surface_sam_ssh_set_delayed_event_handler(
-//			SAM_EVENT_PWR_RQID, san_evt_power,
-//			san_evt_power_delay, dev);
-//	if (status) {
-//		goto err_handler_power;
-//	}
+	status = surface_sam_ssh_set_delayed_event_handler(
+			SAM_EVENT_PWR_RQID, san_evt_power,
+			san_evt_power_delay, &pdev->dev);
+	if (status)
+		return status;
+
+	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
+	if (status) {
+		surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
+		return status;
+	}
+
+	return 0;
+}
+
+static int san_enable_thermal_events(struct platform_device *pdev)
+{
+	int status;
 
 	status = surface_sam_ssh_set_event_handler(
 			SAM_EVENT_TEMP_RQID, san_evt_thermal,
-			dev);
-	if (status) {
-		goto err_handler_thermal;
-	}
-
-//	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-//	if (status) {
-//		goto err_source_power;
-//	}
+			&pdev->dev);
+	if (status)
+		return status;
 
 	status = surface_sam_ssh_enable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
 	if (status) {
-		goto err_source_thermal;
+		surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
+		return status;
+	}
+
+	return 0;
+}
+
+static void san_disable_power_events(void)
+{
+	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
+}
+
+static void san_disable_thermal_events(void)
+{
+	surface_sam_ssh_disable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
+	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
+}
+
+
+static int san_enable_events(struct platform_device *pdev)
+{
+	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
+	int status;
+
+	status = san_enable_thermal_events(pdev);
+	if (status)
+		return status;
+
+	/*
+	 * We have to figure out if this device uses SAN or requires a separate
+	 * driver for the battery. If it uses the separate driver, that driver
+	 * will enable and handle power events.
+	 */
+	drvdata->has_power_events = acpi_has_method(NULL, "\\_SB.BAT1._BST");
+	if (drvdata->has_power_events) {
+		status = san_enable_power_events(pdev);
+		if (status)
+			goto err;
 	}
 
 	return 0;
 
-err_source_thermal:
-//	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-//err_source_power:
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
-err_handler_thermal:
-//	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
-//err_handler_power:
+err:
+	san_disable_thermal_events();
 	return status;
 }
 
-static void san_disable_events(void)
+static void san_disable_events(struct platform_device *pdev)
 {
-	surface_sam_ssh_disable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
-	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
+	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
+
+	san_disable_thermal_events();
+	if (drvdata->has_power_events)
+		san_disable_power_events();
 }
 
 
@@ -685,7 +726,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 		goto err_install_handler;
 	}
 
-	status = san_enable_events(&pdev->dev);
+	status = san_enable_events(pdev);
 	if (status) {
 		goto err_enable_events;
 	}
@@ -710,7 +751,7 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	acpi_status status = AE_OK;
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
-	san_disable_events();
+	san_disable_events(pdev);
 
 	san_consumers_unlink(&drvdata->consumers);
 	kfree(drvdata);
