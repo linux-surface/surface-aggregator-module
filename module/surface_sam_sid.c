@@ -1,3 +1,8 @@
+/*
+ * Surface Integration Driver.
+ * MFD driver to provide device/model dependent functionality.
+ */
+
 #include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/module.h>

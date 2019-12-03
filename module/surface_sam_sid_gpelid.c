@@ -1,3 +1,7 @@
+/*
+ * Surface Lid driver to enable wakeup from suspend via the lid.
+ */
+
 #include <linux/acpi.h>
 #include <linux/dmi.h>
 #include <linux/kernel.h>

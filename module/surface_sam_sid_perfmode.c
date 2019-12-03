@@ -1,3 +1,8 @@
+/*
+ * Surface Performance Mode Driver.
+ * Allows to change cooling capabilities based on user preference.
+ */
+
 #include <asm/unaligned.h>
 #include <linux/kernel.h>
 #include <linux/module.h>

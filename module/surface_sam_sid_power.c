@@ -1,3 +1,8 @@
+/*
+ * Surface SID Battery/AC Driver.
+ * Provides support for the battery and AC on 7th generation Surface devices.
+ */
+
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>

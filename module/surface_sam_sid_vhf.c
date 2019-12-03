@@ -1,6 +1,6 @@
 /*
  * Microsofs Surface HID (VHF) driver for HID input events via SAM.
- * Used for keyboard input events on the Surface Laptops.
+ * Used for keyboard input events on the 7th generation Surface Laptops.
  */
 
 #include <linux/acpi.h>
