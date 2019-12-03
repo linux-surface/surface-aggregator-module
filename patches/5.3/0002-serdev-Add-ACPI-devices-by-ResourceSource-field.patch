@@ -1,4 +1,4 @@
-From bd43cb18da0efd5b7c76e69a2ebff0422e5fd199 Mon Sep 17 00:00:00 2001
+From e8ed0743fbd85e0ac8daff500084805578529477 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Tue, 24 Sep 2019 17:38:12 +0200
 Subject: [PATCH 2/3] serdev: Add ACPI devices by ResourceSource field
