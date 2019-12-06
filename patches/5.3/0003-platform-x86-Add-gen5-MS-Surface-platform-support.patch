@@ -1,6 +1,6 @@
-From ffa97eb9114273358af30897f913bedcab2f1a66 Mon Sep 17 00:00:00 2001
+From f2b4192a96cc7a9299c973667c127de5cc7d261e Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Tue, 3 Dec 2019 22:58:09 +0100
+Date: Fri, 6 Dec 2019 11:56:12 +0100
 Subject: [PATCH 3/3] platform/x86: Add gen5 MS Surface platform support
 
 Add platform/ACPI support for 5th and later generation Microsoft Surface
@@ -20,10 +20,10 @@ handling for the Surface Book 2 clipboard.
  .../surface_sam/surface_sam_sid_perfmode.c    |  225 +++
  .../x86/surface_sam/surface_sam_sid_power.c   | 1258 ++++++++++++
  .../x86/surface_sam/surface_sam_sid_vhf.c     |  440 ++++
- .../x86/surface_sam/surface_sam_ssh.c         | 1771 +++++++++++++++++
+ .../x86/surface_sam/surface_sam_ssh.c         | 1779 +++++++++++++++++
  .../x86/surface_sam/surface_sam_ssh.h         |   97 +
  .../x86/surface_sam/surface_sam_vhf.c         |  276 +++
- 14 files changed, 5983 insertions(+)
+ 14 files changed, 5991 insertions(+)
  create mode 100644 drivers/platform/x86/surface_sam/Kconfig
  create mode 100644 drivers/platform/x86/surface_sam/Makefile
  create mode 100644 drivers/platform/x86/surface_sam/surface_sam_dtx.c
@@ -3951,10 +3951,10 @@ index 000000000000..dc5be3a14a8c
 +MODULE_ALIAS("platform:surface_sam_sid_vhf");
 diff --git a/drivers/platform/x86/surface_sam/surface_sam_ssh.c b/drivers/platform/x86/surface_sam/surface_sam_ssh.c
 new file mode 100644
-index 000000000000..0c535f0ccdc3
+index 000000000000..665d956eec01
 --- /dev/null
 +++ b/drivers/platform/x86/surface_sam/surface_sam_ssh.c
-@@ -0,0 +1,1771 @@
+@@ -0,0 +1,1779 @@
 +/*
 + * Surface Serial Hub (SSH) driver for communication with the Surface/System
 + * Aggregator Module.
@@ -5578,7 +5578,15 @@ index 000000000000..0c535f0ccdc3
 +
 +	surface_sam_ssh_release(ec);
 +
-+	device_init_wakeup(&serdev->dev, true);
++	// TODO: The EC can wake up the system via the associated GPIO interrupt in
++	// multiple situations. One of which is the remaining battery capacity
++	// falling below a certain threshold. Normally, we should use the
++	// device_init_wakeup function, however, the EC also seems to have other
++	// reasons for waking up the system and it seems that Windows has
++	// additional checks whether the system should be resumed. In short, this
++	// causes some spourious unwanted wake-ups. For now let's thus default
++	// power/wakeup to false.
++	device_set_wakeup_capable(&serdev->dev, true);
 +	acpi_walk_dep_device_list(ssh);
 +
 +	return 0;
