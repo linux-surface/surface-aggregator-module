@@ -1236,7 +1236,7 @@ static irqreturn_t surface_sam_irq_handler(int irq, void *dev_id)
 
 static int surface_sam_setup_irq(struct serdev_device *serdev)
 {
-	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING;
 	struct gpio_desc *gpiod;
 	int irq;
 	int status;
