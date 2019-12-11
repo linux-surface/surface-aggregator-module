@@ -10,6 +10,7 @@
 #include <linux/platform_device.h>
 
 #include "surface_sam_ssh.h"
+#include "surface_sam_san.h"
 
 
 #define SAN_RQST_RETRY				5
@@ -35,7 +36,8 @@ static const guid_t SAN_DSM_UUID =
 #define SAM_EVENT_TEMP_RQID		0x0003
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
-#define SAN_RQST_TAG			"surface_sam_san_rqst: "
+#define SAN_RQST_TAG			"surface_sam_san: rqst: "
+#define SAN_RQSG_TAG			"surface_sam_san: rqsg: "
 
 #define SAN_QUIRK_BASE_STATE_DELAY	1000
 
@@ -118,6 +120,57 @@ enum san_pwr_event {
 	SAN_PWR_EVENT_BAT2_STAT	= 0x07,
 	SAN_PWR_EVENT_BAT2_INFO	= 0x08,
 };
+
+
+static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data);
+
+struct sam_san_rqsg_if {
+	struct mutex lock;
+	surface_sam_san_rqsg_handler_fn handler;
+	void *handler_data;
+};
+
+static struct sam_san_rqsg_if rqsg_if = {
+	.lock = __MUTEX_INITIALIZER(rqsg_if.lock),
+	.handler = sam_san_default_rqsg_handler,
+	.handler_data = NULL,
+};
+
+int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *data)
+{
+	int status = -EBUSY;
+
+	mutex_lock(&rqsg_if.lock);
+
+	if (rqsg_if.handler == sam_san_default_rqsg_handler || !fn) {
+		rqsg_if.handler = fn ? fn : sam_san_default_rqsg_handler;
+		rqsg_if.handler_data = data;
+		status = 0;
+	}
+
+	mutex_unlock(&rqsg_if.lock);
+	return status;
+}
+EXPORT_SYMBOL_GPL(surface_sam_san_set_rqsg_handler);
+
+int san_call_rqsg_handler(struct surface_sam_san_rqsg *rqsg)
+{
+	int status;
+
+	mutex_lock(&rqsg_if.lock);
+	status = rqsg_if.handler(rqsg, rqsg_if.handler_data);
+	mutex_unlock(&rqsg_if.lock);
+
+	return status;
+}
+
+static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data)
+{
+	pr_warn(SAN_RQSG_TAG "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
+		rqsg->tc, rqsg->cid, rqsg->iid);
+
+	return 0;
+}
 
 
 static int san_acpi_notify_power_event(struct device *dev, enum san_pwr_event event)
@@ -455,16 +508,33 @@ san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 static acpi_status
 san_rqsg(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *rqsg = san_validate_rqsx(ctx->dev, "RQSG", buffer);
+	struct gsb_data_rqsx *gsb_rqsg = san_validate_rqsx(ctx->dev, "RQSG", buffer);
+	struct surface_sam_san_rqsg rqsg = {};
+	int status;
 
-	if (!rqsg) {
+	if (!gsb_rqsg) {
 		return AE_OK;
 	}
 
-	// TODO: RQSG handler
+	rqsg.tc  = gsb_rqsg->tc;
+	rqsg.cid = gsb_rqsg->cid;
+	rqsg.iid = gsb_rqsg->iid;
+	rqsg.cdl = gsb_rqsg->cdl;
+	rqsg.pld = &gsb_rqsg->pld[0];
 
-	dev_warn(ctx->dev, "unsupported request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
-		 rqsg->tc, rqsg->cid, rqsg->iid);
+	status = san_call_rqsg_handler(&rqsg);
+	if (!status) {
+		buffer->status          = 0x00;
+		buffer->len             = 0x02;
+		buffer->data.out.status = 0x00;
+		buffer->data.out.len    = 0x00;
+	} else {
+		dev_err(ctx->dev, SAN_RQSG_TAG "failed with error %d\n", status);
+		buffer->status          = 0x00;
+		buffer->len             = 0x02;
+		buffer->data.out.status = 0x01;		// indicate _SSH error
+		buffer->data.out.len    = 0x00;
+	}
 
 	return AE_OK;
 }
