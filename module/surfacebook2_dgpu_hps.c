@@ -12,7 +12,6 @@
 // TODO: proper suspend/resume implementation (depends on SAN interface)
 // TODO: improve handling when dGPU is not present / detached
 // TODO: restore previous power state when dGPU is re-attached?
-// TODO: restore previous power state when resuming
 // TODO: vgaswitcheroo integration
 // TODO: module parameters?
 // TODO: check that module re-loading works properly
@@ -69,6 +68,7 @@ struct shps_driver_data {
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
 	unsigned int irq_dgpu_presence;
+	bool power_on_resume;
 };
 
 
@@ -392,6 +392,7 @@ ATTRIBUTE_GROUPS(shps_power);
 static int shps_pm_prepare(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	enum shps_dgpu_power power_dsm;
 	enum shps_dgpu_power power_rp;
 	int status;
@@ -410,11 +411,14 @@ static int shps_pm_prepare(struct device *dev)
 	dev_warn(&pdev->dev, "shps_pm_prepare: root-port power state: %d", power_rp);
 	dev_warn(&pdev->dev, "shps_pm_prepare: direct power state:    %d", power_dsm);
 
-	// TEMPORARY: turn dGPU off
-	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
-	if (status) {
-		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
-		return status;
+	drvdata->power_on_resume = power_rp == SHPS_DGPU_POWER_ON;
+	if (power_rp != SHPS_DGPU_POWER_OFF) {
+		// TEMPORARY: turn dGPU off
+		status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
+		if (status) {
+			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+			return status;
+		}
 	}
 
 	return 0;
@@ -423,6 +427,7 @@ static int shps_pm_prepare(struct device *dev)
 static void shps_pm_complete(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	enum shps_dgpu_power power_dsm;
 	enum shps_dgpu_power power_rp;
 	int status;
@@ -452,11 +457,16 @@ static void shps_pm_complete(struct device *dev)
 		return;
 	}
 
-	// TEMPORARY: turn off dGPU
-	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
-	if (status) {
-		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
-		return;
+	if (!drvdata->power_on_resume) {
+		// TODO: we need to wait for the bridge to be ready
+		//       this is being signaled by RQSG(0x13, 0x02, 0x00...) call
+
+		// TEMPORARY: turn off dGPU
+		status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
+		if (status) {
+			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+			return;
+		}
 	}
 }
 
