@@ -53,17 +53,17 @@ struct san_opreg_context {
 
 struct san_consumer_link {
 	const struct san_acpi_consumer *properties;
-	struct device_link                         *link;
+	struct device_link *link;
 };
 
 struct san_consumers {
-	u32                                   num;
+	u32 num;
 	struct san_consumer_link *links;
 };
 
 struct san_drvdata {
 	struct san_opreg_context opreg_ctx;
-	struct san_consumers     consumers;
+	struct san_consumers consumers;
 	bool has_power_events;
 };
 
