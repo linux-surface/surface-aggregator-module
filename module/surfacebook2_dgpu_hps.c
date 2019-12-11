@@ -8,6 +8,8 @@
 #include <linux/pci.h>
 #include <linux/sysfs.h>
 
+#include "surface_sam_san.h"
+
 
 // TODO: proper suspend/resume implementation (depends on SAN interface)
 // TODO: improve handling when dGPU is not present / detached
@@ -23,6 +25,10 @@
 static const guid_t SHPS_DSM_UUID =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
 		  0x32, 0x0e, 0x10, 0x36, 0x0a);
+
+
+#define SAM_DGPU_TC	        0x13
+#define SAM_DGPU_CID_POWERON	0x02
 
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
@@ -494,6 +500,24 @@ static int shps_dgpu_attached(struct platform_device *pdev)
 	return 0;
 }
 
+static int shps_dgpu_powered_on(struct platform_device *pdev)
+{
+	dev_info(&pdev->dev, "dGPU power-on detected");
+	return 0;
+}
+
+
+static int shps_dgpu_handle_rqsg(struct surface_sam_san_rqsg *rqsg, void *data)
+{
+	struct platform_device *pdev = data;
+
+	if (rqsg->tc == SAM_DGPU_TC && rqsg->cid == SAM_DGPU_CID_POWERON)
+		return shps_dgpu_powered_on(pdev);
+
+	dev_warn(&pdev->dev, "unimplemented dGPU request: RQSG(0x%02x, 0x%02x, 0x%02x)",
+		 rqsg->tc, rqsg->cid, rqsg->iid);
+	return 0;
+}
 
 static irqreturn_t shps_dgpu_presence_irq(int irq, void *data)
 {
@@ -675,6 +699,8 @@ static int shps_probe(struct platform_device *pdev)
 	if (!link)
 		goto err_devlink;
 
+	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+
 	// TEMPORARY: power down dGPU at start
 	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
 	if (status)
@@ -703,6 +729,7 @@ static int shps_remove(struct platform_device *pdev)
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
+	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
 	shps_gpios_remove(pdev);
