@@ -665,6 +665,11 @@ static int shps_probe(struct platform_device *pdev)
 	if (!link)
 		goto err_devlink;
 
+	// TEMPORARY: power down dGPU at start
+	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	if (status)
+		goto err_devlink;
+
 	return 0;
 
 err_devlink:
