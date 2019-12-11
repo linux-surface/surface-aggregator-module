@@ -9,7 +9,7 @@
 #include <linux/sysfs.h>
 
 
-// TODO: proper suspend/resume implementation
+// TODO: proper suspend/resume implementation (depends on SAN interface)
 // TODO: improve handling when dGPU is not present / detached
 // TODO: restore previous power state when dGPU is re-attached?
 // TODO: restore previous power state when resuming
@@ -487,11 +487,6 @@ static int shps_dgpu_attached(struct platform_device *pdev)
 
 static irqreturn_t shps_dgpu_presence_irq(int irq, void *data)
 {
-	return IRQ_WAKE_THREAD;
-}
-
-static irqreturn_t shps_dgpu_presence_irq_fn(int irq, void *data)
-{
 	struct platform_device *pdev = data;
 	bool dgpu_present;
 	int status;
@@ -603,7 +598,7 @@ static void shps_gpios_remove(struct platform_device *pdev)
 
 static int shps_gpios_setup_irq(struct platform_device *pdev)
 {
-	const int irqf = IRQF_SHARED | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
@@ -614,8 +609,7 @@ static int shps_gpios_setup_irq(struct platform_device *pdev)
 	drvdata->irq_dgpu_presence = (unsigned)status;
 
 	status = request_threaded_irq(drvdata->irq_dgpu_presence,
-				      shps_dgpu_presence_irq,
-				      shps_dgpu_presence_irq_fn,
+				      NULL, shps_dgpu_presence_irq,
 				      irqf, "shps_dgpu_presence_irq", pdev);
 	return status;
 }
