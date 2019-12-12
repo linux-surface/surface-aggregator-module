@@ -230,6 +230,17 @@ static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_
 }
 
 
+static bool shps_rp_link_up(struct pci_dev *rp)
+{
+	u16 lnksta = 0, sltsta = 0;
+
+	pcie_capability_read_word(rp, PCI_EXP_LNKSTA, &lnksta);
+	pcie_capability_read_word(rp, PCI_EXP_SLTSTA, &sltsta);
+
+	return (lnksta & PCI_EXP_LNKSTA_DLLLA) || (sltsta & PCI_EXP_SLTSTA_PDS);
+}
+
+
 static int shps_dgpu_rp_get_power_unlocked(struct platform_device *pdev)
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
@@ -259,7 +270,7 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct pci_dev *rp = drvdata->dgpu_root_port;
-	int status;
+	int status, i;
 
 	dev_info(&pdev->dev, "setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
@@ -277,13 +288,18 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 
 		/*
 		 * To properly update the hot-plug system we need to "remove" the dGPU
-		 * before disabling it and sending it to D3cold.
+		 * before disabling it and sending it to D3cold. Following this, we
+		 * need to wait for the link and slot status to actually change.
 		 */
 		status = shps_dgpu_dsm_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
 		if (status)
 			return status;
 
-		msleep(150);
+		for (i = 0; i < 20 && shps_rp_link_up(rp); i++)
+			msleep(50);
+
+		if (shps_rp_link_up(rp))
+			dev_err(&pdev->dev, "dGPU removal via DSM timed out\n");
 
 		pci_clear_master(rp);
 		pci_disable_device(rp);
