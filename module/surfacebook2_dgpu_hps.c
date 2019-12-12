@@ -30,6 +30,9 @@ static const guid_t SHPS_DSM_UUID =
 #define SAM_DGPU_TC	        0x13
 #define SAM_DGPU_CID_POWERON	0x02
 
+#define SHPS_DSM_GPU_ADDRS_RP	"RP5_PCIE"
+#define SHPS_DSM_GPU_ADDRS_DGPU	"DGPU_PCIE"
+
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_base_presence     = { 1, 0, false };
@@ -676,7 +679,7 @@ static int shps_probe(struct platform_device *pdev)
 	mutex_init(&drvdata->pm_mutex);
 	platform_set_drvdata(pdev, drvdata);
 
-	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, "RP5_PCIE");
+	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_RP);
 	if (IS_ERR(drvdata->dgpu_root_port)) {
 		status = PTR_ERR(drvdata->dgpu_root_port);
 		goto err_rp_lookup;
