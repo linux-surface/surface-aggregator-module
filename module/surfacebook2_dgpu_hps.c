@@ -77,8 +77,11 @@ struct shps_driver_data {
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
 	unsigned int irq_dgpu_presence;
-	bool power_on_resume;
+	unsigned long state;
 };
+
+#define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
+#define SHPS_STATE_BIT_RPPWRON_SYNC	1	/* synchronous/requested power-up in progress  */
 
 
 static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char* entry)
@@ -275,10 +278,14 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 	dev_info(&pdev->dev, "setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
 	if (power == SHPS_DGPU_POWER_ON) {
+		set_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
 		pci_set_power_state(rp, PCI_D0);
 		pci_restore_state(rp);
 		pci_enable_device(rp);
 		pci_set_master(rp);
+		clear_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
+
+		set_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	} else {
 		pci_save_state(rp);
 
@@ -300,6 +307,8 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 		pci_clear_master(rp);
 		pci_disable_device(rp);
 		pci_set_power_state(rp, PCI_D3cold);
+
+		clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	}
 
 	return 0;
@@ -434,19 +443,15 @@ static void tmp_dump_power_states(struct platform_device *pdev, const char *pref
 static int shps_pm_prepare(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
 	tmp_dump_power_states(pdev, "shps_pm_prepare");
 
-	drvdata->power_on_resume = power_rp == SHPS_DGPU_POWER_ON;
-	if (power_rp != SHPS_DGPU_POWER_OFF) {
-		// TEMPORARY: turn dGPU off
-		status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
-		if (status) {
-			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
-			return status;
-		}
+	// TEMPORARY: turn dGPU off
+	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
+	if (status) {
+		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+		return status;
 	}
 
 	return 0;
@@ -455,29 +460,7 @@ static int shps_pm_prepare(struct device *dev)
 static void shps_pm_complete(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	int status;
-
 	tmp_dump_power_states(pdev, "shps_pm_complete");
-
-	// TEMPORARY: synchronize power state
-	status = __shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_ON);
-	if (status) {
-		dev_warn(&pdev->dev, "failed to power on dGPU: %d\n", status);
-		return;
-	}
-
-	if (!drvdata->power_on_resume) {
-		// TODO: we need to wait for the bridge to be ready
-		//       this is being signaled by RQSG(0x13, 0x02, 0x00...) call
-
-		// TEMPORARY: turn off dGPU
-		status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
-		if (status) {
-			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
-			return;
-		}
-	}
 }
 
 static void shps_shutdown(struct platform_device *pdev)
@@ -508,7 +491,44 @@ static int shps_dgpu_attached(struct platform_device *pdev)
 
 static int shps_dgpu_powered_on(struct platform_device *pdev)
 {
-	dev_info(&pdev->dev, "dGPU power-on detected");
+	/*
+	 * This function gets called directly after a power-state transition of
+	 * the dGPU root port out of D3cold state, indicating a power-on of the
+	 * dGPU. Specifically, this function is called from the RQSG handler of
+	 * SAN, invoked by the ACPI _ON method of the dGPU root port. This means
+	 * that this function is run inside `pci_set_power_state(rp, ...)`
+	 * syncrhonously and thus returns before the `pci_set_power_state` call
+	 * does.
+	 *
+	 * `pci_set_power_state` may either be called by us or when the PCI
+	 * subsystem decides to power up the root port (e.g. during resume). Thus
+	 * we should use this function to ensure that the dGPU and root port
+	 * states are consistent when an unexpected power-up is encountered.
+	 */
+
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+
+	// if we caused the root port to power-on, return
+	if (test_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state))
+		return 0;
+
+	mutex_lock(&drvdata->lock);
+
+	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.1");
+	pci_restore_state(rp);
+	if (!pci_is_enabled(rp))
+		pci_enable_device(rp);
+	pci_set_master(rp);
+	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.2");
+
+	mutex_unlock(&drvdata->lock);
+
+	if (!test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
+		dev_warn(&pdev->dev, "unexpected dGPU power-on detected");
+		// TODO: schedule state re-check and update
+	}
+
 	return 0;
 }
 
