@@ -277,11 +277,7 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 	if (power == SHPS_DGPU_POWER_ON) {
 		pci_set_power_state(rp, PCI_D0);
 		pci_restore_state(rp);
-
-		status = pci_enable_device(rp);
-		if (status)
-			return status;
-
+		pci_enable_device(rp);
 		pci_set_master(rp);
 	} else {
 		pci_save_state(rp);
