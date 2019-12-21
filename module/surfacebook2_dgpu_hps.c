@@ -414,27 +414,34 @@ static struct attribute *shps_power_attrs[] = {
 ATTRIBUTE_GROUPS(shps_power);
 
 
-static int shps_pm_prepare(struct device *dev)
+static void tmp_dump_power_states(struct platform_device *pdev, const char *prefix)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	enum shps_dgpu_power power_dsm;
 	enum shps_dgpu_power power_rp;
 	int status;
 
-	status = shps_dgpu_rp_get_power(pdev);
+	status = shps_dgpu_rp_get_power_unlocked(pdev);
 	if (status < 0)
-		return status;
+		dev_err(&pdev->dev, "%s: failed to get root-port power state: %d\n", prefix, status);
 	power_rp = status;
 
-	status = shps_dgpu_dsm_get_power(pdev);
+	status = shps_dgpu_rp_get_power_unlocked(pdev);
 	if (status < 0)
-		return status;
+		dev_err(&pdev->dev, "%s: failed to get direct power state: %d\n", prefix, status);
 	power_dsm = status;
 
-	// TODO
-	dev_warn(&pdev->dev, "shps_pm_prepare: root-port power state: %d", power_rp);
-	dev_warn(&pdev->dev, "shps_pm_prepare: direct power state:    %d", power_dsm);
+	dev_warn(&pdev->dev, "%s: root-port power state: %d\n", prefix, power_rp);
+	dev_warn(&pdev->dev, "%s: direct power state:    %d\n", prefix, power_dsm);
+}
+
+
+static int shps_pm_prepare(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status;
+
+	tmp_dump_power_states(pdev, "shps_pm_prepare");
 
 	drvdata->power_on_resume = power_rp == SHPS_DGPU_POWER_ON;
 	if (power_rp != SHPS_DGPU_POWER_OFF) {
@@ -453,27 +460,9 @@ static void shps_pm_complete(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	enum shps_dgpu_power power_dsm;
-	enum shps_dgpu_power power_rp;
 	int status;
 
-	status = shps_dgpu_rp_get_power(pdev);
-	if (status < 0) {
-		dev_warn(&pdev->dev, "failed to get dGPU root port power state: %d\n", status);
-		return;
-	}
-	power_rp = status;
-
-	status = shps_dgpu_dsm_get_power(pdev);
-	if (status < 0) {
-		dev_warn(&pdev->dev, "failed to get direct dGPU power state: %d\n", status);
-		return;
-	}
-	power_dsm = status;
-
-	// TODO
-	dev_warn(&pdev->dev, "shps_pm_complete: root-port power state: %d", power_rp);
-	dev_warn(&pdev->dev, "shps_pm_complete: direct power state:    %d", power_dsm);
+	tmp_dump_power_states(pdev, "shps_pm_complete");
 
 	// TEMPORARY: synchronize power state
 	status = __shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_ON);
@@ -511,11 +500,13 @@ static void shps_shutdown(struct platform_device *pdev)
 
 static int shps_dgpu_detached(struct platform_device *pdev)
 {
+	tmp_dump_power_states(pdev, "shps_dgpu_detached");
 	return shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
 }
 
 static int shps_dgpu_attached(struct platform_device *pdev)
 {
+	tmp_dump_power_states(pdev, "shps_dgpu_attached");
 	return 0;
 }
 
