@@ -71,7 +71,7 @@ static const char* shps_dgpu_power_str(enum shps_dgpu_power power) {
 
 
 struct shps_driver_data {
-	struct mutex pm_mutex;
+	struct mutex lock;
 	struct pci_dev *dgpu_root_port;
 	struct gpio_desc *gpio_dgpu_power;
 	struct gpio_desc *gpio_dgpu_presence;
@@ -167,9 +167,9 @@ static int shps_dgpu_dsm_get_power(struct platform_device *pdev)
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	mutex_lock(&drvdata->pm_mutex);
+	mutex_lock(&drvdata->lock);
 	status = shps_dgpu_dsm_get_power_unlocked(pdev);
-	mutex_unlock(&drvdata->pm_mutex);
+	mutex_unlock(&drvdata->lock);
 
 	return status;
 }
@@ -222,9 +222,9 @@ static int shps_dgpu_dsm_set_power(struct platform_device *pdev, enum shps_dgpu_
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	mutex_lock(&drvdata->pm_mutex);
+	mutex_lock(&drvdata->lock);
 	status = shps_dgpu_dsm_set_power_unlocked(pdev, power);
-	mutex_unlock(&drvdata->pm_mutex);
+	mutex_unlock(&drvdata->lock);
 
 	return status;
 }
@@ -259,9 +259,9 @@ static int shps_dgpu_rp_get_power(struct platform_device *pdev)
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	mutex_lock(&drvdata->pm_mutex);
+	mutex_lock(&drvdata->lock);
 	status = shps_dgpu_rp_get_power_unlocked(pdev);
-	mutex_unlock(&drvdata->pm_mutex);
+	mutex_unlock(&drvdata->lock);
 
 	return status;
 }
@@ -330,9 +330,9 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	mutex_lock(&drvdata->pm_mutex);
+	mutex_lock(&drvdata->lock);
 	status = shps_dgpu_rp_set_power_unlocked(pdev, power);
-	mutex_unlock(&drvdata->pm_mutex);
+	mutex_unlock(&drvdata->lock);
 
 	return status;
 }
@@ -692,7 +692,7 @@ static int shps_probe(struct platform_device *pdev)
 		status = -ENOMEM;
 		goto err_drvdata;
 	}
-	mutex_init(&drvdata->pm_mutex);
+	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
 
 	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_RP);
