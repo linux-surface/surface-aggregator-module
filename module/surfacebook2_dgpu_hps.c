@@ -11,8 +11,11 @@
 #include "surface_sam_san.h"
 
 
-// TODO: proper suspend/resume implementation (depends on SAN interface)
-// TODO: improve handling when dGPU is not present / detached
+// TODO: make sure that SAN driver (OpRegion) is set up before allowing this
+//       driver to probe
+
+// TODO: improve handling when dGPU is not present / detached (e.g. disallow
+//       power-state setting)
 // TODO: restore previous power state when dGPU is re-attached?
 // TODO: vgaswitcheroo integration
 // TODO: module parameters?
