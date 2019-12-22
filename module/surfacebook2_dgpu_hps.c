@@ -11,8 +11,6 @@
 #include "surface_sam_san.h"
 
 
-// TODO: improve handling when dGPU is not present / detached (e.g. disallow
-//       power-state setting)
 // TODO: restore previous power state when dGPU is re-attached?
 // TODO: vgaswitcheroo integration
 // TODO: module parameters?
@@ -373,6 +371,10 @@ static ssize_t dgpu_power_store(struct device *dev, struct device_attribute *att
 	if (status)
 		return status;
 
+	status = shps_dgpu_is_present(pdev);
+	if (status <= 0)
+		return status < 0 ? status : -EPERM;
+
 	power = b ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
 	status = shps_dgpu_rp_set_power(pdev, power);
 
@@ -401,6 +403,10 @@ static ssize_t dgpu_power_dsm_store(struct device *dev, struct device_attribute 
 	status = kstrtobool(data, &b);
 	if (status)
 		return status;
+
+	status = shps_dgpu_is_present(pdev);
+	if (status <= 0)
+		return status < 0 ? status : -EPERM;
 
 	power = b ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
 	status = shps_dgpu_dsm_set_power(pdev, power);
