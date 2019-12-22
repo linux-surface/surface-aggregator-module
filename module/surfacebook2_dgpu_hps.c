@@ -11,9 +11,6 @@
 #include "surface_sam_san.h"
 
 
-// TODO: make sure that SAN driver (OpRegion) is set up before allowing this
-//       driver to probe
-
 // TODO: improve handling when dGPU is not present / detached (e.g. disallow
 //       power-state setting)
 // TODO: restore previous power state when dGPU is re-attached?
@@ -692,6 +689,12 @@ static int shps_probe(struct platform_device *pdev)
 
 	if (gpiod_count(&pdev->dev, NULL) < 0)
 		return -ENODEV;
+
+	// link to SAN
+	status = surface_sam_san_consumer_register(&pdev->dev, 0);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
+	}
 
 	status = acpi_dev_add_driver_gpios(shps_dev, shps_acpi_gpios);
 	if (status)
