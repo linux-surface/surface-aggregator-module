@@ -27,6 +27,7 @@ struct surface_sam_san_rqsg {
 
 typedef int (*surface_sam_san_rqsg_handler_fn)(struct surface_sam_san_rqsg *rqsg, void *data);
 
+int surface_sam_san_consumer_register(struct device *consumer, u32 flags);
 int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *data);
 
 #endif /* _SURFACE_SAM_SAN_H */
