@@ -126,15 +126,37 @@ static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void 
 
 struct sam_san_rqsg_if {
 	struct mutex lock;
+	struct device *san_dev;
 	surface_sam_san_rqsg_handler_fn handler;
 	void *handler_data;
 };
 
 static struct sam_san_rqsg_if rqsg_if = {
 	.lock = __MUTEX_INITIALIZER(rqsg_if.lock),
+	.san_dev = NULL,
 	.handler = sam_san_default_rqsg_handler,
 	.handler_data = NULL,
 };
+
+int surface_sam_san_consumer_register(struct device *consumer, u32 flags)
+{
+	const u32 valid = DL_FLAG_PM_RUNTIME | DL_FLAG_RPM_ACTIVE;
+	int status;
+
+	if ((flags | valid) != valid)
+		return -EINVAL;
+
+	flags |= DL_FLAG_AUTOREMOVE_CONSUMER;
+
+	mutex_lock(&rqsg_if.lock);
+	if (rqsg_if.san_dev)
+		status = device_link_add(consumer, rqsg_if.san_dev, flags) ? 0 : -EINVAL;
+	else
+		status = -ENXIO;
+	mutex_unlock(&rqsg_if.lock);
+	return status;
+}
+EXPORT_SYMBOL_GPL(surface_sam_san_consumer_register);
 
 int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *data)
 {
@@ -801,9 +823,23 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 		goto err_enable_events;
 	}
 
+	mutex_lock(&rqsg_if.lock);
+	if (!rqsg_if.san_dev) {
+		rqsg_if.san_dev = &pdev->dev;
+	} else {
+		status = -EBUSY;
+	}
+	mutex_unlock(&rqsg_if.lock);
+
+	if (status) {
+		goto err_install_dev;
+	}
+
 	acpi_walk_dep_device_list(san);
 	return 0;
 
+err_install_dev:
+	san_disable_events(pdev);
 err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 err_install_handler:
@@ -819,6 +855,10 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
+
+	mutex_lock(&rqsg_if.lock);
+	rqsg_if.san_dev = NULL;
+	mutex_unlock(&rqsg_if.lock);
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 	san_disable_events(pdev);
