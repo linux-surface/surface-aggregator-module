@@ -11,10 +11,10 @@
 #include "surface_sam_san.h"
 
 
-// TODO: restore previous power state when dGPU is re-attached?
+// TODO: detect and handle suspended detach/attach
+// TODO: module parameters
 // TODO: vgaswitcheroo integration
-// TODO: module parameters?
-// TODO: check that module re-loading works properly
+// TODO: power-on on on module removal?
 
 
 #define SHPS_DSM_REVISION	1
