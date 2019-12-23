@@ -613,10 +613,16 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct pci_dev *rp = drvdata->dgpu_root_port;
+	int status;
 
 	// if we caused the root port to power-on, return
 	if (test_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state))
 		return 0;
+
+	// if dGPU is not present, return
+	status = shps_dgpu_is_present(pdev);
+	if (status <= 0)
+		return status;
 
 	mutex_lock(&drvdata->lock);
 
