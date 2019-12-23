@@ -466,15 +466,19 @@ static void tmp_dump_pcie(struct platform_device *pdev, const char *prefix)
 static int shps_pm_prepare(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
 	tmp_dump_power_states(pdev, "shps_pm_prepare");
 
 	// TEMPORARY: turn dGPU off
-	status = shps_dgpu_rp_set_power_unlocked(pdev, SHPS_DGPU_POWER_OFF);
-	if (status) {
-		dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
-		return status;
+	if (test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
+		status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+		if (status) {
+			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+			return status;
+		}
+		set_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	}
 
 	return 0;
