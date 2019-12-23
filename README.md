@@ -31,14 +31,19 @@ The dGPU power-state can also be automatically set when this module is loaded or
   - Values: `0` (off), `1` (on), `-1` (as is).
   - Default: `0` (off).
 
-
 - `dgpu_power_exit`:
   - Description: The power-state to set when unloading this module.
   - Values: `0` (off), `1` (on), `-1` (as is).
-  - Default: `0` (off).
+  - Default: `1` (on).
+
+- `dgpu_power_susp`:
+  - Description: The power-state to set when suspending the device.
+    The previous power-state will be restored when resuming.
+  - Values: `0` (off), `1` (on), `-1` (as is).
+  - Default: `-1` (as-is).
 
 _Warning:_
-By default, the dGPU is turned off when the module loads and unloads, changing this behavior may have unwanted side-effects.
+By default, the dGPU is turned off when the module loads, changing this behavior may have unwanted side-effects.
 Some desktop-environments (including Gnome) claim the dGPU when it is turned on during their initialization phase.
 This will result in you being unable to unload the graphics driver and ultimately crashes or hang-ups when you disable the dGPU dynamically.
 Keeping the dGPU disabled during this initialization phase avoids this problem, so if you want the dGPU to be permanently powered on, you may want to write a script that runs after you log in into your desktop environment.
