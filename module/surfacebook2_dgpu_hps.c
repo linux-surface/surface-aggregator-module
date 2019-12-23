@@ -483,9 +483,33 @@ static int shps_pm_prepare(struct device *dev)
 static void shps_pm_complete(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status;
 
 	tmp_dump_power_states(pdev, "shps_pm_complete");
 	tmp_dump_pcie(pdev, "shps_pm_complete");
+
+	/*
+	 * During resume, the PCIe core will power on the root-port, which in turn
+	 * will power on the dGPU. Most of the state synchronization is already
+	 * handled via the SAN RQSG handler, so it is in a fully consistent
+	 * on-state here. If requested, turn it off here.
+	 *
+	 * As there seem to be some synchronization issues turning off the dGPU
+	 * directly after the power-on SAN RQSG notification during the resume
+	 * process, let's do this here.
+	 *
+	 * TODO/FIXME:
+	 *   This does not combat unhandled power-ons when the device is not fully
+	 *   resumed, i.e. re-suspended before shps_pm_complete is called. Those
+	 *   should normally not be an issue, but the dGPU does get hot even though
+	 *   it is suspended, so ideally we want to keep it off.
+	 */
+	if (!test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
+		status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+		if (status)
+			dev_err(&pdev->dev, "failed to power-off dGPU: %d\n", status);
+	}
 }
 
 static void shps_shutdown(struct platform_device *pdev)
