@@ -12,9 +12,7 @@
 
 
 // TODO: detect and handle suspended detach/attach
-// TODO: module parameters
 // TODO: vgaswitcheroo integration
-// TODO: power-on on on module removal?
 
 
 #define SHPS_DSM_REVISION	1
@@ -80,6 +78,52 @@ struct shps_driver_data {
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
 #define SHPS_STATE_BIT_RPPWRON_SYNC	1	/* synchronous/requested power-up in progress  */
+
+
+#define SHPS_DGPU_PARAM_PERM		(S_IRUGO | S_IWUSR)
+
+enum shps_dgpu_power_mp {
+	SHPS_DGPU_MP_POWER_OFF  = SHPS_DGPU_POWER_OFF,
+	SHPS_DGPU_MP_POWER_ON   = SHPS_DGPU_POWER_ON,
+	SHPS_DGPU_MP_POWER_ASIS = -1,
+
+	__SHPS_DGPU_MP_POWER_START = -1,
+	__SHPS_DGPU_MP_POWER_END   = 1,
+};
+
+static int param_dgpu_power_set(const char *val, const struct kernel_param *kp)
+{
+	int power = SHPS_DGPU_MP_POWER_OFF;
+	int status;
+
+	status = kstrtoint(val, 0, &power);
+	if (status) {
+		return status;
+	}
+
+	if (power < __SHPS_DGPU_MP_POWER_START || power > __SHPS_DGPU_MP_POWER_END) {
+		return -EINVAL;
+	}
+
+	return param_set_int(val, kp);
+}
+
+static const struct kernel_param_ops param_dgpu_power_ops = {
+	.set = param_dgpu_power_set,
+	.get = param_get_int,
+};
+
+static int param_dgpu_power_init = SHPS_DGPU_MP_POWER_OFF;
+static int param_dgpu_power_exit = SHPS_DGPU_MP_POWER_ON;
+static int param_dgpu_power_susp = SHPS_DGPU_MP_POWER_ASIS;
+
+module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SHPS_DGPU_PARAM_PERM);
+module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SHPS_DGPU_PARAM_PERM);
+module_param_cb(dgpu_power_susp, &param_dgpu_power_ops, &param_dgpu_power_susp, SHPS_DGPU_PARAM_PERM);
+
+MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 1: on / 2: as-is, default: off)");
+MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: on)");
+MODULE_PARM_DESC(dgpu_power_susp, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: as-is)");
 
 
 static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char* entry)
@@ -467,18 +511,26 @@ static int shps_pm_prepare(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
-	int status;
+	bool pwrtgt;
+	int status = 0;
 
 	tmp_dump_power_states(pdev, "shps_pm_prepare");
 
-	// TEMPORARY: turn dGPU off
-	if (test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
-		status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	if (param_dgpu_power_susp != SHPS_DGPU_MP_POWER_ASIS) {
+ 		pwrtgt = test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
+
+		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_susp);
 		if (status) {
-			dev_warn(&pdev->dev, "failed to power off dGPU: %d\n", status);
+			dev_warn(&pdev->dev, "failed to power %s dGPU: %d\n",
+				 param_dgpu_power_susp == SHPS_DGPU_MP_POWER_OFF ? "off" : "on",
+				 status);
 			return status;
 		}
-		set_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
+
+		if (pwrtgt)
+			set_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
+		else
+			clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	}
 
 	return 0;
@@ -788,10 +840,11 @@ static int shps_probe(struct platform_device *pdev)
 
 	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
 
-	// TEMPORARY: power down dGPU at start
-	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
-	if (status)
-		goto err_devlink;
+	if (param_dgpu_power_init != SHPS_DGPU_MP_POWER_ASIS) {
+		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_init);
+		if (status)
+			goto err_devlink;
+	}
 
 	return 0;
 
@@ -815,6 +868,13 @@ static int shps_remove(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status;
+
+	if (param_dgpu_power_exit != SHPS_DGPU_MP_POWER_ASIS) {
+		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_exit);
+		if (status)
+			dev_err(&pdev->dev, "failed to set dGPU power state: %d\n", status);
+	}
 
 	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
