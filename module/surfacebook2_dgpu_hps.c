@@ -445,6 +445,23 @@ static void tmp_dump_power_states(struct platform_device *pdev, const char *pref
 	dev_warn(&pdev->dev, "%s: direct power state:    %d\n", prefix, power_dsm);
 }
 
+static void tmp_dump_pcie(struct platform_device *pdev, const char *prefix)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+	u16 lnksta, lnksta2, sltsta, sltsta2;
+
+	pcie_capability_read_word(rp, PCI_EXP_LNKSTA, &lnksta);
+	pcie_capability_read_word(rp, PCI_EXP_LNKSTA2, &lnksta2);
+	pcie_capability_read_word(rp, PCI_EXP_SLTSTA, &sltsta);
+	pcie_capability_read_word(rp, PCI_EXP_SLTSTA2, &sltsta2);
+
+	dev_warn(&pdev->dev, "%s: LNKSTA: 0x%04x", prefix, lnksta);
+	dev_warn(&pdev->dev, "%s: LNKSTA2: 0x%04x", prefix, lnksta2);
+	dev_warn(&pdev->dev, "%s: SLTSTA: 0x%04x", prefix, sltsta);
+	dev_warn(&pdev->dev, "%s: SLTSTA2: 0x%04x", prefix, sltsta2);
+}
+
 
 static int shps_pm_prepare(struct device *dev)
 {
@@ -466,7 +483,9 @@ static int shps_pm_prepare(struct device *dev)
 static void shps_pm_complete(struct device *dev)
 {
 	struct platform_device *pdev = to_platform_device(dev);
+
 	tmp_dump_power_states(pdev, "shps_pm_complete");
+	tmp_dump_pcie(pdev, "shps_pm_complete");
 }
 
 static void shps_shutdown(struct platform_device *pdev)
@@ -522,11 +541,13 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	mutex_lock(&drvdata->lock);
 
 	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.1");
+	tmp_dump_pcie(pdev, "shps_dgpu_powered_on.1");
 	pci_restore_state(rp);
 	if (!pci_is_enabled(rp))
 		pci_enable_device(rp);
 	pci_set_master(rp);
 	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.2");
+	tmp_dump_pcie(pdev, "shps_dgpu_powered_on.2");
 
 	mutex_unlock(&drvdata->lock);
 
