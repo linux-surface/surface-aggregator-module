@@ -545,6 +545,15 @@ static void shps_pm_complete(struct device *dev)
 	tmp_dump_power_states(pdev, "shps_pm_complete");
 	tmp_dump_pcie(pdev, "shps_pm_complete");
 
+	// update power target, dGPU may have been detached while suspended
+	status = shps_dgpu_is_present(pdev);
+	if (status < 0) {
+		dev_err(&pdev->dev, "failed to get dGPU presence: %d\n", status);
+		return;
+	} else if (status == 0) {
+		clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
+	}
+
 	/*
 	 * During resume, the PCIe core will power on the root-port, which in turn
 	 * will power on the dGPU. Most of the state synchronization is already
@@ -619,8 +628,10 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	if (test_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state))
 		return 0;
 
-	// if dGPU is not present, return
+	// if dGPU is not present, force power-target to off and return
 	status = shps_dgpu_is_present(pdev);
+	if (status == 0)
+		clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	if (status <= 0)
 		return status;
 
@@ -798,7 +809,7 @@ static int shps_probe(struct platform_device *pdev)
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata;
 	struct device_link *link;
-	int status = 0;
+	int power, status;
 
 	if (gpiod_count(&pdev->dev, NULL) < 0)
 		return -ENODEV;
@@ -846,8 +857,14 @@ static int shps_probe(struct platform_device *pdev)
 
 	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
 
-	if (param_dgpu_power_init != SHPS_DGPU_MP_POWER_ASIS) {
-		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_init);
+	// if dGPU is not present turn-off root-port, else obey module param
+	status = shps_dgpu_is_present(pdev);
+	if (status < 0)
+		goto err_devlink;
+
+	power = status == 0 ? SHPS_DGPU_POWER_OFF : param_dgpu_power_init;
+	if (power != SHPS_DGPU_MP_POWER_ASIS) {
+		status = shps_dgpu_rp_set_power(pdev, power);
 		if (status)
 			goto err_devlink;
 	}
