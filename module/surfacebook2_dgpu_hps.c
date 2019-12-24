@@ -72,6 +72,7 @@ static const char* shps_dgpu_power_str(enum shps_dgpu_power power) {
 struct shps_driver_data {
 	struct mutex lock;
 	struct pci_dev *dgpu_root_port;
+	struct pci_saved_state *dgpu_root_port_state;
 	struct gpio_desc *gpio_dgpu_power;
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
@@ -326,6 +327,10 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 	if (power == SHPS_DGPU_POWER_ON) {
 		set_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
 		pci_set_power_state(rp, PCI_D0);
+
+		if (drvdata->dgpu_root_port_state)
+			pci_load_and_free_saved_state(rp, &drvdata->dgpu_root_port_state);
+
 		pci_restore_state(rp);
 
 		if (!pci_is_enabled(rp))
@@ -336,7 +341,10 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 
 		set_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	} else {
-		pci_save_state(rp);
+		if (!drvdata->dgpu_root_port_state) {
+			pci_save_state(rp);
+			drvdata->dgpu_root_port_state = pci_store_saved_state(rp);
+		}
 
 		/*
 		 * To properly update the hot-plug system we need to "remove" the dGPU
@@ -524,6 +532,7 @@ static void tmp_dump_drvsta(struct platform_device *pdev, const char *prefix)
 
 	dev_warn(&pdev->dev, "%s: RP power: %d", prefix, rp->current_state);
 	dev_warn(&pdev->dev, "%s: RP state saved: %d", prefix, rp->state_saved);
+	dev_warn(&pdev->dev, "%s: RP state stored: %d", prefix, !!drvdata->dgpu_root_port_state);
 	dev_warn(&pdev->dev, "%s: RP enabled: %d", prefix, atomic_read(&rp->enable_cnt));
 	dev_warn(&pdev->dev, "%s: RP mastered: %d", prefix, rp->is_busmaster);
 }
@@ -666,6 +675,8 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 
 	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.1");
 	tmp_dump_pciesta(pdev, "shps_dgpu_powered_on.1");
+	if (drvdata->dgpu_root_port_state)
+		pci_load_and_free_saved_state(rp, &drvdata->dgpu_root_port_state);
 	pci_restore_state(rp);
 	if (!pci_is_enabled(rp))
 		pci_enable_device(rp);
