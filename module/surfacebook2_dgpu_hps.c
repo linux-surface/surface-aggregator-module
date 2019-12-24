@@ -15,6 +15,9 @@
 // TODO: vgaswitcheroo integration
 
 
+static void tmp_dump_drvsta(struct platform_device *pdev, const char *prefix);
+
+
 #define SHPS_DSM_REVISION	1
 #define SHPS_DSM_GPU_ADDRS	0x02
 #define SHPS_DSM_GPU_POWER	0x05
@@ -319,6 +322,7 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 
 	dev_info(&pdev->dev, "setting dGPU power state to \'%s\'\n", shps_dgpu_power_str(power));
 
+	tmp_dump_drvsta(pdev, "__shps_dgpu_rp_set_power_unlocked.1");
 	if (power == SHPS_DGPU_POWER_ON) {
 		set_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
 		pci_set_power_state(rp, PCI_D0);
@@ -352,6 +356,7 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 
 		clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 	}
+	tmp_dump_drvsta(pdev, "__shps_dgpu_rp_set_power_unlocked.2");
 
 	return 0;
 }
@@ -489,7 +494,7 @@ static void tmp_dump_power_states(struct platform_device *pdev, const char *pref
 	dev_warn(&pdev->dev, "%s: direct power state:    %d\n", prefix, power_dsm);
 }
 
-static void tmp_dump_pcie(struct platform_device *pdev, const char *prefix)
+static void tmp_dump_pciesta(struct platform_device *pdev, const char *prefix)
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct pci_dev *rp = drvdata->dgpu_root_port;
@@ -504,6 +509,17 @@ static void tmp_dump_pcie(struct platform_device *pdev, const char *prefix)
 	dev_warn(&pdev->dev, "%s: LNKSTA2: 0x%04x", prefix, lnksta2);
 	dev_warn(&pdev->dev, "%s: SLTSTA: 0x%04x", prefix, sltsta);
 	dev_warn(&pdev->dev, "%s: SLTSTA2: 0x%04x", prefix, sltsta2);
+}
+
+static void tmp_dump_drvsta(struct platform_device *pdev, const char *prefix)
+{
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	struct pci_dev *rp = drvdata->dgpu_root_port;
+
+	dev_warn(&pdev->dev, "%s: RP power: %d", prefix, rp->current_state);
+	dev_warn(&pdev->dev, "%s: RP state saved: %d", prefix, rp->state_saved);
+	dev_warn(&pdev->dev, "%s: RP enabled: %d", prefix, atomic_read(&rp->enable_cnt));
+	dev_warn(&pdev->dev, "%s: RP mastered: %d", prefix, rp->is_busmaster);
 }
 
 
@@ -543,7 +559,8 @@ static void shps_pm_complete(struct device *dev)
 	int status;
 
 	tmp_dump_power_states(pdev, "shps_pm_complete");
-	tmp_dump_pcie(pdev, "shps_pm_complete");
+	tmp_dump_pciesta(pdev, "shps_pm_complete");
+	tmp_dump_drvsta(pdev, "shps_pm_complete.1");
 
 	// update power target, dGPU may have been detached while suspended
 	status = shps_dgpu_is_present(pdev);
@@ -575,6 +592,8 @@ static void shps_pm_complete(struct device *dev)
 		if (status)
 			dev_err(&pdev->dev, "failed to power-off dGPU: %d\n", status);
 	}
+
+	tmp_dump_drvsta(pdev, "shps_pm_complete.2");
 }
 
 static void shps_shutdown(struct platform_device *pdev)
@@ -624,6 +643,8 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	struct pci_dev *rp = drvdata->dgpu_root_port;
 	int status;
 
+	tmp_dump_drvsta(pdev, "shps_dgpu_powered_on.1");
+
 	// if we caused the root port to power-on, return
 	if (test_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state))
 		return 0;
@@ -638,13 +659,14 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	mutex_lock(&drvdata->lock);
 
 	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.1");
-	tmp_dump_pcie(pdev, "shps_dgpu_powered_on.1");
+	tmp_dump_pciesta(pdev, "shps_dgpu_powered_on.1");
 	pci_restore_state(rp);
 	if (!pci_is_enabled(rp))
 		pci_enable_device(rp);
 	pci_set_master(rp);
+	tmp_dump_drvsta(pdev, "shps_dgpu_powered_on.2");
 	tmp_dump_power_states(pdev, "shps_dgpu_powered_on.2");
-	tmp_dump_pcie(pdev, "shps_dgpu_powered_on.2");
+	tmp_dump_pciesta(pdev, "shps_dgpu_powered_on.2");
 
 	mutex_unlock(&drvdata->lock);
 
