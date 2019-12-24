@@ -327,7 +327,10 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 		set_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
 		pci_set_power_state(rp, PCI_D0);
 		pci_restore_state(rp);
-		pci_enable_device(rp);
+
+		if (!pci_is_enabled(rp))
+			pci_enable_device(rp);
+
 		pci_set_master(rp);
 		clear_bit(SHPS_STATE_BIT_RPPWRON_SYNC, &drvdata->state);
 
@@ -351,7 +354,10 @@ static int __shps_dgpu_rp_set_power_unlocked(struct platform_device *pdev, enum 
 			dev_err(&pdev->dev, "dGPU removal via DSM timed out\n");
 
 		pci_clear_master(rp);
-		pci_disable_device(rp);
+
+		if (pci_is_enabled(rp))
+			pci_disable_device(rp);
+
 		pci_set_power_state(rp, PCI_D3cold);
 
 		clear_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
