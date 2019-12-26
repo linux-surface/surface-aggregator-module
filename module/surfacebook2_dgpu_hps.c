@@ -77,11 +77,13 @@ struct shps_driver_data {
 	struct gpio_desc *gpio_dgpu_presence;
 	struct gpio_desc *gpio_base_presence;
 	unsigned int irq_dgpu_presence;
+	unsigned int irq_base_presence;
 	unsigned long state;
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
 #define SHPS_STATE_BIT_RPPWRON_SYNC	1	/* synchronous/requested power-up in progress  */
+#define SHPS_STATE_BIT_WAKE_ENABLED	2	/* wakeup via base-presence GPIO enabled */
 
 
 #define SHPS_DGPU_PARAM_PERM		(S_IRUGO | S_IWUSR)
@@ -611,6 +613,36 @@ static void shps_pm_complete(struct device *dev)
 	tmp_dump_drvsta(pdev, "shps_pm_complete.2");
 }
 
+static int shps_pm_suspend(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status;
+
+	if (device_may_wakeup(dev)) {
+		status = enable_irq_wake(drvdata->irq_base_presence);
+		if (status)
+			return status;
+
+		set_bit(SHPS_STATE_BIT_WAKE_ENABLED, &drvdata->state);
+	}
+
+	return 0;
+}
+
+static int shps_pm_resume(struct device *dev)
+{
+	struct platform_device *pdev = to_platform_device(dev);
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+	int status = 0;
+
+	if (test_and_clear_bit(SHPS_STATE_BIT_WAKE_ENABLED, &drvdata->state)) {
+		status = disable_irq_wake(drvdata->irq_base_presence);
+	}
+
+	return status;
+}
+
 static void shps_shutdown(struct platform_device *pdev)
 {
 	int status;
@@ -734,6 +766,11 @@ static irqreturn_t shps_dgpu_presence_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+static irqreturn_t shps_base_presence_irq(int irq, void *data)
+{
+	return IRQ_HANDLED;	// nothing to do, just wake
+}
+
 
 static int shps_gpios_setup(struct platform_device *pdev)
 {
@@ -821,25 +858,43 @@ static void shps_gpios_remove(struct platform_device *pdev)
 
 static int shps_gpios_setup_irq(struct platform_device *pdev)
 {
-	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+	const int irqf_dgpu = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+	const int irqf_base = IRQF_SHARED | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
+
+	status = gpiod_to_irq(drvdata->gpio_base_presence);
+	if (status < 0)
+		return status;
+	drvdata->irq_base_presence = status;
 
 	status = gpiod_to_irq(drvdata->gpio_dgpu_presence);
 	if (status < 0)
 		return status;
+	drvdata->irq_dgpu_presence = status;
 
-	drvdata->irq_dgpu_presence = (unsigned)status;
+	status = request_irq(drvdata->irq_base_presence,
+			     shps_base_presence_irq, irqf_base,
+			     "shps_base_presence_irq", pdev);
+	if (status)
+		return status;
 
 	status = request_threaded_irq(drvdata->irq_dgpu_presence,
-				      NULL, shps_dgpu_presence_irq,
-				      irqf, "shps_dgpu_presence_irq", pdev);
-	return status;
+				      NULL, shps_dgpu_presence_irq, irqf_dgpu,
+				      "shps_dgpu_presence_irq", pdev);
+	if (status) {
+		free_irq(drvdata->irq_base_presence, pdev);
+		return status;
+	}
+
+	return 0;
 }
 
 static void shps_gpios_remove_irq(struct platform_device *pdev)
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+
+	free_irq(drvdata->irq_base_presence, pdev);
 	free_irq(drvdata->irq_dgpu_presence, pdev);
 }
 
@@ -908,6 +963,7 @@ static int shps_probe(struct platform_device *pdev)
 			goto err_devlink;
 	}
 
+	device_init_wakeup(&pdev->dev, true);
 	return 0;
 
 err_devlink:
@@ -938,6 +994,7 @@ static int shps_remove(struct platform_device *pdev)
 			dev_err(&pdev->dev, "failed to set dGPU power state: %d\n", status);
 	}
 
+	device_set_wakeup_capable(&pdev->dev, false);
 	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
@@ -954,6 +1011,8 @@ static int shps_remove(struct platform_device *pdev)
 static const struct dev_pm_ops shps_pm_ops = {
 	.prepare = shps_pm_prepare,
 	.complete = shps_pm_complete,
+	.suspend = shps_pm_suspend,
+	.resume = shps_pm_resume,
 };
 
 static const struct acpi_device_id shps_acpi_match[] = {
