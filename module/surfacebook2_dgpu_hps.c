@@ -4,14 +4,14 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/platform_device.h>
 #include <linux/pci.h>
+#include <linux/platform_device.h>
 #include <linux/sysfs.h>
 
+#include "surface_sam_ssh.h"
 #include "surface_sam_san.h"
 
 
-// TODO: detect and handle suspended detach/attach
 // TODO: vgaswitcheroo integration
 
 
@@ -26,11 +26,15 @@ static const guid_t SHPS_DSM_UUID =
 		  0x32, 0x0e, 0x10, 0x36, 0x0a);
 
 
-#define SAM_DGPU_TC	        0x13
-#define SAM_DGPU_CID_POWERON	0x02
+#define SAM_DGPU_TC	        	0x13
+#define SAM_DGPU_CID_POWERON		0x02
 
-#define SHPS_DSM_GPU_ADDRS_RP	"RP5_PCIE"
-#define SHPS_DSM_GPU_ADDRS_DGPU	"DGPU_PCIE"
+#define SAM_DTX_TC			0x11
+#define SAM_DTX_CID_LATCH_LOCK		0x06
+#define SAM_DTX_CID_LATCH_UNLOCK	0x07
+
+#define SHPS_DSM_GPU_ADDRS_RP		"RP5_PCIE"
+#define SHPS_DSM_GPU_ADDRS_DGPU		"DGPU_PCIE"
 
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
@@ -122,14 +126,43 @@ static const struct kernel_param_ops param_dgpu_power_ops = {
 static int param_dgpu_power_init = SHPS_DGPU_MP_POWER_OFF;
 static int param_dgpu_power_exit = SHPS_DGPU_MP_POWER_ON;
 static int param_dgpu_power_susp = SHPS_DGPU_MP_POWER_ASIS;
+static bool param_dtx_latch = true;
 
 module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SHPS_DGPU_PARAM_PERM);
 module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SHPS_DGPU_PARAM_PERM);
 module_param_cb(dgpu_power_susp, &param_dgpu_power_ops, &param_dgpu_power_susp, SHPS_DGPU_PARAM_PERM);
+module_param_named(dtx_latch, param_dtx_latch, bool, SHPS_DGPU_PARAM_PERM);
 
 MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 1: on / 2: as-is, default: off)");
 MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: on)");
 MODULE_PARM_DESC(dgpu_power_susp, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: as-is)");
+MODULE_PARM_DESC(dtx_latch, "lock/unlock DTX base latch in accordance to power-state (Y/n)");
+
+
+static int dtx_cmd_simple(u8 cid)
+{
+	struct surface_sam_ssh_rqst rqst = {
+		.tc  = SAM_DTX_TC,
+		.cid = cid,
+		.iid = 0,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.snc = 0,
+		.cdl = 0,
+		.pld = NULL,
+	};
+
+	return surface_sam_ssh_rqst(&rqst, NULL);
+}
+
+inline static int shps_dtx_latch_lock(void)
+{
+	return dtx_cmd_simple(SAM_DTX_CID_LATCH_LOCK);
+}
+
+inline static int shps_dtx_latch_unlock(void)
+{
+	return dtx_cmd_simple(SAM_DTX_CID_LATCH_UNLOCK);
+}
 
 
 static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char* entry)
@@ -406,6 +439,33 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 }
 
 
+static int shps_dgpu_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
+{
+	int status;
+
+	if (!param_dtx_latch)
+		return shps_dgpu_rp_set_power(pdev, power);
+
+	if (power == SHPS_DGPU_POWER_ON) {
+		status = shps_dtx_latch_lock();
+		if (status)
+			return status;
+
+		status = shps_dgpu_rp_set_power(pdev, power);
+		if (status)
+			shps_dtx_latch_unlock();
+
+		return status;
+	} else {
+		status = shps_dgpu_rp_set_power(pdev, power);
+		if (status)
+			return status;
+
+		return shps_dtx_latch_unlock();
+	}
+}
+
+
 static int shps_dgpu_is_present(struct platform_device *pdev)
 {
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
@@ -441,7 +501,7 @@ static ssize_t dgpu_power_store(struct device *dev, struct device_attribute *att
 		return status < 0 ? status : -EPERM;
 
 	power = b ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
-	status = shps_dgpu_rp_set_power(pdev, power);
+	status = shps_dgpu_set_power(pdev, power);
 
 	return status < 0 ? status : count;
 }
@@ -552,7 +612,7 @@ static int shps_pm_prepare(struct device *dev)
 	if (param_dgpu_power_susp != SHPS_DGPU_MP_POWER_ASIS) {
  		pwrtgt = test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 
-		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_susp);
+		status = shps_dgpu_set_power(pdev, param_dgpu_power_susp);
 		if (status) {
 			dev_warn(&pdev->dev, "failed to power %s dGPU: %d\n",
 				 param_dgpu_power_susp == SHPS_DGPU_MP_POWER_OFF ? "off" : "on",
@@ -605,7 +665,7 @@ static void shps_pm_complete(struct device *dev)
 	 *   it is suspended, so ideally we want to keep it off.
 	 */
 	if (!test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
-		status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+		status = shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_OFF);
 		if (status)
 			dev_err(&pdev->dev, "failed to power-off dGPU: %d\n", status);
 	}
@@ -652,7 +712,7 @@ static void shps_shutdown(struct platform_device *pdev)
 	 * properly shut down the device. If we don't do this, the pcieport driver
 	 * will complain that the device has already been disabled.
 	 */
-	status = shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_ON);
+	status = shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_ON);
 	if (status)
 		dev_warn(&pdev->dev, "failed to turn on dGPU: %d\n", status);
 }
@@ -660,7 +720,7 @@ static void shps_shutdown(struct platform_device *pdev)
 static int shps_dgpu_detached(struct platform_device *pdev)
 {
 	tmp_dump_power_states(pdev, "shps_dgpu_detached");
-	return shps_dgpu_rp_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	return shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_OFF);
 }
 
 static int shps_dgpu_attached(struct platform_device *pdev)
@@ -908,6 +968,12 @@ static int shps_probe(struct platform_device *pdev)
 	if (gpiod_count(&pdev->dev, NULL) < 0)
 		return -ENODEV;
 
+	// link to SSH
+	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	if (status) {
+		return status == -ENXIO ? -EPROBE_DEFER : status;
+	}
+
 	// link to SAN
 	status = surface_sam_san_consumer_register(&pdev->dev, 0);
 	if (status) {
@@ -958,7 +1024,7 @@ static int shps_probe(struct platform_device *pdev)
 
 	power = status == 0 ? SHPS_DGPU_POWER_OFF : param_dgpu_power_init;
 	if (power != SHPS_DGPU_MP_POWER_ASIS) {
-		status = shps_dgpu_rp_set_power(pdev, power);
+		status = shps_dgpu_set_power(pdev, power);
 		if (status)
 			goto err_devlink;
 	}
@@ -989,7 +1055,7 @@ static int shps_remove(struct platform_device *pdev)
 	int status;
 
 	if (param_dgpu_power_exit != SHPS_DGPU_MP_POWER_ASIS) {
-		status = shps_dgpu_rp_set_power(pdev, param_dgpu_power_exit);
+		status = shps_dgpu_set_power(pdev, param_dgpu_power_exit);
 		if (status)
 			dev_err(&pdev->dev, "failed to set dGPU power state: %d\n", status);
 	}
