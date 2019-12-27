@@ -8,6 +8,7 @@ extern struct serdev_device_driver surface_sam_ssh;
 extern struct platform_driver surface_sam_san;
 extern struct platform_driver surface_sam_vhf;
 extern struct platform_driver surface_sam_dtx;
+extern struct platform_driver surface_sam_hps;
 extern struct platform_driver surface_sam_sid;
 extern struct platform_driver surface_sam_sid_gpelid;
 extern struct platform_driver surface_sam_sid_perfmode;
@@ -38,6 +39,11 @@ int __init surface_sam_init(void)
 	status = platform_driver_register(&surface_sam_dtx);
 	if (status) {
 		goto err_dtx;
+	}
+
+	status = platform_driver_register(&surface_sam_hps);
+	if (status) {
+		goto err_hps;
 	}
 
 	status = platform_driver_register(&surface_sam_sid);
@@ -83,6 +89,8 @@ err_sid_perfmode:
 err_sid_gpelid:
 	platform_driver_unregister(&surface_sam_sid);
 err_sid:
+	platform_driver_unregister(&surface_sam_hps);
+err_hps:
 	platform_driver_unregister(&surface_sam_dtx);
 err_dtx:
 	platform_driver_unregister(&surface_sam_vhf);
@@ -102,6 +110,7 @@ void __exit surface_sam_exit(void)
 	platform_driver_unregister(&surface_sam_sid_perfmode);
 	platform_driver_unregister(&surface_sam_sid_gpelid);
 	platform_driver_unregister(&surface_sam_sid);
+	platform_driver_unregister(&surface_sam_hps);
 	platform_driver_unregister(&surface_sam_dtx);
 	platform_driver_unregister(&surface_sam_vhf);
 	platform_driver_unregister(&surface_sam_san);
