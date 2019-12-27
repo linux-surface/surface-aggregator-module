@@ -33,7 +33,7 @@ sources += surface_sam_sid_perfmode.c
 sources += surface_sam_sid_vhf.c
 sources += surface_sam_sid_power.c
 
-ccflags-y := -DDEBUG
+# ccflags-y := -DDEBUG
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
