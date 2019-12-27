@@ -1,4 +1,4 @@
-From b165ea8c02cb9cf0c4c10c6845deff92ce27afe2 Mon Sep 17 00:00:00 2001
+From f77b453082c3d5a319b779d694eee7502ec8c242 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Fri, 6 Dec 2019 11:56:12 +0100
 Subject: [PATCH 3/3] platform/x86: Add gen5 MS Surface platform support
@@ -20,12 +20,12 @@ handling for the Surface Book 2 clipboard.
  .../x86/surface_sam/surface_sam_sid.c         |  117 ++
  .../x86/surface_sam/surface_sam_sid_gpelid.c  |  219 ++
  .../surface_sam/surface_sam_sid_perfmode.c    |  225 +++
- .../x86/surface_sam/surface_sam_sid_power.c   | 1258 ++++++++++++
+ .../x86/surface_sam/surface_sam_sid_power.c   | 1259 ++++++++++++
  .../x86/surface_sam/surface_sam_sid_vhf.c     |  440 ++++
  .../x86/surface_sam/surface_sam_ssh.c         | 1773 +++++++++++++++++
  .../x86/surface_sam/surface_sam_ssh.h         |   97 +
  .../x86/surface_sam/surface_sam_vhf.c         |  276 +++
- 16 files changed, 7247 insertions(+)
+ 16 files changed, 7248 insertions(+)
  create mode 100644 drivers/platform/x86/surface_sam/Kconfig
  create mode 100644 drivers/platform/x86/surface_sam/Makefile
  create mode 100644 drivers/platform/x86/surface_sam/surface_sam_dtx.c
@@ -3519,10 +3519,10 @@ index 000000000000..880a2567cf1b
 +MODULE_ALIAS("platform:surface_sam_sid_perfmode");
 diff --git a/drivers/platform/x86/surface_sam/surface_sam_sid_power.c b/drivers/platform/x86/surface_sam/surface_sam_sid_power.c
 new file mode 100644
-index 000000000000..ce4274709d68
+index 000000000000..1f2c88eda394
 --- /dev/null
 +++ b/drivers/platform/x86/surface_sam/surface_sam_sid_power.c
-@@ -0,0 +1,1258 @@
+@@ -0,0 +1,1259 @@
 +/*
 + * Surface SID Battery/AC Driver.
 + * Provides support for the battery and AC on 7th generation Surface devices.
@@ -4780,7 +4780,8 @@ index 000000000000..ce4274709d68
 +MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 +MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices");
 +MODULE_LICENSE("GPL v2");
-+MODULE_ALIAS("platform:surface_sam_sid_power");
++MODULE_ALIAS("platform:surface_sam_sid_ac");
++MODULE_ALIAS("platform:surface_sam_sid_battery");
 diff --git a/drivers/platform/x86/surface_sam/surface_sam_sid_vhf.c b/drivers/platform/x86/surface_sam/surface_sam_sid_vhf.c
 new file mode 100644
 index 000000000000..dc5be3a14a8c
