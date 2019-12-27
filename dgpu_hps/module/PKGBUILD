@@ -1,0 +1,24 @@
+pkgname="surfacebook2-dgpu-hps"
+pkgver="0.1.0"
+pkgrel=1
+pkgdesc="Experimental driver for Surface Book 2 dGPU hot-plug system"
+license=('GPL v2')
+arch=('x86_64' 'i686')
+depends=('dkms')
+
+source=(
+    "src::git+https://github.com/qzed/linux-surfacebook2-mshw0153.git"
+)
+
+sha256sums=('SKIP')
+
+package() {
+    cd "${srcdir}/src/module"
+
+    install -d "${pkgdir}/usr/src/surfacebook2_dgpu_hps-${pkgver}/"
+    cp "${srcdir}/src/module/Makefile" "${pkgdir}/usr/src/surfacebook2_dgpu_hps-${pkgver}/"
+    cp "${srcdir}/src/module/dkms.conf" "${pkgdir}/usr/src/surfacebook2_dgpu_hps-${pkgver}/"
+    cp "${srcdir}/src/module/surfacebook2_dgpu_hps.c" "${pkgdir}/usr/src/surfacebook2_dgpu_hps-${pkgver}/"
+
+    install -Dm644 "${srcdir}/src/module/surfacebook2_dgpu_hps.conf" "${pkgdir}/usr/lib/depmod.d/surfacebook2_dgpu_hps.conf"
+}
