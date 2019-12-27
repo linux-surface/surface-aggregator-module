@@ -1,3 +1,9 @@
+/*
+ * Surface dGPU hot-plug system driver.
+ * Supports explicit setting of the dGPU power-state on the Surface Book 2 and
+ * properly handles hot-plugging by detaching the base.
+ */
+
 #include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
