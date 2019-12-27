@@ -14,12 +14,13 @@
 #include <linux/pci.h>
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
+#include <linux/vga_switcheroo.h>
 
 #include "surface_sam_ssh.h"
 #include "surface_sam_san.h"
 
 
-// TODO: vgaswitcheroo integration
+// TODO: clean-up
 
 
 static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix);
@@ -98,6 +99,19 @@ struct shps_driver_data {
 #define SHPS_STATE_BIT_WAKE_ENABLED	2	/* wakeup via base-presence GPIO enabled */
 
 
+struct shps_vgasw {
+	struct mutex lock;
+	struct platform_device *pdev;
+	struct pci_dev *dgpu;
+};
+
+static struct shps_vgasw shps_vgasw = {
+	.lock = __MUTEX_INITIALIZER(shps_vgasw.lock),
+	.pdev = NULL,
+	.dgpu = NULL,
+};
+
+
 #define SHPS_DGPU_PARAM_PERM		0644
 
 enum shps_dgpu_power_mp {
@@ -133,16 +147,21 @@ static int param_dgpu_power_init = SHPS_DGPU_MP_POWER_OFF;
 static int param_dgpu_power_exit = SHPS_DGPU_MP_POWER_ON;
 static int param_dgpu_power_susp = SHPS_DGPU_MP_POWER_ASIS;
 static bool param_dtx_latch = true;
+static bool param_vgasw = false;
+static bool param_vgasw_dummy_client = false;
 
 module_param_cb(dgpu_power_init, &param_dgpu_power_ops, &param_dgpu_power_init, SHPS_DGPU_PARAM_PERM);
 module_param_cb(dgpu_power_exit, &param_dgpu_power_ops, &param_dgpu_power_exit, SHPS_DGPU_PARAM_PERM);
 module_param_cb(dgpu_power_susp, &param_dgpu_power_ops, &param_dgpu_power_susp, SHPS_DGPU_PARAM_PERM);
-module_param_named(dtx_latch, param_dtx_latch, bool, SHPS_DGPU_PARAM_PERM);
+module_param_named(vgasw, param_vgasw, bool, SHPS_DGPU_PARAM_PERM);
+module_param_named(vgasw_dummy_client, param_vgasw_dummy_client, bool, SHPS_DGPU_PARAM_PERM);
 
 MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 1: on / 2: as-is, default: off)");
 MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: on)");
 MODULE_PARM_DESC(dgpu_power_susp, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: as-is)");
 MODULE_PARM_DESC(dtx_latch, "lock/unlock DTX base latch in accordance to power-state (Y/n)");
+MODULE_PARM_DESC(vgasw, "install vga-switcheroo handler (y/N)");
+MODULE_PARM_DESC(vgasw_dummy_client, "install vga-switcheroo dummy client for nvidia driver (y/N)");
 
 
 static int dtx_cmd_simple(u8 cid)
@@ -966,6 +985,182 @@ static void shps_gpios_remove_irq(struct platform_device *pdev)
 	free_irq(drvdata->irq_dgpu_presence, pdev);
 }
 
+
+static void vgasw_dummy_set_gpu_state(struct pci_dev *dev, enum vga_switcheroo_state state)
+{
+	if (state == VGA_SWITCHEROO_ON) {
+		pci_set_power_state(dev, PCI_D0);
+		pci_restore_state(dev);
+		if (!pci_is_enabled(dev))
+			pci_enable_device(dev);
+		pci_set_master(dev);
+	} else {
+		pci_save_state(dev);
+		pci_clear_master(dev);
+		if (pci_is_enabled(dev))
+			pci_disable_device(dev);
+		pci_set_power_state(dev, PCI_D3cold);
+	}
+}
+
+static bool vgasw_dummy_can_switch(struct pci_dev *dev)
+{
+	return true;	// TODO
+}
+
+struct vga_switcheroo_client_ops vgasw_dummy_client_ops = {
+	.set_gpu_state = vgasw_dummy_set_gpu_state,
+	.reprobe = NULL,
+	.can_switch = vgasw_dummy_can_switch,
+	.gpu_bound = NULL,
+};
+
+static int shps_vgasw_init_dummy(struct platform_device *pdev)
+{
+	struct pci_dev *dgpu;
+	int status, i = 0;
+
+	if (!param_vgasw_dummy_client)
+		return 0;
+
+	shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_ON);
+	do {
+		msleep(250);
+		dgpu = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_DGPU);
+	} while (i++ < 4 && IS_ERR(dgpu) && PTR_ERR(dgpu) == -ENODEV);
+
+	if (IS_ERR(dgpu)) {
+		dev_err(&pdev->dev, "failed to get dGPU PCI device: %ld\n", PTR_ERR(dgpu));
+		return PTR_ERR(dgpu);
+	}
+
+	status = vga_switcheroo_register_client(dgpu, &vgasw_dummy_client_ops, false);
+	if (status) {
+		dev_err(&pdev->dev, "failed to register vgasw client: %d\n", status);
+		pci_dev_put(dgpu);
+		return status;
+	}
+
+	shps_vgasw.dgpu = dgpu;
+	return 0;
+}
+
+static void shps_vgasw_exit_dummy(struct platform_device *pdev)
+{
+	if (!param_vgasw_dummy_client)
+		return;
+
+	shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_ON);
+	msleep(250);
+
+	vga_switcheroo_unregister_client(shps_vgasw.dgpu);
+	pci_dev_put(shps_vgasw.dgpu);
+}
+
+
+static int shps_vgasw_handler_init(void)
+{
+	printk(KERN_INFO "shps_vgasw: init\n");
+	return 0;
+}
+
+static int shps_vgasw_handler_switchto(enum vga_switcheroo_client_id id)
+{
+	printk(KERN_INFO "shps_vgasw: switchto: %d\n", id);
+	return 0;
+}
+
+static int shps_vgasw_handler_power_state(enum vga_switcheroo_client_id id, enum vga_switcheroo_state state)
+{
+	enum shps_dgpu_power power = state == VGA_SWITCHEROO_ON ? SHPS_DGPU_POWER_ON : SHPS_DGPU_POWER_OFF;
+	struct shps_driver_data *drvdata;
+	int status;
+
+	printk(KERN_INFO "shps_vgasw: power_state: %d, %d\n", id, state);
+
+	if (id == VGA_SWITCHEROO_IGD)
+		return 0;
+
+	mutex_lock(&shps_vgasw.lock);
+	drvdata = platform_get_drvdata(shps_vgasw.pdev);
+	// status = pci_set_power_state(drvdata->dgpu_root_port, state == VGA_SWITCHEROO_ON ? PCI_D0 : PCI_D3cold);
+	status = shps_dgpu_set_power(shps_vgasw.pdev, power);
+	mutex_unlock(&shps_vgasw.lock);
+
+	msleep(250);
+
+	return status;
+}
+
+static enum vga_switcheroo_client_id shps_vgasw_handler_get_client_id(struct pci_dev *pdev)
+{
+	printk(KERN_INFO "shps_vgasw: client_id\n");
+
+	if (pdev->vendor == PCI_VENDOR_ID_INTEL)
+		return VGA_SWITCHEROO_IGD;
+
+	if (pdev->vendor == PCI_VENDOR_ID_NVIDIA)
+		return VGA_SWITCHEROO_DIS;
+
+	return VGA_SWITCHEROO_UNKNOWN_ID;
+}
+
+static struct vga_switcheroo_handler shps_vgasw_handler = {
+	.init = shps_vgasw_handler_init,
+	.switchto = shps_vgasw_handler_switchto,
+	.switch_ddc = NULL,
+	.power_state = shps_vgasw_handler_power_state,
+	.get_client_id = shps_vgasw_handler_get_client_id,
+};
+
+static int shps_vgasw_init(struct platform_device *pdev)
+{
+	int status;
+
+	if (!param_vgasw)
+		return 0;
+
+	mutex_lock(&shps_vgasw.lock);
+	if (shps_vgasw.pdev) {
+		mutex_unlock(&shps_vgasw.lock);
+		return -EBUSY;
+	}
+	shps_vgasw.pdev = pdev;
+	mutex_unlock(&shps_vgasw.lock);
+
+	status = shps_vgasw_init_dummy(pdev);
+	if (status)
+		goto err_dummy;
+
+	status = vga_switcheroo_register_handler(&shps_vgasw_handler, 0);
+	if (status)
+		goto err_handler;
+
+	return 0;
+
+err_handler:
+	shps_vgasw_exit_dummy(pdev);
+err_dummy:
+	mutex_lock(&shps_vgasw.lock);
+	shps_vgasw.pdev = NULL;
+	mutex_unlock(&shps_vgasw.lock);
+	return status;
+}
+
+static void shps_vgasw_exit(struct platform_device *pdev)
+{
+	if (!param_vgasw)
+		return;
+
+	shps_vgasw_exit_dummy(pdev);
+	vga_switcheroo_unregister_handler();
+
+	mutex_lock(&shps_vgasw.lock);
+	shps_vgasw.pdev = NULL;
+	mutex_unlock(&shps_vgasw.lock);
+}
+
+
 static int shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
@@ -1018,7 +1213,13 @@ static int shps_probe(struct platform_device *pdev)
 
 	link = device_link_add(&pdev->dev, &drvdata->dgpu_root_port->dev,
 			       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
-	if (!link)
+	if (!link) {
+		goto err_devlink;
+		status = -EFAULT;
+	}
+
+	status = shps_vgasw_init(pdev);
+	if (status)
 		goto err_devlink;
 
 	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
@@ -1059,6 +1260,8 @@ static int shps_remove(struct platform_device *pdev)
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
+
+	shps_vgasw_exit(pdev);
 
 	if (param_dgpu_power_exit != SHPS_DGPU_MP_POWER_ASIS) {
 		status = shps_dgpu_set_power(pdev, param_dgpu_power_exit);
