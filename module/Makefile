@@ -24,6 +24,7 @@ sources += surface_sam_ssh.h
 sources += surface_sam_ssh.c
 sources += surface_sam_ssh_sysfs.c
 sources += surface_sam_san.c
+sources += surface_sam_san.h
 sources += surface_sam_vhf.c
 sources += surface_sam_dtx.c
 sources += surface_sam_hps.c
