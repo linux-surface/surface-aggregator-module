@@ -2,8 +2,9 @@
 
 Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
-_This has now been integrated into [jakeday/linux-surface](https://github.com/jakeday/linux-surface/)._
-_If you have a Surface Book 2 you might also want to have a look at the [dtx-daemon][dtx-daemon] and the [surface-control][surface-control] utility._
+_Note: This module is integrated into https://github.com/linux-surface/linux-surface._
+_There is no need to install it separately if you've already installed one of the kernels provided there._
+If you have a Surface Book 2 you might also want to have a look at the [dtx-daemon][dtx-daemon] and the [surface-control][surface-control] utility.
 
 ## Supported Features and Devices
 
@@ -30,9 +31,6 @@ This driver now has basic support for clipboard detachment handling (e.g. unmoun
 The driver itself does not do anything more than sending an event to user-space and awaiting a reply.
 A separate daemon is required to handle these events.
 Have a look at [this][dtx-daemon] repository for a basic implementation of such a daemon.
-
-[dtx-daemon]: https://github.com/qzed/linux-surface-dtx-daemon
-[surface-control]: https://github.com/qzed/linux-surface-control
 
 ### Setting the Performance Mode
 
@@ -67,7 +65,7 @@ In both cases, the special value of `0` will keep the performance-state as-is (t
 
 ### Controlling the dGPU Power State
 
-The easiest way to change the dGPU power state is to use the [surface](https://github.com/qzed/linux-surface-control) command line utility.
+The easiest way to change the dGPU power state is to use the [surface][surface-control] command line utility.
 With it installed, simply run `sudo surface dgpu set <state>` where `<state>` is either `on` or `off`.
 Alternatively, the dGPU power state can be accessed via its sysfs attribute
 ```
@@ -117,8 +115,6 @@ CONFIG_SERIAL_DEV_BUS=y
 CONFIG_SERIAL_DEV_CTRL_TTYPORT=y
 ```
 
-There is a pre-compiled kernel available [here][prebuilt-linux-surface].
-
 If you have all the prequisites, you can
 
 ### Build/Test the module
@@ -133,8 +129,6 @@ To uninstall it, run `make dkms-uninstall`.
 If you've installed a patched kernel already contiaining the in-kernel version of this module, you may want to keep it from loading by editing/creating `/etc/modprobe.d/surface-acpi.conf` and adding `blacklist surface_acpi`.
 Note that you will need to undo these changes when you want to use the in-kernel module again.
 
-[patches-linux-surface]: https://github.com/qzed/linux-surface/tree/master/patches/4.18
-[prebuilt-linux-surface]: https://github.com/qzed/linux-surface/releases/tag/v4.18.16-pre1
 
 ## Getting Windows Logs for Reverse Engineering
 
@@ -167,8 +161,6 @@ Note that you will need to undo these changes when you want to use the in-kernel
    Please try to submit concise logs containing one test at a time.
    Usually the messages should stop appearing after a short period of time and you can then assume that the exchange between Windows and the EC is complete.
 
-[irpmon]: https://github.com/MartinDrab/IRPMon/releases/tag/v0.9-beta
-
 ## Notes on the Hardware
 
 From what I can figure out, the (newer) Surface devices use two different ARM chips:
@@ -196,3 +188,8 @@ If that can't stop you:
 https://www.paypal.me/maximilianluz
 Don't get me wrong though, I do appreciate your donations.
 Thank you for your support!
+
+[dtx-daemon]: https://github.com/linux-surface/surface-dtx-daemon
+[surface-control]: https://github.com/linux-surface/surface-control
+[patches-linux-surface]: https://github.com/linux-surface/linux-surface/tree/master/patches/
+[irpmon]: https://github.com/MartinDrab/IRPMon/releases/tag/v0.9-beta
