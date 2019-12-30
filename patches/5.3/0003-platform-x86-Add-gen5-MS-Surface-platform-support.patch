@@ -1,4 +1,4 @@
-From 007ad42cd9f24d6df3727c24f1946c973f9f1c37 Mon Sep 17 00:00:00 2001
+From 0e646784a1add13a2124ad66c89132a079d5b0e0 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Fri, 6 Dec 2019 11:56:12 +0100
 Subject: [PATCH 3/3] platform/x86: Add gen5 MS Surface platform support
@@ -11,7 +11,7 @@ handling for the Surface Book 2 clipboard.
 ---
  drivers/platform/x86/Kconfig                  |    1 +
  drivers/platform/x86/Makefile                 |    1 +
- drivers/platform/x86/surface_sam/Kconfig      |  166 ++
+ drivers/platform/x86/surface_sam/Kconfig      |  163 ++
  drivers/platform/x86/surface_sam/Makefile     |   10 +
  .../x86/surface_sam/surface_sam_dtx.c         |  623 ++++++
  .../x86/surface_sam/surface_sam_hps.c         | 1110 +++++++++++
@@ -25,7 +25,7 @@ handling for the Surface Book 2 clipboard.
  .../x86/surface_sam/surface_sam_ssh.c         | 1773 +++++++++++++++++
  .../x86/surface_sam/surface_sam_ssh.h         |   97 +
  .../x86/surface_sam/surface_sam_vhf.c         |  276 +++
- 16 files changed, 7247 insertions(+)
+ 16 files changed, 7244 insertions(+)
  create mode 100644 drivers/platform/x86/surface_sam/Kconfig
  create mode 100644 drivers/platform/x86/surface_sam/Makefile
  create mode 100644 drivers/platform/x86/surface_sam/surface_sam_dtx.c
@@ -42,10 +42,10 @@ handling for the Surface Book 2 clipboard.
  create mode 100644 drivers/platform/x86/surface_sam/surface_sam_vhf.c
 
 diff --git a/drivers/platform/x86/Kconfig b/drivers/platform/x86/Kconfig
-index 1b67bb578f9f..9dea69a1526a 100644
+index ae21d08c65e8..675ec12cbc0e 100644
 --- a/drivers/platform/x86/Kconfig
 +++ b/drivers/platform/x86/Kconfig
-@@ -1335,6 +1335,7 @@ config PCENGINES_APU2
+@@ -1336,6 +1336,7 @@ config PCENGINES_APU2
  	  will be called pcengines-apuv2.
  
  source "drivers/platform/x86/intel_speed_select_if/Kconfig"
@@ -64,10 +64,10 @@ index 415104033060..18f5a4ba7244 100644
 +obj-$(CONFIG_SURFACE_SAM)	+= surface_sam/
 diff --git a/drivers/platform/x86/surface_sam/Kconfig b/drivers/platform/x86/surface_sam/Kconfig
 new file mode 100644
-index 000000000000..4eff58a121cb
+index 000000000000..b4513c234c4d
 --- /dev/null
 +++ b/drivers/platform/x86/surface_sam/Kconfig
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,163 @@
 +menuconfig SURFACE_SAM
 +    depends on ACPI
 +    tristate "Microsoft Surface/System Aggregator Module and Platform Drivers"
@@ -85,9 +85,6 @@ index 000000000000..4eff58a121cb
 +config SURFACE_SAM_SSH
 +	tristate "Surface Serial Hub Driver"
 +	depends on SURFACE_SAM
-+	depends on X86_INTEL_LPSS
-+	depends on SERIAL_8250_DW
-+	depends on SERIAL_8250_DMA
 +	depends on SERIAL_DEV_CTRL_TTYPORT
 +	select CRC_CCITT
 +	default m

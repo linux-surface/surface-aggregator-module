@@ -1,4 +1,4 @@
-From f77b453082c3d5a319b779d694eee7502ec8c242 Mon Sep 17 00:00:00 2001
+From 570193002a1fcd335175c57245117fbfc112f00b Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Fri, 6 Dec 2019 11:56:12 +0100
 Subject: [PATCH 3/3] platform/x86: Add gen5 MS Surface platform support
@@ -11,7 +11,7 @@ handling for the Surface Book 2 clipboard.
 ---
  drivers/platform/x86/Kconfig                  |    2 +
  drivers/platform/x86/Makefile                 |    1 +
- drivers/platform/x86/surface_sam/Kconfig      |  166 ++
+ drivers/platform/x86/surface_sam/Kconfig      |  163 ++
  drivers/platform/x86/surface_sam/Makefile     |   10 +
  .../x86/surface_sam/surface_sam_dtx.c         |  623 ++++++
  .../x86/surface_sam/surface_sam_hps.c         | 1110 +++++++++++
@@ -25,7 +25,7 @@ handling for the Surface Book 2 clipboard.
  .../x86/surface_sam/surface_sam_ssh.c         | 1773 +++++++++++++++++
  .../x86/surface_sam/surface_sam_ssh.h         |   97 +
  .../x86/surface_sam/surface_sam_vhf.c         |  276 +++
- 16 files changed, 7248 insertions(+)
+ 16 files changed, 7245 insertions(+)
  create mode 100644 drivers/platform/x86/surface_sam/Kconfig
  create mode 100644 drivers/platform/x86/surface_sam/Makefile
  create mode 100644 drivers/platform/x86/surface_sam/surface_sam_dtx.c
@@ -65,10 +65,10 @@ index dc29af4d8e2f..307e944aa756 100644
 ++obj-$(CONFIG_SURFACE_SAM)	+= surface_sam/
 diff --git a/drivers/platform/x86/surface_sam/Kconfig b/drivers/platform/x86/surface_sam/Kconfig
 new file mode 100644
-index 000000000000..4eff58a121cb
+index 000000000000..b4513c234c4d
 --- /dev/null
 +++ b/drivers/platform/x86/surface_sam/Kconfig
-@@ -0,0 +1,166 @@
+@@ -0,0 +1,163 @@
 +menuconfig SURFACE_SAM
 +    depends on ACPI
 +    tristate "Microsoft Surface/System Aggregator Module and Platform Drivers"
@@ -86,9 +86,6 @@ index 000000000000..4eff58a121cb
 +config SURFACE_SAM_SSH
 +	tristate "Surface Serial Hub Driver"
 +	depends on SURFACE_SAM
-+	depends on X86_INTEL_LPSS
-+	depends on SERIAL_8250_DW
-+	depends on SERIAL_8250_DMA
 +	depends on SERIAL_DEV_CTRL_TTYPORT
 +	select CRC_CCITT
 +	default m
