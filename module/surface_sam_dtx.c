@@ -405,7 +405,7 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 
 	// send SW_TABLET_MODE event
 	spin_lock(&ddev->input_lock);
-	input_report_switch(ddev->input_dev, SW_TABLET_MODE, opmode == 0x00);
+	input_report_switch(ddev->input_dev, SW_TABLET_MODE, opmode != DTX_OPMODE_LAPTOP);
 	input_sync(ddev->input_dev);
 	spin_unlock(&ddev->input_lock);
 }
@@ -503,7 +503,7 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 		return ERR_PTR(status);
 	}
 
-	input_report_switch(input_dev, SW_TABLET_MODE, status == 0x00);
+	input_report_switch(input_dev, SW_TABLET_MODE, status != DTX_OPMODE_LAPTOP);
 
 	status = input_register_device(input_dev);
 	if (status) {
