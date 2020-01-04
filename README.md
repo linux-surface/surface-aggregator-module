@@ -126,7 +126,18 @@ After that, you can load the module with `insmod surface_sam.ko`, and after test
 
 If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
 To uninstall it, run `make dkms-uninstall`.
-If you've installed a patched kernel already contiaining the in-kernel version of this module, you may want to keep it from loading by editing/creating `/etc/modprobe.d/surface-acpi.conf` and adding `blacklist surface_acpi`.
+If you've installed a patched kernel already contiaining the in-kernel version of this module, you may want to keep it from loading by editing/creating `/etc/modprobe.d/surface-sam.conf` and adding
+```
+blacklist surface_sam_ssh
+blacklist surface_sam_san
+blacklist surface_sam_vhf
+blacklist surface_sam_dtx
+blacklist surface_sam_hps
+blacklist surface_sam_sid
+blacklist surface_sam_sid_gpelid
+blacklist surface_sam_sid_perfmode
+blacklist surface_sam_sid_vhf
+```
 Note that you will need to undo these changes when you want to use the in-kernel module again.
 
 
