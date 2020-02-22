@@ -46,7 +46,7 @@ surface performance set <mode>
 where the numeric mode-value (1-4) is described below.
 Alternatively, the performance-mode can also be accessed via the `perf_mode` sysfs attribute on the  `MSHW0107` platform device, i.e. it can be set via
 ```
-echo <mode> | sudo tee /sys/devices/platform/MSHW0107:00/perf_mode
+echo <mode> | sudo tee /sys/bus/platform/devices/surface_sam_sid_perfmode/perf_mode
 ```
 where `<mode>` is the numeric value of the mode you want to set.
 Reading from this attribute will return the current mode.
