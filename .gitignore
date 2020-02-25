@@ -1,20 +1,5 @@
 # Created by https://www.gitignore.io/api/c,code,archlinuxpackages
 
-### ArchLinuxPackages ###
-*.tar
-*.tar.*
-*.jar
-*.exe
-*.msi
-*.zip
-*.tgz
-*.log
-*.log.*
-*.sig
-
-pkg/
-src/
-
 ### C ###
 # Prerequisites
 *.d
