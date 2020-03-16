@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Surface Serial Hub (SSH) driver for communication with the Surface/System
  * Aggregator Module.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Surface dGPU hot-plug system driver.
  * Supports explicit setting of the dGPU power-state on the Surface Book 2 and
@@ -475,7 +476,7 @@ static int shps_dgpu_set_power(struct platform_device *pdev, enum shps_dgpu_powe
 static int shps_dgpu_is_present(struct platform_device *pdev)
 {
 	struct shps_driver_data *drvdata;
-	
+
 	drvdata = platform_get_drvdata(pdev);
 	return gpiod_get_value_cansleep(drvdata->gpio_dgpu_presence);
 }

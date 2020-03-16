@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Detachment system (DTX) driver for Microsoft Surface Book 2.
  */

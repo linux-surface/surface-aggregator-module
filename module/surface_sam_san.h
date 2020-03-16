@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Interface for Surface ACPI/Notify (SAN).
  *

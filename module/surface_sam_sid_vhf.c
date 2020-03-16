@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Microsofs Surface HID (VHF) driver for HID input events via SAM.
  * Used for keyboard input events on the 7th generation Surface Laptops.

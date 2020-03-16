@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Surface Integration Driver.
  * MFD driver to provide device/model dependent functionality.

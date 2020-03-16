@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Surface Lid driver to enable wakeup from suspend via the lid.
  */

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Surface Performance Mode Driver.
  * Allows to change cooling capabilities based on user preference.
