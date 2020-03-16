@@ -216,7 +216,7 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 
 	status = surface_sam_ssh_set_event_handler(
 			SAM_EVENT_VHF_RQID,
-	                vhf_event_handler,
+			vhf_event_handler,
 			&drvdata->event_ctx);
 	if (status) {
 		goto err_add_hid;

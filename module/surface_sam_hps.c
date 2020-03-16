@@ -616,7 +616,7 @@ static int shps_pm_prepare(struct device *dev)
 	dbg_dump_power_states(pdev, "shps_pm_prepare");
 
 	if (param_dgpu_power_susp != SHPS_DGPU_MP_POWER_ASIS) {
- 		pwrtgt = test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
+		pwrtgt = test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state);
 
 		status = shps_dgpu_set_power(pdev, param_dgpu_power_susp);
 		if (status) {
