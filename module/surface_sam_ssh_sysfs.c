@@ -22,11 +22,10 @@ struct sysfs_rqst {
 
 
 static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
-                         char *buf, loff_t offs, size_t count)
+			 char *buf, loff_t offs, size_t count)
 {
-	if (offs < 0 || count + offs > SURFACE_SAM_SSH_MAX_RQST_RESPONSE) {
+	if (offs < 0 || count + offs > SURFACE_SAM_SSH_MAX_RQST_RESPONSE)
 		return -EINVAL;
-	}
 
 	memcpy(buf, sam_ssh_debug_rqst_buf_sysfs + offs, count);
 	return count;
@@ -41,20 +40,17 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 	int status;
 
 	// check basic write constriants
-	if (offs != 0 || count > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD + sizeof(struct sysfs_rqst)) {
+	if (offs != 0 || count > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD + sizeof(struct sysfs_rqst))
 		return -EINVAL;
-	}
 
-	if (count < sizeof(struct sysfs_rqst)) {
+	if (count < sizeof(struct sysfs_rqst))
 		return -EINVAL;
-	}
 
 	input = (struct sysfs_rqst *)buf;
 
 	// payload length should be consistent with data provided
-	if (input->cdl + sizeof(struct sysfs_rqst) != count) {
+	if (input->cdl + sizeof(struct sysfs_rqst) != count)
 		return -EINVAL;
-	}
 
 	rqst.tc  = input->tc;
 	rqst.cid = input->cid;
@@ -70,9 +66,8 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 	result.data = sam_ssh_debug_rqst_buf_res;
 
 	status = surface_sam_ssh_rqst(&rqst, &result);
-	if (status) {
+	if (status)
 		return status;
-	}
 
 	sam_ssh_debug_rqst_buf_sysfs[0] = result.len;
 	memcpy(sam_ssh_debug_rqst_buf_sysfs + 1, result.data, result.len);

@@ -22,59 +22,48 @@ int __init surface_sam_init(void)
 	int status;
 
 	status = serdev_device_driver_register(&surface_sam_ssh);
-	if (status) {
+	if (status)
 		goto err_ssh;
-	}
 
 	status = platform_driver_register(&surface_sam_san);
-	if (status) {
+	if (status)
 		goto err_san;
-	}
 
 	status = platform_driver_register(&surface_sam_vhf);
-	if (status) {
+	if (status)
 		goto err_vhf;
-	}
 
 	status = platform_driver_register(&surface_sam_dtx);
-	if (status) {
+	if (status)
 		goto err_dtx;
-	}
 
 	status = platform_driver_register(&surface_sam_hps);
-	if (status) {
+	if (status)
 		goto err_hps;
-	}
 
 	status = platform_driver_register(&surface_sam_sid);
-	if (status) {
+	if (status)
 		goto err_sid;
-	}
 
 	status = platform_driver_register(&surface_sam_sid_gpelid);
-	if (status) {
+	if (status)
 		goto err_sid_gpelid;
-	}
 
 	status = platform_driver_register(&surface_sam_sid_perfmode);
-	if (status) {
+	if (status)
 		goto err_sid_perfmode;
-	}
 
 	status = platform_driver_register(&surface_sam_sid_vhf);
-	if (status) {
+	if (status)
 		goto err_sid_vhf;
-	}
 
 	status = platform_driver_register(&surface_sam_sid_ac);
-	if (status) {
+	if (status)
 		goto err_sid_ac;
-	}
 
 	status = platform_driver_register(&surface_sam_sid_battery);
-	if (status) {
+	if (status)
 		goto err_sid_battery;
-	}
 
 	return 0;
 

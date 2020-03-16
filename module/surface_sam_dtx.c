@@ -117,13 +117,11 @@ static int surface_sam_query_opmpde(void)
 	};
 
 	status = surface_sam_ssh_rqst(&rqst, &result);
-	if (status) {
+	if (status)
 		return status;
-	}
 
-	if (result.len != 1) {
+	if (result.len != 1)
 		return -EFAULT;
-	}
 
 	return result.data[0];
 }
@@ -146,14 +144,14 @@ static int dtx_cmd_simple(u8 cid)
 
 static int dtx_cmd_get_opmode(int __user *buf)
 {
-	int opmode = surface_sam_query_opmpde();
-	if (opmode < 0) {
-		return opmode;
-	}
+	int opmode;
 
-	if (put_user(opmode, buf)) {
+	opmode = surface_sam_query_opmpde();
+	if (opmode < 0)
+		return opmode;
+
+	if (put_user(opmode, buf))
 		return -EACCES;
-	}
 
 	return 0;
 }
@@ -166,9 +164,8 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 
 	// initialize client
 	client = kzalloc(sizeof(struct surface_dtx_client), GFP_KERNEL);
-	if (!client) {
+	if (!client)
 		return -ENOMEM;
-	}
 
 	spin_lock_init(&client->buffer_lock);
 	client->buffer_head = 0;
@@ -210,37 +207,32 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 	size_t read = 0;
 	int status = 0;
 
-	if (count != 0 && count < sizeof(struct surface_dtx_event)) {
+	if (count != 0 && count < sizeof(struct surface_dtx_event))
 		return -EINVAL;
-	}
 
-	if (!ddev->active) {
+	if (!ddev->active)
 		return -ENODEV;
-	}
 
 	// check availability
-	if (client->buffer_head == client->buffer_tail){
-		if (file->f_flags & O_NONBLOCK) {
+	if (client->buffer_head == client->buffer_tail) {
+		if (file->f_flags & O_NONBLOCK)
 			return -EAGAIN;
-		}
 
 		status = wait_event_interruptible(ddev->waitq,
 				client->buffer_head != client->buffer_tail ||
 				!ddev->active);
-		if (status) {
+		if (status)
 			return status;
-		}
 
-		if (!ddev->active) {
+		if (!ddev->active)
 			return -ENODEV;
-		}
 	}
 
 	// copy events one by one
 	while (read + sizeof(struct surface_dtx_event) <= count) {
 		spin_lock_irq(&client->buffer_lock);
 
-		if(client->buffer_head == client->buffer_tail) {
+		if (client->buffer_head == client->buffer_tail) {
 			spin_unlock_irq(&client->buffer_lock);
 			break;
 		}
@@ -251,9 +243,8 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 		spin_unlock_irq(&client->buffer_lock);
 
 		// copy to userspace
-		if(copy_to_user(buf, &event, sizeof(struct surface_dtx_event))) {
+		if (copy_to_user(buf, &event, sizeof(struct surface_dtx_event)))
 			return -EFAULT;
-		}
 
 		read += sizeof(struct surface_dtx_event);
 	}
@@ -268,15 +259,13 @@ static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt
 
 	poll_wait(file, &client->ddev->waitq, pt);
 
-	if (client->ddev->active) {
+	if (client->ddev->active)
 		mask = EPOLLOUT | EPOLLWRNORM;
-	} else {
+	else
 		mask = EPOLLHUP | EPOLLERR;
-	}
 
-	if (client->buffer_head != client->buffer_tail) {
+	if (client->buffer_head != client->buffer_tail)
 		mask |= EPOLLIN | EPOLLRDNORM;
-	}
 
 	return mask;
 }
@@ -295,9 +284,8 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	int status;
 
 	status = mutex_lock_interruptible(&ddev->mutex);
-	if (status) {
+	if (status)
 		return status;
-	}
 
 	if (!ddev->active) {
 		mutex_unlock(&ddev->mutex);
@@ -391,9 +379,8 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 
 	// get operation mode
 	opmode = surface_sam_query_opmpde();
-	if (opmode < 0) {
+	if (opmode < 0)
 		printk(DTX_ERR "EC request failed with error %d\n", opmode);
-	}
 
 	// send DTX event
 	event.type = 0x11;
@@ -455,14 +442,12 @@ static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
 	int status;
 
 	status = surface_sam_ssh_set_event_handler(SAM_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
-	if (status) {
+	if (status)
 		goto err_handler;
-	}
 
 	status = surface_sam_ssh_enable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
-	if (status) {
+	if (status)
 		goto err_source;
-	}
 
 	return 0;
 
@@ -485,9 +470,8 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 	int status;
 
 	input_dev = input_allocate_device();
-	if (!input_dev) {
+	if (!input_dev)
 		return ERR_PTR(-ENOMEM);
-	}
 
 	input_dev->name = DTX_INPUT_NAME;
 	input_dev->dev.parent = &pdev->dev;
@@ -523,14 +507,12 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 
 	// link to ec
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
-	if (status) {
+	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
-	}
 
 	input_dev = surface_dtx_register_inputdev(pdev);
-	if (IS_ERR(input_dev)) {
+	if (IS_ERR(input_dev))
 		return PTR_ERR(input_dev);
-	}
 
 	// initialize device
 	mutex_lock(&ddev->mutex);
@@ -547,15 +529,13 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	mutex_unlock(&ddev->mutex);
 
 	status = misc_register(&ddev->mdev);
-	if (status) {
+	if (status)
 		goto err_register;
-	}
 
 	// enable events
 	status = surface_dtx_events_setup(ddev);
-	if (status) {
+	if (status)
 		goto err_events_setup;
-	}
 
 	return 0;
 
