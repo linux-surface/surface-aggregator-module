@@ -14,7 +14,7 @@ If you have a Surface Book 2 you might also want to have a look at the [dtx-daem
 | Surface Laptop         | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18) |
 | Surface Laptop 2       | battery status, keyboard                                               | caps-lock indicator (#8), performance-modes (#18) |
 | Surface Laptop 3 (13") | battery status, keyboard, performance-modes                            | -                                                 |
-| Surface Laptop 3 (15") | battery status, keyboard                                               | performance-modes (#18)                           |
+| Surface Laptop 3 (15") | battery status, keyboard  performance-modes                            | -                                                 |
 | Surface Pro 2017       | battery status, performance-modes                                      | keyboard backlight enabled during suspend (#4)    |
 | Surface Pro 6          | battery status, performance-modes                                      | keyboard backlight enabled during suspend (#4)    |
 | Surface Pro 7          | battery status, performance-modes                                      | -                                                 |

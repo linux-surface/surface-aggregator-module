@@ -56,9 +56,10 @@ static const struct mfd_cell sid_devs_sl3_13[] = {
 };
 
 static const struct mfd_cell sid_devs_sl3_15[] = {
-	{ .name = "surface_sam_sid_vhf",     .id = -1 },
-	{ .name = "surface_sam_sid_ac",      .id = -1 },
-	{ .name = "surface_sam_sid_battery", .id = -1 },
+	{ .name = "surface_sam_sid_vhf",      .id = -1 },
+	{ .name = "surface_sam_sid_ac",       .id = -1 },
+	{ .name = "surface_sam_sid_battery",  .id = -1 },
+	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
