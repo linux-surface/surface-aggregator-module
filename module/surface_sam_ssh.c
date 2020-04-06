@@ -31,8 +31,8 @@
 
 #define SSH_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
-#define SSH_BYTELEN_SYNC			2
-#define SSH_BYTELEN_TERM			2
+#define SSH_BYTELEN_SYNC			2	// [0xAA, 0x55]
+#define SSH_BYTELEN_TERM			2	// [0xFF, 0xFF]
 #define SSH_BYTELEN_CRC				2
 #define SSH_BYTELEN_CTRL			4	// command-header, ACK, or RETRY
 #define SSH_BYTELEN_CMDFRAME			8	// without payload
