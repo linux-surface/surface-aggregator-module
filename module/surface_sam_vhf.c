@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Virtual HID Framework (VHF) driver for input events via SAM.
  * Used for keyboard input events on the Surface Laptops.

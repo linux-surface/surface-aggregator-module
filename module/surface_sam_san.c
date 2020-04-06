@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Surface ACPI Notify (SAN) and ACPI integration driver for SAM.
  * Translates communication from ACPI to SSH and back.

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+// SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Surface SID Battery/AC Driver.
  * Provides support for the battery and AC on 7th generation Surface devices.
