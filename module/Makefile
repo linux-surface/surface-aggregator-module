@@ -4,21 +4,8 @@ MODULE_VERSION := "0.1"
 
 KVERSION := "$(shell uname -r)"
 
-obj-m += surface_sam.o
-surface_sam-objs := surface_sam_base.o
-surface_sam-objs += surface_sam_ssh.o
-surface_sam-objs += surface_sam_ssh_sysfs.o
-surface_sam-objs += surface_sam_san.o
-surface_sam-objs += surface_sam_vhf.o
-surface_sam-objs += surface_sam_dtx.o
-surface_sam-objs += surface_sam_hps.o
-surface_sam-objs += surface_sam_sid.o
-surface_sam-objs += surface_sam_sid_gpelid.o
-surface_sam-objs += surface_sam_sid_perfmode.o
-surface_sam-objs += surface_sam_sid_vhf.o
-surface_sam-objs += surface_sam_sid_power.o
-
 sources := Makefile
+sources += Kbuild
 sources += dkms.conf
 sources += surface_sam_base.c
 sources += surface_sam_ssh.h
