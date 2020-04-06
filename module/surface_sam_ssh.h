@@ -57,7 +57,7 @@ struct surface_sam_ssh_rqst {
 	u8 cid;				// command ID
 	u8 iid;				// instance ID
 	u8 pri;				// priority
-	u8 snc;				// expect response flag
+	u8 snc;				// expect response flag (bool: 0/1)
 	u8 cdl;				// command data length (length of payload)
 	u8 *pld;			// pointer to payload of length cdl
 };
