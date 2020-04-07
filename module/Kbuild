@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
-obj-m += surface_sam.o
-surface_sam-objs := surface_sam_base.o
-surface_sam-objs += surface_sam_ssh.o
-surface_sam-objs += surface_sam_ssh_sysfs.o
-surface_sam-objs += surface_sam_san.o
-surface_sam-objs += surface_sam_vhf.o
-surface_sam-objs += surface_sam_dtx.o
-surface_sam-objs += surface_sam_hps.o
-surface_sam-objs += surface_sam_sid.o
-surface_sam-objs += surface_sam_sid_gpelid.o
-surface_sam-objs += surface_sam_sid_perfmode.o
-surface_sam-objs += surface_sam_sid_vhf.o
-surface_sam-objs += surface_sam_sid_power.o
+
+obj-m += surface_sam_ssh.o
+obj-m += surface_sam_san.o
+obj-m += surface_sam_dtx.o
+obj-m += surface_sam_hps.o
+obj-m += surface_sam_vhf.o
+obj-m += surface_sam_sid.o
+obj-m += surface_sam_sid_gpelid.o
+obj-m += surface_sam_sid_perfmode.o
+obj-m += surface_sam_sid_power.o
+obj-m += surface_sam_sid_vhf.o
+
+ccflags-y += -DCONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE

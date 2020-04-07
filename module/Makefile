@@ -7,10 +7,8 @@ KVERSION := "$(shell uname -r)"
 sources := Makefile
 sources += Kbuild
 sources += dkms.conf
-sources += surface_sam_base.c
 sources += surface_sam_ssh.h
 sources += surface_sam_ssh.c
-sources += surface_sam_ssh_sysfs.c
 sources += surface_sam_san.c
 sources += surface_sam_san.h
 sources += surface_sam_vhf.c
@@ -22,7 +20,6 @@ sources += surface_sam_sid_perfmode.c
 sources += surface_sam_sid_vhf.c
 sources += surface_sam_sid_power.c
 
-# ccflags-y := -DDEBUG
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
