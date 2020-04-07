@@ -259,7 +259,7 @@ static struct platform_driver surface_sam_vhf = {
 	.remove = surface_sam_vhf_remove,
 	.driver = {
 		.name = "surface_sam_vhf",
-		.acpi_match_table = ACPI_PTR(surface_sam_vhf_match),
+		.acpi_match_table = surface_sam_vhf_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

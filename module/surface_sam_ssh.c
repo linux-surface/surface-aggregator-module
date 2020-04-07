@@ -1709,7 +1709,7 @@ static struct serdev_device_driver surface_sam_ssh = {
 	.remove = surface_sam_ssh_remove,
 	.driver = {
 		.name = "surface_sam_ssh",
-		.acpi_match_table = ACPI_PTR(surface_sam_ssh_match),
+		.acpi_match_table = surface_sam_ssh_match,
 		.pm = &surface_sam_ssh_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},

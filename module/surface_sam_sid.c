@@ -127,7 +127,7 @@ static struct platform_driver surface_sam_sid = {
 	.remove = surface_sam_sid_remove,
 	.driver = {
 		.name = "surface_sam_sid",
-		.acpi_match_table = ACPI_PTR(surface_sam_sid_match),
+		.acpi_match_table = surface_sam_sid_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
