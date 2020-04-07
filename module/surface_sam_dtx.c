@@ -593,7 +593,7 @@ static struct platform_driver surface_sam_dtx = {
 	.remove = surface_sam_dtx_remove,
 	.driver = {
 		.name = "surface_sam_dtx",
-		.acpi_match_table = ACPI_PTR(surface_sam_dtx_match),
+		.acpi_match_table = surface_sam_dtx_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

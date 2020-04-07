@@ -1099,7 +1099,7 @@ static struct platform_driver surface_sam_hps = {
 	.shutdown = shps_shutdown,
 	.driver = {
 		.name = "surface_dgpu_hps",
-		.acpi_match_table = ACPI_PTR(shps_acpi_match),
+		.acpi_match_table = shps_acpi_match,
 		.pm = &shps_pm_ops,
 	},
 };
