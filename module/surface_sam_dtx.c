@@ -588,7 +588,7 @@ static const struct acpi_device_id surface_sam_dtx_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_dtx_match);
 
-struct platform_driver surface_sam_dtx = {
+static struct platform_driver surface_sam_dtx = {
 	.probe = surface_sam_dtx_probe,
 	.remove = surface_sam_dtx_remove,
 	.driver = {
@@ -597,3 +597,8 @@ struct platform_driver surface_sam_dtx = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+module_platform_driver(surface_sam_dtx);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface Detachment System (DTX) Driver for 5th Generation Surface Devices");
+MODULE_LICENSE("GPL");

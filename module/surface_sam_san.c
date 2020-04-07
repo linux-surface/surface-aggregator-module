@@ -867,7 +867,7 @@ static const struct acpi_device_id surface_sam_san_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_san_match);
 
-struct platform_driver surface_sam_san = {
+static struct platform_driver surface_sam_san = {
 	.probe = surface_sam_san_probe,
 	.remove = surface_sam_san_remove,
 	.driver = {
@@ -876,3 +876,8 @@ struct platform_driver surface_sam_san = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+module_platform_driver(surface_sam_san);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface ACPI Notify Driver for 5th Generation Surface Devices");
+MODULE_LICENSE("GPL");

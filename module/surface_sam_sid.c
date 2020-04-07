@@ -122,7 +122,7 @@ static int surface_sam_sid_remove(struct platform_device *pdev)
 	return 0;
 }
 
-struct platform_driver surface_sam_sid = {
+static struct platform_driver surface_sam_sid = {
 	.probe = surface_sam_sid_probe,
 	.remove = surface_sam_sid_remove,
 	.driver = {
@@ -131,3 +131,8 @@ struct platform_driver surface_sam_sid = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+module_platform_driver(surface_sam_sid);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface Integration Driver for 5th Generation Surface Devices");
+MODULE_LICENSE("GPL");

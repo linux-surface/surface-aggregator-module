@@ -254,7 +254,7 @@ static const struct acpi_device_id surface_sam_vhf_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_vhf_match);
 
-struct platform_driver surface_sam_vhf = {
+static struct platform_driver surface_sam_vhf = {
 	.probe = surface_sam_vhf_probe,
 	.remove = surface_sam_vhf_remove,
 	.driver = {
@@ -263,3 +263,8 @@ struct platform_driver surface_sam_vhf = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+module_platform_driver(surface_sam_vhf);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Virtual HID Framework Driver for 5th Generation Surface Devices");
+MODULE_LICENSE("GPL");

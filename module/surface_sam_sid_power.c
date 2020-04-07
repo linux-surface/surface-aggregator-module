@@ -1176,7 +1176,7 @@ static int surface_sam_sid_battery_remove(struct platform_device *pdev)
 	return spwr_battery_unregister(bat);
 }
 
-struct platform_driver surface_sam_sid_battery = {
+static struct platform_driver surface_sam_sid_battery = {
 	.probe = surface_sam_sid_battery_probe,
 	.remove = surface_sam_sid_battery_remove,
 	.driver = {
@@ -1221,7 +1221,7 @@ static int surface_sam_sid_ac_remove(struct platform_device *pdev)
 	return spwr_ac_unregister(ac);
 }
 
-struct platform_driver surface_sam_sid_ac = {
+static struct platform_driver surface_sam_sid_ac = {
 	.probe = surface_sam_sid_ac_probe,
 	.remove = surface_sam_sid_ac_remove,
 	.driver = {
@@ -1229,3 +1229,36 @@ struct platform_driver surface_sam_sid_ac = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+
+
+static int __init surface_sam_sid_power_init(void)
+{
+	int status;
+
+	status = platform_driver_register(&surface_sam_sid_battery);
+	if (status)
+		return status;
+
+	status = platform_driver_register(&surface_sam_sid_ac);
+	if (status) {
+		platform_driver_unregister(&surface_sam_sid_battery);
+		return status;
+	}
+
+	return 0;
+}
+
+static void __exit surface_sam_sid_power_exit(void)
+{
+	platform_driver_unregister(&surface_sam_sid_battery);
+	platform_driver_unregister(&surface_sam_sid_ac);
+}
+
+module_init(surface_sam_sid_power_init);
+module_exit(surface_sam_sid_power_exit);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:surface_sam_sid_ac");
+MODULE_ALIAS("platform:surface_sam_sid_battery");

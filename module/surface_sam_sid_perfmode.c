@@ -200,7 +200,7 @@ static int surface_sam_sid_perfmode_remove(struct platform_device *pdev)
 	return 0;
 }
 
-struct platform_driver surface_sam_sid_perfmode = {
+static struct platform_driver surface_sam_sid_perfmode = {
 	.probe = surface_sam_sid_perfmode_probe,
 	.remove = surface_sam_sid_perfmode_remove,
 	.driver = {
@@ -208,3 +208,9 @@ struct platform_driver surface_sam_sid_perfmode = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+module_platform_driver(surface_sam_sid_perfmode);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface Performance Mode Driver for 5th Generation Surface Devices");
+MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:surface_sam_sid_perfmode");

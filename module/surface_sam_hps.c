@@ -1093,7 +1093,7 @@ static const struct acpi_device_id shps_acpi_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, shps_acpi_match);
 
-struct platform_driver surface_sam_hps = {
+static struct platform_driver surface_sam_hps = {
 	.probe = shps_probe,
 	.remove = shps_remove,
 	.shutdown = shps_shutdown,
@@ -1103,3 +1103,8 @@ struct platform_driver surface_sam_hps = {
 		.pm = &shps_pm_ops,
 	},
 };
+module_platform_driver(surface_sam_hps);
+
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
+MODULE_DESCRIPTION("Surface Hot-Plug System (HPS) and dGPU power-state Driver for Surface Book 2");
+MODULE_LICENSE("GPL");
