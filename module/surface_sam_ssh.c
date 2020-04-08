@@ -98,13 +98,34 @@
  * Command Response Frame:	80 RTC 00 01 RIID RQID RCID PLD
  */
 
+/**
+ * struct ssh_frame_ctrl - SSH control frame.
+ * @type: The type of the frame. See &enum ssh_frame_type.
+ * @len:  The length of the frame payload directly following the CRC for this
+ *        frame. Does not include the final CRC for that payload.
+ * @pad:  Seems to be unused and always zero. We assume this is padding.
+ * @seq:  The sequence number for this message/exchange.
+ */
 struct ssh_frame_ctrl {
 	u8 type;
-	u8 len;			// without crc
+	u8 len;
 	u8 pad;
 	u8 seq;
 } __packed;
 
+/**
+ * struct ssh_frame_cmd - Command frame from payload of a command control frame.
+ * @type:    The type of the payload/frame. See &enum ssh_payload_type.
+ * @tc:      Command target category.
+ * @pri_out: Output priority. Should be zero if this an incoming (EC to host)
+ *           message.
+ * @pri_in:  Input priority. Should be zero if this is an outgoing (hos to EC)
+ *           message.
+ * @iid:     Instance ID.
+ * @rqid:    Request ID. Used to match requests with responses and differentiate
+ *           between responses and events.
+ * @cid:     Command ID.
+ */
 struct ssh_frame_cmd {
 	u8 type;
 	u8 tc;
@@ -115,6 +136,20 @@ struct ssh_frame_cmd {
 	u8 cid;
 } __packed;
 
+/**
+ * enum ssh_frame_type - Frame types for SSH control frames.
+ * @SSH_FRAME_TYPE_CMD: Indicates a command or event message. If this is the
+ *                      type of the control frame of a message, the payload of
+ *                      the control must be present and a command type payload.
+ * 			Command payloads in general have type &SSH_PLD_TYPE_CMD.
+ * @SSH_FRAME_TYPE_CMD_NOACK: Same as SSH_FRAME_TYPE_CMD, but the command
+ *                      or event does not have to be ACKed.
+ * @SSH_FRAME_TYPE_ACK: Indicates an ACK message.
+ * @SSH_FRAME_TYPE_ERR: Indicates an error response for a previously sent
+ *                      command. In general, this means either that the command
+ * 			in question should be re-sent or that the command is
+ *                      malformed or unsupported.
+ */
 enum ssh_frame_type {
 	SSH_FRAME_TYPE_CMD	 = 0x80,
 	SSH_FRAME_TYPE_CMD_NOACK = 0x00,
@@ -122,6 +157,11 @@ enum ssh_frame_type {
 	SSH_FRAME_TYPE_ERR	 = 0x04,
 };
 
+/**
+ * enum ssh_payload_type - Type indicator for the SSH payload frame.
+ * @SSH_PLD_TYPE_CMD: The payload is a command frame with optional command
+ *                    payload.
+ */
 enum ssh_payload_type {
 	SSH_PLD_TYPE_CMD = 0x80,
 };
