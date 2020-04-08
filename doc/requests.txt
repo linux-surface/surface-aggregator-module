@@ -126,7 +126,7 @@ List of Detachment System Requests (TC = 0x11)
     0x08  0x00  0x01  no       no        Request latch open     log
     0x09  0x00  0x01  no       no        Confirm latch open     log
 
-    0x0d  0x00  0x01  no       no        Get device OpMode      dsdt
+    0x0d  0x00  0x01  no       yes       Get device OpMode      dsdt
 
 
 List of Detachment System Events (TC = 0x11)
