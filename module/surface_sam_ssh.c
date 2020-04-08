@@ -68,10 +68,6 @@
 #define SSH_READ_BUF_LEN		512		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
-#define SSH_FRAME_TYPE_CMD_NOACK	0x00	// request/event that does not to be ACKed
-#define SSH_FRAME_TYPE_CMD		0x80	// request/event
-#define SSH_FRAME_TYPE_ACK		0x40	// ACK for request/event
-#define SSH_FRAME_TYPE_RETRY		0x04	// error or retry indicator
 
 #define SSH_FRAME_OFFS_CTRL		SSH_BYTELEN_SYNC
 #define SSH_FRAME_OFFS_CTRL_CRC		(SSH_FRAME_OFFS_CTRL + SSH_BYTELEN_CTRL)
@@ -119,6 +115,12 @@ struct ssh_frame_cmd {
 	u8 cid;
 } __packed;
 
+enum ssh_frame_type {
+	SSH_FRAME_TYPE_CMD	 = 0x80,
+	SSH_FRAME_TYPE_CMD_NOACK = 0x00,
+	SSH_FRAME_TYPE_ACK	 = 0x40,
+	SSH_FRAME_TYPE_ERR	 = 0x04,
+};
 
 enum ssh_ec_state {
 	SSH_EC_UNINITIALIZED,
@@ -1175,7 +1177,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 
 	switch (ctrl->type) {
 	case SSH_FRAME_TYPE_ACK:
-	case SSH_FRAME_TYPE_RETRY:
+	case SSH_FRAME_TYPE_ERR:
 		return ssh_receive_msg_ctrl(ec, buf, size);
 
 	case SSH_FRAME_TYPE_CMD:
