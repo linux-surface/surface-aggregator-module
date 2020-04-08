@@ -594,7 +594,8 @@ int surface_sam_ssh_remove_event_handler(u16 rqid)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_remove_event_handler);
 
 
-static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb)
+static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb,
+			   long timeout)
 {
 	struct serdev_device *serdev = ec->serdev;
 	size_t len = msgb_bytes_used(msgb);
@@ -605,7 +606,7 @@ static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb)
 	print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, msgb->buffer,
 			     len, false);
 
-	status = serdev_device_write(serdev, msgb->buffer, len, SSH_TX_TIMEOUT);
+	status = serdev_device_write(serdev, msgb->buffer, len, timeout);
 	if (status < 0)
 		return status;
 	if ((size_t)status < len)
@@ -668,7 +669,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 	// send command, try to get an ack response
 	for (try = 0; try < SSH_NUM_RETRY; try++) {
-		status = ssh_send_msgbuf(ec, &msgb);
+		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 		if (status)
 			goto out;
 
@@ -720,7 +721,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 			msgb_push_ack(&msgb, packet.seq);
 			msgb_push_ter(&msgb);
 
-			status = ssh_send_msgbuf(ec, &msgb);
+			status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 			if (status)
 				goto out;
 		}
@@ -903,7 +904,7 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 		msgb_push_ack(&msgb, work->seq);
 		msgb_push_ter(&msgb);
 
-		status = ssh_send_msgbuf(ec, &msgb);
+		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 		if (status)
 			dev_err(dev, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
 	}
