@@ -134,7 +134,7 @@ struct ssh_counters {
 struct ssh_writer {
 	u8 *data;
 	u8 *ptr;
-} __packed;
+};
 
 enum ssh_receiver_state {
 	SSH_RCV_DISCARD,
