@@ -60,11 +60,10 @@
 	+ SSH_BYTELEN_CRC			\
 )	// without payload and command-frame
 
-#define SSH_WRITE_TIMEOUT		msecs_to_jiffies(1000)
-#define SSH_READ_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_TX_TIMEOUT			MAX_SCHEDULE_TIMEOUT
+#define SSH_RX_TIMEOUT			msecs_to_jiffies(1000)
 #define SSH_NUM_RETRY			3
 
-#define SSH_WRITE_BUF_LEN		SSH_MAX_WRITE
 #define SSH_READ_BUF_LEN		512		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
@@ -182,11 +181,6 @@ struct ssh_counters {
 	u16 rqid;		// id for request/response matching
 };
 
-struct ssh_writer {
-	u8 *data;
-	u8 *ptr;
-};
-
 enum ssh_receiver_state {
 	SSH_RCV_DISCARD,
 	SSH_RCV_CONTROL,
@@ -228,7 +222,6 @@ struct sam_ssh_ec {
 	enum ssh_ec_state state;
 	struct serdev_device *serdev;
 	struct ssh_counters counter;
-	struct ssh_writer writer;
 	struct ssh_receiver receiver;
 	struct ssh_events events;
 	int irq;
@@ -259,10 +252,6 @@ static struct sam_ssh_ec ssh_ec = {
 		.seq  = 0,
 		.rqid = 0,
 	},
-	.writer = {
-		.data = NULL,
-		.ptr  = NULL,
-	},
 	.receiver = {
 		.lock = __SPIN_LOCK_UNLOCKED(),
 		.state = SSH_RCV_DISCARD,
@@ -275,6 +264,136 @@ static struct sam_ssh_ec ssh_ec = {
 	.irq = -1,
 };
 
+
+/* -- Common/utility functions. --------------------------------------------- */
+
+static inline u16 ssh_crc(const u8 *buf, size_t len)
+{
+	return crc_ccitt_false(0xffff, buf, len);
+}
+
+static inline u16 sam_rqid_to_rqst(u16 rqid)
+{
+	return rqid << SURFACE_SAM_SSH_RQID_EVENT_BITS;
+}
+
+static inline bool sam_rqid_is_event(u16 rqid)
+{
+	const u16 mask = (1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1;
+
+	return rqid != 0 && (rqid | mask) == mask;
+}
+
+
+/* -- Builder API for SAM-over-SSH messages. -------------------------------- */
+
+struct msgbuf {
+	u8 *buffer;
+	u8 *end;
+	u8 *ptr;
+};
+
+static inline void msgb_new(struct msgbuf *msgb, u8 *buffer, size_t cap)
+{
+	msgb->buffer = buffer;
+	msgb->end = buffer + cap;
+	msgb->ptr = buffer;
+}
+
+static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
+{
+	return msgb->ptr - msgb->buffer;
+}
+
+static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
+{
+	BUG_ON(msgb->ptr + sizeof(u16) > msgb->end);
+
+	put_unaligned_le16(value, msgb->ptr);
+	msgb->ptr += sizeof(u16);
+}
+
+static inline void msgb_push_syn(struct msgbuf *msgb)
+{
+	msgb_push_u16(msgb, 0x55aa);
+}
+
+static inline void msgb_push_ter(struct msgbuf *msgb)
+{
+	msgb_push_u16(msgb, 0xffff);
+}
+
+static inline void msgb_push_buf(struct msgbuf *msgb, const u8 *buf, size_t len)
+{
+	msgb->ptr = memcpy(msgb->ptr, buf, len) + len;
+}
+
+static inline void msgb_push_crc(struct msgbuf *msgb, const u8 *buf, size_t len)
+{
+	msgb_push_u16(msgb, ssh_crc(buf, len));
+}
+
+static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
+{
+	struct ssh_frame_ctrl *ack = (struct ssh_frame_ctrl *)msgb->ptr;
+	u8 *begin = msgb->ptr;
+
+	BUG_ON(msgb->ptr + sizeof(*ack) > msgb->end);
+
+	ack->type = SSH_FRAME_TYPE_ACK;
+	ack->len  = 0x00;
+	ack->pad  = 0x00;
+	ack->seq  = seq;
+
+	msgb->ptr += sizeof(*ack);
+
+	msgb_push_crc(msgb, begin, msgb->ptr - begin);
+}
+
+static inline void msgb_push_hdr(struct msgbuf *msgb,
+				 const struct surface_sam_ssh_rqst *rqst,
+				 u8 seq)
+{
+	struct ssh_frame_ctrl *hdr = (struct ssh_frame_ctrl *)msgb->ptr;
+	const u8 *const begin = msgb->ptr;
+
+	BUG_ON(msgb->ptr + sizeof(*hdr) > msgb->end);
+
+	hdr->type = SSH_FRAME_TYPE_CMD;
+	hdr->len  = sizeof(struct ssh_frame_cmd) + rqst->cdl;
+	hdr->pad  = 0x00;
+	hdr->seq  = seq;
+
+	msgb->ptr += sizeof(*hdr);
+
+	msgb_push_crc(msgb, begin, msgb->ptr - begin);
+}
+
+static inline void msgb_push_cmd(struct msgbuf *msgb,
+				 const struct surface_sam_ssh_rqst *rqst,
+				 u16 rqid)
+{
+	struct ssh_frame_cmd *cmd = (struct ssh_frame_cmd *)msgb->ptr;
+	u8 *begin = msgb->ptr;
+
+	BUG_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
+
+	cmd->type    = SSH_FRAME_TYPE_CMD;
+	cmd->tc      = rqst->tc;
+	cmd->pri_out = rqst->pri;
+	cmd->pri_in  = 0x00;
+	cmd->iid     = rqst->iid;
+	cmd->rqid    = cpu_to_le16(rqid);
+	cmd->cid     = rqst->cid;
+
+	msgb->ptr += sizeof(*cmd);
+
+	msgb_push_buf(msgb, rqst->pld, rqst->cdl);
+	msgb_push_crc(msgb, begin, msgb->ptr - begin);
+}
+
+
+/* -- TODO ------------------------------------------------------------------ */
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
 {
@@ -320,18 +439,6 @@ int surface_sam_ssh_consumer_register(struct device *consumer)
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
-
-static inline u16 sam_rqid_to_rqst(u16 rqid)
-{
-	return rqid << SURFACE_SAM_SSH_RQID_EVENT_BITS;
-}
-
-static inline bool sam_rqid_is_event(u16 rqid)
-{
-	const u16 mask = (1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1;
-
-	return rqid != 0 && (rqid | mask) == mask;
-}
 
 int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
@@ -487,139 +594,25 @@ int surface_sam_ssh_remove_event_handler(u16 rqid)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_remove_event_handler);
 
 
-static inline u16 ssh_crc(const u8 *buf, size_t size)
+static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb)
 {
-	return crc_ccitt_false(0xffff, buf, size);
-}
-
-static inline void ssh_write_u16(struct ssh_writer *writer, u16 in)
-{
-	put_unaligned_le16(in, writer->ptr);
-	writer->ptr += 2;
-}
-
-static inline void ssh_write_crc(struct ssh_writer *writer,
-				 const u8 *buf, size_t size)
-{
-	ssh_write_u16(writer, ssh_crc(buf, size));
-}
-
-static inline void ssh_write_syn(struct ssh_writer *writer)
-{
-	u8 *w = writer->ptr;
-
-	*w++ = 0xaa;
-	*w++ = 0x55;
-
-	writer->ptr = w;
-}
-
-static inline void ssh_write_ter(struct ssh_writer *writer)
-{
-	u8 *w = writer->ptr;
-
-	*w++ = 0xff;
-	*w++ = 0xff;
-
-	writer->ptr = w;
-}
-
-static inline void ssh_write_buf(struct ssh_writer *writer,
-				 u8 *in, size_t len)
-{
-	writer->ptr = memcpy(writer->ptr, in, len) + len;
-}
-
-static inline void ssh_write_hdr(struct ssh_writer *writer,
-				 const struct surface_sam_ssh_rqst *rqst,
-				 struct sam_ssh_ec *ec)
-{
-	struct ssh_frame_ctrl *hdr = (struct ssh_frame_ctrl *)writer->ptr;
-	u8 *begin = writer->ptr;
-
-	hdr->type = SSH_FRAME_TYPE_CMD;
-	hdr->len  = SSH_BYTELEN_CMDFRAME + rqst->cdl;	// without CRC
-	hdr->pad  = 0x00;
-	hdr->seq  = ec->counter.seq;
-
-	writer->ptr += sizeof(*hdr);
-
-	ssh_write_crc(writer, begin, writer->ptr - begin);
-}
-
-static inline void ssh_write_cmd(struct ssh_writer *writer,
-				 const struct surface_sam_ssh_rqst *rqst,
-				 struct sam_ssh_ec *ec)
-{
-	struct ssh_frame_cmd *cmd = (struct ssh_frame_cmd *)writer->ptr;
-	u16 rqid = sam_rqid_to_rqst(ec->counter.rqid);
-	u8 *begin = writer->ptr;
-
-	cmd->type     = SSH_FRAME_TYPE_CMD;
-	cmd->tc       = rqst->tc;
-	cmd->pri_out  = rqst->pri;
-	cmd->pri_in   = 0x00;
-	cmd->iid      = rqst->iid;
-	cmd->rqid     = cpu_to_le16(rqid);
-	cmd->cid      = rqst->cid;
-
-	writer->ptr += sizeof(*cmd);
-
-	ssh_write_buf(writer, rqst->pld, rqst->cdl);
-	ssh_write_crc(writer, begin, writer->ptr - begin);
-}
-
-static inline void ssh_write_ack(struct ssh_writer *writer, u8 seq)
-{
-	struct ssh_frame_ctrl *ack = (struct ssh_frame_ctrl *)writer->ptr;
-	u8 *begin = writer->ptr;
-
-	ack->type = SSH_FRAME_TYPE_ACK;
-	ack->len  = 0x00;
-	ack->pad  = 0x00;
-	ack->seq  = seq;
-
-	writer->ptr += sizeof(*ack);
-
-	ssh_write_crc(writer, begin, writer->ptr - begin);
-}
-
-static inline void ssh_writer_reset(struct ssh_writer *writer)
-{
-	writer->ptr = writer->data;
-}
-
-static inline int ssh_writer_flush(struct sam_ssh_ec *ec)
-{
-	struct ssh_writer *writer = &ec->writer;
 	struct serdev_device *serdev = ec->serdev;
+	size_t len = msgb_bytes_used(msgb);
 	int status;
 
-	size_t len = writer->ptr - writer->data;
-
+	// TODO: configurable logging interface
 	dev_dbg(&ec->serdev->dev, "sending message\n");
-	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
-			     writer->data, writer->ptr - writer->data, false);
+	print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, msgb->buffer,
+			     len, false);
 
-	status = serdev_device_write(serdev, writer->data, len, SSH_WRITE_TIMEOUT);
-	return status >= 0 ? 0 : status;
-}
+	status = serdev_device_write(serdev, msgb->buffer, len, SSH_TX_TIMEOUT);
+	if (status < 0)
+		return status;
+	if ((size_t)status < len)
+		return -EINTR;
 
-static inline void ssh_write_msg_cmd(struct sam_ssh_ec *ec,
-				     const struct surface_sam_ssh_rqst *rqst)
-{
-	ssh_writer_reset(&ec->writer);
-	ssh_write_syn(&ec->writer);
-	ssh_write_hdr(&ec->writer, rqst, ec);
-	ssh_write_cmd(&ec->writer, rqst, ec);
-}
-
-static inline void ssh_write_msg_ack(struct sam_ssh_ec *ec, u8 seq)
-{
-	ssh_writer_reset(&ec->writer);
-	ssh_write_syn(&ec->writer);
-	ssh_write_ack(&ec->writer, seq);
-	ssh_write_ter(&ec->writer);
+	serdev_device_wait_until_sent(serdev, 0);
+	return 0;
 }
 
 static inline void ssh_receiver_restart(struct sam_ssh_ec *ec,
@@ -652,8 +645,10 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 					 const struct surface_sam_ssh_rqst *rqst,
 					 struct surface_sam_ssh_buf *result)
 {
+	u8 buf[SSH_MAX_WRITE];
 	struct device *dev = &ec->serdev->dev;
 	struct ssh_fifo_packet packet = {};
+	struct msgbuf msgb;
 	int status;
 	int try;
 	unsigned int rem;
@@ -664,16 +659,20 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	}
 
 	// write command in buffer, we may need it multiple times
-	ssh_write_msg_cmd(ec, rqst);
+	msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+	msgb_push_syn(&msgb);
+	msgb_push_hdr(&msgb, rqst, ec->counter.seq);
+	msgb_push_cmd(&msgb, rqst, sam_rqid_to_rqst(ec->counter.rqid));
+
 	ssh_receiver_restart(ec, rqst);
 
 	// send command, try to get an ack response
 	for (try = 0; try < SSH_NUM_RETRY; try++) {
-		status = ssh_writer_flush(ec);
+		status = ssh_send_msgbuf(ec, &msgb);
 		if (status)
 			goto out;
 
-		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_READ_TIMEOUT);
+		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_RX_TIMEOUT);
 		if (rem) {
 			// completion assures valid packet, thus ignore returned length
 			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
@@ -695,7 +694,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 	// get command response/payload
 	if (rqst->snc && result) {
-		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_READ_TIMEOUT);
+		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_RX_TIMEOUT);
 		if (rem) {
 			// completion assures valid packet, thus ignore returned length
 			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
@@ -716,8 +715,12 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 		// send ACK
 		if (packet.type == SSH_FRAME_TYPE_CMD) {
-			ssh_write_msg_ack(ec, packet.seq);
-			status = ssh_writer_flush(ec);
+			msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+			msgb_push_syn(&msgb);
+			msgb_push_ack(&msgb, packet.seq);
+			msgb_push_ter(&msgb);
+
+			status = ssh_send_msgbuf(ec, &msgb);
 			if (status)
 				goto out;
 		}
@@ -879,36 +882,10 @@ static inline bool ssh_is_valid_crc(const u8 *begin, const u8 *end)
 }
 
 
-static int surface_sam_ssh_send_ack(struct sam_ssh_ec *ec, u8 seq)
-{
-	int status;
-	u8 buf[SSH_MSG_LEN_CTRL];
-	u16 crc;
-
-	buf[0] = 0xaa;
-	buf[1] = 0x55;
-	buf[2] = 0x40;
-	buf[3] = 0x00;
-	buf[4] = 0x00;
-	buf[5] = seq;
-
-	crc = ssh_crc(buf + SSH_FRAME_OFFS_CTRL, SSH_BYTELEN_CTRL);
-	buf[6] = crc & 0xff;
-	buf[7] = crc >> 8;
-
-	buf[8] = 0xff;
-	buf[9] = 0xff;
-
-	dev_dbg(&ec->serdev->dev, "sending message\n");
-	print_hex_dump_debug("send: ", DUMP_PREFIX_OFFSET, 16, 1,
-			     buf, SSH_MSG_LEN_CTRL, false);
-
-	status = serdev_device_write(ec->serdev, buf, SSH_MSG_LEN_CTRL, SSH_WRITE_TIMEOUT);
-	return status >= 0 ? 0 : status;
-}
-
 static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 {
+	u8 buf[SSH_MSG_LEN_CTRL];
+	struct msgbuf msgb;
 	struct surface_sam_ssh_event *event;
 	struct ssh_event_work *work;
 	struct sam_ssh_ec *ec;
@@ -920,11 +897,13 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 	ec = work->ec;
 	dev = &ec->serdev->dev;
 
-	/* make sure we load a fresh ec state */
-	smp_mb();
+	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
+		msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+		msgb_push_syn(&msgb);
+		msgb_push_ack(&msgb, work->seq);
+		msgb_push_ter(&msgb);
 
-	if (ec->state == SSH_EC_INITIALIZED) {
-		status = surface_sam_ssh_send_ack(ec, work->seq);
+		status = ssh_send_msgbuf(ec, &msgb);
 		if (status)
 			dev_err(dev, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
 	}
@@ -1249,7 +1228,7 @@ static int ssh_receive_buf(struct serdev_device *serdev,
 	int used, n;
 
 	dev_dbg(&serdev->dev, SSH_RECV_TAG "received buffer (size: %zu)\n", size);
-	print_hex_dump_debug(SSH_RECV_TAG, DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
+	print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
 	/*
 	 * The battery _BIX message gets a bit long, thus we have to add some
@@ -1563,7 +1542,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	struct sam_ssh_ec *ec;
 	struct workqueue_struct *event_queue_ack;
 	struct workqueue_struct *event_queue_evt;
-	u8 *write_buf;
 	u8 *read_buf;
 	u8 *eval_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
@@ -1580,12 +1558,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		return status;
 
 	// allocate buffers
-	write_buf = kzalloc(SSH_WRITE_BUF_LEN, GFP_KERNEL);
-	if (!write_buf) {
-		status = -ENOMEM;
-		goto err_write_buf;
-	}
-
 	read_buf = kzalloc(SSH_READ_BUF_LEN, GFP_KERNEL);
 	if (!read_buf) {
 		status = -ENOMEM;
@@ -1626,10 +1598,8 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_busy;
 	}
 
-	ec->serdev      = serdev;
-	ec->irq         = irq;
-	ec->writer.data = write_buf;
-	ec->writer.ptr  = write_buf;
+	ec->serdev = serdev;
+	ec->irq    = irq;
 
 	// initialize receiver
 	init_completion(&ec->receiver.signal);
@@ -1699,8 +1669,6 @@ err_ackq:
 err_eval_buf:
 	kfree(read_buf);
 err_read_buf:
-	kfree(write_buf);
-err_write_buf:
 	return status;
 }
 
@@ -1756,11 +1724,6 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	 */
 	destroy_workqueue(ec->events.queue_ack);
 	destroy_workqueue(ec->events.queue_evt);
-
-	// free writer
-	kfree(ec->writer.data);
-	ec->writer.data = NULL;
-	ec->writer.ptr  = NULL;
 
 	// free receiver
 	spin_lock_irqsave(&ec->receiver.lock, flags);
