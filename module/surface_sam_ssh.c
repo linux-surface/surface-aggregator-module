@@ -122,6 +122,11 @@ enum ssh_frame_type {
 	SSH_FRAME_TYPE_ERR	 = 0x04,
 };
 
+enum ssh_payload_type {
+	SSH_PLD_TYPE_CMD = 0x80,
+};
+
+
 enum ssh_ec_state {
 	SSH_EC_UNINITIALIZED,
 	SSH_EC_INITIALIZED,
@@ -1097,7 +1102,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	cmd_end = cmd_begin + ctrl->len;
 
 	// validate command-frame type
-	if (cmd->type != SSH_FRAME_TYPE_CMD) {
+	if (cmd->type != SSH_PLD_TYPE_CMD) {
 		dev_err(dev, SSH_RECV_TAG "expected command frame type but got 0x%02x\n", cmd->type);
 		return size;			// discard everything
 	}
