@@ -113,6 +113,8 @@ struct ssh_frame_ctrl {
 	u8 seq;
 } __packed;
 
+static_assert(sizeof(struct ssh_frame_ctrl) == 4);
+
 /**
  * struct ssh_frame_cmd - Command frame from payload of a command control frame.
  * @type:    The type of the payload/frame. See &enum ssh_payload_type.
@@ -135,6 +137,8 @@ struct ssh_frame_cmd {
 	__le16 rqid;
 	u8 cid;
 } __packed;
+
+static_assert(sizeof(struct ssh_frame_cmd) == 8);
 
 /**
  * enum ssh_frame_type - Frame types for SSH control frames.
