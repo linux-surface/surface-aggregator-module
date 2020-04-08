@@ -42,8 +42,10 @@
 #define SURFACE_SAM_SSH_EVENT_IMMEDIATE		((unsigned long) -1)
 
 
-#define SURFACE_SAM_PRIORITY_NORMAL		1
-#define SURFACE_SAM_PRIORITY_HIGH		2
+enum surface_sam_rqst_priority {
+	SURFACE_SAM_PRIORITY_NORMAL = 1,
+	SURFACE_SAM_PRIORITY_HIGH   = 2,
+};
 
 
 struct surface_sam_ssh_buf {
