@@ -711,7 +711,7 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
 
 /*
- * surface_sam_ssh_ec_resume - resumes the EC if it is in a suspended mode
+ * surface_sam_ssh_ec_resume - Resume the EC if it is in a suspended mode.
  * @ec: the EC to resume
  *
  * Moves the EC from a suspended state to a normal state. See the
@@ -762,7 +762,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 }
 
 /**
- * surface_sam_ssh_ec_suspend - puts the EC in a suspended mode
+ * surface_sam_ssh_ec_suspend - Put the EC in a suspended mode:
  * @ec: the EC to suspend
  *
  * Tells the EC to enter a suspended mode. In this mode, events are quiesced
