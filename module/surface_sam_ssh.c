@@ -708,6 +708,18 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
 
+/*
+ * surface_sam_ssh_ec_resume - resumes the EC if it is in a suspended mode
+ * @ec: the EC to resume
+ *
+ * Moves the EC from a suspended state to a normal state. See the
+ * `surface_sam_ssh_ec_suspend` function what the specific differences of
+ * these states are. Multiple repeated calls to this function seem to be
+ * handled fine by the EC, after the first call, the state will remain
+ * "normal".
+ *
+ * Must be called with the EC initialized and its lock held.
+ */
 static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
@@ -734,15 +746,34 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 	if (status)
 		return status;
 
+	/*
+	 * The purpose of the return value of this request is unknown. Based on
+	 * logging and experience, we expect it to be zero. No other value has
+	 * been observed so far.
+	 */
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev,
-			 "unexpected result while trying to resume EC: 0x%02x\n",
-			 buf[0]);
+		dev_warn(&ec->serdev->dev, "unexpected result while trying to"
+			 " resume EC: 0x%02x\n", buf[0]);
 	}
 
 	return 0;
 }
 
+/**
+ * surface_sam_ssh_ec_suspend - puts the EC in a suspended mode
+ * @ec: the EC to suspend
+ *
+ * Tells the EC to enter a suspended mode. In this mode, events are quiesced
+ * and the wake IRQ is armed (note that the wake IRQ does not fire if the EC
+ * has not been suspended via this request). On some devices, the keyboard
+ * backlight is turned off. Apart from this, the EC seems to continue to work
+ * as normal, meaning requests sent to it are acknowledged and seem to be
+ * correctly handled, including potential responses. Multiple repeated calls
+ * to this function seem to be handled fine by the EC, after the first call,
+ * the state will remain "suspended".
+ *
+ * Must be called with the EC initialized and its lock held.
+ */
 static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
@@ -769,10 +800,14 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 	if (status)
 		return status;
 
+	/*
+	 * The purpose of the return value of this request is unknown. Based on
+	 * logging and experience, we expect it to be zero. No other value has
+	 * been observed so far.
+	 */
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev,
-			 "unexpected result while trying to suspend EC: 0x%02x\n",
-			 buf[0]);
+		dev_warn(&ec->serdev->dev, "unexpected result while trying to"
+			 " suspend EC: 0x%02x\n", buf[0]);
 	}
 
 	return 0;
