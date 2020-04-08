@@ -115,8 +115,7 @@ struct ssh_frame_cmd {
 	u8 pri_out;
 	u8 pri_in;
 	u8 iid;
-	u8 rqid_lo;		// id for request/response matching (low byte)
-	u8 rqid_hi;		// id for request/response matching (high byte)
+	__le16 rqid;
 	u8 cid;
 } __packed;
 
@@ -502,19 +501,15 @@ static inline void ssh_write_cmd(struct ssh_writer *writer,
 				 struct sam_ssh_ec *ec)
 {
 	struct ssh_frame_cmd *cmd = (struct ssh_frame_cmd *)writer->ptr;
-	u8 *begin = writer->ptr;
-
 	u16 rqid = sam_rqid_to_rqst(ec->counter.rqid);
-	u8 rqid_lo = rqid & 0xFF;
-	u8 rqid_hi = rqid >> 8;
+	u8 *begin = writer->ptr;
 
 	cmd->type     = SSH_FRAME_TYPE_CMD;
 	cmd->tc       = rqst->tc;
 	cmd->pri_out  = rqst->pri;
 	cmd->pri_in   = 0x00;
 	cmd->iid      = rqst->iid;
-	cmd->rqid_lo  = rqid_lo;
-	cmd->rqid_hi  = rqid_hi;
+	cmd->rqid     = cpu_to_le16(rqid);
 	cmd->cid      = rqst->cid;
 
 	writer->ptr += sizeof(*cmd);
@@ -953,7 +948,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	refcount_set(&work->refcount, 1);
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
-	work->event.rqid = (cmd->rqid_hi << 8) | cmd->rqid_lo;
+	work->event.rqid = le16_to_cpu(cmd->rqid),
 	work->event.tc   = cmd->tc;
 	work->event.cid  = cmd->cid;
 	work->event.iid  = cmd->iid;
@@ -1118,7 +1113,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// check if we received an event notification
-	if (sam_rqid_is_event((cmd->rqid_hi << 8) | cmd->rqid_lo)) {
+	if (sam_rqid_is_event(le16_to_cpu(cmd->rqid))) {
 		ssh_handle_event(ec, buf);
 		return msg_len;			// handled message
 	}
@@ -1130,7 +1125,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// check if response is for our request
-	if (rcv->expect.rqid != (cmd->rqid_lo | (cmd->rqid_hi << 8))) {
+	if (rcv->expect.rqid != le16_to_cpu(cmd->rqid)) {
 		dev_dbg(dev, SSH_RECV_TAG "discarding message: command not a match\n");
 		return msg_len;			// discard message
 	}
