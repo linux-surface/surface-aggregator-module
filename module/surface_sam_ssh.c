@@ -83,19 +83,69 @@
 #define SAM_NUM_EVENT_TYPES		((1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1)
 
 /*
- * Sync:			aa 55
- * Terminate:			ff ff
- *
- * Request Message:		sync cmd-hdr crc(cmd-hdr) cmd-rqst-frame crc(cmd-rqst-frame)
- * Ack Message:			sync ack crc(ack) terminate
- * Retry Message:		sync retry crc(retry) terminate
- * Response Message:		sync cmd-hdr crc(cmd-hdr) cmd-resp-frame crc(cmd-resp-frame)
- *
- * Command Header:		80 LEN 00 SEQ
- * Ack:				40 00 00 SEQ
- * Retry:			04 00 00 00
  * Command Request Frame:	80 RTC 01 00 RIID RQID RCID PLD
  * Command Response Frame:	80 RTC 00 01 RIID RQID RCID PLD
+ */
+
+
+/*
+ * SSH protocol overview:
+ *
+ * All CRCs used in the following are two-byte crc_ccitt_false(0xffff, ...).
+ *
+ *
+ * -- Basic message/exchange structure: ----------------------------------------
+ *
+ * We define the following building blocks:
+ * - SYN: Synchronization bytes: [0xaa, 0x55].
+ * - TER: Termination bytes: [0xff, 0xff]
+ * - FRAME(<type>): Frame of type `<type>`. A frame consists of struct
+ *   ssh_frame, followed by a 2 byte CRC over the struct ssh_frame, not
+ *   including SYN.
+ *
+ * A message consists of SYN, followed by FRAME. TER is only used by the party
+ * ending the exchange, following the last message. The messages corresponding
+ * to an exchange are identified by having the same sequence ID (SEQ), stored
+ * inside the frame.
+ *
+ * Frames can have the following types:
+ * - DATA: This type of frame is followed by payload data. The payload length
+ *   is specified in the frame. The payload is followed again by a separate CRC
+ *   over this payload. The length field does neither contain the frame- nor
+ *   the payload-CRC. Currently, only command payloads are known. Receival of a
+ *   DATA frame has to be acknowledged by sending back an ACK-type frame with
+ *   the same sequence ID as the DATA frame. Failure to ACK a DATA frame will
+ *   cause the EC to re-send it (according to our observations up to three
+ *   times in total).
+ * - DATA_NOACK: Same as DATA, however, this frame does not have to be ACKed.
+ * . ACK: Acknowledges receival of the data frame with the same SEQ as this
+ *   frame. This frame-type does not have a payload. The `length` field must be
+ *   zero.
+ * - ERR: Indicates an error in the previous frame (usually DATA/DATA_NOACK),
+ *   e.g. an invalid CRC. This frame-type does not have a payload. The `length`
+ *   field must be zero. The sequence ID is fixed to zero (as it cannot be
+ *   reliably determined in case of communication failure).
+ *
+ * An example exchange might look like this:
+ *
+ *   tx: SYN FRAME(DATA) CRC PAYLOAD CRC
+ *   rx:                                 SYN FRAME(ACK) CRC TER
+ *
+ * or in case of an error:
+ *
+ *   tx: SYN FRAME(DATA) CRC PAYLOAD CRC
+ *   rx:                                 SYN FRAME(ERR) CRC TER
+ *
+ * upon which the sender should re-send the message. All frames in the
+ * respective exchanges have the same sequence ID. This is symmetric, i.e.
+ * switching rx and tx results again in a valid exchange. Currently, no longer
+ * exchanges are known.
+ *
+ *
+ * -- Disclaimer ---------------------------------------------------------------
+ *
+ * All of this has been reverse-engineered and may thus be erroneous and/or
+ * incomplete.
  */
 
 
