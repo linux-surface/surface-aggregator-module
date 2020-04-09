@@ -338,52 +338,44 @@ static inline void msgb_push_crc(struct msgbuf *msgb, const u8 *buf, size_t len)
 	msgb_push_u16(msgb, ssh_crc(buf, len));
 }
 
-static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
+static inline void msgb_push_frame(struct msgbuf *msgb, u8 type, u8 len, u8 seq)
 {
-	struct ssh_frame *ack = (struct ssh_frame *)msgb->ptr;
-	u8 *begin = msgb->ptr;
-
-	BUG_ON(msgb->ptr + sizeof(*ack) > msgb->end);
-
-	ack->type = SSH_FRAME_TYPE_ACK;
-	ack->len  = 0x00;
-	ack->pad  = 0x00;
-	ack->seq  = seq;
-
-	msgb->ptr += sizeof(*ack);
-
-	msgb_push_crc(msgb, begin, msgb->ptr - begin);
-}
-
-static inline void msgb_push_hdr(struct msgbuf *msgb,
-				 const struct surface_sam_ssh_rqst *rqst,
-				 u8 seq)
-{
-	struct ssh_frame *hdr = (struct ssh_frame *)msgb->ptr;
+	struct ssh_frame *frame = (struct ssh_frame *)msgb->ptr;
 	const u8 *const begin = msgb->ptr;
 
-	BUG_ON(msgb->ptr + sizeof(*hdr) > msgb->end);
+	BUG_ON(msgb->ptr + sizeof(*frame) > msgb->end);
 
-	hdr->type = SSH_FRAME_TYPE_CMD;
-	hdr->len  = sizeof(struct ssh_command) + rqst->cdl;
-	hdr->pad  = 0x00;
-	hdr->seq  = seq;
+	frame->type = type;
+	frame->len  = len;
+	frame->pad  = 0x00;
+	frame->seq  = seq;
 
-	msgb->ptr += sizeof(*hdr);
-
+	msgb->ptr += sizeof(*frame);
 	msgb_push_crc(msgb, begin, msgb->ptr - begin);
 }
 
-static inline void msgb_push_cmd(struct msgbuf *msgb,
+static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
+{
+	msgb_push_frame(msgb, SSH_FRAME_TYPE_ACK, 0x00, seq);
+}
+
+static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 				 const struct surface_sam_ssh_rqst *rqst,
 				 u16 rqid)
 {
-	struct ssh_command *cmd = (struct ssh_command *)msgb->ptr;
-	u8 *begin = msgb->ptr;
+	struct ssh_command *cmd;
+	const u8 *cmd_begin;
+	const u8 type = SSH_FRAME_TYPE_CMD;
 
+	// command frame + crc
+	msgb_push_frame(msgb, type, sizeof(*cmd) + rqst->cdl, seq);
+
+	// frame payload: command struct + payload
 	BUG_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
+	cmd_begin = msgb->ptr;
+	cmd = (struct ssh_command *)msgb->ptr;
 
-	cmd->type    = SSH_FRAME_TYPE_CMD;
+	cmd->type    = SSH_PLD_TYPE_CMD;
 	cmd->tc      = rqst->tc;
 	cmd->pri_out = rqst->pri;
 	cmd->pri_in  = 0x00;
@@ -393,8 +385,11 @@ static inline void msgb_push_cmd(struct msgbuf *msgb,
 
 	msgb->ptr += sizeof(*cmd);
 
+	// command payload
 	msgb_push_buf(msgb, rqst->pld, rqst->cdl);
-	msgb_push_crc(msgb, begin, msgb->ptr - begin);
+
+	// crc for command struct + payload
+	msgb_push_crc(msgb, cmd_begin, msgb->ptr - cmd_begin);
 }
 
 
@@ -655,8 +650,8 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	struct device *dev = &ec->serdev->dev;
 	struct ssh_fifo_packet packet = {};
 	struct msgbuf msgb;
-	int status;
-	int try;
+	u16 rqid = ssh_rqid_to_rqst(ec->counter.rqid);
+	int status, try;
 	unsigned int rem;
 
 	if (rqst->cdl > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD) {
@@ -667,8 +662,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	// write command in buffer, we may need it multiple times
 	msgb_new(&msgb, buf, ARRAY_SIZE(buf));
 	msgb_push_syn(&msgb);
-	msgb_push_hdr(&msgb, rqst, ec->counter.seq);
-	msgb_push_cmd(&msgb, rqst, ssh_rqid_to_rqst(ec->counter.rqid));
+	msgb_push_cmd(&msgb, ec->counter.seq, rqst, rqid);
 
 	ssh_receiver_restart(ec, rqst);
 
