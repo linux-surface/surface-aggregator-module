@@ -125,19 +125,11 @@ enum ssh_frame_type {
  * @type: The type of the frame. See &enum ssh_frame_type.
  * @len:  The length of the frame payload directly following the CRC for this
  *        frame. Does not include the final CRC for that payload.
- * @pad:  Seems to be unused and always zero. We assume this is padding.
  * @seq:  The sequence number for this message/exchange.
- *
- * Note: The ssh_frame.pad field could also be the high-byte of a u16 length
- * field. The ACPI interface, however, limits the data transfer to 255 bytes
- * and during inspection on Windows we have not observed any longer data
- * transfers. So we currently assume that this is padding or another unknown
- * or reserved field.
  */
 struct ssh_frame {
 	u8 type;
-	u8 len;
-	u8 pad;
+	__le16 len;
 	u8 seq;
 } __packed;
 
@@ -344,16 +336,15 @@ static inline void msgb_push_crc(struct msgbuf *msgb, const u8 *buf, size_t len)
 	msgb_push_u16(msgb, ssh_crc(buf, len));
 }
 
-static inline void msgb_push_frame(struct msgbuf *msgb, u8 type, u8 len, u8 seq)
+static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 {
 	struct ssh_frame *frame = (struct ssh_frame *)msgb->ptr;
 	const u8 *const begin = msgb->ptr;
 
 	BUG_ON(msgb->ptr + sizeof(*frame) > msgb->end);
 
-	frame->type = type;
-	frame->len  = len;
-	frame->pad  = 0x00;
+	frame->type = ty;
+	frame->len  = cpu_to_le16(len);
 	frame->seq  = seq;
 
 	msgb->ptr += sizeof(*frame);
@@ -975,7 +966,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	ctrl = (const struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
 	cmd  = (const struct ssh_command  *)(buf + SSH_FRAME_OFFS_CMD);
 
-	pld_len = ctrl->len - SSH_BYTELEN_CMDFRAME;
+	pld_len = le16_to_cpu(ctrl->len) - SSH_BYTELEN_CMDFRAME;
 
 	work = kzalloc(sizeof(struct ssh_event_work) + pld_len, GFP_ATOMIC);
 	if (!work)
@@ -1124,11 +1115,11 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// actual length check (ctrl->len contains command-frame but not crc)
-	msg_len = SSH_MSG_LEN_CMD_BASE + ctrl->len;
+	msg_len = SSH_MSG_LEN_CMD_BASE + le16_to_cpu(ctrl->len);
 	if (size < msg_len)
 		return 0;			// need more bytes
 
-	cmd_end = cmd_begin + ctrl->len;
+	cmd_end = cmd_begin + le16_to_cpu(ctrl->len);
 
 	// validate command-frame type
 	if (cmd->type != SSH_PLD_TYPE_CMD) {
