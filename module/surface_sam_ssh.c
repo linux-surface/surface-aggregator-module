@@ -296,7 +296,7 @@ struct msgbuf {
 	u8 *ptr;
 };
 
-static inline void msgb_new(struct msgbuf *msgb, u8 *buffer, size_t cap)
+static inline void msgb_init(struct msgbuf *msgb, u8 *buffer, size_t cap)
 {
 	msgb->buffer = buffer;
 	msgb->end = buffer + cap;
@@ -662,7 +662,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	}
 
 	// write command in buffer, we may need it multiple times
-	msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+	msgb_init(&msgb, buf, ARRAY_SIZE(buf));
 	msgb_push_syn(&msgb);
 	msgb_push_cmd(&msgb, ec->counter.seq, rqst, rqid);
 
@@ -900,7 +900,7 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 	dev = &ec->serdev->dev;
 
 	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
-		msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
 		msgb_push_syn(&msgb);
 		msgb_push_ack(&msgb, work->seq);
 		msgb_push_ter(&msgb);
