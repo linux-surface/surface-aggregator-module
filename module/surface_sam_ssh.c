@@ -277,12 +277,12 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 	return crc_ccitt_false(0xffff, buf, len);
 }
 
-static inline u16 sam_rqid_to_rqst(u16 rqid)
+static inline u16 ssh_rqid_to_rqst(u16 rqid)
 {
 	return rqid << SURFACE_SAM_SSH_RQID_EVENT_BITS;
 }
 
-static inline bool sam_rqid_is_event(u16 rqid)
+static inline bool ssh_rqid_is_event(u16 rqid)
 {
 	const u16 mask = (1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1;
 
@@ -469,7 +469,7 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 	int status;
 
 	// only allow RQIDs that lie within event spectrum
-	if (!sam_rqid_is_event(rqid))
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	status = surface_sam_ssh_rqst(&rqst, &result);
@@ -509,7 +509,7 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 	int status;
 
 	// only allow RQIDs that lie within event spectrum
-	if (!sam_rqid_is_event(rqid))
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	status = surface_sam_ssh_rqst(&rqst, &result);
@@ -537,7 +537,7 @@ int surface_sam_ssh_set_delayed_event_handler(
 	struct sam_ssh_ec *ec;
 	unsigned long flags;
 
-	if (!sam_rqid_is_event(rqid))
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	ec = surface_sam_ssh_acquire_init();
@@ -571,7 +571,7 @@ int surface_sam_ssh_remove_event_handler(u16 rqid)
 	struct sam_ssh_ec *ec;
 	unsigned long flags;
 
-	if (!sam_rqid_is_event(rqid))
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	ec = surface_sam_ssh_acquire_init();
@@ -631,7 +631,7 @@ static inline void ssh_receiver_restart(struct sam_ssh_ec *ec,
 	ec->receiver.state = SSH_RCV_CONTROL;
 	ec->receiver.expect.pld = rqst->snc;
 	ec->receiver.expect.seq = ec->counter.seq;
-	ec->receiver.expect.rqid = sam_rqid_to_rqst(ec->counter.rqid);
+	ec->receiver.expect.rqid = ssh_rqid_to_rqst(ec->counter.rqid);
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
@@ -668,7 +668,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	msgb_new(&msgb, buf, ARRAY_SIZE(buf));
 	msgb_push_syn(&msgb);
 	msgb_push_hdr(&msgb, rqst, ec->counter.seq);
-	msgb_push_cmd(&msgb, rqst, sam_rqid_to_rqst(ec->counter.rqid));
+	msgb_push_cmd(&msgb, rqst, ssh_rqid_to_rqst(ec->counter.rqid));
 
 	ssh_receiver_restart(ec, rqst);
 
@@ -1149,7 +1149,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// check if we received an event notification
-	if (sam_rqid_is_event(le16_to_cpu(cmd->rqid))) {
+	if (ssh_rqid_is_event(le16_to_cpu(cmd->rqid))) {
 		ssh_handle_event(ec, buf);
 		return msg_len;			// handled message
 	}
