@@ -101,53 +101,10 @@
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
 
 /**
- * struct ssh_frame_ctrl - SSH control frame.
- * @type: The type of the frame. See &enum ssh_frame_type.
- * @len:  The length of the frame payload directly following the CRC for this
- *        frame. Does not include the final CRC for that payload.
- * @pad:  Seems to be unused and always zero. We assume this is padding.
- * @seq:  The sequence number for this message/exchange.
- */
-struct ssh_frame_ctrl {
-	u8 type;
-	u8 len;
-	u8 pad;
-	u8 seq;
-} __packed;
-
-static_assert(sizeof(struct ssh_frame_ctrl) == 4);
-
-/**
- * struct ssh_frame_cmd - Command frame from payload of a command control frame.
- * @type:    The type of the payload/frame. See &enum ssh_payload_type.
- * @tc:      Command target category.
- * @pri_out: Output priority. Should be zero if this an incoming (EC to host)
- *           message.
- * @pri_in:  Input priority. Should be zero if this is an outgoing (hos to EC)
- *           message.
- * @iid:     Instance ID.
- * @rqid:    Request ID. Used to match requests with responses and differentiate
- *           between responses and events.
- * @cid:     Command ID.
- */
-struct ssh_frame_cmd {
-	u8 type;
-	u8 tc;
-	u8 pri_out;
-	u8 pri_in;
-	u8 iid;
-	__le16 rqid;
-	u8 cid;
-} __packed;
-
-static_assert(sizeof(struct ssh_frame_cmd) == 8);
-
-/**
- * enum ssh_frame_type - Frame types for SSH control frames.
- * @SSH_FRAME_TYPE_CMD: Indicates a command or event message. If this is the
- *                      type of the control frame of a message, the payload of
- *                      the control must be present and a command type payload.
- * 			Command payloads in general have type &SSH_PLD_TYPE_CMD.
+ * enum ssh_frame_type - Frame types for SSH frames.
+ * @SSH_FRAME_TYPE_CMD: Indicates a command or event message. A frame of this
+ *                      type must be followed by a command-type payload. Command
+ *                      payloads in general have type &SSH_PLD_TYPE_CMD.
  * @SSH_FRAME_TYPE_CMD_NOACK: Same as SSH_FRAME_TYPE_CMD, but the command
  *                      or event does not have to be ACKed.
  * @SSH_FRAME_TYPE_ACK: Indicates an ACK message.
@@ -164,13 +121,56 @@ enum ssh_frame_type {
 };
 
 /**
- * enum ssh_payload_type - Type indicator for the SSH payload frame.
- * @SSH_PLD_TYPE_CMD: The payload is a command frame with optional command
+ * struct ssh_frame - SSH communication frame.
+ * @type: The type of the frame. See &enum ssh_frame_type.
+ * @len:  The length of the frame payload directly following the CRC for this
+ *        frame. Does not include the final CRC for that payload.
+ * @pad:  Seems to be unused and always zero. We assume this is padding.
+ * @seq:  The sequence number for this message/exchange.
+ */
+struct ssh_frame {
+	u8 type;
+	u8 len;
+	u8 pad;
+	u8 seq;
+} __packed;
+
+static_assert(sizeof(struct ssh_frame) == 4);
+
+/**
+ * enum ssh_payload_type - Type indicator for the SSH payload.
+ * @SSH_PLD_TYPE_CMD: The payload is a command structure with optional command
  *                    payload.
  */
 enum ssh_payload_type {
 	SSH_PLD_TYPE_CMD = 0x80,
 };
+
+/**
+ * struct ssh_command - Payload of a command-type frame.
+ * @type:    The type of the payload. See &enum ssh_payload_type. Should be
+ *           SSH_PLD_TYPE_CMD for this struct.
+ * @tc:      Command target category.
+ * @pri_out: Output priority. Should be zero if this an incoming (EC to host)
+ *           message.
+ * @pri_in:  Input priority. Should be zero if this is an outgoing (hos to EC)
+ *           message.
+ * @iid:     Instance ID.
+ * @rqid:    Request ID. Used to match requests with responses and differentiate
+ *           between responses and events.
+ * @cid:     Command ID.
+ */
+struct ssh_command {
+	u8 type;
+	u8 tc;
+	u8 pri_out;
+	u8 pri_in;
+	u8 iid;
+	__le16 rqid;
+	u8 cid;
+} __packed;
+
+static_assert(sizeof(struct ssh_command) == 8);
 
 
 /* -- TODO ------------------------------------------------------------------ */
@@ -340,7 +340,7 @@ static inline void msgb_push_crc(struct msgbuf *msgb, const u8 *buf, size_t len)
 
 static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
 {
-	struct ssh_frame_ctrl *ack = (struct ssh_frame_ctrl *)msgb->ptr;
+	struct ssh_frame *ack = (struct ssh_frame *)msgb->ptr;
 	u8 *begin = msgb->ptr;
 
 	BUG_ON(msgb->ptr + sizeof(*ack) > msgb->end);
@@ -359,13 +359,13 @@ static inline void msgb_push_hdr(struct msgbuf *msgb,
 				 const struct surface_sam_ssh_rqst *rqst,
 				 u8 seq)
 {
-	struct ssh_frame_ctrl *hdr = (struct ssh_frame_ctrl *)msgb->ptr;
+	struct ssh_frame *hdr = (struct ssh_frame *)msgb->ptr;
 	const u8 *const begin = msgb->ptr;
 
 	BUG_ON(msgb->ptr + sizeof(*hdr) > msgb->end);
 
 	hdr->type = SSH_FRAME_TYPE_CMD;
-	hdr->len  = sizeof(struct ssh_frame_cmd) + rqst->cdl;
+	hdr->len  = sizeof(struct ssh_command) + rqst->cdl;
 	hdr->pad  = 0x00;
 	hdr->seq  = seq;
 
@@ -378,7 +378,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb,
 				 const struct surface_sam_ssh_rqst *rqst,
 				 u16 rqid)
 {
-	struct ssh_frame_cmd *cmd = (struct ssh_frame_cmd *)msgb->ptr;
+	struct ssh_command *cmd = (struct ssh_command *)msgb->ptr;
 	u8 *begin = msgb->ptr;
 
 	BUG_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
@@ -962,8 +962,8 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 
 static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 {
-	const struct ssh_frame_ctrl *ctrl;
-	const struct ssh_frame_cmd *cmd;
+	const struct ssh_frame *ctrl;
+	const struct ssh_command *cmd;
 	struct ssh_event_work *work;
 	unsigned long flags;
 	u16 pld_len;
@@ -972,8 +972,8 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	void *handler_data;
 	unsigned long delay;
 
-	ctrl = (const struct ssh_frame_ctrl *)(buf + SSH_FRAME_OFFS_CTRL);
-	cmd  = (const struct ssh_frame_cmd  *)(buf + SSH_FRAME_OFFS_CMD);
+	ctrl = (const struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
+	cmd  = (const struct ssh_command  *)(buf + SSH_FRAME_OFFS_CMD);
 
 	pld_len = ctrl->len - SSH_BYTELEN_CMDFRAME;
 
@@ -1025,13 +1025,13 @@ static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t siz
 {
 	struct device *dev = &ec->serdev->dev;
 	struct ssh_receiver *rcv = &ec->receiver;
-	const struct ssh_frame_ctrl *ctrl;
+	const struct ssh_frame *ctrl;
 	struct ssh_fifo_packet packet;
 
 	const u8 *ctrl_begin = buf + SSH_FRAME_OFFS_CTRL;
 	const u8 *ctrl_end   = buf + SSH_FRAME_OFFS_CTRL_CRC;
 
-	ctrl = (const struct ssh_frame_ctrl *)(ctrl_begin);
+	ctrl = (const struct ssh_frame *)(ctrl_begin);
 
 	// actual length check
 	if (size < SSH_MSG_LEN_CTRL)
@@ -1094,8 +1094,8 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 {
 	struct device *dev = &ec->serdev->dev;
 	struct ssh_receiver *rcv = &ec->receiver;
-	const struct ssh_frame_ctrl *ctrl;
-	const struct ssh_frame_cmd *cmd;
+	const struct ssh_frame *ctrl;
+	const struct ssh_command *cmd;
 	struct ssh_fifo_packet packet;
 
 	const u8 *ctrl_begin     = buf + SSH_FRAME_OFFS_CTRL;
@@ -1106,8 +1106,8 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 
 	size_t msg_len;
 
-	ctrl = (const struct ssh_frame_ctrl *)(ctrl_begin);
-	cmd  = (const struct ssh_frame_cmd  *)(cmd_begin);
+	ctrl = (const struct ssh_frame *)(ctrl_begin);
+	cmd  = (const struct ssh_command  *)(cmd_begin);
 
 	// we need at least a full control frame
 	if (size < (SSH_BYTELEN_SYNC + SSH_BYTELEN_CTRL + SSH_BYTELEN_CRC))
@@ -1194,7 +1194,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 {
 	struct device *dev = &ec->serdev->dev;
-	struct ssh_frame_ctrl *ctrl;
+	struct ssh_frame *ctrl;
 
 	// we need at least a control frame to check what to do
 	if (size < (SSH_BYTELEN_SYNC + SSH_BYTELEN_CTRL))
@@ -1207,7 +1207,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 	}
 
 	// handle individual message types separately
-	ctrl = (struct ssh_frame_ctrl *)(buf + SSH_FRAME_OFFS_CTRL);
+	ctrl = (struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
 
 	switch (ctrl->type) {
 	case SSH_FRAME_TYPE_ACK:
