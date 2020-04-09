@@ -303,6 +303,11 @@ static inline void msgb_new(struct msgbuf *msgb, u8 *buffer, size_t cap)
 	msgb->ptr = buffer;
 }
 
+static inline void msgb_reset(struct msgbuf *msgb)
+{
+	msgb->ptr = msgb->buffer;
+}
+
 static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 {
 	return msgb->ptr - msgb->buffer;
@@ -712,7 +717,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 		// send ACK
 		if (packet.type == SSH_FRAME_TYPE_CMD) {
-			msgb_new(&msgb, buf, ARRAY_SIZE(buf));
+			msgb_reset(&msgb);
 			msgb_push_syn(&msgb);
 			msgb_push_ack(&msgb, packet.seq);
 			msgb_push_ter(&msgb);
