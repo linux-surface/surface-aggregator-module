@@ -127,6 +127,12 @@ enum ssh_frame_type {
  *        frame. Does not include the final CRC for that payload.
  * @pad:  Seems to be unused and always zero. We assume this is padding.
  * @seq:  The sequence number for this message/exchange.
+ *
+ * Note: The ssh_frame.pad field could also be the high-byte of a u16 length
+ * field. The ACPI interface, however, limits the data transfer to 255 bytes
+ * and during inspection on Windows we have not observed any longer data
+ * transfers. So we currently assume that this is padding or another unknown
+ * or reserved field.
  */
 struct ssh_frame {
 	u8 type;
