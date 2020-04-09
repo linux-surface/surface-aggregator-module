@@ -97,6 +97,9 @@
  * Command Response Frame:	80 RTC 00 01 RIID RQID RCID PLD
  */
 
+
+/* -- Data structures for SAM-over-SSH communication. ----------------------- */
+
 /**
  * struct ssh_frame_ctrl - SSH control frame.
  * @type: The type of the frame. See &enum ssh_frame_type.
@@ -169,6 +172,8 @@ enum ssh_payload_type {
 	SSH_PLD_TYPE_CMD = 0x80,
 };
 
+
+/* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
 	SSH_EC_UNINITIALIZED,
