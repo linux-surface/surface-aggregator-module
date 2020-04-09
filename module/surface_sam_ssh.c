@@ -417,7 +417,7 @@ static inline struct sam_ssh_ec *surface_sam_ssh_acquire_init(void)
 {
 	struct sam_ssh_ec *ec = surface_sam_ssh_acquire();
 
-	if (ec->state == SSH_EC_UNINITIALIZED) {
+	if (smp_load_acquire(&ec->state) == SSH_EC_UNINITIALIZED) {
 		surface_sam_ssh_release(ec);
 		return NULL;
 	}
@@ -748,7 +748,7 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 		return -ENXIO;
 	}
 
-	if (ec->state == SSH_EC_SUSPENDED) {
+	if (smp_load_acquire(&ec->state) == SSH_EC_SUSPENDED) {
 		dev_warn(&ec->serdev->dev, SSH_RQST_TAG "embedded controller is suspended\n");
 
 		surface_sam_ssh_release(ec);
@@ -1491,7 +1491,7 @@ static int surface_sam_ssh_suspend(struct device *dev)
 			ec->irq_wakeup_enabled = false;
 		}
 
-		ec->state = SSH_EC_SUSPENDED;
+		smp_store_release(&ec->state, SSH_EC_SUSPENDED);
 		surface_sam_ssh_release(ec);
 	}
 
@@ -1507,7 +1507,7 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
-		ec->state = SSH_EC_INITIALIZED;
+		smp_store_release(&ec->state, SSH_EC_INITIALIZED);
 
 		if (ec->irq_wakeup_enabled) {
 			status = disable_irq_wake(ec->irq);
@@ -1596,7 +1596,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	// set up EC
 	ec = surface_sam_ssh_acquire();
-	if (ec->state != SSH_EC_UNINITIALIZED) {
+	if (smp_load_acquire(&ec->state) != SSH_EC_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
 		surface_sam_ssh_release(ec);
 
@@ -1618,12 +1618,9 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	ec->events.queue_ack = event_queue_ack;
 	ec->events.queue_evt = event_queue_evt;
 
-	ec->state = SSH_EC_INITIALIZED;
-
 	serdev_device_set_drvdata(serdev, ec);
 
-	/* ensure everything is properly set-up before we open the device */
-	smp_mb();
+	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
 
 	serdev_device_set_client_ops(serdev, &ssh_device_ops);
 	status = serdev_device_open(serdev);
@@ -1661,7 +1658,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 err_devinit:
 	serdev_device_close(serdev);
 err_open:
-	ec->state = SSH_EC_UNINITIALIZED;
+	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 	serdev_device_set_drvdata(serdev, NULL);
 	surface_sam_ssh_release(ec);
 err_busy:
@@ -1708,11 +1705,8 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	// set device to deinitialized state
-	ec->state  = SSH_EC_UNINITIALIZED;
+	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 	ec->serdev = NULL;
-
-	/* ensure state and serdev get set before continuing */
-	smp_mb();
 
 	/*
 	 * Flush any event that has not been processed yet to ensure we're not going to
