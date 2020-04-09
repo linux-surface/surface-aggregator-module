@@ -37,6 +37,7 @@
 #define SSH_BYTELEN_CTRL			4	// command-header, ACK, or RETRY
 #define SSH_BYTELEN_CMDFRAME			8	// without payload
 
+// TODO: this doesn't hold any more
 #define SSH_MAX_WRITE (				\
 	  SSH_BYTELEN_SYNC			\
 	+ SSH_BYTELEN_CTRL			\
@@ -301,6 +302,26 @@ static inline void msgb_init(struct msgbuf *msgb, u8 *buffer, size_t cap)
 	msgb->buffer = buffer;
 	msgb->end = buffer + cap;
 	msgb->ptr = buffer;
+}
+
+static inline int msgb_alloc(struct msgbuf *msgb, size_t cap, gfp_t flags)
+{
+	u8 *buf;
+
+	buf = kzalloc(cap, flags);
+	if (!buf)
+		return -ENOMEM;
+
+	msgb_init(msgb, buf, cap);
+	return 0;
+}
+
+static inline void msgb_free(struct msgbuf *msgb)
+{
+	kfree(msgb->buffer);
+	msgb->buffer = NULL;
+	msgb->end = NULL;
+	msgb->ptr = NULL;
 }
 
 static inline void msgb_reset(struct msgbuf *msgb)
@@ -648,7 +669,6 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 					 const struct surface_sam_ssh_rqst *rqst,
 					 struct surface_sam_ssh_buf *result)
 {
-	u8 buf[SSH_MAX_WRITE];
 	struct device *dev = &ec->serdev->dev;
 	struct ssh_fifo_packet packet = {};
 	struct msgbuf msgb;
@@ -656,13 +676,18 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	int status, try;
 	unsigned int rem;
 
+	// TODO: assumption doesn't hold any more, allow larger payloads
 	if (rqst->cdl > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD) {
 		dev_err(dev, SSH_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
+	// TODO: calculate actual message length
+	status = msgb_alloc(&msgb, SSH_MAX_WRITE, GFP_KERNEL);
+	if (status)
+		return status;
+
 	// write command in buffer, we may need it multiple times
-	msgb_init(&msgb, buf, ARRAY_SIZE(buf));
 	msgb_push_syn(&msgb);
 	msgb_push_cmd(&msgb, ec->counter.seq, rqst, rqid);
 
@@ -730,6 +755,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 out:
 	ssh_receiver_discard(ec);
+	msgb_free(&msgb);
 	return status;
 }
 
