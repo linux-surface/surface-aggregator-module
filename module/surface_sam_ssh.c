@@ -94,7 +94,7 @@
  * All CRCs used in the following are two-byte crc_ccitt_false(0xffff, ...).
  *
  *
- * -- Basic message/exchange structure: ----------------------------------------
+ * -- Basic message/exchange structure -----------------------------------------
  *
  * We define the following building blocks:
  * - SYN: Synchronization bytes: [0xaa, 0x55].
@@ -140,6 +140,74 @@
  * respective exchanges have the same sequence ID. This is symmetric, i.e.
  * switching rx and tx results again in a valid exchange. Currently, no longer
  * exchanges are known.
+ *
+ *
+ * -- Command payload ----------------------------------------------------------
+ *
+ * Currently the only known payload type of DATA frames. The type is always
+ * SSH_PLD_TYPE_CMD.
+ *
+ * The command payload consists of struct ssh_command optionally followed by
+ * payload data associated with the command. The length of this optional
+ * command data is derived from the frame payload length given in the
+ * corresponding frame, i.e. it is `frame.len - sizeof(struct ssh_command)`.
+ * The command payload in general does not contain any failure detection
+ * mechanism (e.g. CRCs), this is solely done on the frame level.
+ *
+ * Command payloads are used by the host to send commands and requests to the
+ * EC as well as by the EC to send responses and events back to the host. We
+ * differentiate between requests (sent by the host), responses (sent by the
+ * EC in response to a request), and events (sent by the EC without a
+ * preceeding request).
+ *
+ * Commands and events are uniquely identified by their target category (TC)
+ * and command ID (CID). The target category specifies a general category for
+ * the command (e.g. system in general, vs. battery and ac, vs. temperature,
+ * and so on), while the command ID specifies the command inside that
+ * category. Only the combination of TC+CID is unique. Additionally, commands
+ * have an instance ID (IID), which is used to differentiate between different
+ * sub-devices. For example TC=3 CID=1 is a request to get the temperature on
+ * a thermal sensor, where IID specifies the respective sensor. If the
+ * instance ID is not used, it should be set to zero. If instance IDs are
+ * used, they, in general, start with a value of one, whereas zero may be used
+ * for instance independent queries, if applicable. A response to a request
+ * should have the same target category, command ID, and instance ID as the
+ * corresponding request.
+ *
+ * Responses are matched to their corresponding request via the request ID
+ * (rqid) field. This is a 16 bit counter similar to the sequence ID on the
+ * frames. Note that the sequence ID of the frames for a request-response pair
+ * does not match. Only the request ID has to match. Frame-protocol wise these
+ * are two separate exchanges, and may even be separated, e.g. by an event
+ * being sent after the request but before the response.
+ *
+ * Events are identified by unique and reserved request IDs. These IDs should
+ * not be used by the host when sending a new request. They are used on the
+ * host to, first, detect events and, second, match them with a registered
+ * event handler. Request IDs for events are chosen by the host and directed
+ * to the EC when setting up and enabling an event source (via the
+ * enable-event-source request). The EC then uses the specified request ID for
+ * events sent from the respective source. Note that an event should still be
+ * identified by its target category, command ID, and, if applicable, instance
+ * ID, as a single event source can send multiple different event types. In
+ * general, however, a single target category should map to a single reserved
+ * event request ID.
+ *
+ * Furthermore, requests, responses, and events have an associated priority
+ * (PRI). This priority is split into output (host to EC) and input (EC to
+ * host) fields, with the respecting other field (e.g. output field on
+ * incoming messages) set to zero. Two priorities are known: Normal priority
+ * (0x01) and high priority (0x02). In general, the response to a request
+ * should have the same priority value, however, the field (output vs. input)
+ * should be used in accordance to the direction in which the response is sent
+ * (i.e. on the input field, as responses are generally sent from the EC to
+ * the host).
+ *
+ * Note that even though requests and events should be uniquely identifiable
+ * by target category and command ID alone, the EC may require specific
+ * priority and instance ID values to accept a command. A command that is
+ * accepted at normal priority, for example, may not be accepted at high
+ * priority and vice versa.
  *
  *
  * -- Disclaimer ---------------------------------------------------------------
