@@ -354,7 +354,7 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 	BUG_ON(msgb->ptr + sizeof(*frame) > msgb->end);
 
 	frame->type = ty;
-	frame->len  = cpu_to_le16(len);
+	put_unaligned_le16(len, &frame->len);
 	frame->seq  = seq;
 
 	msgb->ptr += sizeof(*frame);
@@ -387,7 +387,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 	cmd->pri_out = rqst->pri;
 	cmd->pri_in  = 0x00;
 	cmd->iid     = rqst->iid;
-	cmd->rqid    = cpu_to_le16(rqid);
+	put_unaligned_le16(rqid, &cmd->rqid);
 	cmd->cid     = rqst->cid;
 
 	msgb->ptr += sizeof(*cmd);
@@ -982,7 +982,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	ctrl = (const struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
 	cmd  = (const struct ssh_command  *)(buf + SSH_FRAME_OFFS_CMD);
 
-	pld_len = le16_to_cpu(ctrl->len) - SSH_BYTELEN_CMDFRAME;
+	pld_len = get_unaligned_le16(&ctrl->len) - SSH_BYTELEN_CMDFRAME;
 
 	work = kzalloc(sizeof(struct ssh_event_work) + pld_len, GFP_ATOMIC);
 	if (!work)
@@ -991,7 +991,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	refcount_set(&work->refcount, 1);
 	work->ec         = ec;
 	work->seq        = ctrl->seq;
-	work->event.rqid = le16_to_cpu(cmd->rqid),
+	work->event.rqid = get_unaligned_le16(&cmd->rqid),
 	work->event.tc   = cmd->tc;
 	work->event.cid  = cmd->cid;
 	work->event.iid  = cmd->iid;
@@ -1131,11 +1131,11 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// actual length check (ctrl->len contains command-frame but not crc)
-	msg_len = SSH_MSG_LEN_CMD_BASE + le16_to_cpu(ctrl->len);
+	msg_len = SSH_MSG_LEN_CMD_BASE + get_unaligned_le16(&ctrl->len);
 	if (size < msg_len)
 		return 0;			// need more bytes
 
-	cmd_end = cmd_begin + le16_to_cpu(ctrl->len);
+	cmd_end = cmd_begin + get_unaligned_le16(&ctrl->len);
 
 	// validate command-frame type
 	if (cmd->type != SSH_PLD_TYPE_CMD) {
@@ -1156,7 +1156,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// check if we received an event notification
-	if (ssh_rqid_is_event(le16_to_cpu(cmd->rqid))) {
+	if (ssh_rqid_is_event(get_unaligned_le16(&cmd->rqid))) {
 		ssh_handle_event(ec, buf);
 		return msg_len;			// handled message
 	}
@@ -1168,7 +1168,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 	}
 
 	// check if response is for our request
-	if (rcv->expect.rqid != le16_to_cpu(cmd->rqid)) {
+	if (rcv->expect.rqid != get_unaligned_le16(&cmd->rqid)) {
 		dev_dbg(dev, SSH_RECV_TAG "discarding message: command not a match\n");
 		return msg_len;			// discard message
 	}
