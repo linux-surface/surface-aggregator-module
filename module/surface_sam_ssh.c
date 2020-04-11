@@ -451,6 +451,7 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
+	int status;
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
@@ -468,8 +469,6 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 		result.data = buf,
 	};
 
-	int status;
-
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -478,8 +477,8 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 
 	if (buf[0] != 0x00) {
 		pr_warn(SSH_RQST_TAG_FULL
-			"unexpected result while enabling event source: 0x%02x\n",
-			buf[0]);
+			"unexpected result while enabling event source: "
+			"0x%02x\n", buf[0]);
 	}
 
 	return status;
@@ -491,6 +490,7 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 {
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
+	int status;
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
@@ -508,8 +508,6 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 		result.data = buf,
 	};
 
-	int status;
-
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -518,8 +516,8 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 
 	if (buf[0] != 0x00) {
 		pr_warn(SSH_RQST_TAG_FULL
-			"unexpected result while disabling event source: 0x%02x\n",
-			buf[0]);
+			"unexpected result while disabling event source: "
+			"0x%02x\n", buf[0]);
 	}
 
 	return status;
