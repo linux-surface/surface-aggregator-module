@@ -785,6 +785,7 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
+	int status;
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
@@ -801,8 +802,6 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 		result.len = 0,
 		result.data = buf,
 	};
-
-	int status;
 
 	ssh_dbg(ec, "pm: resuming system aggregator module\n");
 	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
@@ -840,6 +839,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 {
 	u8 buf[1] = { 0x00 };
+	int status;
 
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
@@ -856,8 +856,6 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 		result.len = 0,
 		result.data = buf,
 	};
-
-	int status;
 
 	ssh_dbg(ec, "pm: suspending system aggregator module\n");
 	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
