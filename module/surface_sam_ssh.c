@@ -335,11 +335,6 @@ static inline void msgb_push_syn(struct msgbuf *msgb)
 	msgb_push_u16(msgb, 0x55aa);
 }
 
-static inline void msgb_push_ter(struct msgbuf *msgb)
-{
-	msgb_push_u16(msgb, 0xffff);
-}
-
 static inline void msgb_push_buf(struct msgbuf *msgb, const u8 *buf, size_t len)
 {
 	msgb->ptr = memcpy(msgb->ptr, buf, len) + len;
@@ -367,7 +362,11 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 
 static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
 {
+	// ACK-type frame + CRC
 	msgb_push_frame(msgb, SSH_FRAME_TYPE_ACK, 0x00, seq);
+
+	// payload CRC (ACK-type frames do not have a payload)
+	msgb_push_crc(msgb, msgb->ptr, 0);
 }
 
 static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
@@ -730,7 +729,6 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 			msgb_reset(&msgb);
 			msgb_push_syn(&msgb);
 			msgb_push_ack(&msgb, packet.seq);
-			msgb_push_ter(&msgb);
 
 			status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 			if (status)
@@ -914,7 +912,6 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
 		msgb_push_syn(&msgb);
 		msgb_push_ack(&msgb, work->seq);
-		msgb_push_ter(&msgb);
 
 		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 		if (status)
