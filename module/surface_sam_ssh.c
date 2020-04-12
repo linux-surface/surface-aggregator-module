@@ -155,6 +155,11 @@ struct ssh_command {
 
 static_assert(sizeof(struct ssh_command) == 8);
 
+/**
+ * Syncrhonization (SYN) bytes.
+ */
+#define SSH_MSG_SYN		((u16)0x55aa)
+
 
 /* -- TODO ------------------------------------------------------------------ */
 
@@ -332,7 +337,7 @@ static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
 
 static inline void msgb_push_syn(struct msgbuf *msgb)
 {
-	msgb_push_u16(msgb, 0x55aa);
+	msgb_push_u16(msgb, SSH_MSG_SYN);
 }
 
 static inline void msgb_push_buf(struct msgbuf *msgb, const u8 *buf, size_t len)
