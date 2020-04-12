@@ -255,6 +255,10 @@ static struct sam_ssh_ec ssh_ec = {
 
 /* -- Common/utility functions. --------------------------------------------- */
 
+#define ssh_dbg(ec, fmt, ...)  dev_dbg(&ec->serdev->dev, fmt, ##__VA_ARGS__)
+#define ssh_warn(ec, fmt, ...) dev_warn(&ec->serdev->dev, fmt, ##__VA_ARGS__)
+#define ssh_err(ec, fmt, ...)  dev_err(&ec->serdev->dev, fmt, ##__VA_ARGS__)
+
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
 	return crc_ccitt_false(0xffff, buf, len);
@@ -606,8 +610,7 @@ static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb,
 	size_t len = msgb_bytes_used(msgb);
 	int status;
 
-	// TODO: configurable logging interface
-	dev_dbg(&ec->serdev->dev, "sending message\n");
+	ssh_dbg(ec, "tx: sending data (length: %zu)\n", len);
 	print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, msgb->buffer,
 			     len, false);
 
@@ -651,7 +654,6 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 					 const struct surface_sam_ssh_rqst *rqst,
 					 struct surface_sam_ssh_buf *result)
 {
-	struct device *dev = &ec->serdev->dev;
 	struct ssh_fifo_packet packet = {};
 	struct msgbuf msgb;
 	u16 rqid = ssh_rqid_to_rqst(ec->counter.rqid);
@@ -660,7 +662,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 	// TODO: assumption doesn't hold any more, allow larger payloads
 	if (rqst->cdl > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD) {
-		dev_err(dev, SSH_RQST_TAG "request payload too large\n");
+		ssh_err(ec, SSH_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
@@ -693,7 +695,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 
 	// check if we ran out of tries?
 	if (try >= SSH_NUM_RETRY) {
-		dev_err(dev, SSH_RQST_TAG "communication failed %d times, giving up\n", try);
+		ssh_err(ec, SSH_RQST_TAG "communication failed %d times, giving up\n", try);
 		status = -EIO;
 		goto out;
 	}
@@ -717,7 +719,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 			(void) !kfifo_out(&ec->receiver.fifo, result->data, packet.len);
 			result->len = packet.len;
 		} else {
-			dev_err(dev, SSH_RQST_TAG "communication timed out\n");
+			ssh_err(ec, SSH_RQST_TAG "communication timed out\n");
 			status = -EIO;
 			goto out;
 		}
@@ -754,7 +756,7 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 	}
 
 	if (smp_load_acquire(&ec->state) == SSH_EC_SUSPENDED) {
-		dev_warn(&ec->serdev->dev, SSH_RQST_TAG "embedded controller is suspended\n");
+		ssh_warn(ec, SSH_RQST_TAG "embedded controller is suspended\n");
 
 		surface_sam_ssh_release(ec);
 		return -EPERM;
@@ -802,6 +804,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 
 	int status;
 
+	ssh_dbg(ec, "pm: resuming system aggregator module\n");
 	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
 	if (status)
 		return status;
@@ -812,8 +815,8 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 	 * been observed so far.
 	 */
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev, "unexpected result while trying to"
-			 " resume EC: 0x%02x\n", buf[0]);
+		ssh_warn(ec, "unexpected result while trying to resume EC: "
+			 "0x%02x\n", buf[0]);
 	}
 
 	return 0;
@@ -856,6 +859,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 
 	int status;
 
+	ssh_dbg(ec, "pm: suspending system aggregator module\n");
 	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
 	if (status)
 		return status;
@@ -866,8 +870,8 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 	 * been observed so far.
 	 */
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev, "unexpected result while trying to"
-			 " suspend EC: 0x%02x\n", buf[0]);
+		ssh_warn(ec, "unexpected result while trying to suspend EC: "
+			 "0x%02x\n", buf[0]);
 	}
 
 	return 0;
@@ -916,7 +920,7 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 
 		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 		if (status)
-			dev_err(dev, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
+			ssh_err(ec, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
 	}
 
 	if (refcount_dec_and_test(&work->refcount))
@@ -956,10 +960,10 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 	if (handler)
 		status = handler(event, handler_data);
 	else
-		dev_warn(dev, SSH_EVENT_TAG "unhandled event (rqid: %04x)\n", event->rqid);
+		ssh_warn(ec, SSH_EVENT_TAG "unhandled event (rqid: %04x)\n", event->rqid);
 
 	if (status)
-		dev_err(dev, SSH_EVENT_TAG "error handling event: %d\n", status);
+		ssh_err(ec, SSH_EVENT_TAG "error handling event: %d\n", status);
 
 	if (refcount_dec_and_test(&work->refcount))
 		kfree(work);
@@ -1028,7 +1032,6 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 
 static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 {
-	struct device *dev = &ec->serdev->dev;
 	struct ssh_receiver *rcv = &ec->receiver;
 	const struct ssh_frame *ctrl;
 	struct ssh_fifo_packet packet;
@@ -1044,30 +1047,30 @@ static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t siz
 
 	// validate TERM
 	if (!ssh_is_valid_ter(buf + SSH_FRAME_OFFS_TERM)) {
-		dev_err(dev, SSH_RECV_TAG "invalid end of message\n");
+		ssh_err(ec, SSH_RECV_TAG "invalid end of message\n");
 		return size;			// discard everything
 	}
 
 	// validate CRC
 	if (!ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		dev_err(dev, SSH_RECV_TAG "invalid checksum (ctrl)\n");
+		ssh_err(ec, SSH_RECV_TAG "invalid checksum (ctrl)\n");
 		return SSH_MSG_LEN_CTRL;	// only discard message
 	}
 
 	// check if we expect the message
 	if (rcv->state != SSH_RCV_CONTROL) {
-		dev_err(dev, SSH_RECV_TAG "discarding message: ctrl not expected\n");
+		ssh_err(ec, SSH_RECV_TAG "discarding message: ctrl not expected\n");
 		return SSH_MSG_LEN_CTRL;	// discard message
 	}
 
 	// check if it is for our request
 	if (ctrl->type == SSH_FRAME_TYPE_ACK && ctrl->seq != rcv->expect.seq) {
-		dev_err(dev, SSH_RECV_TAG "discarding message: ack does not match\n");
+		ssh_err(ec, SSH_RECV_TAG "discarding message: ack does not match\n");
 		return SSH_MSG_LEN_CTRL;	// discard message
 	}
 
 	// we now have a valid & expected ACK/RETRY message
-	dev_dbg(dev, SSH_RECV_TAG "valid control message received (type: 0x%02x)\n", ctrl->type);
+	ssh_dbg(ec, SSH_RECV_TAG "valid control message received (type: 0x%02x)\n", ctrl->type);
 
 	packet.type = ctrl->type;
 	packet.seq  = ctrl->seq;
@@ -1077,7 +1080,7 @@ static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t siz
 		kfifo_in(&rcv->fifo, (u8 *) &packet, sizeof(packet));
 
 	} else {
-		dev_warn(dev, SSH_RECV_TAG
+		ssh_warn(ec, SSH_RECV_TAG
 			 "dropping frame: not enough space in fifo (type = %d)\n",
 			 ctrl->type);
 
@@ -1097,7 +1100,6 @@ static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t siz
 
 static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 {
-	struct device *dev = &ec->serdev->dev;
 	struct ssh_receiver *rcv = &ec->receiver;
 	const struct ssh_frame *ctrl;
 	const struct ssh_command *cmd;
@@ -1120,7 +1122,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 
 	// validate control-frame CRC
 	if (!ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		dev_err(dev, SSH_RECV_TAG "invalid checksum (cmd-ctrl)\n");
+		ssh_err(ec, SSH_RECV_TAG "invalid checksum (cmd-ctrl)\n");
 		/*
 		 * We can't be sure here if length is valid, thus
 		 * discard everything.
@@ -1137,13 +1139,13 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 
 	// validate command-frame type
 	if (cmd->type != SSH_PLD_TYPE_CMD) {
-		dev_err(dev, SSH_RECV_TAG "expected command frame type but got 0x%02x\n", cmd->type);
+		ssh_err(ec, SSH_RECV_TAG "expected command frame type but got 0x%02x\n", cmd->type);
 		return size;			// discard everything
 	}
 
 	// validate command-frame CRC
 	if (!ssh_is_valid_crc(cmd_begin, cmd_end)) {
-		dev_err(dev, SSH_RECV_TAG "invalid checksum (cmd-pld)\n");
+		ssh_err(ec, SSH_RECV_TAG "invalid checksum (cmd-pld)\n");
 
 		/*
 		 * The message length is provided in the control frame. As we
@@ -1161,18 +1163,18 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 
 	// check if we expect the message
 	if (rcv->state != SSH_RCV_COMMAND) {
-		dev_dbg(dev, SSH_RECV_TAG "discarding message: command not expected\n");
+		ssh_dbg(ec, SSH_RECV_TAG "discarding message: command not expected\n");
 		return msg_len;			// discard message
 	}
 
 	// check if response is for our request
 	if (rcv->expect.rqid != get_unaligned_le16(&cmd->rqid)) {
-		dev_dbg(dev, SSH_RECV_TAG "discarding message: command not a match\n");
+		ssh_dbg(ec, SSH_RECV_TAG "discarding message: command not a match\n");
 		return msg_len;			// discard message
 	}
 
 	// we now have a valid & expected command message
-	dev_dbg(dev, SSH_RECV_TAG "valid command message received\n");
+	ssh_dbg(ec, SSH_RECV_TAG "valid command message received\n");
 
 	packet.type = ctrl->type;
 	packet.seq = ctrl->seq;
@@ -1183,7 +1185,7 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 		kfifo_in(&rcv->fifo, cmd_begin_pld, packet.len);
 
 	} else {
-		dev_warn(dev, SSH_RECV_TAG
+		ssh_warn(ec, SSH_RECV_TAG
 			 "dropping frame: not enough space in fifo (type = %d)\n",
 			 ctrl->type);
 
@@ -1198,7 +1200,6 @@ static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size
 
 static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 {
-	struct device *dev = &ec->serdev->dev;
 	struct ssh_frame *ctrl;
 
 	// we need at least a control frame to check what to do
@@ -1207,7 +1208,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 
 	// make sure we're actually at the start of a new message
 	if (!ssh_is_valid_syn(buf)) {
-		dev_err(dev, SSH_RECV_TAG "invalid start of message\n");
+		ssh_err(ec, SSH_RECV_TAG "invalid start of message\n");
 		return size;		// discard everything
 	}
 
@@ -1224,7 +1225,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 		return ssh_receive_msg_cmd(ec, buf, size);
 
 	default:
-		dev_err(dev, SSH_RECV_TAG "unknown frame type 0x%02x\n", ctrl->type);
+		ssh_err(ec, SSH_RECV_TAG "unknown frame type 0x%02x\n", ctrl->type);
 		return size;		// discard everything
 	}
 }
@@ -1238,7 +1239,7 @@ static int ssh_receive_buf(struct serdev_device *serdev,
 	int offs = 0;
 	int used, n;
 
-	dev_dbg(&serdev->dev, SSH_RECV_TAG "received buffer (size: %zu)\n", size);
+	ssh_dbg(ec, "rx: received data (size: %zu)\n", size);
 	print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
 
 	/*
@@ -1387,7 +1388,7 @@ static irqreturn_t surface_sam_irq_handler(int irq, void *dev_id)
 {
 	struct serdev_device *serdev = dev_id;
 
-	dev_info(&serdev->dev, "wake irq triggered\n");
+	dev_dbg(&serdev->dev, "pm: wake irq triggered\n");
 	return IRQ_HANDLED;
 }
 
@@ -1474,7 +1475,7 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	struct sam_ssh_ec *ec;
 	int status;
 
-	dev_dbg(dev, "suspending\n");
+	dev_dbg(dev, "pm: suspending\n");
 
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
@@ -1508,7 +1509,7 @@ static int surface_sam_ssh_resume(struct device *dev)
 	struct sam_ssh_ec *ec;
 	int status;
 
-	dev_dbg(dev, "resuming\n");
+	dev_dbg(dev, "pm: resuming\n");
 
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
@@ -1558,8 +1559,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
 	int irq;
-
-	dev_dbg(&serdev->dev, "probing\n");
 
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
