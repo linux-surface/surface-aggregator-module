@@ -38,25 +38,25 @@ consists of the following fields, packed together and in order:
     LEN     u16    Length of the payload associated with the frame.
     SEQ     u8     Sequence ID (see explanation below).
 
-Each frame structure is followed by a CRC over this structure. If the frame
-has a payload (LEN > 0), the CRC over the frame structure (TYPE, LEN, and
-SEQ fields) is placed directly after the frame structure and before the
-payload. The payload is followed by its own CRC (over all payload bytes).
-The LEN field does not include any of the CRCs, it equals the number of
-bytes inbetween the CRC of the frame and the CRC of the payload.
+Each frame structure is followed by a CRC over this structure. The CRC over
+the frame structure (TYPE, LEN, and SEQ fields) is placed directly after the
+frame structure and before the payload. The payload is followed by its own
+CRC (over all payload bytes). If the payload is not present (i.e. the frame
+has LEN = 0), the CRC of the payload is still present and will evaluate to
+`0xffff`. The LEN field does not include any of the CRCs, it equals the
+number of bytes inbetween the CRC of the frame and the CRC of the payload.
 
 Additionally, the following fixed two-byte sequences are used:
 
     Name   Value          Description
     ------------------------------------------------------------------------
     SYN    [0xAA, 0x55]   Synchronization bytes.
-    TER    [0xFF, 0xFF]   Termination bytes.
 
 A message consists of SYN, followed by the frame (TYPE, LEN, SEQ and CRC)
-and, if specified in the frame (i.e. LEN > 0), payload (plus CRC). TER is
-only used by the party ending the exchange, following the last message. The
-messages corresponding to an exchange are identified by having the same
-sequence ID (SEQ), stored inside the frame.
+and, if specified in the frame (i.e. LEN > 0), payload bytes, followed
+finally, regardless if the payload is present, the payload CRC. The messages
+corresponding to an exchange are identified by having the same sequence ID
+(SEQ), stored inside the frame.
 
 A frame can have the following types:
 
@@ -78,36 +78,35 @@ Top-Level Protocol: Flow Sequence
 
 Each exchange begins with SYN, followed by a DATA- or DATA_NOACK-type frame,
 followed by its CRC, payload, and payload CRC. In case of a DATA_NOACK-type
-frame, the exchange is then finished. No TER sequence is sent after the
-DATA_NOACK-type frame. In case of a DATA-type frame, the receiving party has
-to acknowledge receival of the frame by responding with a message containing
-an ACK-type frame with the same sequence ID of the DATA frame. In other
-words, the sequence ID of the ACK frame specifies the DATA frame to be
-acknowledged. The receiving party then terminates the exchange by following
-the ACK-type frame and its CRC with the TER byte sequence. In case of an
-error, e.g. an invalid CRC, the receiving party responds with a message
-containing an ERR-type frame. As the sequence ID of the previous data frame,
-for which an error is indicated via the ERR frame, cannot be relied upon,
-the sequence ID of the ERR frame should not be used and is set to zero.
-After receival of an ERR frame, the sending party should re-send all
-outstanding (non-ACKed) messages.
+frame, the exchange is then finished. In case of a DATA-type frame, the
+receiving party has to acknowledge receival of the frame by responding with
+a message containing an ACK-type frame with the same sequence ID of the DATA
+frame. In other words, the sequence ID of the ACK frame specifies the DATA
+frame to be acknowledged. In case of an error, e.g. an invalid CRC, the
+receiving party responds with a message containing an ERR-type frame. As the
+sequence ID of the previous data frame, for which an error is indicated via
+the ERR frame, cannot be relied upon, the sequence ID of the ERR frame
+should not be used and is set to zero. After receival of an ERR frame, the
+sending party should re-send all outstanding (non-ACKed) messages.
 
 An example exchange might look like this:
 
-    tx: -- SYN FRAME(DATA) CRC PAYLOAD CRC ---------------------------------
-    rx: ---------------------------------- SYN FRAME(ACK) CRC TER ----------
+    tx: -- SYN FRAME(D) CRC(F) PAYLOAD CRC(P) ------------------------------
+    rx: ------------------------------------- SYN FRAME(A) CRC(F) CRC(P) ---
 
-where both frames have the same sequence ID (SEQ). In case of an error, the
-exchange would look like this:
+where both frames have the same sequence ID (SEQ). Here, FRAME(D) indicates
+a DATA-type frame, FRAME(A) an ACK-type frame, CRC(F) the CRC over the
+previous frame, CRC(P) the CRC over the previous payload. In case of an
+error, the exchange would look like this:
 
-    tx: -- SYN FRAME(DATA) CRC PAYLOAD CRC ---------------------------------
-    rx: ---------------------------------- SYN FRAME(ERR) CRC TER ----------
+    tx: -- SYN FRAME(D) CRC(F) PAYLOAD CRC(P) ------------------------------
+    rx: ------------------------------------- SYN FRAME(E) CRC(F) CRC(P) ---
 
-upon which the sender should re-send the message. Note that the sequence ID
-of the ERR-type frame is fixed to zero. For DATA_NOACK-type frames, both
-exchanges are the same:
+upon which the sender should re-send the message. FRAME(E) indicates an
+ERR-type frame. Note that the sequence ID of the ERR-type frame is fixed to
+zero. For DATA_NOACK-type frames, both exchanges are the same:
 
-    tx: -- SYN FRAME(DATA_NOACK) CRC PAYLOAD CRC ---------------------------
+    tx: -- SYN FRAME(DATA_NOACK) CRC(F) PAYLOAD CRC(P) ---------------------
     rx: --------------------------------------------------------------------
 
 Here, an error can be detected, but not corrected or indicated to the
