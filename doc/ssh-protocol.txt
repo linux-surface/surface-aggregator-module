@@ -55,8 +55,9 @@ Additionally, the following fixed two-byte sequences are used:
 A message consists of SYN, followed by the frame (TYPE, LEN, SEQ and CRC)
 and, if specified in the frame (i.e. LEN > 0), payload bytes, followed
 finally, regardless if the payload is present, the payload CRC. The messages
-corresponding to an exchange are identified by having the same sequence ID
-(SEQ), stored inside the frame.
+corresponding to an exchange are, in part, identified by having the same
+sequence ID (SEQ), stored inside the frame (more on this in the next
+section). The sequence ID is a wrapping counter.
 
 A frame can have the following types:
 
@@ -88,6 +89,13 @@ the sequence ID of the previous data frame, for which an error is indicated
 via the NACK frame, cannot be relied upon, the sequence ID of the NACK frame
 should not be used and is set to zero. After receival of an NACK frame, the
 sending party should re-send all outstanding (non-ACKed) messages.
+
+Sequence IDs are not synchronized between the two parties, meaning that they
+are managed independently for each party. Identifying the messages
+corresponding to a single exchange thus relies on the sequence ID as well as
+the type of the message, and the context. Specifically, the sequence ID is
+used to associate ACKs with DATA-type frames, but not DATA- or
+DATA_NOACK-type frames with other DATA- or DATA_NOACK- type frames.
 
 An example exchange might look like this:
 
@@ -161,11 +169,12 @@ should have the same target category, command ID, and instance ID as the
 corresponding request.
 
 Responses are matched to their corresponding request via the request ID
-(rqid) field. This is a 16 bit counter similar to the sequence ID on the
-frames. Note that the sequence ID of the frames for a request-response pair
-does not match. Only the request ID has to match. Frame-protocol wise these
-are two separate exchanges, and may even be separated, e.g. by an event
-being sent after the request but before the response.
+(RQID) field. This is a 16 bit wrapping counter similar to the sequence ID
+on the frames. Note that the sequence ID of the frames for a
+request-response pair does not match. Only the request ID has to match.
+Frame-protocol wise these are two separate exchanges, and may even be
+separated, e.g. by an event being sent after the request but before the
+response.
 
 Events are identified by unique and reserved request IDs. These IDs should
 not be used by the host when sending a new request. They are used on the
