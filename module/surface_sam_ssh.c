@@ -92,7 +92,7 @@
  * @SSH_FRAME_TYPE_DATA_NOACK: Same as SSH_FRAME_TYPE_DATA, but the message
  *                       does not have to be ACKed.
  * @SSH_FRAME_TYPE_ACK:  Indicates an ACK message.
- * @SSH_FRAME_TYPE_ERR:  Indicates an error response for previously sent
+ * @SSH_FRAME_TYPE_NACK: Indicates an error response for previously sent
  *                       frame. In general, this means that the frame and/or
  *                       payload is malformed, e.g. a CRC is wrong. For command-
  *                       type payloads, this can also mean that the command is
@@ -102,7 +102,7 @@ enum ssh_frame_type {
 	SSH_FRAME_TYPE_DATA	  = 0x80,
 	SSH_FRAME_TYPE_DATA_NOACK = 0x00,
 	SSH_FRAME_TYPE_ACK	  = 0x40,
-	SSH_FRAME_TYPE_ERR	  = 0x04,
+	SSH_FRAME_TYPE_NACK	  = 0x04,
 };
 
 /**
@@ -1220,7 +1220,7 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 
 	switch (ctrl->type) {
 	case SSH_FRAME_TYPE_ACK:
-	case SSH_FRAME_TYPE_ERR:
+	case SSH_FRAME_TYPE_NACK:
 		return ssh_receive_msg_ctrl(ec, buf, size);
 
 	case SSH_FRAME_TYPE_DATA:

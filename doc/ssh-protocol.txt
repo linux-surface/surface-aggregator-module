@@ -62,12 +62,12 @@ A frame can have the following types:
 
     Name         Value   Short Description
     ------------------------------------------------------------------------
-    ERR          0x04    Sent on error in previously received message.
+    NACK         0x04    Sent on error in previously received message.
     ACK          0x40    Sent to acknowledge receival of DATA frame.
     DATA         0x80    Sent to transfer data.
     DATA_NOACK   0x00    Same as DATA, but does not need to be ACKed.
 
-Both ERR- and ACK-type frames are used to control flow of messages and thus
+Both NACK- and ACK-type frames are used to control flow of messages and thus
 do not carry a payload. DATA- and DATA_NOACK-type frames on the other hand
 must carry a payload. The flow sequence and interaction of different frame
 types will be described in more depth in the next section.
@@ -83,10 +83,10 @@ receiving party has to acknowledge receival of the frame by responding with
 a message containing an ACK-type frame with the same sequence ID of the DATA
 frame. In other words, the sequence ID of the ACK frame specifies the DATA
 frame to be acknowledged. In case of an error, e.g. an invalid CRC, the
-receiving party responds with a message containing an ERR-type frame. As the
-sequence ID of the previous data frame, for which an error is indicated via
-the ERR frame, cannot be relied upon, the sequence ID of the ERR frame
-should not be used and is set to zero. After receival of an ERR frame, the
+receiving party responds with a message containing an NACK-type frame. As
+the sequence ID of the previous data frame, for which an error is indicated
+via the NACK frame, cannot be relied upon, the sequence ID of the NACK frame
+should not be used and is set to zero. After receival of an NACK frame, the
 sending party should re-send all outstanding (non-ACKed) messages.
 
 An example exchange might look like this:
@@ -100,11 +100,11 @@ previous frame, CRC(P) the CRC over the previous payload. In case of an
 error, the exchange would look like this:
 
     tx: -- SYN FRAME(D) CRC(F) PAYLOAD CRC(P) ------------------------------
-    rx: ------------------------------------- SYN FRAME(E) CRC(F) CRC(P) ---
+    rx: ------------------------------------- SYN FRAME(N) CRC(F) CRC(P) ---
 
-upon which the sender should re-send the message. FRAME(E) indicates an
-ERR-type frame. Note that the sequence ID of the ERR-type frame is fixed to
-zero. For DATA_NOACK-type frames, both exchanges are the same:
+upon which the sender should re-send the message. FRAME(N) indicates an
+NACK-type frame. Note that the sequence ID of the NACK-type frame is fixed
+to zero. For DATA_NOACK-type frames, both exchanges are the same:
 
     tx: -- SYN FRAME(DATA_NOACK) CRC(F) PAYLOAD CRC(P) ---------------------
     rx: --------------------------------------------------------------------
