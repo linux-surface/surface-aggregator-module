@@ -139,8 +139,8 @@ order:
     ------------------------------------------------------------------------
     TYPE        u8     Type of the payload. For commands always 0x80.
     TC          u8     Target category.
-    PRI (in)    u8     Priority for incoming (EC to host) commands.
     PRI (out)   u8     Priority for outgoing (host to EC) commands.
+    PRI (in)    u8     Priority for incoming (EC to host) commands.
     IID         u8     Instance ID.
     RQID        u16    Request ID.
     CID         u8     Command ID.
