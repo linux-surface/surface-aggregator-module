@@ -203,3 +203,26 @@ by target category and command ID alone, the EC may require specific
 priority and instance ID values to accept a command. A command that is
 accepted at normal priority, for example, may not be accepted at high
 priority and vice versa.
+
+
+Limitations and Observations
+--------------------------------------------------------------------------------
+
+The protocol can, in theory, handle up to U8_MAX frames in parallel, with up
+to U16_MAX pending requests (neglecting request IDs reserved for events). In
+practice, however, this is more limited. From our testing (altough via a
+python and thus a user-space program), it seems that the EC can handle up to
+four requests (mostly) reliably in parallel at a certain time. With five or
+more requests in parallel, consistent discarding of commands (ACKed frame
+but no command response) has been observed. For five simultaneous commands,
+this reproducibly resulted in one command being dropped and four commands
+being handled. We thus recommend a restriction to a maximum of three pending
+commands.
+
+However, it has also been noted that, even with three requests in parallel,
+occasional frame drops happen. Apart from this, with a limit of three
+pending requests, no dropped commands (i.e. command being dropped but frame
+carrying command being ACKed) have been observed. In any case, frames (and
+possibly also commands) should be re-sent by the host if a certain timeout
+is exceeded. This is done by the EC for frames with a timeout of one second,
+up to two re-tries (i.e. three transmissions in total).
