@@ -174,7 +174,10 @@ on the frames. Note that the sequence ID of the frames for a
 request-response pair does not match. Only the request ID has to match.
 Frame-protocol wise these are two separate exchanges, and may even be
 separated, e.g. by an event being sent after the request but before the
-response.
+response. Not all commands produce a response, and this is not detectable by
+TC+CID. It is the responsibility of the issuing party to wait for a response
+(or signal this to the communication framework, as is done in SAN/ACPI via
+the SNC flag).
 
 Events are identified by unique and reserved request IDs. These IDs should
 not be used by the host when sending a new request. They are used on the
