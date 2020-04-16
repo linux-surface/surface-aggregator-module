@@ -219,8 +219,7 @@ four requests (mostly) reliably in parallel at a certain time. With five or
 more requests in parallel, consistent discarding of commands (ACKed frame
 but no command response) has been observed. For five simultaneous commands,
 this reproducibly resulted in one command being dropped and four commands
-being handled. We thus recommend a restriction to a maximum of three pending
-commands.
+being handled.
 
 However, it has also been noted that, even with three requests in parallel,
 occasional frame drops happen. Apart from this, with a limit of three
@@ -228,4 +227,25 @@ pending requests, no dropped commands (i.e. command being dropped but frame
 carrying command being ACKed) have been observed. In any case, frames (and
 possibly also commands) should be re-sent by the host if a certain timeout
 is exceeded. This is done by the EC for frames with a timeout of one second,
-up to two re-tries (i.e. three transmissions in total).
+up to two re-tries (i.e. three transmissions in total). The limit of
+re-tries also applies to received NACKs, and, in a worst case scenario, can
+lead to entire messages being dropped.
+
+While this also seems to work fine for pending data frames as long as no
+transmission failures occur, implementation and handling of these seems to
+depend on the assumption that there is only one non-acknowledged data frame.
+In particular, the detection of repeated frames relies on the last sequence
+number. This means that, if a frame that has been successfully received by
+the EC is sent again, e.g. due to the host not receiving an ACK, the EC will
+only detect this if it has the sequence ID of the last frame received by the
+EC. As an example: Sending two frames with SEQ=0 and SEQ=1 followed by a
+repetition of SEQ=0 will not detect the second SEQ=0 frame as such, and thus
+execute the command in this frame each time it has been received, i.e. twice
+in this example. Sending SEQ=0, SEQ=1 and then repeating SEQ=1 will detect
+the second SEQ=1 as repetition of the first one and ignore it, thus
+executing the contained command only once.
+
+In conclusion, this suggests a limit of at most one pending un-ACKed frame
+(per party, effectively leading to synchronous communication regarding
+frames) and at most three pending commands. The limit to synchronous frame
+transfers seems to be consistent with behavior observed on Windows.
