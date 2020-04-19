@@ -148,8 +148,8 @@ List of Input System Requests (TC = 0x15)
      CID   IID   PRI  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x01  any   0x02  yes      no        output report          log
-    0x02  any   0x02  yes      no        set feature report     log
-    0x03  any   0x02  yes      yes       get feature report     log
+    0x02  any   0x02  yes      yes       get feature report     log
+    0x03  any   0x02  yes      no        set feature report     log
     0x04  #ID   0x02  yes      yes       subdevice meta (HID)   log
 
 Note: #ID can be any device ID plus 0 which represents all of the device data
