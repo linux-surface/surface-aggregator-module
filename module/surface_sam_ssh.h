@@ -28,11 +28,12 @@
 #define SURFACE_SAM_SSH_MAX_RQST_RESPONSE	(255 - 4)
 
 /*
- * The number of (lower) bits of the request ID (RQID) reserved for events.
- * These bits may only be used exclusively for events sent from the EC to the
- * host.
+ * The number of reserved event IDs, used for registering an SSH event
+ * handler. Valid event IDs are numbers below or equal to this value, with
+ * exception of zero, which is not an event ID. Thus, this is also the
+ * absolute maximum number of event handlers that can be registered.
  */
-#define SURFACE_SAM_SSH_RQID_EVENT_BITS		5
+#define SURFACE_SAM_SSH_MAX_EVENT_ID		32
 
 /*
  * Special event-handler delay value indicating that the corresponding event

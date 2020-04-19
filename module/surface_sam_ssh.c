@@ -75,13 +75,6 @@
 #define SSH_FRAME_OFFS_CMD		SSH_FRAME_OFFS_TERM	// either TERM or CMD
 #define SSH_FRAME_OFFS_CMD_PLD		(SSH_FRAME_OFFS_CMD + SSH_BYTELEN_CMDFRAME)
 
-/*
- * A note on Request IDs (RQIDs):
- *	0x0000 is not a valid RQID
- *	0x0001 is valid, but reserved for Surface Laptop keyboard events
- */
-#define SAM_NUM_EVENT_TYPES		((1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1)
-
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
 
@@ -207,7 +200,7 @@ struct ssh_events {
 	spinlock_t lock;
 	struct workqueue_struct *queue_ack;
 	struct workqueue_struct *queue_evt;
-	struct ssh_event_handler handler[SAM_NUM_EVENT_TYPES];
+	struct ssh_event_handler handler[SURFACE_SAM_SSH_MAX_EVENT_ID];
 };
 
 struct sam_ssh_ec {
@@ -269,16 +262,19 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 	return crc_ccitt_false(0xffff, buf, len);
 }
 
-static inline u16 ssh_rqid_to_rqst(u16 rqid)
+static inline u16 ssh_rqid_next(u16 rqid)
 {
-	return rqid << SURFACE_SAM_SSH_RQID_EVENT_BITS;
+	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID;
+}
+
+static inline u16 ssh_rqid_to_event(u16 rqid)
+{
+	return rqid - 1;
 }
 
 static inline bool ssh_rqid_is_event(u16 rqid)
 {
-	const u16 mask = (1 << SURFACE_SAM_SSH_RQID_EVENT_BITS) - 1;
-
-	return rqid != 0 && (rqid | mask) == mask;
+	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_MAX_EVENT_ID;
 }
 
 
@@ -644,7 +640,7 @@ static inline void ssh_receiver_restart(struct sam_ssh_ec *ec,
 	ec->receiver.state = SSH_RCV_CONTROL;
 	ec->receiver.expect.pld = rqst->snc;
 	ec->receiver.expect.seq = ec->counter.seq;
-	ec->receiver.expect.rqid = ssh_rqid_to_rqst(ec->counter.rqid);
+	ec->receiver.expect.rqid = ec->counter.rqid;
 	ec->receiver.eval_buf.len = 0;
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
@@ -666,7 +662,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 {
 	struct ssh_fifo_packet packet = {};
 	struct msgbuf msgb;
-	u16 rqid = ssh_rqid_to_rqst(ec->counter.rqid);
+	u16 rqid = ec->counter.rqid;
 	int status, try;
 	unsigned int rem;
 
@@ -709,8 +705,8 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 		goto out;
 	}
 
-	ec->counter.seq  += 1;
-	ec->counter.rqid += 1;
+	ec->counter.seq += 1;
+	ec->counter.rqid = ssh_rqid_next(ec->counter.rqid);
 
 	// get command response/payload
 	if (rqst->snc && result) {
@@ -1708,7 +1704,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	spin_lock_irqsave(&ec->events.lock, flags);
 	memset(ec->events.handler, 0,
 	       sizeof(struct ssh_event_handler)
-		* SAM_NUM_EVENT_TYPES);
+		* SURFACE_SAM_SSH_MAX_EVENT_ID);
 	spin_unlock_irqrestore(&ec->events.lock, flags);
 
 	// set device to deinitialized state
