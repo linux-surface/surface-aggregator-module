@@ -265,7 +265,7 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 
 static inline u16 ssh_rqid_next(u16 rqid)
 {
-	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID;
+	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID + 1;
 }
 
 static inline u16 ssh_rqid_to_event(u16 rqid)
