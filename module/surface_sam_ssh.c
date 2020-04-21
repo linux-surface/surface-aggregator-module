@@ -773,7 +773,7 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
 
-/*
+/**
  * surface_sam_ssh_ec_resume - Resume the EC if it is in a suspended mode.
  * @ec: the EC to resume
  *
