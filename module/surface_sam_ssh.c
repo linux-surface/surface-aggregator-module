@@ -1544,10 +1544,6 @@ static const struct serdev_device_ops ssh_device_ops = {
 	.write_wakeup = serdev_device_write_wakeup,
 };
 
-
-int surface_sam_ssh_sysfs_register(struct device *dev);
-void surface_sam_ssh_sysfs_unregister(struct device *dev);
-
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
 	struct sam_ssh_ec *ec;
