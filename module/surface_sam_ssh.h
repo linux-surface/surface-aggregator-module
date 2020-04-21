@@ -5,7 +5,7 @@
  * The SSH is the main communication hub for communication between host and
  * the Surface/System Aggregator Module (SAM) on newer Microsoft Surface
  * devices (Book 2, Pro 5, Laptops, ...). Also referred to as SAM-over-SSH.
- * Older devices (Book 1, Pro 4) use SAM-over-I2C.
+ * Older devices (Book 1, Pro 4) use SAM-over-HID (via I2C).
  */
 
 #ifndef _SURFACE_SAM_SSH_H
