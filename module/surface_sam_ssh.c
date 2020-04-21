@@ -1417,32 +1417,35 @@ static int ssh_setup_irq(struct serdev_device *serdev)
 }
 
 
-static acpi_status
-ssh_setup_from_resource(struct acpi_resource *resource, void *context)
+static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 {
-	struct serdev_device *serdev = context;
+	struct serdev_device *serdev = ctx;
 	struct acpi_resource_common_serialbus *serial;
 	struct acpi_resource_uart_serialbus *uart;
+	bool flow_control;
 	int status = 0;
 
-	if (resource->type != ACPI_RESOURCE_TYPE_SERIAL_BUS)
+	if (rsc->type != ACPI_RESOURCE_TYPE_SERIAL_BUS)
 		return AE_OK;
 
-	serial = &resource->data.common_serial_bus;
+	serial = &rsc->data.common_serial_bus;
 	if (serial->type != ACPI_RESOURCE_SERIAL_TYPE_UART)
 		return AE_OK;
 
-	uart = &resource->data.uart_serial_bus;
+	uart = &rsc->data.uart_serial_bus;
 
 	// set up serdev device
 	serdev_device_set_baudrate(serdev, uart->default_baud_rate);
 
 	// serdev currently only supports RTSCTS flow control
-	if (uart->flow_control & SSH_SUPPORTED_FLOW_CONTROL_MASK)
-		dev_warn(&serdev->dev, "unsupported flow control (value: 0x%02x)\n", uart->flow_control);
+	if (uart->flow_control & SSH_SUPPORTED_FLOW_CONTROL_MASK) {
+		dev_warn(&serdev->dev, "setup: unsupported flow control"
+			 " (value: 0x%02x)\n", uart->flow_control);
+	}
 
 	// set RTSCTS flow control
-	serdev_device_set_flow_control(serdev, uart->flow_control & ACPI_UART_FLOW_CONTROL_HW);
+	flow_control = uart->flow_control & ACPI_UART_FLOW_CONTROL_HW;
+	serdev_device_set_flow_control(serdev, flow_control);
 
 	// serdev currently only supports EVEN/ODD parity
 	switch (uart->parity) {
@@ -1456,12 +1459,14 @@ ssh_setup_from_resource(struct acpi_resource *resource, void *context)
 		status = serdev_device_set_parity(serdev, SERDEV_PARITY_ODD);
 		break;
 	default:
-		dev_warn(&serdev->dev, "unsupported parity (value: 0x%02x)\n", uart->parity);
+		dev_warn(&serdev->dev, "setup: unsupported parity"
+			 " (value: 0x%02x)\n", uart->parity);
 		break;
 	}
 
 	if (status) {
-		dev_err(&serdev->dev, "failed to set parity (value: 0x%02x)\n", uart->parity);
+		dev_err(&serdev->dev, "setup: failed to set parity"
+			" (value: 0x%02x)\n", uart->parity);
 		return status;
 	}
 
@@ -1536,7 +1541,8 @@ static int surface_sam_ssh_resume(struct device *dev)
 	return 0;
 }
 
-static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend, surface_sam_ssh_resume);
+static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
+			 surface_sam_ssh_resume);
 
 
 static const struct serdev_device_ops ssh_device_ops = {
