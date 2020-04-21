@@ -65,7 +65,7 @@
 #define SSH_RX_TIMEOUT			msecs_to_jiffies(1000)
 #define SSH_NUM_RETRY			3
 
-#define SSH_READ_BUF_LEN		512		// must be power of 2
+#define SSH_READ_BUF_LEN		4096		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
 
