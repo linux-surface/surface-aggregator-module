@@ -61,15 +61,15 @@ section). The sequence ID is a wrapping counter.
 
 A frame can have the following types:
 
-    Name         Value   Short Description
+    Name       Value   Short Description
     ------------------------------------------------------------------------
-    NACK         0x04    Sent on error in previously received message.
-    ACK          0x40    Sent to acknowledge receival of DATA frame.
-    DATA         0x80    Sent to transfer data.
-    DATA_NOACK   0x00    Same as DATA, but does not need to be ACKed.
+    NAK        0x04    Sent on error in previously received message.
+    ACK        0x40    Sent to acknowledge receival of DATA frame.
+    DATA_SEQ   0x80    Sent to transfer data. Sequenced.
+    DATA_NSQ   0x00    Same as DATA_SEQ, but does not need to be ACKed.
 
-Both NACK- and ACK-type frames are used to control flow of messages and thus
-do not carry a payload. DATA- and DATA_NOACK-type frames on the other hand
+Both NAK- and ACK-type frames are used to control flow of messages and thus
+do not carry a payload. DATA_SEQ- and DATA_NSQ-type frames on the other hand
 must carry a payload. The flow sequence and interaction of different frame
 types will be described in more depth in the next section.
 
@@ -77,9 +77,9 @@ types will be described in more depth in the next section.
 Top-Level Protocol: Flow Sequence
 --------------------------------------------------------------------------------
 
-Each exchange begins with SYN, followed by a DATA- or DATA_NOACK-type frame,
-followed by its CRC, payload, and payload CRC. In case of a DATA_NOACK-type
-frame, the exchange is then finished. In case of a DATA-type frame, the
+Each exchange begins with SYN, followed by a DATA_SEQ- or DATA_NSQ-type frame,
+followed by its CRC, payload, and payload CRC. In case of a DATA_NSQ-type
+frame, the exchange is then finished. In case of a DATA_SEQ-type frame, the
 receiving party has to acknowledge receival of the frame by responding with
 a message containing an ACK-type frame with the same sequence ID of the DATA
 frame. In other words, the sequence ID of the ACK frame specifies the DATA
@@ -94,8 +94,8 @@ Sequence IDs are not synchronized between the two parties, meaning that they
 are managed independently for each party. Identifying the messages
 corresponding to a single exchange thus relies on the sequence ID as well as
 the type of the message, and the context. Specifically, the sequence ID is
-used to associate ACKs with DATA-type frames, but not DATA- or
-DATA_NOACK-type frames with other DATA- or DATA_NOACK- type frames.
+used to associate ACKs with DATA_SEQ-type frames, but not DATA_SEQ- or
+DATA_NSQ-type frames with other DATA- type frames.
 
 An example exchange might look like this:
 
@@ -103,7 +103,7 @@ An example exchange might look like this:
     rx: ------------------------------------- SYN FRAME(A) CRC(F) CRC(P) ---
 
 where both frames have the same sequence ID (SEQ). Here, FRAME(D) indicates
-a DATA-type frame, FRAME(A) an ACK-type frame, CRC(F) the CRC over the
+a DATA_SEQ-type frame, FRAME(A) an ACK-type frame, CRC(F) the CRC over the
 previous frame, CRC(P) the CRC over the previous payload. In case of an
 error, the exchange would look like this:
 
@@ -112,9 +112,9 @@ error, the exchange would look like this:
 
 upon which the sender should re-send the message. FRAME(N) indicates an
 NACK-type frame. Note that the sequence ID of the NACK-type frame is fixed
-to zero. For DATA_NOACK-type frames, both exchanges are the same:
+to zero. For DATA_NSQ-type frames, both exchanges are the same:
 
-    tx: -- SYN FRAME(DATA_NOACK) CRC(F) PAYLOAD CRC(P) ---------------------
+    tx: -- SYN FRAME(DATA_NSQ) CRC(F) PAYLOAD CRC(P) -----------------------
     rx: --------------------------------------------------------------------
 
 Here, an error can be detected, but not corrected or indicated to the

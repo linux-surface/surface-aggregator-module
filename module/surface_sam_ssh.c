@@ -80,22 +80,23 @@
 
 /**
  * enum ssh_frame_type - Frame types for SSH frames.
- * @SSH_FRAME_TYPE_DATA: Indicates a data frame, followed by a payload with the
- *                       length specified in the ssh_frame.len field.
- * @SSH_FRAME_TYPE_DATA_NOACK: Same as SSH_FRAME_TYPE_DATA, but the message
- *                       does not have to be ACKed.
- * @SSH_FRAME_TYPE_ACK:  Indicates an ACK message.
- * @SSH_FRAME_TYPE_NACK: Indicates an error response for previously sent
- *                       frame. In general, this means that the frame and/or
- *                       payload is malformed, e.g. a CRC is wrong. For command-
- *                       type payloads, this can also mean that the command is
- *                       invalid.
+ * @SSH_FRAME_TYPE_DATA_SEQ: Indicates a data frame, followed by a payload with
+ *                      the length specified in the ssh_frame.len field. This
+ *                      frame is sequenced, meaning that an ACK is required.
+ * @SSH_FRAME_TYPE_DATA_NSQ: Same as SSH_FRAME_TYPE_DATA_SEQ, but unsequenced,
+ *                      meaning that the message does not have to be ACKed.
+ * @SSH_FRAME_TYPE_ACK: Indicates an ACK message.
+ * @SSH_FRAME_TYPE_NAK: Indicates an error response for previously sent
+ *                      frame. In general, this means that the frame and/or
+ *                      payload is malformed, e.g. a CRC is wrong. For command-
+ *                      type payloads, this can also mean that the command is
+ *                      invalid.
  */
 enum ssh_frame_type {
-	SSH_FRAME_TYPE_DATA	  = 0x80,
-	SSH_FRAME_TYPE_DATA_NOACK = 0x00,
-	SSH_FRAME_TYPE_ACK	  = 0x40,
-	SSH_FRAME_TYPE_NACK	  = 0x04,
+	SSH_FRAME_TYPE_DATA_SEQ = 0x80,
+	SSH_FRAME_TYPE_DATA_NSQ = 0x00,
+	SSH_FRAME_TYPE_ACK	= 0x40,
+	SSH_FRAME_TYPE_NAK	= 0x04,
 };
 
 /**
@@ -379,7 +380,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 {
 	struct ssh_command *cmd;
 	const u8 *cmd_begin;
-	const u8 type = SSH_FRAME_TYPE_DATA;
+	const u8 type = SSH_FRAME_TYPE_DATA_SEQ;
 
 	// SYN
 	msgb_push_syn(msgb);
@@ -730,7 +731,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 		}
 
 		// send ACK
-		if (packet.type == SSH_FRAME_TYPE_DATA) {
+		if (packet.type == SSH_FRAME_TYPE_DATA_SEQ) {
 			// TODO: add send_ack function?
 			msgb_reset(&msgb);
 			msgb_push_ack(&msgb, packet.seq);
@@ -1003,7 +1004,7 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	memcpy(work->event.pld, buf + SSH_FRAME_OFFS_CMD_PLD, pld_len);
 
 	// queue ACK for if required
-	if (ctrl->type == SSH_FRAME_TYPE_DATA) {
+	if (ctrl->type == SSH_FRAME_TYPE_DATA_SEQ) {
 		refcount_set(&work->refcount, 2);
 		INIT_WORK(&work->work_ack, surface_sam_ssh_event_work_ack_handler);
 		queue_work(ec->events.queue_ack, &work->work_ack);
@@ -1216,11 +1217,11 @@ static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
 
 	switch (ctrl->type) {
 	case SSH_FRAME_TYPE_ACK:
-	case SSH_FRAME_TYPE_NACK:
+	case SSH_FRAME_TYPE_NAK:
 		return ssh_receive_msg_ctrl(ec, buf, size);
 
-	case SSH_FRAME_TYPE_DATA:
-	case SSH_FRAME_TYPE_DATA_NOACK:
+	case SSH_FRAME_TYPE_DATA_SEQ:
+	case SSH_FRAME_TYPE_DATA_NSQ:
 		return ssh_receive_msg_cmd(ec, buf, size);
 
 	default:
