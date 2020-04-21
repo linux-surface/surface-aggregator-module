@@ -1374,16 +1374,16 @@ static void surface_sam_ssh_sysfs_unregister(struct device *dev)
 #endif	/* CONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE */
 
 
-static const struct acpi_gpio_params gpio_sam_wakeup_int = { 0, 0, false };
-static const struct acpi_gpio_params gpio_sam_wakeup     = { 1, 0, false };
+static const struct acpi_gpio_params gpio_ssh_wakeup_int = { 0, 0, false };
+static const struct acpi_gpio_params gpio_ssh_wakeup     = { 1, 0, false };
 
-static const struct acpi_gpio_mapping surface_sam_acpi_gpios[] = {
-	{ "sam_wakeup-int-gpio", &gpio_sam_wakeup_int, 1 },
-	{ "sam_wakeup-gpio",     &gpio_sam_wakeup,     1 },
+static const struct acpi_gpio_mapping ssh_acpi_gpios[] = {
+	{ "ssh_wakeup-int-gpio", &gpio_ssh_wakeup_int, 1 },
+	{ "ssh_wakeup-gpio",     &gpio_ssh_wakeup,     1 },
 	{ },
 };
 
-static irqreturn_t surface_sam_irq_handler(int irq, void *dev_id)
+static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
 {
 	struct serdev_device *serdev = dev_id;
 
@@ -1391,14 +1391,14 @@ static irqreturn_t surface_sam_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int surface_sam_setup_irq(struct serdev_device *serdev)
+static int ssh_setup_irq(struct serdev_device *serdev)
 {
 	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING;
 	struct gpio_desc *gpiod;
 	int irq;
 	int status;
 
-	gpiod = gpiod_get(&serdev->dev, "sam_wakeup-int", GPIOD_ASIS);
+	gpiod = gpiod_get(&serdev->dev, "ssh_wakeup-int", GPIOD_ASIS);
 	if (IS_ERR(gpiod))
 		return PTR_ERR(gpiod);
 
@@ -1408,8 +1408,8 @@ static int surface_sam_setup_irq(struct serdev_device *serdev)
 	if (irq < 0)
 		return irq;
 
-	status = request_threaded_irq(irq, NULL, surface_sam_irq_handler,
-				      irqf, "surface_sam_wakeup", serdev);
+	status = request_threaded_irq(irq, NULL, ssh_wake_irq_handler,
+				      irqf, "surface_sam_sh_wakeup", serdev);
 	if (status)
 		return status;
 
@@ -1558,7 +1558,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
 
-	status = devm_acpi_dev_add_driver_gpios(&serdev->dev, surface_sam_acpi_gpios);
+	status = devm_acpi_dev_add_driver_gpios(&serdev->dev, ssh_acpi_gpios);
 	if (status)
 		return status;
 
@@ -1587,7 +1587,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_evtq;
 	}
 
-	irq = surface_sam_setup_irq(serdev);
+	irq = ssh_setup_irq(serdev);
 	if (irq < 0) {
 		status = irq;
 		goto err_irq;
