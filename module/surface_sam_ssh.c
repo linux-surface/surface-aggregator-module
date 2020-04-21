@@ -27,7 +27,6 @@
 #define SSH_RQST_TAG_FULL			"surface_sam_ssh_rqst: "
 #define SSH_RQST_TAG				"rqst: "
 #define SSH_EVENT_TAG				"event: "
-#define SSH_RECV_TAG				"recv: "
 
 #define SSH_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
@@ -54,26 +53,12 @@
 	+ SSH_BYTELEN_TERM			\
 )
 
-#define SSH_MSG_LEN_CMD_BASE (			\
-	  SSH_BYTELEN_SYNC			\
-	+ SSH_BYTELEN_CTRL			\
-	+ SSH_BYTELEN_CRC			\
-	+ SSH_BYTELEN_CRC			\
-)	// without payload and command-frame
-
 #define SSH_TX_TIMEOUT			MAX_SCHEDULE_TIMEOUT
 #define SSH_RX_TIMEOUT			msecs_to_jiffies(1000)
 #define SSH_NUM_RETRY			3
 
 #define SSH_READ_BUF_LEN		4096		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
-
-
-#define SSH_FRAME_OFFS_CTRL		SSH_BYTELEN_SYNC
-#define SSH_FRAME_OFFS_CTRL_CRC		(SSH_FRAME_OFFS_CTRL + SSH_BYTELEN_CTRL)
-#define SSH_FRAME_OFFS_TERM		(SSH_FRAME_OFFS_CTRL_CRC + SSH_BYTELEN_CRC)
-#define SSH_FRAME_OFFS_CMD		SSH_FRAME_OFFS_TERM	// either TERM or CMD
-#define SSH_FRAME_OFFS_CMD_PLD		(SSH_FRAME_OFFS_CMD + SSH_BYTELEN_CMDFRAME)
 
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
@@ -153,6 +138,13 @@ static_assert(sizeof(struct ssh_command) == 8);
  * Syncrhonization (SYN) bytes.
  */
 #define SSH_MSG_SYN		((u16)0x55aa)
+
+/**
+ * Base-length of a SSH message. This is the minimum number of bytes required
+ * to form a message. The actual message length is SSH_MSG_LEN_BASE plus the
+ * length of the frame payload.
+ */
+#define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3 * sizeof(u16))
 
 
 /* -- TODO ------------------------------------------------------------------ */
@@ -276,6 +268,11 @@ static inline u16 ssh_rqid_to_event(u16 rqid)
 static inline bool ssh_rqid_is_event(u16 rqid)
 {
 	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_MAX_EVENT_ID;
+}
+
+static inline u32 ssh_message_length(u16 payload_size)
+{
+	return SSH_MSG_LEN_BASE + payload_size;
 }
 
 
@@ -408,6 +405,137 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 
 	// crc for command struct + payload
 	msgb_push_crc(msgb, cmd_begin, msgb->ptr - cmd_begin);
+}
+
+
+/* -- Parser API for SSH messages. ------------------------------------------ */
+
+struct bufspan {
+	u8    *ptr;
+	size_t len;
+};
+
+static inline bool sshp_validate_crc(const struct bufspan *data, const u8 *crc)
+{
+	u16 actual = ssh_crc(data->ptr, data->len);
+	u16 expected = get_unaligned_le16(crc);
+
+	return actual == expected;
+}
+
+static bool sshp_find_syn(const struct bufspan *src, struct bufspan *rem)
+{
+	size_t i;
+
+	for (i = 0; i < src->len - 1; i++) {
+		if (likely(get_unaligned_le16(src->ptr + i) == SSH_MSG_SYN)) {
+			rem->ptr = src->ptr + i;
+			rem->len = src->len - i;
+			return true;
+		}
+	}
+
+	if (unlikely(src->ptr[src->len - 1] == (SSH_MSG_SYN & 0xff))) {
+		rem->ptr = src->ptr + src->len - 1;
+		rem->len = 1;
+		return false;
+	} else {
+		rem->ptr = src->ptr + src->len;
+		rem->len = 0;
+		return false;
+	}
+}
+
+static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
+			       const struct bufspan *source,
+			       struct ssh_frame **frame,
+			       struct bufspan *payload)
+{
+	struct bufspan aligned;
+	struct bufspan sf;
+	struct bufspan sp;
+	bool syn_found;
+
+	// initialize output
+	*frame = NULL;
+	payload->ptr = NULL;
+	payload->len = 0;
+
+	// find SYN
+	syn_found = sshp_find_syn(source, &aligned);
+
+	if (unlikely(aligned.ptr - source->ptr) > 0)
+		ssh_warn(ec, "rx: parser: invalid start of frame, skipping \n");
+
+	if (unlikely(!syn_found))
+		return aligned.ptr - source->ptr;
+
+	// check for minumum packet length
+	if (aligned.len < ssh_message_length(0)) {
+		ssh_dbg(ec, "rx: parser: not enough data for frame\n");
+		return aligned.ptr - source->ptr;
+	}
+
+	// pin down frame
+	sf.ptr = aligned.ptr + sizeof(u16);
+	sf.len = sizeof(struct ssh_frame);
+
+	// validate frame CRC
+	if (unlikely(!sshp_validate_crc(&sf, sf.ptr + sf.len))) {
+		ssh_warn(ec, "rx: parser: invalid frame CRC\n");
+
+		// skip enough bytes to try and find next SYN
+		return aligned.ptr - source->ptr + sizeof(u16);
+	}
+
+	// pin down payload
+	sp.ptr = sf.ptr + sf.len + sizeof(u16);
+	sp.len = get_unaligned_le16(&((struct ssh_frame *)sf.ptr)->len);
+
+	// check for frame + payload length
+	if (aligned.len < ssh_message_length(sp.len)) {
+		ssh_dbg(ec, "rx: parser: not enough data for payload\n");
+		return aligned.ptr - source->ptr;
+	}
+
+	// validate payload crc
+	if (unlikely(!sshp_validate_crc(&sp, sp.ptr + sp.len))) {
+		ssh_warn(ec, "rx: parser: invalid payload CRC\n");
+
+		// skip enough bytes to try and find next SYN
+		return aligned.ptr - source->ptr + sizeof(u16);
+	}
+
+	*frame = (struct ssh_frame *)sf.ptr;
+	*payload = sp;
+
+	ssh_dbg(ec, "rx: parser: valid frame found (type: 0x%02x, len: %u)\n",
+		(*frame)->type, (*frame)->len);
+
+	return aligned.ptr - source->ptr;
+}
+
+static void sshp_parse_command(const struct sam_ssh_ec *ec,
+			       const struct bufspan *source,
+			       struct ssh_command **command,
+			       struct bufspan *command_data)
+{
+	// check for minimum length
+	if (unlikely(source->len < sizeof(struct ssh_command))) {
+		*command = NULL;
+		command_data->ptr = NULL;
+		command_data->len = 0;
+
+		ssh_err(ec, "rx: parser: command payload is too short\n");
+		return;
+	}
+
+	*command = (struct ssh_command *)source->ptr;
+	command_data->ptr = source->ptr + sizeof(struct ssh_command);
+	command_data->len = source->len - sizeof(struct ssh_command);
+
+	ssh_dbg(ec, "rx: parser: valid command found (tc: 0x%02x,"
+		" cid: 0x%02x)\n", (*command)->tc, (*command)->cid);
 }
 
 
@@ -969,50 +1097,43 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 		kfree(work);
 }
 
-static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
+static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
+				const struct ssh_frame *frame,
+				const struct ssh_command *command,
+				const struct bufspan *command_data)
 {
-	const struct ssh_frame *ctrl;
-	const struct ssh_command *cmd;
-	struct ssh_event_work *work;
-	unsigned long flags;
-	u16 pld_len;
-
 	surface_sam_ssh_event_handler_delay delay_fn;
+	struct ssh_event_work *work;
 	void *handler_data;
 	unsigned long delay;
+	unsigned long flags;
 
-	ctrl = (const struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
-	cmd  = (const struct ssh_command  *)(buf + SSH_FRAME_OFFS_CMD);
-
-	pld_len = get_unaligned_le16(&ctrl->len) - SSH_BYTELEN_CMDFRAME;
-
-	work = kzalloc(sizeof(struct ssh_event_work) + pld_len, GFP_ATOMIC);
+	work = kzalloc(sizeof(struct ssh_event_work) + command_data->len, GFP_ATOMIC);
 	if (!work)
 		return;
 
 	refcount_set(&work->refcount, 1);
 	work->ec         = ec;
-	work->seq        = ctrl->seq;
-	work->event.rqid = get_unaligned_le16(&cmd->rqid),
-	work->event.tc   = cmd->tc;
-	work->event.cid  = cmd->cid;
-	work->event.iid  = cmd->iid;
-	work->event.pri  = cmd->pri_in;
-	work->event.len  = pld_len;
+	work->seq        = frame->seq;
+	work->event.rqid = get_unaligned_le16(&command->rqid),
+	work->event.tc   = command->tc;
+	work->event.cid  = command->cid;
+	work->event.iid  = command->iid;
+	work->event.pri  = command->pri_in;
+	work->event.len  = command_data->len;
 	work->event.pld  = ((u8 *)work) + sizeof(struct ssh_event_work);
-
-	memcpy(work->event.pld, buf + SSH_FRAME_OFFS_CMD_PLD, pld_len);
+	memcpy(work->event.pld, command_data->ptr, command_data->len);
 
 	// queue ACK for if required
-	if (ctrl->type == SSH_FRAME_TYPE_DATA_SEQ) {
+	if (frame->type == SSH_FRAME_TYPE_DATA_SEQ) {
 		refcount_set(&work->refcount, 2);
 		INIT_WORK(&work->work_ack, surface_sam_ssh_event_work_ack_handler);
 		queue_work(ec->events.queue_ack, &work->work_ack);
 	}
 
 	spin_lock_irqsave(&ec->events.lock, flags);
-	handler_data = ec->events.handler[work->event.rqid - 1].data;
-	delay_fn = ec->events.handler[work->event.rqid - 1].delay;
+	handler_data = ec->events.handler[ssh_rqid_to_event(work->event.rqid)].data;
+	delay_fn = ec->events.handler[ssh_rqid_to_event(work->event.rqid)].delay;
 
 	/* Note:
 	 * We need to check delay_fn here: This may have never been set as we
@@ -1030,204 +1151,146 @@ static void ssh_handle_event(struct sam_ssh_ec *ec, const u8 *buf)
 	}
 }
 
-static int ssh_receive_msg_ctrl(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
+static void ssh_rx_complete_command(struct sam_ssh_ec *ec,
+				    const struct ssh_frame *frame,
+				    const struct ssh_command *command,
+				    const struct bufspan *command_data)
 {
 	struct ssh_receiver *rcv = &ec->receiver;
-	const struct ssh_frame *ctrl;
 	struct ssh_fifo_packet packet;
 
-	const u8 *ctrl_begin = buf + SSH_FRAME_OFFS_CTRL;
-	const u8 *ctrl_end   = buf + SSH_FRAME_OFFS_CTRL_CRC;
-
-	ctrl = (const struct ssh_frame *)(ctrl_begin);
-
-	// actual length check
-	if (size < SSH_MSG_LEN_CTRL)
-		return 0;			// need more bytes
-
-	// validate TERM
-	if (!ssh_is_valid_ter(buf + SSH_FRAME_OFFS_TERM)) {
-		ssh_err(ec, SSH_RECV_TAG "invalid end of message\n");
-		return size;			// discard everything
-	}
-
-	// validate CRC
-	if (!ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		ssh_err(ec, SSH_RECV_TAG "invalid checksum (ctrl)\n");
-		return SSH_MSG_LEN_CTRL;	// only discard message
-	}
-
 	// check if we expect the message
-	if (rcv->state != SSH_RCV_CONTROL) {
-		ssh_err(ec, SSH_RECV_TAG "discarding message: ctrl not expected\n");
-		return SSH_MSG_LEN_CTRL;	// discard message
-	}
-
-	// check if it is for our request
-	if (ctrl->type == SSH_FRAME_TYPE_ACK && ctrl->seq != rcv->expect.seq) {
-		ssh_err(ec, SSH_RECV_TAG "discarding message: ack does not match\n");
-		return SSH_MSG_LEN_CTRL;	// discard message
-	}
-
-	// we now have a valid & expected ACK/RETRY message
-	ssh_dbg(ec, SSH_RECV_TAG "valid control message received (type: 0x%02x)\n", ctrl->type);
-
-	packet.type = ctrl->type;
-	packet.seq  = ctrl->seq;
-	packet.len  = 0;
-
-	if (kfifo_avail(&rcv->fifo) >= sizeof(packet)) {
-		kfifo_in(&rcv->fifo, (u8 *) &packet, sizeof(packet));
-
-	} else {
-		ssh_warn(ec, SSH_RECV_TAG
-			 "dropping frame: not enough space in fifo (type = %d)\n",
-			 ctrl->type);
-
-		return SSH_MSG_LEN_CTRL;	// discard message
-	}
-
-	// update decoder state
-	if (ctrl->type == SSH_FRAME_TYPE_ACK) {
-		rcv->state = rcv->expect.pld
-			? SSH_RCV_COMMAND
-			: SSH_RCV_DISCARD;
-	}
-
-	complete(&rcv->signal);
-	return SSH_MSG_LEN_CTRL;		// handled message
-}
-
-static int ssh_receive_msg_cmd(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
-{
-	struct ssh_receiver *rcv = &ec->receiver;
-	const struct ssh_frame *ctrl;
-	const struct ssh_command *cmd;
-	struct ssh_fifo_packet packet;
-
-	const u8 *ctrl_begin     = buf + SSH_FRAME_OFFS_CTRL;
-	const u8 *ctrl_end       = buf + SSH_FRAME_OFFS_CTRL_CRC;
-	const u8 *cmd_begin      = buf + SSH_FRAME_OFFS_CMD;
-	const u8 *cmd_begin_pld  = buf + SSH_FRAME_OFFS_CMD_PLD;
-	const u8 *cmd_end;
-
-	size_t msg_len;
-
-	ctrl = (const struct ssh_frame *)(ctrl_begin);
-	cmd  = (const struct ssh_command  *)(cmd_begin);
-
-	// we need at least a full control frame
-	if (size < (SSH_BYTELEN_SYNC + SSH_BYTELEN_CTRL + SSH_BYTELEN_CRC))
-		return 0;		// need more bytes
-
-	// validate control-frame CRC
-	if (!ssh_is_valid_crc(ctrl_begin, ctrl_end)) {
-		ssh_err(ec, SSH_RECV_TAG "invalid checksum (cmd-ctrl)\n");
-		/*
-		 * We can't be sure here if length is valid, thus
-		 * discard everything.
-		 */
-		return size;
-	}
-
-	// actual length check (ctrl->len contains command-frame but not crc)
-	msg_len = SSH_MSG_LEN_CMD_BASE + get_unaligned_le16(&ctrl->len);
-	if (size < msg_len)
-		return 0;			// need more bytes
-
-	cmd_end = cmd_begin + get_unaligned_le16(&ctrl->len);
-
-	// validate command-frame type
-	if (cmd->type != SSH_PLD_TYPE_CMD) {
-		ssh_err(ec, SSH_RECV_TAG "expected command frame type but got 0x%02x\n", cmd->type);
-		return size;			// discard everything
-	}
-
-	// validate command-frame CRC
-	if (!ssh_is_valid_crc(cmd_begin, cmd_end)) {
-		ssh_err(ec, SSH_RECV_TAG "invalid checksum (cmd-pld)\n");
-
-		/*
-		 * The message length is provided in the control frame. As we
-		 * already validated that, we can be sure here that it's
-		 * correct, so we only need to discard the message.
-		 */
-		return msg_len;
-	}
-
-	// check if we received an event notification
-	if (ssh_rqid_is_event(get_unaligned_le16(&cmd->rqid))) {
-		ssh_handle_event(ec, buf);
-		return msg_len;			// handled message
-	}
-
-	// check if we expect the message
-	if (rcv->state != SSH_RCV_COMMAND) {
-		ssh_dbg(ec, SSH_RECV_TAG "discarding message: command not expected\n");
-		return msg_len;			// discard message
+	if (unlikely(rcv->state != SSH_RCV_COMMAND)) {
+		ssh_dbg(ec, "rx: discarding message: command not expected\n");
+		return;
 	}
 
 	// check if response is for our request
-	if (rcv->expect.rqid != get_unaligned_le16(&cmd->rqid)) {
-		ssh_dbg(ec, SSH_RECV_TAG "discarding message: command not a match\n");
-		return msg_len;			// discard message
+	if (unlikely(rcv->expect.rqid != get_unaligned_le16(&command->rqid))) {
+		ssh_dbg(ec, "rx: discarding message: command not a match\n");
+		return;
 	}
 
 	// we now have a valid & expected command message
-	ssh_dbg(ec, SSH_RECV_TAG "valid command message received\n");
+	ssh_dbg(ec, "rx: valid command message received\n");
 
-	packet.type = ctrl->type;
-	packet.seq = ctrl->seq;
-	packet.len = cmd_end - cmd_begin_pld;
+	packet.type = frame->type;
+	packet.seq = frame->seq;
+	packet.len = command_data->len;
 
-	if (kfifo_avail(&rcv->fifo) >= sizeof(packet) + packet.len) {
-		kfifo_in(&rcv->fifo, &packet, sizeof(packet));
-		kfifo_in(&rcv->fifo, cmd_begin_pld, packet.len);
-
-	} else {
-		ssh_warn(ec, SSH_RECV_TAG
-			 "dropping frame: not enough space in fifo (type = %d)\n",
-			 ctrl->type);
-
-		return SSH_MSG_LEN_CTRL;	// discard message
+	if (unlikely(kfifo_avail(&rcv->fifo) < sizeof(packet) + packet.len)) {
+		ssh_warn(ec, "rx: dropping frame: not enough space in fifo (type = %d)\n",
+			 frame->type);
+		return;
 	}
+
+	kfifo_in(&rcv->fifo, &packet, sizeof(packet));
+	kfifo_in(&rcv->fifo, command_data->ptr, command_data->len);
 
 	rcv->state = SSH_RCV_DISCARD;
-
 	complete(&rcv->signal);
-	return msg_len;				// handled message
 }
 
-static int ssh_eval_buf(struct sam_ssh_ec *ec, const u8 *buf, size_t size)
+static void ssh_receive_control_frame(struct sam_ssh_ec *ec,
+				      const struct ssh_frame *frame)
 {
-	struct ssh_frame *ctrl;
+	struct ssh_receiver *rcv = &ec->receiver;
+	struct ssh_fifo_packet packet;
 
-	// we need at least a control frame to check what to do
-	if (size < (SSH_BYTELEN_SYNC + SSH_BYTELEN_CTRL))
-		return 0;		// need more bytes
-
-	// make sure we're actually at the start of a new message
-	if (!ssh_is_valid_syn(buf)) {
-		ssh_err(ec, SSH_RECV_TAG "invalid start of message\n");
-		return size;		// discard everything
+	// check if we expect the message
+	if (unlikely(rcv->state != SSH_RCV_CONTROL)) {
+		ssh_err(ec, "rx: discarding message: control not expected\n");
+		return;
 	}
 
-	// handle individual message types separately
-	ctrl = (struct ssh_frame *)(buf + SSH_FRAME_OFFS_CTRL);
+	// check if it is for our request
+	if (unlikely(frame->type == SSH_FRAME_TYPE_ACK && frame->seq != rcv->expect.seq)) {
+		ssh_err(ec, "rx: discarding message: ACK does not match\n");
+		return;
+	}
 
-	switch (ctrl->type) {
+	// we now have a valid & expected ACK/RETRY message
+	ssh_dbg(ec, "rx: valid control message received (type: 0x%02x)\n", frame->type);
+
+	packet.type = frame->type;
+	packet.seq  = frame->seq;
+	packet.len  = 0;
+
+	if (unlikely(kfifo_avail(&rcv->fifo) < sizeof(packet))) {
+		ssh_warn(ec, "rx: dropping frame: not enough space in fifo (type = %d)\n",
+			 frame->type);
+		return;
+	}
+
+	kfifo_in(&rcv->fifo, (u8 *) &packet, sizeof(packet));
+
+	// update decoder state
+	if (frame->type == SSH_FRAME_TYPE_ACK)
+		rcv->state = rcv->expect.pld ? SSH_RCV_COMMAND : SSH_RCV_DISCARD;
+
+	complete(&rcv->signal);
+}
+
+static void ssh_receive_command_frame(struct sam_ssh_ec *ec,
+				      const struct ssh_frame *frame,
+				      const struct ssh_command *command,
+				      const struct bufspan *command_data)
+{
+	// check if we received an event notification
+	if (ssh_rqid_is_event(get_unaligned_le16(&command->rqid))) {
+		ssh_rx_handle_event(ec, frame, command, command_data);
+	} else {
+		ssh_rx_complete_command(ec, frame, command, command_data);
+	}
+}
+
+static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
+				   const struct ssh_frame *frame,
+				   const struct bufspan *payload)
+{
+	struct ssh_command *command;
+	struct bufspan command_data;
+
+	if (likely(payload->ptr[0] == SSH_PLD_TYPE_CMD)) {
+		sshp_parse_command(ec, payload, &command, &command_data);
+		if (unlikely(!command))
+			return;
+
+		ssh_receive_command_frame(ec, frame, command, &command_data);
+	} else {
+		ssh_err(ec, "rx: unknown frame payload type (type: 0x%02x)\n",
+			payload->ptr[0]);
+	}
+}
+
+static size_t ssh_eval_buf(struct sam_ssh_ec *ec, u8 *buf, size_t size)
+{
+	struct ssh_frame *frame;
+	struct bufspan source = { .ptr = buf, .len = size };
+	struct bufspan payload;
+	size_t n;
+
+	// parse and validate frame
+	n = sshp_parse_frame(ec, &source, &frame, &payload);
+	if (!frame)
+		return n;
+
+	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
 	case SSH_FRAME_TYPE_NAK:
-		return ssh_receive_msg_ctrl(ec, buf, size);
+		ssh_receive_control_frame(ec, frame);
+		break;
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
 	case SSH_FRAME_TYPE_DATA_NSQ:
-		return ssh_receive_msg_cmd(ec, buf, size);
+		ssh_receive_data_frame(ec, frame, &payload);
+		break;
 
 	default:
-		ssh_err(ec, SSH_RECV_TAG "unknown frame type 0x%02x\n", ctrl->type);
-		return size;		// discard everything
+		ssh_warn(ec, "rx: unknown frame type 0x%02x\n", frame->type);
 	}
+
+	return n + ssh_message_length(frame->len);
 }
 
 static int ssh_receive_buf(struct serdev_device *serdev,
@@ -1236,8 +1299,7 @@ static int ssh_receive_buf(struct serdev_device *serdev,
 	struct sam_ssh_ec *ec = serdev_device_get_drvdata(serdev);
 	struct ssh_receiver *rcv = &ec->receiver;
 	unsigned long flags;
-	int offs = 0;
-	int used, n;
+	size_t n, offs = 0, used;
 
 	ssh_dbg(ec, "rx: received data (size: %zu)\n", size);
 	print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
@@ -1258,7 +1320,7 @@ static int ssh_receive_buf(struct serdev_device *serdev,
 	while (offs < rcv->eval_buf.len) {
 		n = rcv->eval_buf.len - offs;
 		n = ssh_eval_buf(ec, rcv->eval_buf.ptr + offs, n);
-		if (n <= 0)
+		if (n == 0)
 			break;	// need more bytes
 
 		offs += n;
