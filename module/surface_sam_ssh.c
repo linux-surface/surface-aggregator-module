@@ -471,7 +471,7 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 		return aligned.ptr - source->ptr;
 
 	// check for minumum packet length
-	if (aligned.len < ssh_message_length(0)) {
+	if (unlikely(aligned.len < ssh_message_length(0))) {
 		ssh_dbg(ec, "rx: parser: not enough data for frame\n");
 		return aligned.ptr - source->ptr;
 	}
