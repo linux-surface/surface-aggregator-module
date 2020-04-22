@@ -74,8 +74,9 @@ List of System Requests (TC = 0x01)
     0x0b  0x00  0x01  yes      yes       Enable event source    log
     0x0c  0x00  0x01  no       yes       Disable event source   log
 
-    0x15  0x00  0x01  no       yes       Suspend EC             log
-    0x16  0x00  0x01  no       yes       Resume EC              log
+    0x15  0x00  0x01  no       yes       Suspend EC (disp. off) log
+    0x16  0x00  0x01  no       yes       Resume EC (displ. on)  log
+    0x17  0x00  0x01  no       yes       GPIO wake IRQ callback rev
 
     0x1a  0x00  0x01  yes      yes       RTC: ACPI/_STV         dsdt
     0x1b  0x00  0x01  yes      yes       RTC: ACPI/_GWS         dsdt
@@ -84,6 +85,9 @@ List of System Requests (TC = 0x01)
 
     0x1f  0x00  0x01  no       yes       RTC: ACPI/_GRT         dsdt
     0x20  0x00  0x01  yes      yes       RTC: ACPI/_SRT         dsdt
+
+    0x33  0x00  0x01  no       yes       Device D3 Entry        rev
+    0x34  0x00  0x01  no       yes       Device D0 Entry        rev
 
 
 List of Power Subsystem Requests (TC = 0x02)
