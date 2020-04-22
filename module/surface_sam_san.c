@@ -350,14 +350,7 @@ static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
 		return san_evt_power_adapter(dev, event);
 
 	case SAM_EVENT_PWR_CID_DPTF:
-		/*
-		 * Ignored for now.
-		 * This signals a change in Intel DPTF PMAX, and possibly other
-		 * fields. Ignore for now as there is no corresponding _DSM call and
-		 * DPTF is implemented via a separate INT3407 device.
-		 *
-		 * The payload of this event is: [u32 PMAX, unknown...].
-		 */
+		// TODO: call _DSM(Arg2=0x0A, Arg3=Buffer(payload, size=0x0c))
 		return 0;
 
 	default:
