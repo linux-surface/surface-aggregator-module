@@ -1350,6 +1350,13 @@ static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
 	struct serdev_device *serdev = dev_id;
 
 	dev_dbg(&serdev->dev, "pm: wake irq triggered\n");
+
+	// TODO: Send GPIO callback command repeatedly to EC until callback
+	//       returns 0x00. Return flag of callback is "has more events".
+	//       Each time the command is sent, one event is "released". Once
+	//       all events have been released (return = 0x00), the GPIO is
+	//       re-armed.
+
 	return IRQ_HANDLED;
 }
 
