@@ -25,13 +25,45 @@ direct prior request, may need to be set up).
 List of Target Categories:
 --------------------------------------------------------------------------------
 
+Some of these have been extracted from the MS SSH driver and are noted with
+the abbreviation found there.
+
       TC  Name/Function
     -----------------------------------------------------------------------
-    0x01  Generic system functionality and real-time clock
-    0x02  Battery/Power-subsystem
-    0x03  Thermal subsystem, temperature probes
-    0x08  Laptop 1/Laptop 2 keyboard
-    0x11  Detachment system and discrete graphics (Surface Book 2)
+    0x00  N/A
+    0x01  Generic system functionality and real-time clock [SAM]
+    0x02  Battery/Power-subsystem [BAT]
+    0x03  Thermal subsystem, temperature probes [TMP]
+    0x04  PMC
+    0x05  FAN
+    0x06  PoM
+    0x07  DBG
+    0x08  Laptop 1/Laptop 2 keyboard [KBD]
+    0x09  FWU
+    0x0A  UNI
+    0x0B  LPC
+    0x0C  TCL
+    0x0D  SFL
+    0x0E  KIP
+    0x0F  EXT
+    0x10  BLD
+    0x11  Detachment system and discrete graphics (Surface Book 2) [BAS]
+    0x12  SEN
+    0x13  SRQ
+    0x14  MCU
+    0x15  Laptop 3 HID subsystem (Keyboard + Touchpad) [HID]
+    0x16  TCH
+    0x17  BKL
+    0x18  TAM
+    0x19  ACC
+    0x1A  UFI
+    0x1B  USC
+    0x1C  PEN
+    0x1D  VID
+    0x1E  AUD
+    0x1F  SMC
+    0x20  KPD
+    0x21  REG
 
 
 List of System Requests (TC = 0x01)
