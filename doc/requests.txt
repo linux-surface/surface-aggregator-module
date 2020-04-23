@@ -74,6 +74,8 @@ List of System Requests (TC = 0x01)
     0x0b  0x00  0x01  yes      yes       Enable event source    log
     0x0c  0x00  0x01  no       yes       Disable event source   log
 
+    0x13  0x00  0x01  no       yes       SAM Controller version rev
+
     0x15  0x00  0x01  no       yes       Suspend EC (disp. off) log
     0x16  0x00  0x01  no       yes       Resume EC (displ. on)  log
     0x17  0x00  0x01  no       yes       GPIO wake IRQ callback rev
