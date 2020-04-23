@@ -220,15 +220,6 @@ TC=2, CID=1, IID=6) can lead to unexpected behavior (in this case turning
 off the system), which might be undefined.
 
 
-List of System Requests (TC = 0x01)
---------------------------------------------------------------------------------
-
-     CID   IID   PRI  Payload  Response  Function/Behavior      Source
-    ------------------------------------------------------------------------
-    0x33  0x00  0x01  no       yes       ???                    log
-    0x34  0x00  0x01  no       yes       ???                    log
-
-
 List of Unknown Power Subsystem Requests (TC = 0x02)
 --------------------------------------------------------------------------------
 
