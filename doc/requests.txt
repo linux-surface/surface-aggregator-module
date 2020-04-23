@@ -271,7 +271,7 @@ Note: IID 01 means the command works both on IID=0 and IID=1, similarly IID
 run on IID=0 likely return the same data as if run on IID=1.
 
 
-List of Unknown Category 4 Requests (TC = 0x04)
+List of Unknown PMC Requests (TC = 0x04)
 --------------------------------------------------------------------------------
 
      CID   IID   PRI  Payload  Response  Function/Behavior      Source
@@ -279,7 +279,7 @@ List of Unknown Category 4 Requests (TC = 0x04)
     0x01  0x00  0x01  no       no        reboot                 probing
     0x04  0x00  0x01  no       no        power-off              probing
     0x05  0x00  0x01  ?        yes       ?                      probing
-    0x06  0x00  0x01  ?        yes       ?                      probing
+    0x06  0x00  0x01  yes      yes       telemetry?             probing/rev
     0x07  0x00  0x01  ?        yes       ?                      probing
 
 
