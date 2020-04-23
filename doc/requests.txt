@@ -316,6 +316,17 @@ represents the number of bytes actually read, and the end flag is nonzero if
 the buffer does not hold any more data beyond this read request.
 
 
+List of KIP System Requests (TC = 0x0E)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Function/Behavior      Source
+    ------------------------------------------------------------------------
+    0x0a  0x00  0x02  no       no        ?                      rev
+    0x0b  0x00  0x02  no       no        ?                      rev
+    0x1d  0x00  0x01  no       u8        ?                      rev
+    0x2c  0x00  0x01  no       u8        ?                      rev
+
+
 List of ?? System Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
