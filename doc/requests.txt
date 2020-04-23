@@ -333,7 +333,7 @@ List of KIP System Requests (TC = 0x0E)
     0x2c  0x00  0x01  no       u8        ?                      rev
 
 
-List of ?? System Requests (TC = 0x21)
+List of REG System Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
      CID   IID   PRI  Payload  Response  Name/Function          Source
@@ -342,5 +342,3 @@ List of ?? System Requests (TC = 0x21)
 
 
 Note: This list may not be exhaustive.
-
-
