@@ -285,6 +285,37 @@ List of Unknown Category 4 Requests (TC = 0x04)
     0x06  0x00  0x01  ?        yes       ?                      probing
     0x07  0x00  0x01  ?        yes       ?                      probing
 
+
+List of TCL System Requests (TC = 0x0C)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Function/Behavior      Source
+    ------------------------------------------------------------------------
+    0x0a  0x00  0x02  yes      yes       called for CID=0x0c    rev
+    0x0b  1+    0x02  yes      yes       called for CID=0x0c    rev
+    0x0c  1+    0x01  yes      yes       reads some buffer      rev
+
+CID=0x0a takes an u16 buffer ID as payload and returns that buffer ID,
+followed by a maximum IID. With that, CID=0x0c can be called for IIDs in
+range 1 to the obtained maximum (inclusively).
+
+CID=0x0b takes an u16 buffer ID as payload and returns that buffer ID,
+followed by unknown data.
+
+CID=0x0c takes the following struct as input (in order):
+
+    Type  Description
+    ------------------------------------------------------------------------
+    u16   Buffer ID
+    u32   Buffer offset (offset to read at, in bytes)
+    u16   Read length (length to read in bytes)
+    u8    End flag (zero for input, nonzero on output if exhausted)
+
+The same struct is returned with same buffer ID and offset, but read length
+represents the number of bytes actually read, and the end flag is nonzero if
+the buffer does not hold any more data beyond this read request.
+
+
 List of ?? System Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
