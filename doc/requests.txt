@@ -165,8 +165,12 @@ List of Detachment System Requests (TC = 0x11)
     0x07  0x00  0x01  no       no        Unlock latch           dsdt
     0x08  0x00  0x01  no       no        Request latch open     log
     0x09  0x00  0x01  no       no        Confirm latch open     log
-
+    0x0a  0x00  0x01  no       no        DTX command heartbeat  rev
+    0x0b  0x00  0x01  no       no        Canclel DTX command    rev
+    0x0c  0x00  0x01  no       yes       Get state cause        rev
     0x0d  0x00  0x01  no       yes       Get device OpMode      dsdt
+
+    0x11  0x00  0x01  no       yes       Get latch status       rev
 
 
 List of Detachment System Events (TC = 0x11)
