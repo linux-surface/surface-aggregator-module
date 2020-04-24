@@ -1031,6 +1031,47 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 }
 
 
+static int surface_sam_ssh_get_controller_version(struct sam_ssh_ec *ec, u32 *version)
+{
+	struct surface_sam_ssh_rqst rqst = {
+		.tc  = 0x01,
+		.cid = 0x13,
+		.iid = 0x00,
+		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.snc = 0x01,
+		.cdl = 0x00,
+		.pld = NULL,
+	};
+
+	struct surface_sam_ssh_buf result = {
+		result.cap = sizeof(*version),
+		result.len = 0,
+		result.data = (u8 *)version,
+	};
+
+	*version = 0;
+	return surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+}
+
+static int surface_sam_ssh_log_controller_version(struct sam_ssh_ec *ec)
+{
+	u32 version, a, b, c;
+	int status;
+
+	status = surface_sam_ssh_get_controller_version(ec, &version);
+	if (status)
+		return status;
+
+	a = (version >> 24) & 0xff;
+	b = le16_to_cpu((version >> 8) & 0xffff);
+	c = version & 0xff;
+
+	dev_info(&ec->serdev->dev, "SAM controller version: %u.%u.%u\n",
+		 a, b, c);
+	return 0;
+}
+
+
 static inline bool ssh_is_valid_syn(const u8 *ptr)
 {
 	return ptr[0] == 0xaa && ptr[1] == 0x55;
@@ -1601,6 +1642,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
 				     ssh_setup_from_resource, serdev);
 	if (ACPI_FAILURE(status))
+		goto err_devinit;
+
+	status = surface_sam_ssh_log_controller_version(ec);
+	if (status)
 		goto err_devinit;
 
 	status = surface_sam_ssh_ec_resume(ec);
