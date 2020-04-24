@@ -15,6 +15,7 @@
 #include <linux/kernel.h>
 #include <linux/kfifo.h>
 #include <linux/mutex.h>
+#include <linux/notifier.h>
 #include <linux/pm.h>
 #include <linux/refcount.h>
 #include <linux/serdev.h>
@@ -183,17 +184,11 @@ struct ssh_receiver {
 	} eval_buf;
 };
 
-struct ssh_event_handler {
-	surface_sam_ssh_event_handler_fn handler;
-	surface_sam_ssh_event_handler_delay delay;
-	void *data;
-};
-
 struct ssh_events {
-	spinlock_t lock;
 	struct workqueue_struct *queue_ack;
 	struct workqueue_struct *queue_evt;
-	struct ssh_event_handler handler[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
 };
 
 struct sam_ssh_ec {
@@ -217,7 +212,7 @@ struct ssh_event_work {
 	refcount_t refcount;
 	struct sam_ssh_ec *ec;
 	struct work_struct work_ack;
-	struct delayed_work work_evt;
+	struct work_struct work_evt;
 	struct surface_sam_ssh_event event;
 	u8 seq;
 };
@@ -237,8 +232,7 @@ static struct sam_ssh_ec ssh_ec = {
 		.expect = {},
 	},
 	.events = {
-		.lock = __SPIN_LOCK_UNLOCKED(),
-		.handler = {},
+		.notifier_count = { 0 },
 	},
 	.irq = -1,
 };
@@ -260,6 +254,11 @@ static inline u16 ssh_rqid_next(u16 rqid)
 	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID + 1;
 }
 
+static inline u16 ssh_event_to_rqid(u16 event)
+{
+	return event + 1;
+}
+
 static inline u16 ssh_rqid_to_event(u16 rqid)
 {
 	return rqid - 1;
@@ -268,6 +267,21 @@ static inline u16 ssh_rqid_to_event(u16 rqid)
 static inline bool ssh_rqid_is_event(u16 rqid)
 {
 	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_MAX_EVENT_ID;
+}
+
+static inline int ssh_tc_to_event(u8 tc)
+{
+	/*
+	 * TC=0x08 represents the input subsystem on Surface Laptop 1 and 2.
+	 * This is mapped on Windows to RQID=0x0001. As input events seem to be
+	 * somewhat special with regards to enabling/disabling (they seem to be
+	 * enabled by default with a fixed RQID), let's do the same here.
+	 */
+	if (tc == 0x08)
+		return ssh_rqid_to_event(0x0001);
+
+	/* Default path: Set RQID = TC. */
+	return ssh_rqid_to_event(tc);
 }
 
 static inline u32 ssh_message_length(u16 payload_size)
@@ -586,7 +600,12 @@ int surface_sam_ssh_consumer_register(struct device *consumer)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
 
-int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
+static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
+					 const struct surface_sam_ssh_rqst *rqst,
+					 struct surface_sam_ssh_buf *result);
+
+static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec, u8 tc,
+					u8 unknown, u16 rqid)
 {
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
@@ -612,7 +631,12 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	status = surface_sam_ssh_rqst(&rqst, &result);
+	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+
+	if (status) {
+		dev_err(&ec->serdev->dev, "failed to enable event source"
+			" (tc: 0x%02x, rqid: 0x%04x)\n", tc, rqid);
+	}
 
 	if (buf[0] != 0x00) {
 		pr_warn(SSH_RQST_TAG_FULL
@@ -623,9 +647,9 @@ int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid)
 	return status;
 
 }
-EXPORT_SYMBOL_GPL(surface_sam_ssh_enable_event_source);
 
-int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
+static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec, u8 tc,
+					 u8 unknown, u16 rqid)
 {
 	u8 pld[4] = { tc, unknown, rqid & 0xff, rqid >> 8 };
 	u8 buf[1] = { 0x00 };
@@ -651,30 +675,30 @@ int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid)
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	status = surface_sam_ssh_rqst(&rqst, &result);
+	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+
+	if (status) {
+		dev_err(&ec->serdev->dev, "failed to disable event source"
+			" (tc: 0x%02x, rqid: 0x%04x)\n", tc, rqid);
+	}
 
 	if (buf[0] != 0x00) {
-		pr_warn(SSH_RQST_TAG_FULL
+		dev_warn(&ec->serdev->dev,
 			"unexpected result while disabling event source: "
 			"0x%02x\n", buf[0]);
 	}
 
 	return status;
 }
-EXPORT_SYMBOL_GPL(surface_sam_ssh_disable_event_source);
 
-static unsigned long sam_event_default_delay(struct surface_sam_ssh_event *event, void *data)
-{
-	return event->pri == SURFACE_SAM_PRIORITY_HIGH ? SURFACE_SAM_SSH_EVENT_IMMEDIATE : 0;
-}
 
-int surface_sam_ssh_set_delayed_event_handler(
-		u16 rqid, surface_sam_ssh_event_handler_fn fn,
-		surface_sam_ssh_event_handler_delay delay,
-		void *data)
+int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb)
 {
 	struct sam_ssh_ec *ec;
-	unsigned long flags;
+	struct srcu_notifier_head *nh;
+	u16 event = ssh_tc_to_event(tc);
+	u16 rqid = ssh_event_to_rqid(event);
+	int status;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -683,32 +707,35 @@ int surface_sam_ssh_set_delayed_event_handler(
 	if (!ec)
 		return -ENXIO;
 
-	if (!delay)
-		delay = sam_event_default_delay;
-
-	spin_lock_irqsave(&ec->events.lock, flags);
-	// check if we already have a handler
-	if (ec->events.handler[rqid - 1].handler) {
-		spin_unlock_irqrestore(&ec->events.lock, flags);
-		return -EINVAL;
+	nh = &ec->events.notifier[event];
+	status = srcu_notifier_chain_register(nh, nb);
+	if (status) {
+		surface_sam_ssh_release(ec);
+		return status;
 	}
 
-	// 0 is not a valid event RQID
-	ec->events.handler[rqid - 1].handler = fn;
-	ec->events.handler[rqid - 1].delay = delay;
-	ec->events.handler[rqid - 1].data = data;
+	if (ec->events.notifier_count[event] == 0) {
+		status = surface_sam_ssh_event_enable(ec, tc, 0x01, rqid);
+		if (status) {
+			srcu_notifier_chain_unregister(nh, nb);
+			surface_sam_ssh_release(ec);
+			return status;
+		}
+	}
+	ec->events.notifier_count[event] += 1;
 
-	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surface_sam_ssh_release(ec);
-
 	return 0;
 }
-EXPORT_SYMBOL_GPL(surface_sam_ssh_set_delayed_event_handler);
+EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_register);
 
-int surface_sam_ssh_remove_event_handler(u16 rqid)
+int surface_sam_ssh_notifier_unregister(u8 tc, struct notifier_block *nb)
 {
 	struct sam_ssh_ec *ec;
-	unsigned long flags;
+	struct srcu_notifier_head *nh;
+	u16 event = ssh_tc_to_event(tc);
+	u16 rqid = ssh_event_to_rqid(event);
+	int status;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -717,25 +744,21 @@ int surface_sam_ssh_remove_event_handler(u16 rqid)
 	if (!ec)
 		return -ENXIO;
 
-	spin_lock_irqsave(&ec->events.lock, flags);
+	nh = &ec->events.notifier[event];
+	status = srcu_notifier_chain_unregister(nh, nb);
+	if (status) {
+		surface_sam_ssh_release(ec);
+		return status;
+	}
 
-	// 0 is not a valid event RQID
-	ec->events.handler[rqid - 1].handler = NULL;
-	ec->events.handler[rqid - 1].delay = NULL;
-	ec->events.handler[rqid - 1].data = NULL;
+	ec->events.notifier_count[event] -= 1;
+	if (ec->events.notifier_count == 0)
+		status = surface_sam_ssh_event_disable(ec, tc, 0x01, rqid);
 
-	spin_unlock_irqrestore(&ec->events.lock, flags);
 	surface_sam_ssh_release(ec);
-
-	/*
-	 * Make sure that the handler is not in use any more after we've
-	 * removed it.
-	 */
-	flush_workqueue(ec->events.queue_evt);
-
-	return 0;
+	return status;
 }
-EXPORT_SYMBOL_GPL(surface_sam_ssh_remove_event_handler);
+EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
 
 
 static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb,
@@ -1057,41 +1080,30 @@ static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
 
 static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 {
-	struct delayed_work *dwork = (struct delayed_work *)_work;
 	struct ssh_event_work *work;
+	struct srcu_notifier_head *nh;
 	struct surface_sam_ssh_event *event;
 	struct sam_ssh_ec *ec;
 	struct device *dev;
-	unsigned long flags;
+	int status = 0, ncalls = 0;
 
-	surface_sam_ssh_event_handler_fn handler;
-	void *handler_data;
-
-	int status = 0;
-
-	work = container_of(dwork, struct ssh_event_work, work_evt);
+	work = container_of(_work, struct ssh_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
 	dev = &ec->serdev->dev;
 
-	spin_lock_irqsave(&ec->events.lock, flags);
-	handler       = ec->events.handler[event->rqid - 1].handler;
-	handler_data  = ec->events.handler[event->rqid - 1].data;
-	spin_unlock_irqrestore(&ec->events.lock, flags);
+	nh = &ec->events.notifier[ssh_rqid_to_event(event->rqid)];
+	status = __srcu_notifier_call_chain(nh, event->tc, event, -1, &ncalls);
+	status = notifier_to_errno(status);
 
-	/*
-	 * During handler removal or driver release, we ensure every event gets
-	 * handled before return of that function. Thus a handler obtained here is
-	 * guaranteed to be valid at least until this function returns.
-	 */
+	if (status < 0)
+		ssh_err(ec, "event: error handling event: %d\n", status);
 
-	if (handler)
-		status = handler(event, handler_data);
-	else
-		ssh_warn(ec, SSH_EVENT_TAG "unhandled event (rqid: %04x)\n", event->rqid);
-
-	if (status)
-		ssh_err(ec, SSH_EVENT_TAG "error handling event: %d\n", status);
+	if (ncalls == 0) {
+		ssh_warn(ec, "event: unhandled event"
+			 " (rqid: 0x%04x, tc: 0x%02x, cid: 0x%02x)\n",
+			 event->rqid, event->tc, event->cid);
+	}
 
 	if (refcount_dec_and_test(&work->refcount))
 		kfree(work);
@@ -1102,11 +1114,7 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 				const struct ssh_command *command,
 				const struct bufspan *command_data)
 {
-	surface_sam_ssh_event_handler_delay delay_fn;
 	struct ssh_event_work *work;
-	void *handler_data;
-	unsigned long delay;
-	unsigned long flags;
 
 	work = kzalloc(sizeof(struct ssh_event_work) + command_data->len, GFP_ATOMIC);
 	if (!work)
@@ -1131,24 +1139,8 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 		queue_work(ec->events.queue_ack, &work->work_ack);
 	}
 
-	spin_lock_irqsave(&ec->events.lock, flags);
-	handler_data = ec->events.handler[ssh_rqid_to_event(work->event.rqid)].data;
-	delay_fn = ec->events.handler[ssh_rqid_to_event(work->event.rqid)].delay;
-
-	/* Note:
-	 * We need to check delay_fn here: This may have never been set as we
-	 * can't guarantee that events only occur when they have been enabled.
-	 */
-	delay = delay_fn ? delay_fn(&work->event, handler_data) : 0;
-	spin_unlock_irqrestore(&ec->events.lock, flags);
-
-	// immediate execution for high priority events (e.g. keyboard)
-	if (delay == SURFACE_SAM_SSH_EVENT_IMMEDIATE) {
-		surface_sam_ssh_event_work_evt_handler(&work->work_evt.work);
-	} else {
-		INIT_DELAYED_WORK(&work->work_evt, surface_sam_ssh_event_work_evt_handler);
-		queue_delayed_work(ec->events.queue_evt, &work->work_evt, delay);
-	}
+	INIT_WORK(&work->work_evt, surface_sam_ssh_event_work_evt_handler);
+	queue_work(ec->events.queue_evt, &work->work_evt);
 }
 
 static void ssh_rx_complete_command(struct sam_ssh_ec *ec,
@@ -1528,7 +1520,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	u8 *eval_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
-	int irq;
+	int irq, i;
 
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
@@ -1592,6 +1584,11 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	ec->events.queue_ack = event_queue_ack;
 	ec->events.queue_evt = event_queue_evt;
 
+	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
+		srcu_init_notifier_head(&ec->events.notifier[i]);
+		ec->events.notifier_count[i] = 0;
+	}
+
 	serdev_device_set_drvdata(serdev, ec);
 
 	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
@@ -1649,7 +1646,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 {
 	struct sam_ssh_ec *ec;
 	unsigned long flags;
-	int status;
+	int status, i;
 
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec)
@@ -1667,11 +1664,10 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	flush_workqueue(ec->events.queue_evt);
 
 	// remove event handlers
-	spin_lock_irqsave(&ec->events.lock, flags);
-	memset(ec->events.handler, 0,
-	       sizeof(struct ssh_event_handler)
-		* SURFACE_SAM_SSH_MAX_EVENT_ID);
-	spin_unlock_irqrestore(&ec->events.lock, flags);
+	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
+		srcu_cleanup_notifier_head(&ec->events.notifier[i]);
+		ec->events.notifier_count[i] = 0;
+	}
 
 	// set device to deinitialized state
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);

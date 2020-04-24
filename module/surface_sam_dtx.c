@@ -41,7 +41,6 @@
 #define SAM_RQST_DTX_CID_GET_OPMODE			0x0D
 
 #define SAM_EVENT_DTX_TC				0x11
-#define SAM_EVENT_DTX_RQID				0x0011
 #define SAM_EVENT_DTX_CID_CONNECTION			0x0c
 #define SAM_EVENT_DTX_CID_BUTTON			0x0e
 #define SAM_EVENT_DTX_CID_ERROR				0x0f
@@ -72,6 +71,8 @@ struct surface_dtx_event {
 } __packed;
 
 struct surface_dtx_dev {
+	struct notifier_block sam_nb;
+	struct delayed_work opmode_work;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
 	spinlock_t client_lock;
@@ -398,10 +399,19 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 	spin_unlock(&ddev->input_lock);
 }
 
-static int surface_dtx_evt_dtx(struct surface_sam_ssh_event *in_event, void *data)
+static void surface_dtx_opmode_workfn(struct work_struct *work)
 {
-	struct surface_dtx_dev *ddev = data;
+	struct surface_dtx_dev *ddev = container_of(work, struct surface_dtx_dev, opmode_work.work);
+
+	surface_dtx_update_opmpde(ddev);
+}
+
+static int surface_dtx_notification(struct notifier_block *nb, unsigned long action, void *data)
+{
+	struct surface_sam_ssh_event *in_event = data;
+	struct surface_dtx_dev *ddev = container_of(nb, struct surface_dtx_dev, sam_nb);
 	struct surface_dtx_event event;
+	unsigned long delay;
 
 	switch (in_event->cid) {
 	case SAM_EVENT_DTX_CID_CONNECTION:
@@ -427,41 +437,11 @@ static int surface_dtx_evt_dtx(struct surface_sam_ssh_event *in_event, void *dat
 
 	// update device mode
 	if (in_event->cid == SAM_EVENT_DTX_CID_CONNECTION) {
-		if (in_event->pld[0]) {
-			// Note: we're already in a workqueue task
-			msleep(DTX_CONNECT_OPMODE_DELAY);
-		}
-
-		surface_dtx_update_opmpde(ddev);
+		delay = in_event->pld[0] ? DTX_CONNECT_OPMODE_DELAY : 0;
+		schedule_delayed_work(&ddev->opmode_work, delay);
 	}
 
 	return 0;
-}
-
-static int surface_dtx_events_setup(struct surface_dtx_dev *ddev)
-{
-	int status;
-
-	status = surface_sam_ssh_set_event_handler(SAM_EVENT_DTX_RQID, surface_dtx_evt_dtx, ddev);
-	if (status)
-		goto err_handler;
-
-	status = surface_sam_ssh_enable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
-	if (status)
-		goto err_source;
-
-	return 0;
-
-err_source:
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_DTX_RQID);
-err_handler:
-	return status;
-}
-
-static void surface_dtx_events_disable(void)
-{
-	surface_sam_ssh_disable_event_source(SAM_EVENT_DTX_TC, 0x01, SAM_EVENT_DTX_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_DTX_RQID);
 }
 
 
@@ -523,6 +503,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 		goto err_register;
 	}
 
+	INIT_DELAYED_WORK(&ddev->opmode_work, surface_dtx_opmode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
@@ -533,8 +514,11 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	if (status)
 		goto err_register;
 
-	// enable events
-	status = surface_dtx_events_setup(ddev);
+	// set up events
+	ddev->sam_nb.priority = 1;
+	ddev->sam_nb.notifier_call = surface_dtx_notification;
+
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_DTX_TC, &ddev->sam_nb);
 	if (status)
 		goto err_events_setup;
 
@@ -563,7 +547,7 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	mutex_unlock(&ddev->mutex);
 
 	// After this call we're guaranteed that no more input events will arive
-	surface_dtx_events_disable();
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_DTX_TC, &ddev->sam_nb);
 
 	// wake up clients
 	spin_lock(&ddev->client_lock);
