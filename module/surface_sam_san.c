@@ -27,14 +27,12 @@ static const guid_t SAN_DSM_UUID =
 #define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
 #define SAM_EVENT_PWR_TC		0x02
-#define SAM_EVENT_PWR_RQID		0x0002
 #define SAM_EVENT_PWR_CID_BIX		0x15
 #define SAM_EVENT_PWR_CID_BST		0x16
 #define SAM_EVENT_PWR_CID_ADAPTER	0x17
 #define SAM_EVENT_PWR_CID_DPTF		0x4f
 
 #define SAM_EVENT_TEMP_TC		0x03
-#define SAM_EVENT_TEMP_RQID		0x0003
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
 #define SAN_RQST_TAG			"surface_sam_san: rqst: "
@@ -68,6 +66,16 @@ struct san_drvdata {
 	struct san_opreg_context opreg_ctx;
 	struct san_consumers consumers;
 	bool has_power_events;
+
+	struct platform_device *dev;
+	struct notifier_block nb_pwr;
+	struct notifier_block nb_tmp;
+};
+
+struct san_event_work {
+	struct delayed_work work;
+	struct platform_device *dev;
+	struct surface_sam_ssh_event event;
 };
 
 struct gsb_data_in {
@@ -313,9 +321,9 @@ static inline int san_evt_power_bst(struct device *dev, struct surface_sam_ssh_e
 	return 0;
 }
 
-static unsigned long san_evt_power_delay(struct surface_sam_ssh_event *event, void *data)
+static unsigned long san_evt_power_delay(u8 cid)
 {
-	switch (event->cid) {
+	switch (cid) {
 	case SAM_EVENT_PWR_CID_ADAPTER:
 		/*
 		 * Wait for battery state to update before signalling adapter change.
@@ -335,10 +343,8 @@ static unsigned long san_evt_power_delay(struct surface_sam_ssh_event *event, vo
 	}
 }
 
-static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
+static int san_evt_power(struct surface_sam_ssh_event *event, struct device *dev)
 {
-	struct device *dev = (struct device *)data;
-
 	switch (event->cid) {
 	case SAM_EVENT_PWR_CID_BIX:
 		return san_evt_power_bix(dev, event);
@@ -360,6 +366,40 @@ static int san_evt_power(struct surface_sam_ssh_event *event, void *data)
 	return 0;
 }
 
+static void san_evt_power_workfn(struct work_struct *work)
+{
+	struct san_event_work *ev = container_of(work, struct san_event_work, work.work);
+
+	san_evt_power(&ev->event, &ev->dev->dev);
+	kfree(ev);
+}
+
+
+static int san_evt_power_nb(struct notifier_block *nb, unsigned long action, void *data)
+{
+	struct surface_sam_ssh_event *event = (struct surface_sam_ssh_event *)data;
+	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nb_pwr);
+	struct san_event_work *work;
+	unsigned long delay = san_evt_power_delay(event->cid);
+
+	if (delay == 0)
+		return san_evt_power(event, &drvdata->dev->dev);
+
+	work = kzalloc(sizeof(struct san_event_work) + event->len, GFP_KERNEL);
+	if (!work)
+		return -ENOMEM;
+
+	INIT_DELAYED_WORK(&work->work, san_evt_power_workfn);
+	work->dev = drvdata->dev;
+
+	memcpy(&work->event, event, sizeof(struct surface_sam_ssh_event));
+	work->event.pld = ((u8 *)work) + sizeof(struct san_event_work);
+	memcpy(work->event.pld, event->pld, event->len);
+
+	schedule_delayed_work(&work->work, delay);
+	return 0;
+}
+
 
 static inline int san_evt_thermal_notify(struct device *dev, struct surface_sam_ssh_event *event)
 {
@@ -374,10 +414,8 @@ static inline int san_evt_thermal_notify(struct device *dev, struct surface_sam_
 	return 0;
 }
 
-static int san_evt_thermal(struct surface_sam_ssh_event *event, void *data)
+static int san_evt_thermal(struct surface_sam_ssh_event *event, struct device *dev)
 {
-	struct device *dev = (struct device *)data;
-
 	switch (event->cid) {
 	case SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
 		return san_evt_thermal_notify(dev, event);
@@ -387,6 +425,15 @@ static int san_evt_thermal(struct surface_sam_ssh_event *event, void *data)
 	}
 
 	return 0;
+}
+
+static int san_evt_thermal_nb(struct notifier_block *nb, unsigned long action, void *data)
+{
+	struct surface_sam_ssh_event *event = (struct surface_sam_ssh_event *)data;
+	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nb_tmp);
+	struct platform_device *pdev = drvdata->dev;
+
+	return san_evt_thermal(event, &pdev->dev);
 }
 
 
@@ -584,65 +631,10 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 	return AE_OK;
 }
 
-static int san_enable_power_events(struct platform_device *pdev)
-{
-	int status;
-
-	status = surface_sam_ssh_set_delayed_event_handler(
-			SAM_EVENT_PWR_RQID, san_evt_power,
-			san_evt_power_delay, &pdev->dev);
-	if (status)
-		return status;
-
-	status = surface_sam_ssh_enable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-	if (status) {
-		surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
-		return status;
-	}
-
-	return 0;
-}
-
-static int san_enable_thermal_events(struct platform_device *pdev)
-{
-	int status;
-
-	status = surface_sam_ssh_set_event_handler(
-			SAM_EVENT_TEMP_RQID, san_evt_thermal,
-			&pdev->dev);
-	if (status)
-		return status;
-
-	status = surface_sam_ssh_enable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
-	if (status) {
-		surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
-		return status;
-	}
-
-	return 0;
-}
-
-static void san_disable_power_events(void)
-{
-	surface_sam_ssh_disable_event_source(SAM_EVENT_PWR_TC, 0x01, SAM_EVENT_PWR_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_PWR_RQID);
-}
-
-static void san_disable_thermal_events(void)
-{
-	surface_sam_ssh_disable_event_source(SAM_EVENT_TEMP_TC, 0x01, SAM_EVENT_TEMP_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_TEMP_RQID);
-}
-
-
-static int san_enable_events(struct platform_device *pdev)
+static int san_events_register(struct platform_device *pdev)
 {
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 	int status;
-
-	status = san_enable_thermal_events(pdev);
-	if (status)
-		return status;
 
 	/*
 	 * We have to figure out if this device uses SAN or requires a separate
@@ -651,25 +643,32 @@ static int san_enable_events(struct platform_device *pdev)
 	 */
 	drvdata->has_power_events = acpi_has_method(NULL, "\\_SB.BAT1._BST");
 	if (drvdata->has_power_events) {
-		status = san_enable_power_events(pdev);
+		drvdata->nb_pwr.priority = 1;
+		drvdata->nb_pwr.notifier_call = san_evt_power_nb;
+
+		status = surface_sam_ssh_notifier_register(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
 		if (status)
-			goto err;
+			return status;
 	}
 
-	return 0;
+	drvdata->nb_tmp.priority = 1;
+	drvdata->nb_tmp.notifier_call = san_evt_thermal_nb;
 
-err:
-	san_disable_thermal_events();
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
+	if (status && drvdata->has_power_events)
+		surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+
 	return status;
 }
 
-static void san_disable_events(struct platform_device *pdev)
+static void san_events_unregister(struct platform_device *pdev)
 {
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	san_disable_thermal_events();
 	if (drvdata->has_power_events)
-		san_disable_power_events();
+		surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
 }
 
 
@@ -777,6 +776,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (!drvdata)
 		return -ENOMEM;
 
+	drvdata->dev = pdev;
 	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
@@ -796,7 +796,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 		goto err_install_handler;
 	}
 
-	status = san_enable_events(pdev);
+	status = san_events_register(pdev);
 	if (status)
 		goto err_enable_events;
 
@@ -814,7 +814,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	return 0;
 
 err_install_dev:
-	san_disable_events(pdev);
+	san_events_unregister(pdev);
 err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 err_install_handler:
@@ -836,7 +836,13 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	mutex_unlock(&rqsg_if.lock);
 
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
-	san_disable_events(pdev);
+	san_events_unregister(pdev);
+
+	/*
+	 * We have unregistered our event sources. Now we need to ensure that
+	 * all delayed works they may have spawned are run to completion.
+	 */
+	flush_scheduled_work();
 
 	san_consumers_unlink(&drvdata->consumers);
 	kfree(drvdata);

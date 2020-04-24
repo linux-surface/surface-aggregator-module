@@ -18,21 +18,13 @@
 
 #define VHF_INPUT_NAME			"Microsoft Virtual HID Framework Device"
 
-/*
- * Request ID for VHF events. This value is based on the output of the Surface
- * EC and should not be changed.
- */
-#define SAM_EVENT_VHF_RQID		0x0001
 #define SAM_EVENT_VHF_TC		0x08
 
 
-struct vhf_evtctx {
-	struct device     *dev;
-	struct hid_device *hid;
-};
-
 struct vhf_drvdata {
-	struct vhf_evtctx event_ctx;
+	struct platform_device *dev;
+	struct hid_device *hid;
+	struct notifier_block sam_nb;
 };
 
 
@@ -169,14 +161,15 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 	return hid;
 }
 
-static int vhf_event_handler(struct surface_sam_ssh_event *event, void *data)
+static int vhf_event_handler(struct notifier_block *nb, unsigned long action, void *data)
 {
-	struct vhf_evtctx *ctx = (struct vhf_evtctx *)data;
+	struct surface_sam_ssh_event *event = data;
+	struct vhf_drvdata *drvdata = container_of(nb, struct vhf_drvdata, sam_nb);
 
 	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04))
-		return hid_input_report(ctx->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
+		return hid_input_report(drvdata->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
 
-	dev_warn(ctx->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
+	dev_warn(&drvdata->dev->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
 	return 0;
 }
 
@@ -205,26 +198,19 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	if (status)
 		goto err_add_hid;
 
-	drvdata->event_ctx.dev = &pdev->dev;
-	drvdata->event_ctx.hid = hid;
+	drvdata->dev = pdev;
+	drvdata->hid = hid;
+	drvdata->sam_nb.priority = 1;
+	drvdata->sam_nb.notifier_call = vhf_event_handler;
 
 	platform_set_drvdata(pdev, drvdata);
 
-	status = surface_sam_ssh_set_event_handler(
-			SAM_EVENT_VHF_RQID,
-			vhf_event_handler,
-			&drvdata->event_ctx);
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_VHF_TC, &drvdata->sam_nb);
 	if (status)
 		goto err_add_hid;
 
-	status = surface_sam_ssh_enable_event_source(SAM_EVENT_VHF_TC, 0x01, SAM_EVENT_VHF_RQID);
-	if (status)
-		goto err_event_source;
-
 	return 0;
 
-err_event_source:
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_VHF_RQID);
 err_add_hid:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
@@ -237,10 +223,8 @@ static int surface_sam_vhf_remove(struct platform_device *pdev)
 {
 	struct vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_disable_event_source(SAM_EVENT_VHF_TC, 0x01, SAM_EVENT_VHF_RQID);
-	surface_sam_ssh_remove_event_handler(SAM_EVENT_VHF_RQID);
-
-	hid_destroy_device(drvdata->event_ctx.hid);
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_VHF_TC, &drvdata->sam_nb);
+	hid_destroy_device(drvdata->hid);
 	kfree(drvdata);
 
 	platform_set_drvdata(pdev, NULL);

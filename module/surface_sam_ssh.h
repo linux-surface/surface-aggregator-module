@@ -13,6 +13,7 @@
 
 #include <linux/types.h>
 #include <linux/device.h>
+#include <linux/notifier.h>
 
 
 /*
@@ -76,26 +77,11 @@ struct surface_sam_ssh_event {
 };
 
 
-typedef int (*surface_sam_ssh_event_handler_fn)(struct surface_sam_ssh_event *event, void *data);
-typedef unsigned long (*surface_sam_ssh_event_handler_delay)(struct surface_sam_ssh_event *event, void *data);
-
 int surface_sam_ssh_consumer_register(struct device *consumer);
 
+int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb);
+int surface_sam_ssh_notifier_unregister(u8 tc, struct notifier_block *nb);
+
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result);
-
-int surface_sam_ssh_enable_event_source(u8 tc, u8 unknown, u16 rqid);
-int surface_sam_ssh_disable_event_source(u8 tc, u8 unknown, u16 rqid);
-int surface_sam_ssh_remove_event_handler(u16 rqid);
-
-int surface_sam_ssh_set_delayed_event_handler(u16 rqid,
-		surface_sam_ssh_event_handler_fn fn,
-		surface_sam_ssh_event_handler_delay delay,
-		void *data);
-
-static inline int surface_sam_ssh_set_event_handler(u16 rqid, surface_sam_ssh_event_handler_fn fn, void *data)
-{
-	return surface_sam_ssh_set_delayed_event_handler(rqid, fn, NULL, data);
-}
-
 
 #endif /* _SURFACE_SAM_SSH_H */
