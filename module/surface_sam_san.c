@@ -127,6 +127,7 @@ enum san_pwr_event {
 	SAN_PWR_EVENT_ADP1_INFO	= 0x06,
 	SAN_PWR_EVENT_BAT2_STAT	= 0x07,
 	SAN_PWR_EVENT_BAT2_INFO	= 0x08,
+	SAN_PWR_EVENT_DPTF      = 0x0A,
 };
 
 
@@ -308,6 +309,41 @@ static inline int san_evt_power_bst(struct device *dev, struct surface_sam_ssh_e
 	return san_acpi_notify_power_event(dev, evcode);
 }
 
+static inline int san_evt_power_dptf(struct device *dev, struct surface_sam_ssh_event *event)
+{
+	union acpi_object payload;
+	acpi_handle san = ACPI_HANDLE(dev);
+	union acpi_object *obj;
+
+	if (!san_acpi_can_notify(dev, SAN_PWR_EVENT_DPTF))
+		return 0;
+
+	/*
+	 * The Surface ACPI expects a buffer and not a package. It specifically
+	 * checks for ObjectType (Arg3) == 0x03. This will cause a warning in
+	 * acpica/nsarguments.c, but this can safely be ignored.
+	 */
+	payload.type = ACPI_TYPE_BUFFER;
+	payload.buffer.length = event->len;
+	payload.buffer.pointer = event->pld;
+
+	dev_dbg(dev, "notify power event 0x%02x\n", event->cid);
+	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
+				      SAN_PWR_EVENT_DPTF, &payload,
+				      ACPI_TYPE_BUFFER);
+
+	if (IS_ERR_OR_NULL(obj))
+		return obj ? PTR_ERR(obj) : -ENXIO;
+
+	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
+		dev_err(dev, "got unexpected result from _DSM\n");
+		return -EFAULT;
+	}
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
 static unsigned long san_evt_power_delay(u8 cid)
 {
 	switch (cid) {
@@ -348,7 +384,7 @@ static void san_evt_power(struct surface_sam_ssh_event *event, struct device *de
 		break;
 
 	case SAM_EVENT_PWR_CID_DPTF:
-		// TODO: call _DSM(Arg2=0x0A, Arg3=Buffer(payload, size=0x0c))
+		status = san_evt_power_dptf(dev, event);
 		break;
 
 	default:
