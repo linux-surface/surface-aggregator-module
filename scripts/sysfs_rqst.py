@@ -19,7 +19,7 @@ def main():
     fd = os.open(PATH_DEV_RQST, os.O_RDWR | os.O_SYNC)
 
     #            [  TC,  CID,  IID,  PRI,  SNC,  CDL, payload...]
-    data = bytes(performance_state_request(state=0x04))
+    data = bytes([0x15, 0x53, 0x00, 0x01, 0x01, 0x00])
 
     os.write(fd, data)
 
