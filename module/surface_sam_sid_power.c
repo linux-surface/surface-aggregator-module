@@ -367,7 +367,7 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 };
 
 
-static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, u8 iid);
+static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, int iid);
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
@@ -915,7 +915,7 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 	return 0;
 }
 
-static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, u8 iid)
+static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, int iid)
 {
 	struct power_supply_config psy_cfg = {};
 	u32 sta;
