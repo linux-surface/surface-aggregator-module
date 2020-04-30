@@ -47,13 +47,6 @@
 	+ SSH_BYTELEN_CRC			\
 )
 
-#define SSH_MSG_LEN_CTRL (			\
-	  SSH_BYTELEN_SYNC			\
-	+ SSH_BYTELEN_CTRL			\
-	+ SSH_BYTELEN_CRC			\
-	+ SSH_BYTELEN_TERM			\
-)
-
 #define SSH_TX_TIMEOUT			MAX_SCHEDULE_TIMEOUT
 #define SSH_RX_TIMEOUT			msecs_to_jiffies(1000)
 #define SSH_NUM_RETRY			3
@@ -146,6 +139,11 @@ static_assert(sizeof(struct ssh_command) == 8);
  * length of the frame payload.
  */
 #define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3 * sizeof(u16))
+
+/**
+ * Length of a control message.
+ */
+#define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
 
 /* -- TODO ------------------------------------------------------------------ */
