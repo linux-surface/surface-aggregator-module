@@ -14,6 +14,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/kfifo.h>
+#include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/notifier.h>
 #include <linux/pm.h>
@@ -53,6 +54,9 @@
 
 #define SSH_READ_BUF_LEN		4096		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
+
+
+#define SSH_MAX_PACKETS_PENDING			1
 
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
@@ -550,6 +554,898 @@ static void sshp_parse_command(const struct sam_ssh_ec *ec,
 		" cid: 0x%02x)\n", (*command)->tc, (*command)->cid);
 }
 
+
+/* -- Packet transmission system (ptx). ------------------------------------- */
+/*
+ * To simplify reasoning about the code below, we define a state-machine. As
+ * there are a lot of potential states, we do not explicitly define states,
+ * but describe them by a combination of flags. To apply a transition,
+ * triggered by an action, the flags required by it must be set/cleared. If
+ * these requirements are not fulfilled, the transition is not applied and the
+ * state does not change. Applying a transition changes the state by changing
+ * the specified flags.
+ *
+ * >> Actions <<
+ *
+ * - submit
+ * - transmission start (process next item in queue)
+ * - transmission finished (guaranteed to never be parallel to transmission
+ *   start)
+ * - ACK received
+ * - NAK received (this is equivalent to issuing re-submit for all pending
+ *   packets)
+ * - timeout (this is equivalent to re-issuing a submit or canceling)
+ * - cancel (non-pending and pending)
+ *
+ * >> States <<
+ *
+ * - queued (corresponds to being in submission queue)
+ * - pending (corresponds to being in set of pending packets)
+ * - transmitting
+ * - transmitted
+ * - acked
+ * - completed
+ * - canceling
+ *
+ * Note that "queued" and pending always must be set/cleared in conjunction
+ * with addition of/removing the packet from the corresponding data structure.
+ *
+ * If "completed" has been set, no state changes are allowed to happen. This
+ * is done, so that the process which has successfully managed to set the
+ * "completed" flag is the sole owner of the packet and can then safely remove
+ * it from all data structures. To ensure that no use-after-free errors
+ * happen, no other process is allowed to access references without holding
+ * the packet lock once the "completed" flag has been set, and transition
+ * rules must ensure that the packet cannot be set to "completed" when it can
+ * be accessed in an exclusive context (e.g. "transmitting" is set). The
+ * process setting the "completed" flag is responsible for ensuring that those
+ * references are no longer available to other processes.
+ *
+ * When a packet reference in the transfer system is taken outside the scope
+ * of packet and/or queue locks (queue/pending), the packet must first be
+ * (successfully) transitioned to an exclusive state (i.e. "completed" or
+ * "transmitting"). The reference held by the packet timer is an exception to
+ * this, but this reference must not be passed outside of the timer callback.
+ *
+ * >> Transitions <<
+ *
+ * Note: `|#` as suffix means alternative transition. The coice of transition
+ * depends on the flags currently set on the packet and the flags required by
+ * the transition.
+ *
+ * - submit
+ *   required: -queued, -completed, -canceling
+ *   changed: +queued
+ *
+ * - pop_from_queue
+ *   required: +queued, -transmitting, -completed, -canceling
+ *   changed: -queued, +transmitting
+ *
+ *   Note: This is only called when no packet is being transmitted. Thus
+ *   checking for "transmitting" is redundant.
+ *
+ * - add_to_pending
+ *   required: -pending, -completed, -canceling, +IS_SEQ
+ *   changed: +pending
+ *
+ *   Note: Logically coupled with pop_from_queue to form "transmission start",
+ *   but separated into two transitions so that we don't have to hold both
+ *   queue and pending data structure locks at the same time. As this is
+ *   coupled with pop_from_queue, which adds the "transmitting" flag, a check
+ *   for completed is redundant as "completed" and "transmitting" are mutually
+ *   exclusive.
+ *
+ * - transmit_done|1
+ *   required: +transmitting, -completed, -canceling, -acked, +IS_SEQ
+ *   changed: -transmitting, +transmitted
+ *
+ * - transmit_done|2
+ *   required: +transmitting, -completed, -canceling, +acked, +IS_SEQ
+ *   changed: -transmitting, +transmitted, +completed
+ *
+ *   Note: Check "transmitted" before applyign flag changes to determine if the
+ *   ACK came before the first full transmission. In that case, complete with
+ *   error.
+ *
+ * - transmit_done|3
+ *   required: +transmitting, -completed, -canceling, -IS_SEQ
+ *   changed: -transmitting, +transmitted, +completed
+ *
+ *   Note: Successful completion (normal end-point for unsequenced packets).
+ *
+ * - transmit_done|4
+ *   required: +transmitting, -completed, +canceling
+ *   changed: -transmitting, +transmitted, +completed
+ *
+ *   Note: Check "acked" and "IS_SEQ" to determine between success/canceled
+ *   result.
+ *
+ * - transmit_done|5 (in case of transmit error)
+ *   required: +transmitting, -completed
+ *   changed: -transmitting, +completed
+ *
+ *   Note: Completion caused by transmit error.
+ *
+ * - ack|1
+ *   required: +pending, -transmitting, -completed
+ *   changed: +acked, +completed, -pending
+ *
+ *   Note: Successful completion (normal end-point for sequenced packets). It
+ *   theoretically is possible that an ACK for this packet has been received
+ *   before the transmit completed. This indicates an error in communication
+ *   and the packet should be completed with an error (check transmitted).
+ *
+ * - ack|2
+ *   required: +pending, +transmitting, -completed
+ *   changed: +acked, -pending
+ *
+ * - cancel_nonpending
+ *   required: -completed, -canceling, -transmitting, -pending
+ *   changed: +canceling, +completed
+ *
+ * - cancel_pending|1
+ *   required: -completed, -canceling, -transmitting
+ *   changed: +canceling, +completed
+ *
+ * - cancel_pending|2
+ *   required: -completed, -canceling, +transmitting
+ *   changed: +canceling
+ *
+ * To avoid deadlocks, data structure locks (queue/pending) must always be
+ * acquired before the packet lock and released after.
+ */
+
+/**
+ * Maximum number transmission attempts per sequenced packet in case of
+ * time-outs.
+ */
+#define SSH_PTX_MAX_PKT_TIMEOUTS	3
+
+/**
+ * Timeout in jiffies for ACKs. If we have not received an ACK in this
+ * time-frame after starting transmission, the packet will be re-submitted.
+ */
+#define SSH_PTX_PKT_TIMEOUT		msecs_to_jiffies(1000)
+
+enum ssh_packet_priority {
+	SSH_PACKET_PRIORITY_MIN = 0,
+	SSH_PACKET_PRIORITY_DATA = SSH_PACKET_PRIORITY_MIN,
+	SSH_PACKET_PRIORITY_DATA_RESUB,
+	SSH_PACKET_PRIORITY_NAK,
+	SSH_PACKET_PRIORITY_ACK,
+};
+
+enum ssh_packet_type_flags {
+	SSH_PACKET_TY_SEQUENCED_BIT,
+	SSH_PACKET_TY_BLOCKING_BIT,
+
+	SSH_PACKET_TY_SEQUENCED = BIT(SSH_PACKET_TY_SEQUENCED_BIT),
+	SSH_PACKET_TY_BLOCKING  = BIT(SSH_PACKET_TY_BLOCKING_BIT),
+};
+
+enum ssh_packet_state_flags {
+	SSH_PACKET_SF_QUEUED_BIT,
+	SSH_PACKET_SF_PENDING_BIT,
+	SSH_PACKET_SF_TRANSMITTING_BIT,
+	SSH_PACKET_SF_TRANSMITTED_BIT,
+	SSH_PACKET_SF_ACKED_BIT,
+	SSH_PACKET_SF_COMPLETED_BIT,
+	SSH_PACKET_SF_CANCELING_BIT,
+	SSH_PACKET_SF_CANCELED_BIT,
+	SSH_PACKET_SF_TIMEDOUT_BIT,
+
+	SSH_PACKET_SF_QUEUED       = BIT(SSH_PACKET_SF_QUEUED_BIT),
+	SSH_PACKET_SF_PENDING      = BIT(SSH_PACKET_SF_PENDING_BIT),
+	SSH_PACKET_SF_TRANSMITTING = BIT(SSH_PACKET_SF_TRANSMITTING_BIT),
+	SSH_PACKET_SF_TRANSMITTED  = BIT(SSH_PACKET_SF_TRANSMITTED_BIT),
+	SSH_PACKET_SF_ACKED        = BIT(SSH_PACKET_SF_ACKED_BIT),
+	SSH_PACKET_SF_COMPLETED    = BIT(SSH_PACKET_SF_COMPLETED_BIT),
+	SSH_PACKET_SF_CANCELING    = BIT(SSH_PACKET_SF_CANCELING_BIT),
+	SSH_PACKET_SF_CANCELED     = BIT(SSH_PACKET_SF_CANCELED_BIT),
+	SSH_PACKET_SF_TIMEDOUT     = BIT(SSH_PACKET_SF_TIMEDOUT_BIT),
+};
+
+struct ssh_ptx;
+
+struct ssh_packet {
+	struct ssh_ptx *ptx;
+
+	spinlock_t lock;
+	unsigned int type;
+	unsigned int state;
+	struct list_head queue_node;
+	struct list_head pending_node;
+
+	enum ssh_packet_priority priority;
+	u8 sequence_id;
+	int status;
+
+	unsigned int num_timeouts;
+	struct timer_list timer;
+
+	struct {
+		unsigned char *ptr;
+		size_t length;
+	} buffer;
+};
+
+struct ssh_ptx {
+	struct serdev_device *serdev;
+
+	struct {
+		spinlock_t lock;
+		struct list_head head;
+	} queue;
+
+	struct {
+		spinlock_t lock;
+		struct list_head head;
+		atomic_t count;
+	} pending;
+
+	struct {
+		struct work_struct work;
+		struct ssh_packet *packet;
+		size_t offset;
+	} tx;
+};
+
+#define ptx_dbg(ptx, fmt, ...)  dev_dbg(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptx_warn(ptx, fmt, ...) dev_warn(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptx_err(ptx, fmt, ...)  dev_err(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
+
+static int ssh_ptx_queue_insert_before(struct ssh_packet *packet,
+				       struct list_head *head)
+{
+	spin_lock_bh(&packet->lock);
+
+	// avoid further transitions when cancelling
+	if (packet->state & SSH_PACKET_SF_CANCELING) {
+		spin_unlock_bh(&packet->lock);
+		return -EINVAL;
+	}
+
+	// if this packet has already been completed, do not add it
+	if (packet->state & SSH_PACKET_SF_COMPLETED) {
+		spin_unlock_bh(&packet->lock);
+		return -EINVAL;
+	}
+
+	// if this packet has already been queued, do not add it
+	if (packet->state & SSH_PACKET_SF_QUEUED) {
+		spin_unlock_bh(&packet->lock);
+		return -EALREADY;
+	}
+
+	packet->state |= SSH_PACKET_SF_QUEUED;
+	list_add_tail(&packet->queue_node, head);
+
+	spin_unlock_bh(&packet->lock);
+	return 0;
+}
+
+static int ssh_ptx_queue_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
+{
+	enum ssh_packet_priority priority = smp_load_acquire(&packet->priority);
+	struct list_head *head;
+	struct ssh_packet *p;
+	int status;
+
+	spin_lock_bh(&ptx->queue.lock);
+
+	// fast path: minimum priority packets are always added at the end
+	if (priority == SSH_PACKET_PRIORITY_MIN) {
+		status = ssh_ptx_queue_insert_before(packet, &ptx->queue.head);
+
+	// regular path
+	} else {
+		// find first node with lower priority
+		list_for_each(head, &ptx->queue.head) {
+			p = list_entry(head, struct ssh_packet, queue_node);
+
+			if (priority > smp_load_acquire(&p->priority))
+				break;
+		}
+
+		// insert before
+		status = ssh_ptx_queue_insert_before(packet, &ptx->queue.head);
+	}
+
+	spin_unlock_bh(&ptx->queue.lock);
+	return status;
+}
+
+static void ssh_ptx_queue_remove(struct ssh_ptx *ptx, struct ssh_packet *packet)
+{
+	spin_lock_bh(&ptx->queue.lock);
+	spin_lock_bh(&packet->lock);
+
+	if (packet->state & SSH_PACKET_SF_QUEUED) {
+		packet->state &= ~SSH_PACKET_SF_QUEUED;
+		list_del(&packet->queue_node);
+	}
+
+	spin_unlock_bh(&packet->lock);
+	spin_unlock_bh(&ptx->queue.lock);
+}
+
+static inline
+bool ssh_ptx_can_process(struct ssh_ptx *ptx, struct ssh_packet *packet)
+{
+	// we can alwas process non-blocking packets
+	if (packet->type & SSH_PACKET_TY_BLOCKING)
+		return true;
+
+	// if we are already waiting for this packet, send it again
+	if (packet->state & SSH_PACKET_SF_PENDING)
+		return true;
+
+	// otherwise: check if we have the capacity to send
+	return atomic_read(&ptx->pending.count) < SSH_MAX_PACKETS_PENDING;
+}
+
+static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
+{
+	struct ssh_packet *packet = NULL;
+	struct ssh_packet *p, *n;
+
+	spin_lock_bh(&ptx->queue.lock);
+	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
+		spin_lock_bh(&p->lock);
+
+		/*
+		 * Packets should be ordered non-blocking/to-be-resent first.
+		 * If we cannot process this packet, assume that we can't
+		 * process any following packet either and abort.
+		 */
+		if (!ssh_ptx_can_process(ptx, p)) {
+			spin_unlock_bh(&p->lock);
+			break;
+		}
+
+		/*
+		 * If we are cancelling this packet, ignore it. It's going to be
+		 * removed from this queue shortly.
+		 */
+		if (p->state & SSH_PACKET_SF_CANCELING) {
+			spin_unlock_bh(&p->lock);
+			continue;
+		}
+
+		/*
+		 * If this packet has already been completed, ignore it. It's
+		 * going to be removed from this queue shortly.
+		 */
+		if (p->state & SSH_PACKET_SF_COMPLETED) {
+			spin_unlock_bh(&p->lock);
+			continue;
+		}
+
+		/*
+		 * We are allowed to change the state now. Remove it from the
+		 * queue and mark it as being transmitted. Note that we cannot
+		 * add it to the set of pending packets yet, as queue locks must
+		 * always be acquired before packet locks (otherwise we might
+		 * run into a deadlock).
+		 */
+
+		list_del(&p->queue_node);
+		p->state &= ~SSH_PACKET_SF_QUEUED;
+		p->state |= SSH_PACKET_SF_TRANSMITTING;
+
+		spin_unlock_bh(&p->lock);
+
+		packet = p;
+		break;
+	}
+	spin_unlock_bh(&ptx->queue.lock);
+
+	return packet;
+}
+
+static void ssh_ptx_pending_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
+{
+	spin_lock_bh(&ptx->pending.lock);
+	spin_lock_bh(&packet->lock);
+
+	// if we are cancelling this packet, do not add it
+	if (packet->state & SSH_PACKET_SF_CANCELING)
+		goto out;
+
+	// in case it is already pending (e.g. re-submission), do not add it
+	if (packet->state & SSH_PACKET_SF_PENDING)
+		goto out;
+
+	atomic_inc(&ptx->pending.count);
+	list_add_tail(&packet->pending_node, &ptx->pending.head);
+
+out:
+	spin_unlock_bh(&packet->lock);
+	spin_unlock_bh(&ptx->pending.lock);
+}
+
+static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
+					      u8 sequence_id)
+{
+	struct ssh_packet *packet = ERR_PTR(-ENOENT);
+	struct ssh_packet *p, *n;
+
+	spin_lock_bh(&ptx->pending.lock);
+	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
+		if (unlikely(p->sequence_id != sequence_id))
+			continue;
+
+		spin_lock_bh(&p->lock);
+
+		/*
+		 * In case we receive an ACK while handling a transmission error
+		 * completion. The packet will be removed shortly.
+		 */
+		if (unlikely(p->state & SSH_PACKET_SF_COMPLETED)) {
+			packet = ERR_PTR(-EPERM);
+			spin_unlock_bh(&p->lock);
+			break;
+		}
+
+		p->state &= ~SSH_PACKET_SF_PENDING;
+		p->state |= SSH_PACKET_SF_ACKED;
+
+		atomic_dec(&ptx->pending.count);
+		list_del(&p->pending_node);
+
+		/*
+		 * This packet may currently be transmitting (e.g. as it may
+		 * have been re-submitted). In that case, we are not allowed to
+		 * return it, only mark it as ACKed and remove it from pending.
+		 */
+		if (unlikely(p->state & SSH_PACKET_SF_TRANSMITTING)) {
+			packet = ERR_PTR(-EPERM);
+			spin_unlock_bh(&p->lock);
+			break;
+		}
+
+		p->state |= SSH_PACKET_SF_COMPLETED;
+		packet = p;
+
+		spin_unlock_bh(&p->lock);
+		break;
+	}
+	spin_unlock_bh(&ptx->pending.lock);
+
+	return packet;
+}
+
+static void ssh_ptx_pending_remove(struct ssh_ptx *ptx,
+				   struct ssh_packet *packet)
+{
+	spin_lock_bh(&ptx->pending.lock);
+	spin_lock_bh(&packet->lock);
+
+	if (packet->state & SSH_PACKET_SF_PENDING) {
+		packet->state &= ~SSH_PACKET_SF_PENDING;
+		list_del(&packet->pending_node);
+		atomic_dec(&ptx->pending.count);
+	}
+
+	spin_unlock_bh(&packet->lock);
+	spin_unlock_bh(&ptx->pending.lock);
+}
+
+static inline
+void ssh_ptx_packet_complete(struct ssh_ptx *ptx,struct ssh_packet *packet)
+{
+	ptx_dbg(ptx, "ptx: completing packet %p\n", packet);
+
+	// TODO: call completion callback of packet
+}
+
+static inline struct ssh_packet *ssh_ptx_transmit_next(struct ssh_ptx *ptx)
+{
+	struct ssh_packet *packet;
+
+	packet = ssh_ptx_queue_pop(ptx);
+	if (!packet)
+		return packet;
+
+	if (packet->type & SSH_PACKET_TY_SEQUENCED) {
+		ptx_dbg(ptx, "transmitting sequenced packet %p\n", packet);
+
+		ssh_ptx_pending_push(ptx, packet);
+		mod_timer(&packet->timer, jiffies + SSH_PTX_PKT_TIMEOUT);
+
+	} else {
+		ptx_dbg(ptx, "transmitting non-sequenced packet %p\n", packet);
+	}
+
+	return packet;
+}
+
+/*
+ * Needs to be called with packet lock, unlocks and potentially completes
+ * packet.
+ */
+static inline void ssh_ptx_transmit_done(struct ssh_ptx *ptx,
+					 struct ssh_packet *packet)
+{
+	bool completed;
+	int status = 0;
+
+	if (packet->type & SSH_PACKET_TY_SEQUENCED) {
+		if (unlikely(packet->state & SSH_PACKET_SF_ACKED)) {
+			/*
+			 * Packet has been ACKed before this transmission
+			 * finished. In case we have not transmitted the packet
+			 * before, this indicates a communication error. In both
+			 * cases, the packet should be completed.
+			 */
+			completed = true;
+			packet->state |= SSH_PACKET_SF_COMPLETED;
+
+			if (!(packet->state & SSH_PACKET_SF_TRANSMITTED)) {
+				ptx_err(ptx, "ptx: received ACK before packet"
+					" had been fully transmitted\n");
+				status = -EIO;
+			}
+
+		} else if (unlikely(packet->state & SSH_PACKET_SF_CANCELING)) {
+			/*
+			 * We would now wait for an ACK but have received a
+			 * request to cancel this packet while we were
+			 * transmitting it. Thus cancel the packet.
+			 */
+			completed = true;
+			packet->state |= SSH_PACKET_SF_COMPLETED;
+			packet->state |= SSH_PACKET_SF_CANCELED;
+
+			// check if cancellation was caused by timeout
+			if (packet->state & SSH_PACKET_SF_TIMEDOUT)
+				status = -ETIMEDOUT;
+			else
+				status = -EINTR;
+
+		} else {
+			completed = false;	// need to wait for ACK
+		}
+
+	} else {
+		// this is a non-sequenced packet, no need to wait for ACK
+		completed = true;
+		packet->state |= SSH_PACKET_SF_COMPLETED;
+		status = 0;
+	}
+
+	packet->state &= ~SSH_PACKET_SF_TRANSMITTING;
+	packet->state |= SSH_PACKET_SF_TRANSMITTED;
+
+	spin_unlock_bh(&packet->lock);
+
+	ptx_dbg(ptx, "ptx: transmitted packet %p\n", packet);
+	if (packet->state & SSH_PACKET_SF_CANCELED)
+		ptx_dbg(ptx, "ptx: canceled packet %p\n", packet);
+
+	if (completed) {
+		// remove from system and complete
+		del_timer_sync(&packet->timer);
+		ssh_ptx_queue_remove(ptx, packet);
+		ssh_ptx_pending_remove(ptx, packet);
+
+		packet->status = status;
+		ssh_ptx_packet_complete(ptx, packet);
+	}
+}
+
+/* Needs to be called with packet lock, unlocks and completes packet */
+static inline void ssh_ptx_transmit_error(struct ssh_ptx *ptx,
+					  struct ssh_packet *packet, int status)
+{
+	packet->state &= ~SSH_PACKET_SF_TRANSMITTING;
+	packet->state |= SSH_PACKET_SF_COMPLETED;
+
+	spin_unlock_bh(&packet->lock);
+
+	ptx_err(ptx, "ptx: transmission error: %d\n", status);
+
+	// remove packet from system
+	del_timer_sync(&packet->timer);
+	ssh_ptx_queue_remove(ptx, packet);
+	ssh_ptx_pending_remove(ptx, packet);
+
+	packet->status = status;
+	ssh_ptx_packet_complete(ptx, packet);
+}
+
+static void ssh_ptx_process_work(struct work_struct *work)
+{
+	struct ssh_ptx *ptx = container_of(work, struct ssh_ptx, tx.work);
+	unsigned char *buf;
+	size_t len;
+	int status;
+
+	while (true) {
+		// if we don't have a packet, get the next and add it to pending
+		if (!ptx->tx.packet) {
+			ptx->tx.packet = ssh_ptx_transmit_next(ptx);
+			ptx->tx.offset = 0;
+
+			// if no packet is available, we are done
+			if (!ptx->tx.packet)
+				break;
+		}
+
+		/*
+		 * We need to hold the lock while sending to accurately detect
+		 * ACKed-before-sent cases. Otherwise we could run into false
+		 * positives.
+		 */
+		spin_lock_bh(&ptx->tx.packet->lock);
+
+		buf = ptx->tx.packet->buffer.ptr + ptx->tx.offset;
+		len = ptx->tx.packet->buffer.length - ptx->tx.offset;
+		status = serdev_device_write_buf(ptx->serdev, buf, len);
+
+		if (status < 0) {
+			// complete packet with error and unlock
+			ssh_ptx_transmit_error(ptx, ptx->tx.packet, status);
+			ptx->tx.packet = NULL;
+
+		} else if (status == len) {
+			// complete packet and/or mark as transmitted and unlock
+			ssh_ptx_transmit_done(ptx, ptx->tx.packet);
+			ptx->tx.packet = NULL;
+
+		} else {	// need more buffer space
+			ptx->tx.offset += status;
+			spin_unlock_bh(&ptx->tx.packet->lock);
+			break;
+		}
+	}
+}
+
+static inline void ssh_ptx_process_queue(struct ssh_ptx *ptx, bool force)
+{
+	if (force || atomic_read(&ptx->pending.count) < SSH_MAX_PACKETS_PENDING)
+		schedule_work(&ptx->tx.work);
+}
+
+static void ssh_ptx_timeout_fn(struct timer_list *tl)
+{
+	struct ssh_packet *packet = container_of(tl, struct ssh_packet, timer);
+	struct ssh_ptx *ptx = smp_load_acquire(&packet->ptx);
+
+	packet->num_timeouts += 1;
+
+	if (likely(packet->num_timeouts <= SSH_PTX_MAX_PKT_TIMEOUTS)) {
+		// update priority to
+		smp_store_release(&packet->priority,
+				  SSH_PACKET_PRIORITY_DATA_RESUB);
+
+		if (!ssh_ptx_queue_push(ptx, packet))
+			ssh_ptx_process_queue(ptx, true);
+		return;
+	}
+
+	// we have reached the max number of timeouts: cancel this packet
+
+	spin_lock_bh(&packet->lock);
+
+	if (packet->state & SSH_PACKET_SF_COMPLETED) {
+		spin_unlock_bh(&packet->lock);
+		return;
+	}
+
+	if (packet->state & SSH_PACKET_SF_CANCELING) {
+		spin_unlock_bh(&packet->lock);
+		return;
+	}
+
+	if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
+		packet->state |= SSH_PACKET_SF_CANCELING;
+		spin_unlock_bh(&packet->lock);
+		return;
+	}
+
+	packet->state |= SSH_PACKET_SF_CANCELING;
+	packet->state |= SSH_PACKET_SF_CANCELED;
+	packet->state |= SSH_PACKET_SF_COMPLETED;
+
+	spin_unlock_bh(&packet->lock);
+
+	// remove from system
+	ssh_ptx_queue_remove(ptx, packet);
+	ssh_ptx_pending_remove(ptx, packet);
+
+	packet->status = -ETIMEDOUT;
+	ssh_ptx_packet_complete(ptx, packet);
+
+	// we may have freed up some capacity to send
+	ssh_ptx_process_queue(ptx, false);
+}
+
+
+static int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
+{
+	int status;
+
+	status = ssh_ptx_queue_push(ptx, packet);
+	if (status)
+		return status;
+
+	smp_store_release(&packet->ptx, ptx);
+	ssh_ptx_process_queue(ptx, packet->type != SSH_PACKET_TY_BLOCKING);
+	return 0;
+}
+
+static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
+{
+	struct ssh_packet *p;
+	struct list_head *head;
+
+	spin_lock_bh(&ptx->queue.lock);
+	spin_lock_bh(&ptx->pending.lock);
+
+	// find first node with lower than data resubmission priority
+	list_for_each(head, &ptx->queue.head) {
+		p = list_entry(head, struct ssh_packet, queue_node);
+
+		if (smp_load_acquire(&p->priority)
+		    < SSH_PACKET_PRIORITY_DATA_RESUB)
+			break;
+	}
+
+	// re-queue all pending packets
+	list_for_each_entry(p, &ptx->pending.head, pending_node) {
+		spin_lock_bh(&p->lock);
+
+		// avoid further transitions when cancelling
+		if (p->state & SSH_PACKET_SF_CANCELING) {
+			spin_unlock_bh(&p->lock);
+			continue;
+		}
+
+		// if this packet has already been completed, do not add it
+		if (p->state & SSH_PACKET_SF_COMPLETED) {
+			spin_unlock_bh(&p->lock);
+			continue;
+		}
+
+		// if this packet has already been queued, do not add it
+		if (p->state & SSH_PACKET_SF_QUEUED) {
+			spin_unlock_bh(&p->lock);
+			continue;
+		}
+
+		/*
+		 * Note: All packets here are guaranteed to be pending
+		 * (non-ACKed) data packets.
+		 */
+
+		smp_store_release(&p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
+		list_add_tail(&p->queue_node, head);
+
+		spin_unlock_bh(&p->lock);
+	}
+
+	spin_lock_bh(&ptx->pending.lock);
+	spin_lock_bh(&ptx->queue.lock);
+
+	ssh_ptx_process_queue(ptx, true);
+}
+
+static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
+{
+	struct ssh_packet *packet;
+
+	packet = ssh_ptx_pending_pop(ptx, seq);
+	if (IS_ERR(packet)) {
+		if (PTR_ERR(packet) == -ENOENT) {
+			/*
+			 * The packet has not been found in the set of pending
+			 * packets.
+			 */
+			ptx_warn(ptx, "ptx: received ACK for non-pending"
+				 " packet\n");
+		} else {
+			/*
+			 * The packet is pending, but we are not allowed to take
+			 * it. This could be because the packet is currently
+			 * transmitting or a transmission error may have been
+			 * encountered and is currently being handled. Others
+			 * will take care of completion
+			 */
+		}
+
+		return;
+	}
+
+	ptx_dbg(ptx, "ACK received for packet %p\n", packet);
+
+	// remove packet from system
+	del_timer_sync(&packet->timer);
+	ssh_ptx_queue_remove(ptx, packet);
+	ssh_ptx_pending_remove(ptx, packet);
+
+	/*
+	 * We might have received an ACK for this packet before we have even
+	 * transmitted it. In this case, set an error.
+	 *
+	 * NB: No locking required here, we have already removed the paket from
+	 * the system at this point.
+	 */
+	if (likely(packet->state & SSH_PACKET_SF_TRANSMITTED)) {
+		packet->status = 0;
+	} else {
+		packet->status = -EIO;
+		ptx_err(ptx, "ptx: received ACK before packet had been fully"
+			" transmitted\n");
+	}
+
+	ssh_ptx_packet_complete(ptx, packet);
+
+	// we've completed a pendig packet, there may be new capacity to send
+	ssh_ptx_process_queue(ptx, false);
+}
+
+static bool ssh_ptx_cancel(struct ssh_ptx *ptx, struct ssh_packet *packet,
+			   bool pending)
+{
+	spin_lock_bh(&packet->lock);
+
+	if (packet->state & SSH_PACKET_SF_COMPLETED) {
+		spin_unlock_bh(&packet->lock);
+		return true;
+	}
+
+	if (packet->state & SSH_PACKET_SF_CANCELING) {
+		spin_unlock_bh(&packet->lock);
+		return true;
+	}
+
+	if (pending) {
+		/*
+		 * If packet is currently transmitting, we cannot take
+		 * ownership of it. Instead mark it as canceling and let the
+		 * transmission function take care of it once it's done.
+		 */
+		if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
+			ptx_dbg(ptx, "ptx: canceling packet %p\n", packet);
+			packet->state |= SSH_PACKET_SF_CANCELING;
+			spin_unlock_bh(&packet->lock);
+			return true;
+		}
+	} else {
+		if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
+			spin_unlock_bh(&packet->lock);
+			return false;
+		}
+
+		if (packet->state & SSH_PACKET_SF_PENDING) {
+			spin_unlock_bh(&packet->lock);
+			return false;
+		}
+	}
+
+	packet->state |= SSH_PACKET_SF_CANCELING;
+	packet->state |= SSH_PACKET_SF_CANCELED;
+	packet->state |= SSH_PACKET_SF_COMPLETED;
+
+	spin_unlock_bh(&packet->lock);
+
+	ptx_dbg(ptx, "ptx: canceled packet %p\n", packet);
+
+	// remove from system
+	del_timer_sync(&packet->timer);
+	ssh_ptx_queue_remove(ptx, packet);
+	ssh_ptx_pending_remove(ptx, packet);
+
+	packet->status = -EINTR;
+	ssh_ptx_packet_complete(ptx, packet);
+
+	// cancellation may have freed up some capacity to send
+	if (!pending)
+		ssh_ptx_process_queue(ptx, false);
+
+	return true;
+}
 
 /* -- TODO ------------------------------------------------------------------ */
 
