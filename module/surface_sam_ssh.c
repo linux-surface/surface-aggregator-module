@@ -1261,11 +1261,13 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	}
 
 	if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
+		packet->state |= SSH_PACKET_SF_TIMEDOUT;
 		packet->state |= SSH_PACKET_SF_CANCELING;
 		spin_unlock(&packet->lock);
 		return;
 	}
 
+	packet->state |= SSH_PACKET_SF_TIMEDOUT;
 	packet->state |= SSH_PACKET_SF_CANCELING;
 	packet->state |= SSH_PACKET_SF_CANCELED;
 	packet->state |= SSH_PACKET_SF_COMPLETED;
