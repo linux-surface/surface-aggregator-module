@@ -1463,6 +1463,48 @@ static bool ssh_ptx_cancel(struct ssh_ptx *ptx, struct ssh_packet *packet,
 	return true;
 }
 
+static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev)
+{
+	ptx->serdev = serdev;
+
+	spin_lock_init(&ptx->queue.lock);
+	INIT_LIST_HEAD(&ptx->queue.head);
+
+	spin_lock_init(&ptx->pending.lock);
+	INIT_LIST_HEAD(&ptx->pending.head);
+	atomic_set(&ptx->pending.count, 0);
+
+	INIT_WORK(&ptx->tx.work, ssh_ptx_process_work);
+	ptx->tx.packet = NULL;
+	ptx->tx.offset = 0;
+}
+
+static void ssh_ptx_init_packet(struct ssh_ptx *ptx, struct ssh_packet *packet,
+				enum ssh_packet_type_flags type,
+				enum ssh_packet_priority priority,
+				u8 sequence_id, unsigned char *buffer,
+				size_t buffer_length)
+{
+	packet->ptx = ptx;
+	packet->type = type;
+	packet->state = 0;
+	packet->priority = priority;
+	packet->sequence_id = sequence_id;
+	packet->status = 0;
+
+	spin_lock_init(&packet->lock);
+	INIT_LIST_HEAD(&packet->queue_node);
+	INIT_LIST_HEAD(&packet->pending_node);
+
+	packet->timeout.count = 0;
+	timer_setup(&packet->timeout.timer, ssh_ptx_timeout_tfn, TIMER_IRQSAFE);
+	INIT_WORK(&packet->timeout.work, ssh_ptx_timeout_wfn);
+
+	packet->buffer.ptr = buffer;
+	packet->buffer.length = buffer_length;
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
