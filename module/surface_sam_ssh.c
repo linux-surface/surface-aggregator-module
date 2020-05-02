@@ -760,8 +760,11 @@ struct ssh_packet {
 	u8 sequence_id;
 	int status;
 
-	unsigned int num_timeouts;
-	struct timer_list timer;
+	struct {
+		unsigned int count;
+		struct timer_list timer;
+		struct work_struct work;
+	} timeout;
 
 	struct {
 		unsigned char *ptr;
@@ -797,30 +800,30 @@ struct ssh_ptx {
 static int ssh_ptx_queue_insert_before(struct ssh_packet *packet,
 				       struct list_head *head)
 {
-	spin_lock_bh(&packet->lock);
+	spin_lock(&packet->lock);
 
 	// avoid further transitions when cancelling
 	if (packet->state & SSH_PACKET_SF_CANCELING) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return -EINVAL;
 	}
 
 	// if this packet has already been completed, do not add it
 	if (packet->state & SSH_PACKET_SF_COMPLETED) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return -EINVAL;
 	}
 
 	// if this packet has already been queued, do not add it
 	if (packet->state & SSH_PACKET_SF_QUEUED) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return -EALREADY;
 	}
 
 	packet->state |= SSH_PACKET_SF_QUEUED;
 	list_add_tail(&packet->queue_node, head);
 
-	spin_unlock_bh(&packet->lock);
+	spin_unlock(&packet->lock);
 	return 0;
 }
 
@@ -831,7 +834,7 @@ static int ssh_ptx_queue_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
 	struct ssh_packet *p;
 	int status;
 
-	spin_lock_bh(&ptx->queue.lock);
+	spin_lock(&ptx->queue.lock);
 
 	// fast path: minimum priority packets are always added at the end
 	if (priority == SSH_PACKET_PRIORITY_MIN) {
@@ -851,22 +854,22 @@ static int ssh_ptx_queue_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
 		status = ssh_ptx_queue_insert_before(packet, &ptx->queue.head);
 	}
 
-	spin_unlock_bh(&ptx->queue.lock);
+	spin_unlock(&ptx->queue.lock);
 	return status;
 }
 
 static void ssh_ptx_queue_remove(struct ssh_ptx *ptx, struct ssh_packet *packet)
 {
-	spin_lock_bh(&ptx->queue.lock);
-	spin_lock_bh(&packet->lock);
+	spin_lock(&ptx->queue.lock);
+	spin_lock(&packet->lock);
 
 	if (packet->state & SSH_PACKET_SF_QUEUED) {
 		packet->state &= ~SSH_PACKET_SF_QUEUED;
 		list_del(&packet->queue_node);
 	}
 
-	spin_unlock_bh(&packet->lock);
-	spin_unlock_bh(&ptx->queue.lock);
+	spin_unlock(&packet->lock);
+	spin_unlock(&ptx->queue.lock);
 }
 
 static inline
@@ -889,9 +892,9 @@ static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
 	struct ssh_packet *packet = NULL;
 	struct ssh_packet *p, *n;
 
-	spin_lock_bh(&ptx->queue.lock);
+	spin_lock(&ptx->queue.lock);
 	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
-		spin_lock_bh(&p->lock);
+		spin_lock(&p->lock);
 
 		/*
 		 * Packets should be ordered non-blocking/to-be-resent first.
@@ -899,7 +902,7 @@ static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
 		 * process any following packet either and abort.
 		 */
 		if (!ssh_ptx_can_process(ptx, p)) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			break;
 		}
 
@@ -908,7 +911,7 @@ static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
 		 * removed from this queue shortly.
 		 */
 		if (p->state & SSH_PACKET_SF_CANCELING) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			continue;
 		}
 
@@ -917,7 +920,7 @@ static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
 		 * going to be removed from this queue shortly.
 		 */
 		if (p->state & SSH_PACKET_SF_COMPLETED) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			continue;
 		}
 
@@ -933,20 +936,20 @@ static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
 		p->state &= ~SSH_PACKET_SF_QUEUED;
 		p->state |= SSH_PACKET_SF_TRANSMITTING;
 
-		spin_unlock_bh(&p->lock);
+		spin_unlock(&p->lock);
 
 		packet = p;
 		break;
 	}
-	spin_unlock_bh(&ptx->queue.lock);
+	spin_unlock(&ptx->queue.lock);
 
 	return packet;
 }
 
 static void ssh_ptx_pending_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
 {
-	spin_lock_bh(&ptx->pending.lock);
-	spin_lock_bh(&packet->lock);
+	spin_lock(&ptx->pending.lock);
+	spin_lock(&packet->lock);
 
 	// if we are cancelling this packet, do not add it
 	if (packet->state & SSH_PACKET_SF_CANCELING)
@@ -960,8 +963,8 @@ static void ssh_ptx_pending_push(struct ssh_ptx *ptx, struct ssh_packet *packet)
 	list_add_tail(&packet->pending_node, &ptx->pending.head);
 
 out:
-	spin_unlock_bh(&packet->lock);
-	spin_unlock_bh(&ptx->pending.lock);
+	spin_unlock(&packet->lock);
+	spin_unlock(&ptx->pending.lock);
 }
 
 static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
@@ -970,12 +973,12 @@ static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
 	struct ssh_packet *packet = ERR_PTR(-ENOENT);
 	struct ssh_packet *p, *n;
 
-	spin_lock_bh(&ptx->pending.lock);
+	spin_lock(&ptx->pending.lock);
 	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
 		if (unlikely(p->sequence_id != sequence_id))
 			continue;
 
-		spin_lock_bh(&p->lock);
+		spin_lock(&p->lock);
 
 		/*
 		 * In case we receive an ACK while handling a transmission error
@@ -983,7 +986,7 @@ static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
 		 */
 		if (unlikely(p->state & SSH_PACKET_SF_COMPLETED)) {
 			packet = ERR_PTR(-EPERM);
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			break;
 		}
 
@@ -1000,17 +1003,17 @@ static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
 		 */
 		if (unlikely(p->state & SSH_PACKET_SF_TRANSMITTING)) {
 			packet = ERR_PTR(-EPERM);
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			break;
 		}
 
 		p->state |= SSH_PACKET_SF_COMPLETED;
 		packet = p;
 
-		spin_unlock_bh(&p->lock);
+		spin_unlock(&p->lock);
 		break;
 	}
-	spin_unlock_bh(&ptx->pending.lock);
+	spin_unlock(&ptx->pending.lock);
 
 	return packet;
 }
@@ -1018,8 +1021,8 @@ static struct ssh_packet *ssh_ptx_pending_pop(struct ssh_ptx *ptx,
 static void ssh_ptx_pending_remove(struct ssh_ptx *ptx,
 				   struct ssh_packet *packet)
 {
-	spin_lock_bh(&ptx->pending.lock);
-	spin_lock_bh(&packet->lock);
+	spin_lock(&ptx->pending.lock);
+	spin_lock(&packet->lock);
 
 	if (packet->state & SSH_PACKET_SF_PENDING) {
 		packet->state &= ~SSH_PACKET_SF_PENDING;
@@ -1027,8 +1030,8 @@ static void ssh_ptx_pending_remove(struct ssh_ptx *ptx,
 		atomic_dec(&ptx->pending.count);
 	}
 
-	spin_unlock_bh(&packet->lock);
-	spin_unlock_bh(&ptx->pending.lock);
+	spin_unlock(&packet->lock);
+	spin_unlock(&ptx->pending.lock);
 }
 
 static inline
@@ -1051,7 +1054,8 @@ static inline struct ssh_packet *ssh_ptx_transmit_next(struct ssh_ptx *ptx)
 		ptx_dbg(ptx, "transmitting sequenced packet %p\n", packet);
 
 		ssh_ptx_pending_push(ptx, packet);
-		mod_timer(&packet->timer, jiffies + SSH_PTX_PKT_TIMEOUT);
+		mod_timer(&packet->timeout.timer,
+			  jiffies + SSH_PTX_PKT_TIMEOUT);
 
 	} else {
 		ptx_dbg(ptx, "transmitting non-sequenced packet %p\n", packet);
@@ -1117,7 +1121,7 @@ static inline void ssh_ptx_transmit_done(struct ssh_ptx *ptx,
 	packet->state &= ~SSH_PACKET_SF_TRANSMITTING;
 	packet->state |= SSH_PACKET_SF_TRANSMITTED;
 
-	spin_unlock_bh(&packet->lock);
+	spin_unlock(&packet->lock);
 
 	ptx_dbg(ptx, "ptx: transmitted packet %p\n", packet);
 	if (packet->state & SSH_PACKET_SF_CANCELED)
@@ -1125,7 +1129,8 @@ static inline void ssh_ptx_transmit_done(struct ssh_ptx *ptx,
 
 	if (completed) {
 		// remove from system and complete
-		del_timer_sync(&packet->timer);
+		del_timer_sync(&packet->timeout.timer);
+		cancel_work_sync(&packet->timeout.work);
 		ssh_ptx_queue_remove(ptx, packet);
 		ssh_ptx_pending_remove(ptx, packet);
 
@@ -1141,12 +1146,13 @@ static inline void ssh_ptx_transmit_error(struct ssh_ptx *ptx,
 	packet->state &= ~SSH_PACKET_SF_TRANSMITTING;
 	packet->state |= SSH_PACKET_SF_COMPLETED;
 
-	spin_unlock_bh(&packet->lock);
+	spin_unlock(&packet->lock);
 
 	ptx_err(ptx, "ptx: transmission error: %d\n", status);
 
 	// remove packet from system
-	del_timer_sync(&packet->timer);
+	del_timer_sync(&packet->timeout.timer);
+	cancel_work_sync(&packet->timeout.work);
 	ssh_ptx_queue_remove(ptx, packet);
 	ssh_ptx_pending_remove(ptx, packet);
 
@@ -1177,7 +1183,7 @@ static void ssh_ptx_process_work(struct work_struct *work)
 		 * ACKed-before-sent cases. Otherwise we could run into false
 		 * positives.
 		 */
-		spin_lock_bh(&ptx->tx.packet->lock);
+		spin_lock(&ptx->tx.packet->lock);
 
 		buf = ptx->tx.packet->buffer.ptr + ptx->tx.offset;
 		len = ptx->tx.packet->buffer.length - ptx->tx.offset;
@@ -1195,7 +1201,7 @@ static void ssh_ptx_process_work(struct work_struct *work)
 
 		} else {	// need more buffer space
 			ptx->tx.offset += status;
-			spin_unlock_bh(&ptx->tx.packet->lock);
+			spin_unlock(&ptx->tx.packet->lock);
 			break;
 		}
 	}
@@ -1207,14 +1213,22 @@ static inline void ssh_ptx_process_queue(struct ssh_ptx *ptx, bool force)
 		schedule_work(&ptx->tx.work);
 }
 
-static void ssh_ptx_timeout_fn(struct timer_list *tl)
+static void ssh_ptx_timeout_tfn(struct timer_list *tl)
 {
-	struct ssh_packet *packet = container_of(tl, struct ssh_packet, timer);
+	struct ssh_packet *packet;
+
+	packet = container_of(tl, struct ssh_packet, timeout.timer);
+	schedule_work(&packet->timeout.work);
+}
+
+static void ssh_ptx_timeout_wfn(struct work_struct *work)
+{
+	struct ssh_packet *packet = container_of(work, struct ssh_packet, timeout.work);
 	struct ssh_ptx *ptx = smp_load_acquire(&packet->ptx);
 
-	packet->num_timeouts += 1;
+	packet->timeout.count += 1;
 
-	if (likely(packet->num_timeouts <= SSH_PTX_MAX_PKT_TIMEOUTS)) {
+	if (likely(packet->timeout.count <= SSH_PTX_MAX_PKT_TIMEOUTS)) {
 		// update priority to
 		smp_store_release(&packet->priority,
 				  SSH_PACKET_PRIORITY_DATA_RESUB);
@@ -1226,21 +1240,21 @@ static void ssh_ptx_timeout_fn(struct timer_list *tl)
 
 	// we have reached the max number of timeouts: cancel this packet
 
-	spin_lock_bh(&packet->lock);
+	spin_lock(&packet->lock);
 
 	if (packet->state & SSH_PACKET_SF_COMPLETED) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return;
 	}
 
 	if (packet->state & SSH_PACKET_SF_CANCELING) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return;
 	}
 
 	if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
 		packet->state |= SSH_PACKET_SF_CANCELING;
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return;
 	}
 
@@ -1248,9 +1262,10 @@ static void ssh_ptx_timeout_fn(struct timer_list *tl)
 	packet->state |= SSH_PACKET_SF_CANCELED;
 	packet->state |= SSH_PACKET_SF_COMPLETED;
 
-	spin_unlock_bh(&packet->lock);
+	spin_unlock(&packet->lock);
 
 	// remove from system
+	del_timer_sync(&packet->timeout.timer);
 	ssh_ptx_queue_remove(ptx, packet);
 	ssh_ptx_pending_remove(ptx, packet);
 
@@ -1260,7 +1275,6 @@ static void ssh_ptx_timeout_fn(struct timer_list *tl)
 	// we may have freed up some capacity to send
 	ssh_ptx_process_queue(ptx, false);
 }
-
 
 static int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
 {
@@ -1280,8 +1294,8 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 	struct ssh_packet *p;
 	struct list_head *head;
 
-	spin_lock_bh(&ptx->queue.lock);
-	spin_lock_bh(&ptx->pending.lock);
+	spin_lock(&ptx->queue.lock);
+	spin_lock(&ptx->pending.lock);
 
 	// find first node with lower than data resubmission priority
 	list_for_each(head, &ptx->queue.head) {
@@ -1294,23 +1308,23 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 
 	// re-queue all pending packets
 	list_for_each_entry(p, &ptx->pending.head, pending_node) {
-		spin_lock_bh(&p->lock);
+		spin_lock(&p->lock);
 
 		// avoid further transitions when cancelling
 		if (p->state & SSH_PACKET_SF_CANCELING) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			continue;
 		}
 
 		// if this packet has already been completed, do not add it
 		if (p->state & SSH_PACKET_SF_COMPLETED) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			continue;
 		}
 
 		// if this packet has already been queued, do not add it
 		if (p->state & SSH_PACKET_SF_QUEUED) {
-			spin_unlock_bh(&p->lock);
+			spin_unlock(&p->lock);
 			continue;
 		}
 
@@ -1322,11 +1336,11 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 		smp_store_release(&p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
 		list_add_tail(&p->queue_node, head);
 
-		spin_unlock_bh(&p->lock);
+		spin_unlock(&p->lock);
 	}
 
-	spin_lock_bh(&ptx->pending.lock);
-	spin_lock_bh(&ptx->queue.lock);
+	spin_lock(&ptx->pending.lock);
+	spin_lock(&ptx->queue.lock);
 
 	ssh_ptx_process_queue(ptx, true);
 }
@@ -1360,7 +1374,8 @@ static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
 	ptx_dbg(ptx, "ACK received for packet %p\n", packet);
 
 	// remove packet from system
-	del_timer_sync(&packet->timer);
+	del_timer_sync(&packet->timeout.timer);
+	cancel_work_sync(&packet->timeout.work);
 	ssh_ptx_queue_remove(ptx, packet);
 	ssh_ptx_pending_remove(ptx, packet);
 
@@ -1388,15 +1403,15 @@ static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
 static bool ssh_ptx_cancel(struct ssh_ptx *ptx, struct ssh_packet *packet,
 			   bool pending)
 {
-	spin_lock_bh(&packet->lock);
+	spin_lock(&packet->lock);
 
 	if (packet->state & SSH_PACKET_SF_COMPLETED) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return true;
 	}
 
 	if (packet->state & SSH_PACKET_SF_CANCELING) {
-		spin_unlock_bh(&packet->lock);
+		spin_unlock(&packet->lock);
 		return true;
 	}
 
@@ -1407,19 +1422,19 @@ static bool ssh_ptx_cancel(struct ssh_ptx *ptx, struct ssh_packet *packet,
 		 * transmission function take care of it once it's done.
 		 */
 		if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
-			ptx_dbg(ptx, "ptx: canceling packet %p\n", packet);
 			packet->state |= SSH_PACKET_SF_CANCELING;
-			spin_unlock_bh(&packet->lock);
+			spin_unlock(&packet->lock);
+			ptx_dbg(ptx, "ptx: canceling packet %p\n", packet);
 			return true;
 		}
 	} else {
 		if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
-			spin_unlock_bh(&packet->lock);
+			spin_unlock(&packet->lock);
 			return false;
 		}
 
 		if (packet->state & SSH_PACKET_SF_PENDING) {
-			spin_unlock_bh(&packet->lock);
+			spin_unlock(&packet->lock);
 			return false;
 		}
 	}
@@ -1428,12 +1443,13 @@ static bool ssh_ptx_cancel(struct ssh_ptx *ptx, struct ssh_packet *packet,
 	packet->state |= SSH_PACKET_SF_CANCELED;
 	packet->state |= SSH_PACKET_SF_COMPLETED;
 
-	spin_unlock_bh(&packet->lock);
+	spin_unlock(&packet->lock);
 
 	ptx_dbg(ptx, "ptx: canceled packet %p\n", packet);
 
 	// remove from system
-	del_timer_sync(&packet->timer);
+	del_timer_sync(&packet->timeout.timer);
+	cancel_work_sync(&packet->timeout.work);
 	ssh_ptx_queue_remove(ptx, packet);
 	ssh_ptx_pending_remove(ptx, packet);
 
