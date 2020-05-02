@@ -1223,7 +1223,8 @@ static void ssh_ptx_timeout_tfn(struct timer_list *tl)
 
 static void ssh_ptx_timeout_wfn(struct work_struct *work)
 {
-	struct ssh_packet *packet = container_of(work, struct ssh_packet, timeout.work);
+	struct ssh_packet *packet = container_of(work, struct ssh_packet,
+						 timeout.work);
 	struct ssh_ptx *ptx = smp_load_acquire(&packet->ptx);
 
 	packet->timeout.count += 1;
