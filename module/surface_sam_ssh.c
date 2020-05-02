@@ -879,7 +879,7 @@ static inline bool ssh_ptx_can_process(struct ssh_packet *packet)
 	struct ssh_ptx *ptx = packet->ptx;
 
 	// we can alwas process non-blocking packets
-	if (packet->type & SSH_PACKET_TY_BLOCKING)
+	if (!(packet->type & SSH_PACKET_TY_BLOCKING))
 		return true;
 
 	// if we are already waiting for this packet, send it again
