@@ -1165,9 +1165,9 @@ static void ssh_ptx_process_work(struct work_struct *work)
 	struct ssh_ptx *ptx = container_of(work, struct ssh_ptx, tx.work);
 	unsigned char *buf;
 	size_t len;
-	int status;
+	int i, status;
 
-	while (true) {
+	for (i = 0; i < 25; i++) {
 		// if we don't have a packet, get the next and add it to pending
 		if (!ptx->tx.packet) {
 			ptx->tx.packet = ssh_ptx_transmit_next(ptx);
@@ -1175,7 +1175,7 @@ static void ssh_ptx_process_work(struct work_struct *work)
 
 			// if no packet is available, we are done
 			if (!ptx->tx.packet)
-				break;
+				return;
 		}
 
 		/*
@@ -1202,9 +1202,16 @@ static void ssh_ptx_process_work(struct work_struct *work)
 		} else {	// need more buffer space
 			ptx->tx.offset += status;
 			spin_unlock(&ptx->tx.packet->lock);
-			break;
+			return;
 		}
 	}
+
+	/*
+	 * In the unlikely case that we don't run out of new packets to process
+	 * or buffer space for sending any time soon, let's be a good work item
+	 * and give others a chance. Break here and re-schedule ourselves.
+	 */
+	schedule_work(&ptx->tx.work);
 }
 
 static inline void ssh_ptx_process_queue(struct ssh_ptx *ptx, bool force)
