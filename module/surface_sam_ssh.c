@@ -292,7 +292,7 @@ static inline u32 ssh_message_length(u16 payload_size)
 }
 
 
-/* -- Builder API for SAM-over-SSH messages. -------------------------------- */
+/* -- Builder functions for SAM-over-SSH messages. -------------------------- */
 
 struct msgbuf {
 	u8 *buffer;
@@ -424,7 +424,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 }
 
 
-/* -- Parser API for SSH messages. ------------------------------------------ */
+/* -- Parser functions for SAM-over-SSH messages. --------------------------- */
 
 struct bufspan {
 	u8    *ptr;
