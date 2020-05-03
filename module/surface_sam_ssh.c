@@ -838,7 +838,7 @@ static int ssh_ptx_queue_push(struct ssh_packet *packet)
 
 	// fast path: minimum priority packets are always added at the end
 	if (priority == SSH_PACKET_PRIORITY_MIN) {
-		status = ssh_ptx_queue_insert_before(packet, &ptx->queue.head);
+		status = ssh_ptx_queue_insert(packet, &ptx->queue.head);
 
 	// regular path
 	} else {
@@ -851,7 +851,7 @@ static int ssh_ptx_queue_push(struct ssh_packet *packet)
 		}
 
 		// insert before
-		status = ssh_ptx_queue_insert_before(packet, &ptx->queue.head);
+		status = ssh_ptx_queue_insert(packet, &ptx->queue.head);
 	}
 
 	spin_unlock(&ptx->queue.lock);
