@@ -1276,6 +1276,38 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 		return;
 	}
 
+	/*
+	 * We need to make sure that this work_struct is not pending again, as,
+	 * if we want to complete this packet, we need to ensure that we are the
+	 * only ones holding a reference to it. We can't guarantee that if there
+	 * is still a work item queued which references this and we can't cancel
+	 * that from here.
+	 *
+	 * Without external re-submission of the packet, this can only happen in
+	 * one, very specific "the starts align just right and hell freezes over
+	 * at the same time as you're getting struck by lightning while falling
+	 * down a cliff" kind-of way: The receiver receives a NAK, re-submits
+	 * the packet, which eventually gets transmitted and at the same re-arms
+	 * the timeout timer, which triggers before we are done with this
+	 * function and queus this work_struct _while_ we're already executing
+	 * it. The timing for this is only possible if this work struct gets
+	 * delayed unreasonably long (at least as long as the timeout), and on
+	 * top of it the package needs to be either re-submitted, externally or
+	 * via a NAK.
+	 *
+	 * As we have chosen not to sacrifice our favorite goat and the most
+	 * expensive wine to Tyche/Fortuna and are strict believers in Murphy's
+	 * Law, let's deal with this. So cancel the timer synchronously here
+	 * (which we're _very_ likely not going to have to wait on) and in the
+	 * unlikely case that it has already triggered another time and queued
+	 * this work_struct again, let the second instance take care of it.
+	 */
+	del_timer_sync(&packet->timeout.timer);
+	if (unlikely(work_pending(&packet->timeout.work))) {
+		spin_unlock(&packet->lock);
+		return;
+	}
+
 	packet->state |= SSH_PACKET_SF_TIMEDOUT;
 	packet->state |= SSH_PACKET_SF_CANCELING;
 	packet->state |= SSH_PACKET_SF_CANCELED;
@@ -1284,7 +1316,6 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	spin_unlock(&packet->lock);
 
 	// remove from system
-	del_timer_sync(&packet->timeout.timer);
 	ssh_ptx_queue_remove(packet);
 	ssh_ptx_pending_remove(packet);
 
