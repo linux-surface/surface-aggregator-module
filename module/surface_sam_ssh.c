@@ -1262,14 +1262,11 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 		return;
 	}
 
-	if (packet->state & SSH_PACKET_SF_CANCELING) {
-		spin_unlock(&packet->lock);
-		return;
-	}
+	packet->state |= SSH_PACKET_SF_TIMEDOUT;
+	packet->state |= SSH_PACKET_SF_CANCELING;
 
+	// if we are currently transmitting, let that process take care of it
 	if (packet->state & SSH_PACKET_SF_TRANSMITTING) {
-		packet->state |= SSH_PACKET_SF_TIMEDOUT;
-		packet->state |= SSH_PACKET_SF_CANCELING;
 		spin_unlock(&packet->lock);
 		return;
 	}
@@ -1298,16 +1295,19 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	 * Law, let's deal with this. So cancel the timer synchronously here
 	 * (which we're _very_ likely not going to have to wait on) and in the
 	 * unlikely case that it has already triggered another time and queued
-	 * this work_struct again, let the second instance take care of it.
+	 * this work_struct again, let the second instance take care of it. In
+	 * case we have a second work instance queued, we have already mark the
+	 * packet as "canceling", to ensure that the timer is not being added
+	 * again in-between this and the next execution of this critical
+	 * section.
 	 */
 	del_timer_sync(&packet->timeout.timer);
+
 	if (unlikely(work_pending(&packet->timeout.work))) {
 		spin_unlock(&packet->lock);
 		return;
 	}
 
-	packet->state |= SSH_PACKET_SF_TIMEDOUT;
-	packet->state |= SSH_PACKET_SF_CANCELING;
 	packet->state |= SSH_PACKET_SF_CANCELED;
 	packet->state |= SSH_PACKET_SF_COMPLETED;
 
