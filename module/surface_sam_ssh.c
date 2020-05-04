@@ -1300,6 +1300,12 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	 * packet as "canceling", to ensure that the timer is not being added
 	 * again in-between this and the next execution of this critical
 	 * section.
+	 *
+	 * Note: This needs to run locked with (or after) the state transition
+	 * to "canceling". Otherwise, the timer could be re-added and this whole
+	 * situation could repeat itself. We opted to keep this in the lock as
+	 * it is very unlikely that we have to wait for the timer and otherwise
+	 * we'd have to repeat the checks above again.
 	 */
 	del_timer_sync(&packet->timeout.timer);
 
