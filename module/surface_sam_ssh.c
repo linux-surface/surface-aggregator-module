@@ -1522,6 +1522,17 @@ static bool ssh_ptx_cancel(struct ssh_packet *packet, bool pending)
 	return true;
 }
 
+static enum ssh_packet_state_flags ssh_ptx_state(struct ssh_packet *packet)
+{
+	enum ssh_packet_state_flags state;
+
+	spin_lock(&packet->lock);
+	state = packet->state;
+	spin_unlock(&packet->lock);
+
+	return state;
+}
+
 static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev)
 {
 	ptx->serdev = serdev;
