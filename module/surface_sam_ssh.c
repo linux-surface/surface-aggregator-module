@@ -762,7 +762,6 @@ struct ssh_packet {
 
 	enum ssh_packet_priority priority;
 	u8 sequence_id;
-	int status;
 
 	struct {
 		unsigned int count;
@@ -775,6 +774,8 @@ struct ssh_packet {
 		size_t length;
 	} buffer;
 };
+
+typedef void (*ssh_ptx_completion_t)(struct ssh_packet *packet, int status);
 
 struct ssh_ptx {
 	struct serdev_device *serdev;
@@ -795,6 +796,8 @@ struct ssh_ptx {
 		struct ssh_packet *packet;
 		size_t offset;
 	} tx;
+
+	ssh_ptx_completion_t complete;
 };
 
 #define ptx_dbg(ptx, fmt, ...)  dev_dbg(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
@@ -1047,9 +1050,7 @@ static inline void ssh_ptx_pending_remove(struct ssh_packet *packet)
 static inline void ssh_ptx_packet_complete(struct ssh_packet *p, int status)
 {
 	ptx_dbg(p->ptx, "ptx: completing packet %p\n", p);
-	p->status = status;
-
-	// TODO: call completion callback of packet
+	p->ptx->complete(p, status);
 }
 
 static void ssh_ptx_packet_remove_and_complete(struct ssh_packet *p, int status)
@@ -1533,7 +1534,8 @@ static enum ssh_packet_state_flags ssh_ptx_state(struct ssh_packet *packet)
 	return state;
 }
 
-static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev)
+static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev,
+			 ssh_ptx_completion_t complete)
 {
 	ptx->serdev = serdev;
 
@@ -1547,6 +1549,8 @@ static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev)
 	INIT_WORK(&ptx->tx.work, ssh_ptx_process_work);
 	ptx->tx.packet = NULL;
 	ptx->tx.offset = 0;
+
+	ptx->complete = complete;
 }
 
 static void ssh_ptx_init_packet(struct ssh_packet *packet,
@@ -1560,7 +1564,6 @@ static void ssh_ptx_init_packet(struct ssh_packet *packet,
 	packet->state = 0;
 	packet->priority = priority;
 	packet->sequence_id = sequence_id;
-	packet->status = 0;
 
 	spin_lock_init(&packet->lock);
 	INIT_LIST_HEAD(&packet->queue_node);
