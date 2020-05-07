@@ -56,9 +56,6 @@
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
 
-#define SSH_MAX_PACKETS_PENDING			1
-
-
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
 
 /**
@@ -707,6 +704,13 @@ static void sshp_parse_command(const struct sam_ssh_ec *ec,
  */
 #define SSH_PTX_PKT_TIMEOUT		msecs_to_jiffies(1000)
 
+/**
+ * Maximum number of sequenced packets concurrently waiting for an ACK.
+ * Packets marked as blocking will not be transmitted while this limit is
+ * reached.
+ */
+#define SSH_PTX_MAX_PENDING		1
+
 enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_MIN = 0,
 	SSH_PACKET_PRIORITY_DATA = SSH_PACKET_PRIORITY_MIN,
@@ -888,7 +892,7 @@ static inline bool ssh_ptx_can_process(struct ssh_packet *packet)
 		return true;
 
 	// otherwise: check if we have the capacity to send
-	return atomic_read(&ptx->pending.count) < SSH_MAX_PACKETS_PENDING;
+	return atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING;
 }
 
 static struct ssh_packet *ssh_ptx_queue_pop(struct ssh_ptx *ptx)
@@ -1217,7 +1221,7 @@ static void ssh_ptx_process_work(struct work_struct *work)
 
 static inline void ssh_ptx_process_queue(struct ssh_ptx *ptx, bool force)
 {
-	if (force || atomic_read(&ptx->pending.count) < SSH_MAX_PACKETS_PENDING)
+	if (force || atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING)
 		schedule_work(&ptx->tx.work);
 }
 
