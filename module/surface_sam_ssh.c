@@ -13,6 +13,7 @@
 #include <linux/interrupt.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
+#include <linux/kthread.h>
 #include <linux/kfifo.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -792,7 +793,9 @@ struct ssh_ptx {
 	} pending;
 
 	struct {
-		struct work_struct work;
+		struct task_struct *thread;
+		struct wait_queue_head signal;
+		atomic_t signal_var;
 		struct ssh_packet *packet;
 		size_t offset;
 	} tx;
@@ -1166,22 +1169,32 @@ static inline void ssh_ptx_transmit_error(struct ssh_packet *packet, int status)
 	ssh_ptx_packet_remove_and_complete(packet, status);
 }
 
-static void ssh_ptx_process_work(struct work_struct *work)
+static inline void ssh_ptx_process_wait(struct ssh_ptx *ptx)
 {
-	struct ssh_ptx *ptx = container_of(work, struct ssh_ptx, tx.work);
+	wait_event_interruptible(ptx->tx.signal,
+				 atomic_read(&ptx->tx.signal_var) != 0
+				 || kthread_should_stop());
+	atomic_set(&ptx->tx.signal_var, 0);
+}
+
+static int ssh_ptx_txthread(void *data)
+{
+	struct ssh_ptx *ptx = data;
 	unsigned char *buf;
 	size_t len;
-	int i, status;
+	int status;
 
-	for (i = 0; i < 25; i++) {
+	while (!kthread_should_stop()) {
 		// if we don't have a packet, get the next and add it to pending
 		if (!ptx->tx.packet) {
 			ptx->tx.packet = ssh_ptx_transmit_next(ptx);
 			ptx->tx.offset = 0;
 
 			// if no packet is available, we are done
-			if (!ptx->tx.packet)
-				return;
+			if (!ptx->tx.packet) {
+				ssh_ptx_process_wait(ptx);
+				continue;
+			}
 		}
 
 		/*
@@ -1208,22 +1221,40 @@ static void ssh_ptx_process_work(struct work_struct *work)
 		} else {	// need more buffer space
 			ptx->tx.offset += status;
 			spin_unlock(&ptx->tx.packet->lock);
-			return;
+			ssh_ptx_process_wait(ptx);
 		}
 	}
 
-	/*
-	 * In the unlikely case that we don't run out of new packets to process
-	 * or buffer space for sending any time soon, let's be a good work item
-	 * and give others a chance. Break here and re-schedule ourselves.
-	 */
-	schedule_work(&ptx->tx.work);
+	// cancel active packet before we actually stop
+	if (ptx->tx.packet) {
+		spin_lock(&ptx->tx.packet->lock);
+		ssh_ptx_transmit_error(ptx->tx.packet, -EINTR);
+		ptx->tx.packet = NULL;
+	}
+
+	return 0;
 }
 
-static inline void ssh_ptx_process_queue(struct ssh_ptx *ptx, bool force)
+static inline void ssh_ptx_tx_wakeup(struct ssh_ptx *ptx, bool force)
 {
-	if (force || atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING)
-		schedule_work(&ptx->tx.work);
+	if (force || atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING) {
+		atomic_set(&ptx->tx.signal_var, 1);
+		wake_up(&ptx->tx.signal);
+	}
+}
+
+static inline int ssh_ptx_tx_start(struct ssh_ptx *ptx)
+{
+	ptx->tx.thread = kthread_run(ssh_ptx_txthread, ptx, "surface-sh-tx");
+	if (IS_ERR(ptx->tx.thread))
+		return PTR_ERR(ptx->tx.thread);
+
+	return 0;
+}
+
+static inline int ssh_ptx_tx_stop(struct ssh_ptx *ptx)
+{
+	return kthread_stop(ptx->tx.thread);
 }
 
 static inline int ssh_ptx_resubmit(struct ssh_packet *packet)
@@ -1238,7 +1269,7 @@ static inline int ssh_ptx_resubmit(struct ssh_packet *packet)
 	force_work = READ_ONCE(packet->state) & SSH_PACKET_SF_PENDING;
 	force_work |= packet->type != SSH_PACKET_TY_BLOCKING;
 
-	ssh_ptx_process_queue(packet->ptx, force_work);
+	ssh_ptx_tx_wakeup(packet->ptx, force_work);
 	return 0;
 }
 
@@ -1331,7 +1362,7 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	ssh_ptx_packet_complete(packet, -ETIMEDOUT);
 
 	// we may have freed up some capacity to send
-	ssh_ptx_process_queue(packet->ptx, false);
+	ssh_ptx_tx_wakeup(packet->ptx, false);
 }
 
 static void ssh_ptx_timeout_tfn(struct timer_list *tl)
@@ -1358,7 +1389,7 @@ static inline int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
 	if (status)
 		return status;
 
-	ssh_ptx_process_queue(ptx, packet->type != SSH_PACKET_TY_BLOCKING);
+	ssh_ptx_tx_wakeup(ptx, packet->type != SSH_PACKET_TY_BLOCKING);
 	return 0;
 }
 
@@ -1415,7 +1446,7 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 	spin_lock(&ptx->pending.lock);
 	spin_lock(&ptx->queue.lock);
 
-	ssh_ptx_process_queue(ptx, true);
+	ssh_ptx_tx_wakeup(ptx, true);
 }
 
 static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
@@ -1464,7 +1495,7 @@ static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
 	ssh_ptx_packet_remove_and_complete(packet, status);
 
 	// we've completed a pendig packet, there may be new capacity to send
-	ssh_ptx_process_queue(ptx, false);
+	ssh_ptx_tx_wakeup(ptx, false);
 }
 
 static bool ssh_ptx_cancel(struct ssh_packet *packet, bool pending)
@@ -1518,7 +1549,7 @@ static bool ssh_ptx_cancel(struct ssh_packet *packet, bool pending)
 
 	// cancellation may have freed up some capacity to send
 	if (!pending)
-		ssh_ptx_process_queue(ptx, false);
+		ssh_ptx_tx_wakeup(ptx, false);
 
 	return true;
 }
@@ -1546,7 +1577,8 @@ static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev,
 	INIT_LIST_HEAD(&ptx->pending.head);
 	atomic_set(&ptx->pending.count, 0);
 
-	INIT_WORK(&ptx->tx.work, ssh_ptx_process_work);
+	ptx->tx.thread = NULL;
+	atomic_set(&ptx->tx.signal_var, 0);
 	ptx->tx.packet = NULL;
 	ptx->tx.offset = 0;
 
