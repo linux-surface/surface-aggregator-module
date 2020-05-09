@@ -1150,11 +1150,12 @@ static inline void ssh_ptx_transmit_done(struct ssh_packet *packet)
 	spin_unlock(&packet->lock);
 
 	ptx_dbg(ptx, "ptx: transmitted packet %p\n", packet);
-	if (packet->state & SSH_PACKET_SF_CANCELED)
-		ptx_dbg(ptx, "ptx: canceled packet %p\n", packet);
+	if (completed) {
+		if (packet->state & SSH_PACKET_SF_CANCELED)
+			ptx_dbg(ptx, "ptx: canceled packet %p\n", packet);
 
-	if (completed)
 		ssh_ptx_packet_remove_and_complete(packet, status);
+	}
 }
 
 /* Needs to be called with packet lock, unlocks and completes packet */
