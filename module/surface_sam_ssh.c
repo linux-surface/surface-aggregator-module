@@ -1382,6 +1382,8 @@ static void ssh_ptx_cancel(struct ssh_packet *packet)
 
 	set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->flags);
 	ssh_ptx_remove_and_complete(packet, -EINTR);
+
+	ssh_ptx_tx_wakeup(packet->ptx, false);
 }
 
 
@@ -1414,6 +1416,8 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 
 			ssh_ptx_tx_wakeup(p->ptx, false);
 			__ssh_ptx_complete(p, -ETIMEDOUT);
+
+			ssh_ptx_tx_wakeup(p->ptx, false);
 		}
 	}
 
