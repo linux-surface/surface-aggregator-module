@@ -1002,7 +1002,7 @@ static inline bool ssh_ptx_tx_can_process(struct ssh_packet *packet)
 
 static inline struct ssh_packet *ssh_ptx_tx_pop(struct ssh_ptx *ptx)
 {
-	struct ssh_packet *packet = NULL;
+	struct ssh_packet *packet = ERR_PTR(-ENOENT);
 	struct ssh_packet *p, *n;
 
 	spin_lock(&ptx->queue.lock);
@@ -1014,6 +1014,7 @@ static inline struct ssh_packet *ssh_ptx_tx_pop(struct ssh_ptx *ptx)
 		 */
 		if (!ssh_ptx_tx_can_process(p)) {
 			spin_unlock(&ptx->queue.lock);
+			packet = ERR_PTR(-EBUSY);
 			break;
 		}
 
@@ -1061,7 +1062,7 @@ static inline struct ssh_packet *ssh_ptx_tx_next(struct ssh_ptx *ptx)
 	struct ssh_packet *packet;
 
 	packet = ssh_ptx_tx_pop(ptx);
-	if (!packet)
+	if (IS_ERR(packet))
 		return packet;
 
 	if (test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &packet->flags)) {
@@ -1132,12 +1133,12 @@ static int ssh_ptx_tx_threadfn(void *data)
 
 	while (!kthread_should_stop()) {
 		// if we don't have a packet, get the next and add it to pending
-		if (!ptx->tx.packet) {
+		if (IS_ERR_OR_NULL(ptx->tx.packet)) {
 			ptx->tx.packet = ssh_ptx_tx_next(ptx);
 			ptx->tx.offset = 0;
 
 			// if no packet is available, we are done
-			if (!ptx->tx.packet) {
+			if (IS_ERR(ptx->tx.packet)) {
 				ssh_ptx_tx_threadfn_wait(ptx);
 				continue;
 			}
