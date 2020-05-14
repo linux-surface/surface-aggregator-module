@@ -1315,8 +1315,8 @@ static int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
 	if (status)
 		return status;
 
-	ssh_ptx_tx_wakeup(ptx, test_bit(SSH_PACKET_TY_BLOCKING_BIT,
-					&packet->flags));
+	ssh_ptx_tx_wakeup(ptx, !test_bit(SSH_PACKET_TY_BLOCKING_BIT,
+					 &packet->flags));
 	return 0;
 }
 
