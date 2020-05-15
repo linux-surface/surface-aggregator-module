@@ -1308,9 +1308,17 @@ static int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
 	 * This function is currently not intended for re-submission. The ptx
 	 * reference only gets set on the first submission. After the first
 	 * submission, it has to be read-only.
+	 *
+	 * Use cmpxchg to ensure safety with regards to ssh_ptx_cancel and
+	 * re-entry, where we can't guarantee that the packet has been submitted
+	 * yet.
+	 *
+	 * The implicit barrier of cmpxchg is paired with barrier in
+	 * ssh_ptx_cancel to guarantee cancelation in case the packet has never
+	 * been submitted or is currently being submitted.
 	 */
-	BUG_ON(READ_ONCE(packet->ptx) != NULL);
-	packet->ptx = ptx;
+	if (cmpxchg(&packet->ptx, NULL, ptx) != NULL)
+		return -EALREADY;
 
 	status = ssh_ptx_queue_push(packet);
 	if (status)
@@ -1376,15 +1384,34 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 	ssh_ptx_tx_wakeup(ptx, true);
 }
 
-static void ssh_ptx_cancel(struct ssh_packet *packet)
+static void ssh_ptx_cancel(struct ssh_packet *p)
 {
-	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &packet->flags))
+	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &p->flags))
 		return;
 
-	set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->flags);
-	ssh_ptx_remove_and_complete(packet, -EINTR);
+	// lock packet and commit
+	set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->flags);
+	smp_mb__after_atomic();
 
-	ssh_ptx_tx_wakeup(packet->ptx, false);
+	/*
+	 * By marking the packet as locked and employing the memory barrier, we
+	 * have guaranteed that, at this point, the packet cannot be added to
+	 * the queue any more.
+	 *
+	 * In case the packet has never been submitted, packet->ptx is NULL. If
+	 * the packet is currently being submitted, packet->ptx may be NULL or
+	 * non-NULL. Due marking the packet as locked above and committing with
+	 * the memory barrier, we have guaranteed that, if packet->ptx is NULL,
+	 * the packet will never be added to the queue. If packet->ptx is
+	 * non-NULL, we don't have any guarantees.
+	 */
+
+	if (READ_ONCE(p->ptx)) {
+		ssh_ptx_remove_and_complete(p, -EINTR);
+		ssh_ptx_tx_wakeup(p->ptx, false);
+	} else if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->flags)) {
+		__ssh_ptx_complete(p, -EINTR);
+	}
 }
 
 
