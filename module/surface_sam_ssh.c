@@ -964,8 +964,7 @@ static inline void ssh_ptx_pending_remove(struct ssh_packet *packet)
 static inline void __ssh_ptx_complete(struct ssh_packet *p, int status)
 {
 	ptx_dbg(p->ptx, "ptx: completing packet %p\n", p);
-	if (p->ops.complete)
-		p->ops.complete(p, status);
+	p->ops.complete(p, status);
 }
 
 static inline void ssh_ptx_remove_and_complete(struct ssh_packet *p, int status)
