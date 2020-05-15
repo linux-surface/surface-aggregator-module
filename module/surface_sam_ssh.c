@@ -791,9 +791,9 @@ struct ssh_ptx {
 	} rx;
 };
 
-#define ptx_dbg(ptx, fmt, ...)  dev_dbg(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
-#define ptx_warn(ptx, fmt, ...) dev_warn(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
-#define ptx_err(ptx, fmt, ...)  dev_err(&ptx->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptx_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptx_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptx_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 
 
 static void __ssh_ptx_packet_release(struct kref *kref)
