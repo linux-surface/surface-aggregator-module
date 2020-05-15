@@ -6,6 +6,7 @@
 
 #include <asm/unaligned.h>
 #include <linux/acpi.h>
+#include <linux/atomic.h>
 #include <linux/completion.h>
 #include <linux/crc-ccitt.h>
 #include <linux/dmaengine.h>
