@@ -1389,14 +1389,18 @@ static void ssh_ptx_cancel(struct ssh_packet *p)
 	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &p->flags))
 		return;
 
-	// lock packet and commit
-	set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->flags);
-	smp_mb__after_atomic();
+	/*
+	 * Lock packet and commit with memory barrier. If this packet has
+	 * already been locked, it's going to be removed and completed by
+	 * another party, which should have precedence.
+	 */
+	if (test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->flags))
+		return;
 
 	/*
-	 * By marking the packet as locked and employing the memory barrier, we
-	 * have guaranteed that, at this point, the packet cannot be added to
-	 * the queue any more.
+	 * By marking the packet as locked and employing the implicit memory
+	 * barrier of test_and_set_bit, we have guaranteed that, at this point,
+	 * the packet cannot be added to the queue any more.
 	 *
 	 * In case the packet has never been submitted, packet->ptx is NULL. If
 	 * the packet is currently being submitted, packet->ptx may be NULL or
