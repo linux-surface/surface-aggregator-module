@@ -162,7 +162,7 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 	return count;
 }
 
-const static DEVICE_ATTR_RW(perf_mode);
+static const DEVICE_ATTR_RW(perf_mode);
 
 
 static int surface_sam_sid_perfmode_probe(struct platform_device *pdev)
