@@ -12,3 +12,5 @@ obj-m += surface_sam_sid_power.o
 obj-m += surface_sam_sid_vhf.o
 
 ccflags-y += -DCONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE
+ccflags-y += -Wall -Wextra
+ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
