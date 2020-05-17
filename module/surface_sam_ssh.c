@@ -1514,6 +1514,643 @@ static void ssh_ptx_init_packet(struct ssh_packet *packet,
 }
 
 
+/* -- Request transmission system (rtx). ------------------------------------ */
+
+#define SSH_RTX_RQST_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_RTX_MAX_PENDING		3
+
+enum ssh_request_type_flags {
+	SSH_REQUEST_TY_EXPRESP_BIT,
+
+	SSH_REQUEST_TY_EXPRESP = BIT(SSH_REQUEST_TY_EXPRESP_BIT),
+};
+
+enum ssh_request_state_flags {
+	SSH_REQUEST_SF_LOCKED_BIT,
+	SSH_REQUEST_SF_QUEUED_BIT,
+	SSH_REQUEST_SF_PENDING_BIT,
+	SSH_REQUEST_SF_TRANSMITTING_BIT,
+	SSH_REQUEST_SF_TRANSMITTED_BIT,
+	SSH_REQUEST_SF_RSPRCVD_BIT,
+	SSH_REQUEST_SF_COMPLETED_BIT,
+};
+
+struct ssh_rtx;
+
+struct ssh_request {
+	struct ssh_rtx *rtx;
+	struct ssh_packet packet;
+	struct list_head queue_node;
+	struct list_head pending_node;
+
+	enum ssh_request_type_flags type;
+	unsigned long state;
+
+	u16 request_id;
+
+	struct {
+		struct mutex lock;
+		struct timer_list timer;
+		struct work_struct work;
+	} timeout;
+
+	// TODO
+};
+
+struct ssh_rtx {
+	struct ssh_ptx ptx;
+
+	struct {
+		spinlock_t lock;
+		struct list_head head;
+	} queue;
+
+	struct {
+		spinlock_t lock;
+		struct list_head head;
+		atomic_t count;
+	} pending;
+
+	struct work_struct tx_work;
+};
+
+
+#define rtx_dbg(r, fmt, ...)  ptx_dbg(&(r)->ptx, fmt, ##__VA_ARGS__)
+#define rtx_warn(r, fmt, ...) ptx_warn(&(r)->ptx, fmt, ##__VA_ARGS__)
+#define rtx_err(r, fmt, ...)  ptx_err(&(r)->ptx, fmt, ##__VA_ARGS__)
+
+
+static inline void ssh_request_get(struct ssh_request *rqst)
+{
+	ssh_packet_get(&rqst->packet);
+}
+
+static inline void ssh_request_put(struct ssh_request *rqst)
+{
+	ssh_packet_put(&rqst->packet);
+}
+
+
+static inline struct ssh_request *ssh_rtx_tx_next(struct ssh_rtx *rtx)
+{
+	struct ssh_request *rqst = ERR_PTR(-ENOENT);
+	struct ssh_request *p, *n;
+
+	if (atomic_read(&rtx->pending.count) >= SSH_RTX_MAX_PENDING)
+		return ERR_PTR(-EBUSY);
+
+	spin_lock(&rtx->queue.lock);
+
+	// find first non-locked request and remove it
+	list_for_each_entry_safe(p, n, &rtx->queue.head, queue_node) {
+		if (unlikely(test_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state)))
+			continue;
+
+		/*
+		 * Remove from queue and mark as transmitting. Ensure that the
+		 * state does not get zero via memory barrier.
+		 */
+		set_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &p->state);
+		smp_mb__before_atomic();
+		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &p->state);
+
+		list_del(&p->queue_node);
+
+		rqst = p;
+		break;
+	}
+
+	spin_unlock(&rtx->queue.lock);
+	return rqst;
+}
+
+static inline int ssh_rtx_tx_pending_push(struct ssh_request *rqst)
+{
+	struct ssh_rtx *rtx = rqst->rtx;
+
+	spin_lock(&rtx->pending.lock);
+
+	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
+		spin_unlock(&rtx->pending.lock);
+		return -EINVAL;
+	}
+
+	if (test_and_set_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state)) {
+		spin_unlock(&rtx->pending.lock);
+		return -EALREADY;
+	}
+
+	atomic_inc(&rtx->pending.count);
+	ssh_request_get(rqst);
+	list_add_tail(&rqst->pending_node, &rtx->pending.head);
+
+	spin_unlock(&rtx->pending.lock);
+	return 0;
+}
+
+static inline int ssh_rtx_tx_try_process_one(struct ssh_rtx *rtx)
+{
+	struct ssh_request *rqst;
+	int status;
+
+	rqst = ssh_rtx_tx_next(rtx);
+	if (IS_ERR(rqst))
+		return PTR_ERR(rqst);
+
+	status = ssh_rtx_tx_pending_push(rqst);
+	if (status) {
+		ssh_request_put(rqst);
+		return -EAGAIN;
+	}
+
+	/* Part 3: Submit packet. */
+	status = ssh_ptx_submit(&rtx->ptx, &rqst->packet);
+	if (status) {
+		/*
+		 * If submitting the packet failed, the packet has either been
+		 * submmitted/queued before (which cannot happen as we have
+		 * guaranteed that requests cannot be re-submitted), or the
+		 * packet was marked as locked. To mark the packet locked at
+		 * this stage, the request, and thus the package itself, had to
+		 * have been canceled. Simply drop the reference. Cancellation
+		 * itself will remove it from the set of pending requests.
+		 */
+		ssh_request_put(rqst);
+		return -EAGAIN;
+	}
+
+	ssh_request_put(rqst);
+	return 0;
+}
+
+static inline bool ssh_rtx_tx_schedule(struct ssh_rtx *rtx)
+{
+	if (atomic_read(&rtx->pending.count) < SSH_RTX_MAX_PENDING)
+		return schedule_work(&rtx->tx_work);
+	else
+		return false;
+}
+
+static void ssh_rtx_tx_work_fn(struct work_struct *work)
+{
+	struct ssh_rtx *rtx = container_of(work, struct ssh_rtx, tx_work);
+	int i, status;
+
+	/*
+	 * Try to be nice and not block the workqueue: Run a maximum of 10
+	 * tries, then re-submit if necessary. This should not be neccesary,
+	 * for normal execution, but guarantee it anyway.
+	 */
+	for (i = 0; i < 10; i++) {
+		status = ssh_rtx_tx_try_process_one(rtx);
+		if (status == -ENOENT || status == -EBUSY)
+			return;		// no more requests to process
+
+		BUG_ON(status != 0 || status != -EAGAIN);
+	}
+
+	// out of tries, reschedule
+	ssh_rtx_tx_schedule(rtx);
+}
+
+
+static int ssh_rtx_submit(struct ssh_rtx *rtx, struct ssh_request *rqst)
+{
+	/*
+	 * Ensure that requests expecting a response are sequenced. If this
+	 * invariant ever changes, see the comment in ssh_rtx_complete on what
+	 * is required to be changed in the code.
+	 */
+	if (rqst->type & SSH_REQUEST_TY_EXPRESP)
+		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
+			return -EINVAL;
+
+	// try to set rtx and check if this request has already been submitted
+	if (cmpxchg(&rqst->rtx, NULL, rtx) != NULL)
+		return -EALREADY;
+
+	spin_lock(&rtx->queue.lock);
+
+	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
+		spin_unlock(&rtx->queue.lock);
+		return -EINVAL;
+	}
+
+	if (test_and_set_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
+		spin_unlock(&rtx->queue.lock);
+		return -EALREADY;
+	}
+
+	ssh_request_get(rqst);
+	list_add_tail(&rqst->queue_node, &rtx->queue.head);
+
+	spin_unlock(&rtx->queue.lock);
+
+	ssh_rtx_tx_schedule(rtx);
+	return 0;
+}
+
+
+static inline void ssh_rtx_queue_remove(struct ssh_request *rqst)
+{
+	bool remove;
+
+	spin_lock(&rqst->rtx->queue.lock);
+
+	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
+	if (remove)
+		list_del(&rqst->queue_node);
+
+	spin_unlock(&rqst->rtx->queue.lock);
+
+	if (remove)
+		ssh_request_put(rqst);
+}
+
+static inline void ssh_rtx_pending_remove(struct ssh_request *rqst)
+{
+	bool remove;
+
+	spin_lock(&rqst->rtx->pending.lock);
+
+	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
+	if (remove) {
+		atomic_dec(&rqst->rtx->pending.count);
+		list_del(&rqst->pending_node);
+	}
+
+	spin_unlock(&rqst->rtx->pending.lock);
+
+	if (remove)
+		ssh_request_put(rqst);
+}
+
+
+static inline void ssh_rtx_timeout_start(struct ssh_request *rqst)
+{
+	// if this fails, someone else is setting or cancelling the timeout
+	if (!mutex_trylock(&rqst->timeout.lock))
+		return;
+
+	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state))
+		return;
+
+	ssh_request_get(rqst);
+	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTX_RQST_TIMEOUT);
+
+	mutex_unlock(&rqst->timeout.lock);
+}
+
+static inline void ssh_rtx_timeout_cancel_sync(struct ssh_request *rqst)
+{
+	bool pending;
+
+	mutex_lock(&rqst->timeout.lock);
+	pending = del_timer_sync(&rqst->timeout.timer);
+	pending |= cancel_work_sync(&rqst->timeout.work);
+	mutex_unlock(&rqst->timeout.lock);
+
+	if (pending)
+		ssh_request_put(rqst);
+}
+
+
+static void ssh_rtx_complete_with_status(struct ssh_request *rqst, int status)
+{
+	struct ssh_rtx *rtx = READ_ONCE(rqst->rtx);
+
+	// rqst->rtx may not be set if we're cancelling before submitting
+	if (rtx) {
+		rtx_dbg(rtx, "rtx: completing request (rqid: 0x%04x,"
+			" status: %d)\n", rqst->request_id, status);
+	}
+
+	// TODO
+}
+
+static void ssh_rtx_complete_with_rsp(struct ssh_request *rqst /* TODO */)
+{
+	rtx_dbg(rqst->rtx, "rtx: completing request with response"
+		" (rqid: 0x%04x)\n", rqst->request_id);
+
+	// TODO
+}
+
+static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
+{
+	struct ssh_request *r = NULL;
+	struct ssh_request *p, *n;
+
+	/*
+	 * Get request from pending based on request ID and mark it as response
+	 * received and locked.
+	 */
+	spin_lock(&rtx->pending.lock);
+	list_for_each_entry_safe(p, n, &rtx->pending.head, pending_node) {
+		// we generally expect requests to be processed in order
+		if (unlikely(p->request_id != rqid))
+			continue;
+
+		/*
+		 * Mark as "responce received" and "locked" as we're going to
+		 * complete it. Ensure that the state doesn't get zero by
+		 * employing a memory barrier.
+		 */
+		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state);
+		set_bit(SSH_REQUEST_SF_RSPRCVD_BIT, &p->state);
+		smp_mb__before_atomic();
+		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &p->state);
+
+		atomic_dec(&rtx->pending.count);
+		list_del(&p->pending_node);
+
+		r = p;
+		break;
+	}
+	spin_unlock(&rtx->pending.lock);
+
+	if (!r) {
+		rtx_err(rtx, "rtx: received unexpected command message"
+			" (rqid = 0x%04x)\n", rqid);
+		return;
+	}
+
+	// if the request hasn't been completed yet, we will do this now
+	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state)) {
+		ssh_request_put(r);
+		ssh_rtx_tx_schedule(rtx);
+		return;
+	}
+
+	// disable timeout first
+	ssh_rtx_timeout_cancel_sync(r);
+
+	/*
+	 * Make sure the request has been transmitted. In case of a sequenced
+	 * request, we are guaranteed that the completion callback will run on
+	 * the receiver thread directly when the ACK for the packet has been
+	 * received. Similarly, this function is guaranteed to run on the
+	 * receiver thread. Thus we are guaranteed that if the packet has been
+	 * successfully transmitted and received an ACK, the transmitted flag
+	 * has been set and is visible here.
+	 *
+	 * We are currently not handling unsequenced packets here, as those
+	 * should never expect a response as ensured in ssh_rtx_submit. If this
+	 * ever changes, one would have to test for
+	 *
+	 * 	(r->state & (transmitting | transmitted))
+	 *
+	 * on unsequenced packets to determine if they could have been
+	 * transmitted. There are no synchronization guarantees as in the
+	 * sequenced case, since, in this case, the callback function will not
+	 * run on the same thread. Thus an exact determination is impossible.
+	 */
+	if (!test_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state)) {
+		rtx_err(rtx, "rtx: received response before ACK for request"
+			" (rqid = 0x%04x)\n", rqid);
+
+		/*
+		 * NB: Timeout has already been canceled, request already been
+		 * removed from pending and marked as locked and completed. As
+		 * we receive a "false" response, the packet might still be
+		 * queued though.
+		 */
+		ssh_rtx_queue_remove(r);
+
+		ssh_rtx_complete_with_status(r, -EREMOTEIO);
+		ssh_request_put(r);
+
+		ssh_rtx_tx_schedule(rtx);
+		return;
+	}
+
+	/*
+	 * NB: Timeout has already been canceled, request already been
+	 * removed from pending and marked as locked and completed. The request
+	 * can also not be queued any more, as it has been marked as
+	 * transmitting and later transmitted. Thus no need to remove it from
+	 * anywhere.
+	 */
+
+	ssh_rtx_complete_with_rsp(r);
+	ssh_request_put(r);
+
+	ssh_rtx_tx_schedule(rtx);
+}
+
+
+static inline bool ssh_rtx_cancel_nonpending(struct ssh_request *r)
+{
+	unsigned long state;
+	bool remove;
+
+	/*
+	 * Handle unsubmitted request: Try to mark the packet as locked,
+	 * expecting the state to be zero (i.e. unsubmitted). Note that, if
+	 * setting the state worked, we might still be adding the packet to the
+	 * queue in a currently executing submit call. In that case, however,
+	 * rqst->rtx must have been set previously, as locked is checked after
+	 * setting rqst->rtx. Thus only if we successfully lock this request and
+	 * rqst->rtx is NULL, we have successfully removed the request.
+	 * Otherwise we need to try and grab it from the queue.
+	 *
+	 * Note that if the CMPXCHG fails, we are guaranteed that rqst->rtx has
+	 * been set and is non-NULL, as states can only be nonzero after this
+	 * has been set.
+	 */
+	state = cmpxchg(&r->state, 0, SSH_REQUEST_SF_LOCKED_BIT);
+	if (!state && !READ_ONCE(r->rtx)) {
+		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+			return true;
+
+		ssh_rtx_complete_with_status(r, -EINTR);
+		return true;
+	}
+
+	spin_lock(&r->rtx->queue.lock);
+
+	/*
+	 * Note: 1) Requests cannot be re-submitted. 2) If a request is queued,
+	 * it cannot be "transmitting"/"pending" yet. Thus, if we successfully
+	 * remove the the request here, we have removed all its occurences in
+	 * the system.
+	 */
+
+	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
+	if (!remove) {
+		spin_unlock(&r->rtx->queue.lock);
+		return false;
+	}
+
+	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+	list_del(&r->queue_node);
+
+	spin_unlock(&r->rtx->queue.lock);
+
+	ssh_request_put(r);	// drop reference obtained from queue
+
+	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+		return true;
+
+	ssh_rtx_complete_with_status(r, -EINTR);
+	return true;
+}
+
+static inline bool ssh_rtx_cancel_pending(struct ssh_request *r)
+{
+	// if the packet is already locked, it's going to be removed shortly
+	if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
+		return true;
+
+	/*
+	 * Now that we have locked the packet, we have guaranteed that it can't
+	 * be added to the system any more. If rqst->rtx is zero, the locked
+	 * check in ssh_rtx_submit has not been run and any submission,
+	 * currently in progress or called later, won't add the packet. Thus we
+	 * can directly complete it.
+	 */
+	if (!READ_ONCE(r->rtx)) {
+		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+			return true;
+
+		ssh_rtx_complete_with_status(r, -EINTR);
+		return true;
+	}
+
+	/*
+	 * Try to cancel the packet. If the packet has not been completed yet,
+	 * this will subsequently (and synchronously) call the completion
+	 * callback of the packet, which will complete the request.
+	 */
+	ssh_ptx_cancel(&r->packet);
+
+	/*
+	 * If the packet has been completed with success, i.e. has not been
+	 * canceled by the above call, the request may not have been completed
+	 * yet (may be waiting for a response). Check if we need to do this
+	 * here.
+	 */
+	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+		return true;
+
+	ssh_rtx_queue_remove(r);
+	ssh_rtx_timeout_cancel_sync(r);
+	ssh_rtx_pending_remove(r);
+	ssh_rtx_complete_with_status(r, -EINTR);
+
+	return true;
+}
+
+static bool ssh_rtx_cancel(struct ssh_request *rqst, bool pending)
+{
+	struct ssh_rtx *rtx;
+	bool canceled;
+
+	if (pending)
+		canceled = ssh_rtx_cancel_pending(rqst);
+	else
+		canceled = ssh_rtx_cancel_nonpending(rqst);
+
+	// note: rqst->rtx may be NULL if request has not been submitted yet
+	rtx = READ_ONCE(rqst->rtx);
+	if (canceled && rtx)
+		ssh_rtx_tx_schedule(rtx);
+
+	return canceled;
+}
+
+
+static void ssh_rtx_packet_callback(struct ssh_packet *p, int status)
+{
+	struct ssh_request *r = container_of(p, struct ssh_request, packet);
+
+	if (unlikely(status)) {
+		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+
+		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+			return;
+
+		/*
+		 * The packet may get cancelled even though it has not been
+		 * submitted yet. The request may still be queued. Check the
+		 * queue and remove it if necessary. As the timeout would have
+		 * been started in this function on success, there's no need to
+		 * cancel it here.
+		 */
+		ssh_rtx_queue_remove(r);
+		ssh_rtx_pending_remove(r);
+		ssh_rtx_complete_with_status(r, -EINTR);
+
+		ssh_rtx_tx_schedule(r->rtx);
+		return;
+	}
+
+	/*
+	 * Mark as transmitted, ensure that state doesn't get zero by inserting
+	 * a memory barrier.
+	 */
+	set_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state);
+	smp_mb__before_atomic();
+	clear_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &r->state);
+
+	// if we expect a response, we just need to start the timeout
+	if (r->type & SSH_REQUEST_TY_EXPRESP) {
+		ssh_rtx_timeout_start(r);
+		return;
+	}
+
+	/*
+	 * If we don't expect a response, lock, remove, and complete the
+	 * request. Note that, at this point, the request is guaranteed to have
+	 * left the queue and no timeout has been started. Thus we only need to
+	 * remove it from pending. If the request has already been completed (it
+	 * may have been canceled) return.
+	 */
+
+	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+		return;
+
+	ssh_rtx_pending_remove(r);
+	ssh_rtx_complete_with_status(r, 0);
+
+	ssh_rtx_tx_schedule(r->rtx);
+}
+
+
+static void ssh_rtx_timeout_wfn(struct work_struct *work)
+{
+	struct ssh_request *rqst;
+	struct ssh_rtx *rtx;
+
+	rqst = container_of(work, struct ssh_request, timeout.work);
+	rtx = rqst->rtx;
+
+	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
+	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &rqst->state))
+		return;
+
+	/*
+	 * The timeout is activated only after the request has been removed from
+	 * the queue. Thus no need to check it. The timeout is guaranteed to run
+	 * only once, so we also don't need to handle that.
+	 */
+	ssh_rtx_pending_remove(rqst);
+	ssh_rtx_complete_with_status(rqst, -ETIMEDOUT);
+	ssh_request_put(rqst);
+
+	ssh_rtx_tx_schedule(rtx);
+}
+
+static void ssh_rtx_timeout_tfn(struct timer_list *tl)
+{
+	struct ssh_packet *packet;
+
+	packet = container_of(tl, struct ssh_packet, timeout.timer);
+	schedule_work(&packet->timeout.work);
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
