@@ -1035,21 +1035,21 @@ static inline struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 
 static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 {
-	struct ssh_packet *packet;
+	struct ssh_packet *p;
 
-	packet = ssh_ptl_tx_pop(ptl);
-	if (IS_ERR(packet))
-		return packet;
+	p = ssh_ptl_tx_pop(ptl);
+	if (IS_ERR(p))
+		return p;
 
-	if (packet->type & SSH_PACKET_TY_SEQUENCED) {
-		ptl_dbg(ptl, "transmitting sequenced packet %p\n", packet);
-		ssh_ptl_pending_push(packet);
-		ssh_ptl_timeout_start(packet);
+	if (p->type & SSH_PACKET_TY_SEQUENCED) {
+		ptl_dbg(ptl, "ptl: transmitting sequenced packet %p\n", p);
+		ssh_ptl_pending_push(p);
+		ssh_ptl_timeout_start(p);
 	} else {
-		ptl_dbg(ptl, "transmitting non-sequenced packet %p\n", packet);
+		ptl_dbg(ptl, "ptl: transmitting non-sequenced packet %p\n", p);
 	}
 
-	return packet;
+	return p;
 }
 
 static inline void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
@@ -1848,8 +1848,8 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid /* TODO */)
 	spin_unlock(&rtl->pending.lock);
 
 	if (!r) {
-		rtl_err(rtl, "rtl: received unexpected command message"
-			" (rqid = 0x%04x)\n", rqid);
+		rtl_warn(rtl, "rtl: dropping unexpected command message"
+			 " (rqid = 0x%04x)\n", rqid);
 		return;
 	}
 
