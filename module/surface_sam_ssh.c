@@ -1153,6 +1153,11 @@ static int ssh_ptx_tx_threadfn(void *data)
 
 		buf = ptx->tx.packet->buffer.ptr + ptx->tx.offset;
 		len = ptx->tx.packet->buffer.length - ptx->tx.offset;
+
+		ptx_dbg(ptx, "tx: sending data (length: %zu)\n", len);
+		print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, buf,
+				     len, false);
+
 		status = serdev_device_write_buf(ptx->serdev, buf, len);
 
 		if (status < 0) {
