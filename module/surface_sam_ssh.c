@@ -660,13 +660,13 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * Maximum number transmission attempts per sequenced packet in case of
  * time-outs.
  */
-#define SSH_PTX_MAX_PKT_TIMEOUTS	3
+#define SSH_PTX_MAX_PACKET_TIMEOUTS	3
 
 /**
  * Timeout in jiffies for ACKs. If we have not received an ACK in this
  * time-frame after starting transmission, the packet will be re-submitted.
  */
-#define SSH_PTX_PKT_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_PTX_PACKET_TIMEOUT		msecs_to_jiffies(1000)
 
 /**
  * Maximum number of sequenced packets concurrently waiting for an ACK.
@@ -799,7 +799,7 @@ static inline void ssh_ptx_timeout_start(struct ssh_packet *packet)
 		return;
 
 	ssh_packet_get(packet);
-	mod_timer(&packet->timeout.timer, jiffies + SSH_PTX_PKT_TIMEOUT);
+	mod_timer(&packet->timeout.timer, jiffies + SSH_PTX_PACKET_TIMEOUT);
 
 	mutex_unlock(&packet->timeout.lock);
 }
@@ -1408,7 +1408,7 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 
 	ptx_dbg(p->ptx, "ptx: packet timed out (packet = %p)", p);
 
-	if (likely(p->timeout.count <= SSH_PTX_MAX_PKT_TIMEOUTS)) {
+	if (likely(p->timeout.count <= SSH_PTX_MAX_PACKET_TIMEOUTS)) {
 		// re-submit with (slightly) higher priority
 		WRITE_ONCE(p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
 		ssh_ptx_resubmit(p);
@@ -1494,7 +1494,7 @@ static void ssh_ptx_init_packet(struct ssh_packet *packet,
 
 /* -- Request transmission system (rtx). ------------------------------------ */
 
-#define SSH_RTX_RQST_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_RTX_REQUEST_TIMEOUT		msecs_to_jiffies(1000)
 #define SSH_RTX_MAX_PENDING		3
 
 enum ssh_request_type_flags {
@@ -1774,7 +1774,7 @@ static inline void ssh_rtx_timeout_start(struct ssh_request *rqst)
 		return;
 
 	ssh_request_get(rqst);
-	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTX_RQST_TIMEOUT);
+	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTX_REQUEST_TIMEOUT);
 
 	mutex_unlock(&rqst->timeout.lock);
 }
