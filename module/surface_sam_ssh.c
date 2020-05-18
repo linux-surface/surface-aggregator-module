@@ -1436,6 +1436,8 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 	p = container_of(work, struct ssh_packet, timeout.work);
 	p->timeout.count += 1;
 
+	ptx_dbg(p->ptx, "ptx: packet timed out (packet = %p)", p);
+
 	if (likely(p->timeout.count <= SSH_PTX_MAX_PKT_TIMEOUTS)) {
 		// re-submit with (slightly) higher priority
 		WRITE_ONCE(p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
