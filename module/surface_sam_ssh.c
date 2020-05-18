@@ -685,6 +685,10 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  */
 #define SSH_PTL_MAX_PENDING		1
 
+#define SSH_PTL_RX_BUF_LEN		4096
+
+#define SSH_PTL_RX_FIFO_LEN		4096
+
 enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_MIN = 0,
 	SSH_PACKET_PRIORITY_DATA = SSH_PACKET_PRIORITY_MIN,
@@ -773,6 +777,11 @@ struct ssh_ptl {
 	} tx;
 
 	struct {
+		struct task_struct *thread;
+		struct wait_queue_head wq;
+		struct kfifo fifo;
+		struct sshp_buf buf;
+
 		// TODO
 	} rx;
 };
@@ -1457,7 +1466,124 @@ static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static void ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev) {
+static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
+{
+	struct ssh_frame *frame;
+	struct sshp_span payload;
+	size_t n;
+
+	// parse and validate frame
+	n = sshp_parse_frame(&ptl->serdev->dev, source, &frame, &payload,
+			     SSH_PTL_RX_BUF_LEN);
+	if (!frame)
+		return n;
+
+	if (IS_ERR(frame)) {
+		if (PTR_ERR(frame) == -E2BIG) {
+			ptl_warn(ptl, "ptl: received frame is too large,"
+				 " dropping it\n");
+		}
+
+		return n + sizeof(u16);		// look for next SYN
+	}
+
+	switch (frame->type) {
+	case SSH_FRAME_TYPE_ACK:
+		ssh_ptl_acknowledge(ptl, frame->seq);
+		break;
+
+	case SSH_FRAME_TYPE_NAK:
+		ssh_ptl_resubmit_pending(ptl);
+		break;
+
+	case SSH_FRAME_TYPE_DATA_SEQ:
+	case SSH_FRAME_TYPE_DATA_NSQ:
+		// TODO: handle data frame
+		break;
+
+	default:
+		ptl_warn(ptl, "ptl: received frame with unknown type 0x%02x\n",
+			 frame->type);
+	}
+
+	return n + ssh_message_length(frame->len);
+}
+
+static int ssh_ptl_rx_threadfn(void *data)
+{
+	struct ssh_ptl *ptl = data;
+
+	while (true) {
+		struct sshp_span span;
+		size_t offs = 0;
+		size_t n;
+
+		wait_event_interruptible(ptl->rx.wq,
+					 !kfifo_is_empty(&ptl->rx.fifo)
+					 || kthread_should_stop());
+		if (kthread_should_stop())
+			break;
+
+		// copy from fifo to evaluation buffer
+		n = sshp_buf_read_from_fifo(&ptl->rx.buf, &ptl->rx.fifo);
+
+		ptl_dbg(ptl, "rx: received data (size: %zu)\n", n);
+		print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1,
+				     ptl->rx.buf.ptr + ptl->rx.buf.len - n,
+				     n, false);
+
+		// parse until we need more bytes or buffer is empty
+		while (offs < ptl->rx.buf.len) {
+			sshp_buf_span_from(&ptl->rx.buf, offs, &span);
+			n = ssh_ptl_rx_eval(ptl, &span);
+			if (n == 0)
+				break;	// need more bytes
+
+			offs += n;
+		}
+
+		// throw away the evaluated parts
+		sshp_buf_drop(&ptl->rx.buf, offs);
+	}
+
+	return 0;
+}
+
+static inline void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
+{
+	wake_up(&ptl->rx.wq);
+}
+
+static inline int ssh_ptl_rx_start(struct ssh_ptl *ptl)
+{
+	ptl->rx.thread = kthread_run(ssh_ptl_rx_threadfn, ptl, "surface-sh-rx");
+	if (IS_ERR(ptl->rx.thread))
+		return PTR_ERR(ptl->rx.thread);
+
+	return 0;
+}
+
+static inline int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
+{
+	return kthread_stop(ptl->rx.thread);
+}
+
+static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
+{
+	int used;
+
+	used = kfifo_in(&ptl->rx.fifo, buf, n);
+	if (used)
+		ssh_ptl_rx_wakeup(ptl);
+
+	return used;
+}
+
+
+static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev)
+{
+	int status;
+
 	ptl->serdev = serdev;
 
 	spin_lock_init(&ptl->queue.lock);
@@ -1472,6 +1598,25 @@ static void ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev) {
 	ptl->tx.signal = false;
 	ptl->tx.packet = NULL;
 	ptl->tx.offset = 0;
+
+	ptl->rx.thread = NULL;
+	init_waitqueue_head(&ptl->rx.wq);
+
+	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
+	if (status)
+		return status;
+
+	status = sshp_buf_alloc(&ptl->rx.buf, SSH_PTL_RX_BUF_LEN, GFP_KERNEL);
+	if (status)
+		kfifo_free(&ptl->rx.fifo);
+
+	return status;
+}
+
+static void ssh_ptl_free(struct ssh_ptl *ptl)
+{
+	kfifo_free(&ptl->rx.fifo);
+	sshp_buf_free(&ptl->rx.buf);
 }
 
 static void ssh_ptl_init_packet(struct ssh_packet *packet,
