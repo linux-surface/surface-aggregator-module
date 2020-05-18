@@ -153,10 +153,6 @@ static_assert(sizeof(struct ssh_command) == 8);
 
 /* -- Common/utility functions. --------------------------------------------- */
 
-#define ssh_dbg(ec, fmt, ...)  dev_dbg(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ssh_warn(ec, fmt, ...) dev_warn(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ssh_err(ec, fmt, ...)  dev_err(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
 	return crc_ccitt_false(0xffff, buf, len);
@@ -2223,6 +2219,11 @@ static struct sam_ssh_ec ssh_ec = {
 
 
 /* -- TODO ------------------------------------------------------------------ */
+
+#define ssh_dbg(ec, fmt, ...)  dev_dbg(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ssh_warn(ec, fmt, ...) dev_warn(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ssh_err(ec, fmt, ...)  dev_err(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
+
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
 {
