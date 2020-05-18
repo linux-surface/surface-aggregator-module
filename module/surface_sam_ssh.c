@@ -527,7 +527,7 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 }
 
 
-/* -- Packet transmission system (ptx). ------------------------------------- */
+/* -- Packet transport layer (ptl). ----------------------------------------- */
 /*
  * To simplify reasoning about the code below, we define a few concepts. The
  * system below is similar to a state-machine for packets, however, there are
@@ -660,20 +660,20 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * Maximum number transmission attempts per sequenced packet in case of
  * time-outs.
  */
-#define SSH_PTX_MAX_PACKET_TIMEOUTS	3
+#define SSH_PTL_MAX_PACKET_TIMEOUTS	3
 
 /**
  * Timeout in jiffies for ACKs. If we have not received an ACK in this
  * time-frame after starting transmission, the packet will be re-submitted.
  */
-#define SSH_PTX_PACKET_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_PTL_PACKET_TIMEOUT		msecs_to_jiffies(1000)
 
 /**
  * Maximum number of sequenced packets concurrently waiting for an ACK.
  * Packets marked as blocking will not be transmitted while this limit is
  * reached.
  */
-#define SSH_PTX_MAX_PENDING		1
+#define SSH_PTL_MAX_PENDING		1
 
 enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_MIN = 0,
@@ -702,7 +702,7 @@ enum ssh_packet_state_flags {
 	SSH_PACKET_SF_COMPLETED_BIT,
 };
 
-struct ssh_ptx;
+struct ssh_ptl;
 struct ssh_packet;
 
 struct ssh_packet_ops {
@@ -713,7 +713,7 @@ struct ssh_packet_ops {
 struct ssh_packet {
 	struct kref refcnt;
 
-	struct ssh_ptx *ptx;
+	struct ssh_ptl *ptl;
 	struct list_head queue_node;
 	struct list_head pending_node;
 
@@ -740,7 +740,7 @@ struct ssh_packet {
 	struct ssh_packet_ops ops;
 };
 
-struct ssh_ptx {
+struct ssh_ptl {
 	struct serdev_device *serdev;
 
 	struct {
@@ -767,12 +767,12 @@ struct ssh_ptx {
 	} rx;
 };
 
-#define ptx_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ptx_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ptx_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptl_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 
 
-static void __ssh_ptx_packet_release(struct kref *kref)
+static void __ssh_ptl_packet_release(struct kref *kref)
 {
 	struct ssh_packet *p = container_of(kref, struct ssh_packet, refcnt);
 	p->ops.release(p);
@@ -785,11 +785,11 @@ static inline void ssh_packet_get(struct ssh_packet *packet)
 
 static inline void ssh_packet_put(struct ssh_packet *packet)
 {
-	kref_put(&packet->refcnt, __ssh_ptx_packet_release);
+	kref_put(&packet->refcnt, __ssh_ptl_packet_release);
 }
 
 
-static inline void ssh_ptx_timeout_start(struct ssh_packet *packet)
+static inline void ssh_ptl_timeout_start(struct ssh_packet *packet)
 {
 	// if this fails, someone else is setting or cancelling the timeout
 	if (!mutex_trylock(&packet->timeout.lock))
@@ -799,12 +799,12 @@ static inline void ssh_ptx_timeout_start(struct ssh_packet *packet)
 		return;
 
 	ssh_packet_get(packet);
-	mod_timer(&packet->timeout.timer, jiffies + SSH_PTX_PACKET_TIMEOUT);
+	mod_timer(&packet->timeout.timer, jiffies + SSH_PTL_PACKET_TIMEOUT);
 
 	mutex_unlock(&packet->timeout.lock);
 }
 
-static inline void ssh_ptx_timeout_cancel_sync(struct ssh_packet *packet)
+static inline void ssh_ptl_timeout_cancel_sync(struct ssh_packet *packet)
 {
 	bool pending;
 
@@ -818,7 +818,7 @@ static inline void ssh_ptx_timeout_cancel_sync(struct ssh_packet *packet)
 }
 
 
-static inline int ssh_ptx_queue_add(struct ssh_packet *p, struct list_head *h)
+static inline int ssh_ptl_queue_add(struct ssh_packet *p, struct list_head *h)
 {
 	// avoid further transitions when cancelling/completing
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
@@ -836,24 +836,24 @@ static inline int ssh_ptx_queue_add(struct ssh_packet *p, struct list_head *h)
 	return 0;
 }
 
-static int ssh_ptx_queue_push(struct ssh_packet *packet)
+static int ssh_ptl_queue_push(struct ssh_packet *packet)
 {
 	enum ssh_packet_priority priority = READ_ONCE(packet->priority);
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 	struct list_head *head;
 	struct ssh_packet *p;
 	int status;
 
-	spin_lock(&ptx->queue.lock);
+	spin_lock(&ptl->queue.lock);
 
 	// fast path: minimum priority packets are always added at the end
 	if (priority == SSH_PACKET_PRIORITY_MIN) {
-		status = ssh_ptx_queue_add(packet, &ptx->queue.head);
+		status = ssh_ptl_queue_add(packet, &ptl->queue.head);
 
 	// regular path
 	} else {
 		// find first node with lower priority
-		list_for_each(head, &ptx->queue.head) {
+		list_for_each(head, &ptl->queue.head) {
 			p = list_entry(head, struct ssh_packet, queue_node);
 
 			if (priority > READ_ONCE(p->priority))
@@ -861,83 +861,83 @@ static int ssh_ptx_queue_push(struct ssh_packet *packet)
 		}
 
 		// insert before
-		status = ssh_ptx_queue_add(packet, &ptx->queue.head);
+		status = ssh_ptl_queue_add(packet, &ptl->queue.head);
 	}
 
-	spin_unlock(&ptx->queue.lock);
+	spin_unlock(&ptl->queue.lock);
 	return status;
 }
 
-static inline void ssh_ptx_queue_remove(struct ssh_packet *packet)
+static inline void ssh_ptl_queue_remove(struct ssh_packet *packet)
 {
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 	bool remove;
 
-	spin_lock(&ptx->queue.lock);
+	spin_lock(&ptl->queue.lock);
 
 	remove = test_and_clear_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state);
 	if (remove)
 		list_del(&packet->queue_node);
 
-	spin_unlock(&ptx->queue.lock);
+	spin_unlock(&ptl->queue.lock);
 
 	if (remove)
 		ssh_packet_put(packet);
 }
 
 
-static inline void ssh_ptx_pending_push(struct ssh_packet *packet)
+static inline void ssh_ptl_pending_push(struct ssh_packet *packet)
 {
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 
-	spin_lock(&ptx->pending.lock);
+	spin_lock(&ptl->pending.lock);
 
 	// if we are cancelling/completing this packet, do not add it
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state)) {
-		spin_unlock(&ptx->pending.lock);
+		spin_unlock(&ptl->pending.lock);
 		return;
 	}
 
 	// in case it is already pending (e.g. re-submission), do not add it
 	if (test_and_set_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state)) {
-		spin_unlock(&ptx->pending.lock);
+		spin_unlock(&ptl->pending.lock);
 		return;
 	}
 
-	atomic_inc(&ptx->pending.count);
+	atomic_inc(&ptl->pending.count);
 	ssh_packet_get(packet);
-	list_add_tail(&packet->pending_node, &ptx->pending.head);
+	list_add_tail(&packet->pending_node, &ptl->pending.head);
 
-	spin_unlock(&ptx->pending.lock);
+	spin_unlock(&ptl->pending.lock);
 }
 
-static inline void ssh_ptx_pending_remove(struct ssh_packet *packet)
+static inline void ssh_ptl_pending_remove(struct ssh_packet *packet)
 {
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 	bool remove;
 
-	spin_lock(&ptx->pending.lock);
+	spin_lock(&ptl->pending.lock);
 
 	remove = test_and_clear_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state);
 	if (remove) {
 		list_del(&packet->pending_node);
-		atomic_dec(&ptx->pending.count);
+		atomic_dec(&ptl->pending.count);
 	}
 
-	spin_unlock(&ptx->pending.lock);
+	spin_unlock(&ptl->pending.lock);
 
 	if (remove)
 		ssh_packet_put(packet);
 }
 
 
-static inline void __ssh_ptx_complete(struct ssh_packet *p, int status)
+static inline void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
-	ptx_dbg(p->ptx, "ptx: completing packet %p\n", p);
+	ptl_dbg(p->ptl, "ptl: completing packet %p\n", p);
 	p->ops.complete(p, status);
 }
 
-static inline void ssh_ptx_remove_and_complete(struct ssh_packet *p, int status)
+static inline void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 {
 	/*
 	 * A call to this function should in general be preceeded by
@@ -952,17 +952,17 @@ static inline void ssh_ptx_remove_and_complete(struct ssh_packet *p, int status)
 	if (test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
 		return;
 
-	ssh_ptx_timeout_cancel_sync(p);
-	ssh_ptx_queue_remove(p);
-	ssh_ptx_pending_remove(p);
+	ssh_ptl_timeout_cancel_sync(p);
+	ssh_ptl_queue_remove(p);
+	ssh_ptl_pending_remove(p);
 
-	__ssh_ptx_complete(p, status);
+	__ssh_ptl_complete(p, status);
 }
 
 
-static inline bool ssh_ptx_tx_can_process(struct ssh_packet *packet)
+static inline bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 {
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 
 	// we can alwas process non-blocking packets
 	if (!(packet->type & SSH_PACKET_TY_BLOCKING))
@@ -973,23 +973,23 @@ static inline bool ssh_ptx_tx_can_process(struct ssh_packet *packet)
 		return true;
 
 	// otherwise: check if we have the capacity to send
-	return atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING;
+	return atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING;
 }
 
-static inline struct ssh_packet *ssh_ptx_tx_pop(struct ssh_ptx *ptx)
+static inline struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *packet = ERR_PTR(-ENOENT);
 	struct ssh_packet *p, *n;
 
-	spin_lock(&ptx->queue.lock);
-	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
+	spin_lock(&ptl->queue.lock);
+	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		/*
 		 * Packets should be ordered non-blocking/to-be-resent first.
 		 * If we cannot process this packet, assume that we can't
 		 * process any following packet either and abort.
 		 */
-		if (!ssh_ptx_tx_can_process(p)) {
-			spin_unlock(&ptx->queue.lock);
+		if (!ssh_ptl_tx_can_process(p)) {
+			spin_unlock(&ptl->queue.lock);
 			packet = ERR_PTR(-EBUSY);
 			break;
 		}
@@ -999,7 +999,7 @@ static inline struct ssh_packet *ssh_ptx_tx_pop(struct ssh_ptx *ptx)
 		 * It's going to be removed from this queue shortly.
 		 */
 		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
-			spin_unlock(&ptx->queue.lock);
+			spin_unlock(&ptl->queue.lock);
 			continue;
 		}
 
@@ -1028,35 +1028,35 @@ static inline struct ssh_packet *ssh_ptx_tx_pop(struct ssh_ptx *ptx)
 		packet = p;
 		break;
 	}
-	spin_unlock(&ptx->queue.lock);
+	spin_unlock(&ptl->queue.lock);
 
 	return packet;
 }
 
-static inline struct ssh_packet *ssh_ptx_tx_next(struct ssh_ptx *ptx)
+static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *packet;
 
-	packet = ssh_ptx_tx_pop(ptx);
+	packet = ssh_ptl_tx_pop(ptl);
 	if (IS_ERR(packet))
 		return packet;
 
 	if (packet->type & SSH_PACKET_TY_SEQUENCED) {
-		ptx_dbg(ptx, "transmitting sequenced packet %p\n", packet);
-		ssh_ptx_pending_push(packet);
-		ssh_ptx_timeout_start(packet);
+		ptl_dbg(ptl, "transmitting sequenced packet %p\n", packet);
+		ssh_ptl_pending_push(packet);
+		ssh_ptl_timeout_start(packet);
 	} else {
-		ptx_dbg(ptx, "transmitting non-sequenced packet %p\n", packet);
+		ptl_dbg(ptl, "transmitting non-sequenced packet %p\n", packet);
 	}
 
 	return packet;
 }
 
-static inline void ssh_ptx_tx_compl_success(struct ssh_packet *packet)
+static inline void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 {
-	struct ssh_ptx *ptx = packet->ptx;
+	struct ssh_ptl *ptl = packet->ptl;
 
-	ptx_dbg(ptx, "ptx: successfully transmitted packet %p\n", packet);
+	ptl_dbg(ptl, "ptl: successfully transmitted packet %p\n", packet);
 
 	/*
 	 * Transition to state to "transmitted". Ensure that the flags never get
@@ -1069,13 +1069,13 @@ static inline void ssh_ptx_tx_compl_success(struct ssh_packet *packet)
 	// if the packet is unsequenced, we're done: lock and complete
 	if (!(packet->type & SSH_PACKET_TY_SEQUENCED)) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state);
-		ssh_ptx_remove_and_complete(packet, 0);
+		ssh_ptl_remove_and_complete(packet, 0);
 	}
 
 	complete_all(&packet->transmitted);
 }
 
-static inline void ssh_ptx_tx_compl_error(struct ssh_packet *packet, int status)
+static inline void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 {
 	/*
 	 * Transmission failure: Lock the packet and try to complete it. Ensure
@@ -1085,108 +1085,108 @@ static inline void ssh_ptx_tx_compl_error(struct ssh_packet *packet, int status)
 	smp_mb__before_atomic();
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
-	ptx_err(packet->ptx, "ptx: transmission error: %d\n", status);
-	ptx_dbg(packet->ptx, "ptx: failed to transmit packet: %p\n", packet);
+	ptl_err(packet->ptl, "ptl: transmission error: %d\n", status);
+	ptl_dbg(packet->ptl, "ptl: failed to transmit packet: %p\n", packet);
 
-	ssh_ptx_remove_and_complete(packet, status);
+	ssh_ptl_remove_and_complete(packet, status);
 	complete_all(&packet->transmitted);
 }
 
-static inline void ssh_ptx_tx_threadfn_wait(struct ssh_ptx *ptx)
+static inline void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
 {
-	wait_event_interruptible(ptx->tx.wq, READ_ONCE(ptx->tx.signal)
+	wait_event_interruptible(ptl->tx.wq, READ_ONCE(ptl->tx.signal)
 				 || kthread_should_stop());
-	WRITE_ONCE(ptx->tx.signal, false);
+	WRITE_ONCE(ptl->tx.signal, false);
 }
 
-static int ssh_ptx_tx_threadfn(void *data)
+static int ssh_ptl_tx_threadfn(void *data)
 {
-	struct ssh_ptx *ptx = data;
+	struct ssh_ptl *ptl = data;
 	unsigned char *buf;
 	size_t len;
 	int status;
 
 	while (!kthread_should_stop()) {
 		// if we don't have a packet, get the next and add it to pending
-		if (IS_ERR_OR_NULL(ptx->tx.packet)) {
-			ptx->tx.packet = ssh_ptx_tx_next(ptx);
-			ptx->tx.offset = 0;
+		if (IS_ERR_OR_NULL(ptl->tx.packet)) {
+			ptl->tx.packet = ssh_ptl_tx_next(ptl);
+			ptl->tx.offset = 0;
 
 			// if no packet is available, we are done
-			if (IS_ERR(ptx->tx.packet)) {
-				ssh_ptx_tx_threadfn_wait(ptx);
+			if (IS_ERR(ptl->tx.packet)) {
+				ssh_ptl_tx_threadfn_wait(ptl);
 				continue;
 			}
 		}
 
-		buf = ptx->tx.packet->buffer.ptr + ptx->tx.offset;
-		len = ptx->tx.packet->buffer.length - ptx->tx.offset;
+		buf = ptl->tx.packet->buffer.ptr + ptl->tx.offset;
+		len = ptl->tx.packet->buffer.length - ptl->tx.offset;
 
-		ptx_dbg(ptx, "tx: sending data (length: %zu)\n", len);
+		ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
 		print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, buf,
 				     len, false);
 
-		status = serdev_device_write_buf(ptx->serdev, buf, len);
+		status = serdev_device_write_buf(ptl->serdev, buf, len);
 
 		if (status < 0) {
 			// complete packet with error
-			ssh_ptx_tx_compl_error(ptx->tx.packet, status);
-			ssh_packet_put(ptx->tx.packet);
-			ptx->tx.packet = NULL;
+			ssh_ptl_tx_compl_error(ptl->tx.packet, status);
+			ssh_packet_put(ptl->tx.packet);
+			ptl->tx.packet = NULL;
 
 		} else if (status == len) {
 			// complete packet and/or mark as transmitted
-			ssh_ptx_tx_compl_success(ptx->tx.packet);
-			ssh_packet_put(ptx->tx.packet);
-			ptx->tx.packet = NULL;
+			ssh_ptl_tx_compl_success(ptl->tx.packet);
+			ssh_packet_put(ptl->tx.packet);
+			ptl->tx.packet = NULL;
 
 		} else {	// need more buffer space
-			ptx->tx.offset += status;
-			ssh_ptx_tx_threadfn_wait(ptx);
+			ptl->tx.offset += status;
+			ssh_ptl_tx_threadfn_wait(ptl);
 		}
 	}
 
 	// cancel active packet before we actually stop
-	if (ptx->tx.packet) {
-		ssh_ptx_tx_compl_error(ptx->tx.packet, -EINTR);
-		ssh_packet_put(ptx->tx.packet);
-		ptx->tx.packet = NULL;
+	if (ptl->tx.packet) {
+		ssh_ptl_tx_compl_error(ptl->tx.packet, -EINTR);
+		ssh_packet_put(ptl->tx.packet);
+		ptl->tx.packet = NULL;
 	}
 
 	return 0;
 }
 
-static inline void ssh_ptx_tx_wakeup(struct ssh_ptx *ptx, bool force)
+static inline void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
 {
-	if (force || atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING) {
-		WRITE_ONCE(ptx->tx.signal, true);
+	if (force || atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING) {
+		WRITE_ONCE(ptl->tx.signal, true);
 		smp_mb__after_atomic();
-		wake_up(&ptx->tx.wq);
+		wake_up(&ptl->tx.wq);
 	}
 }
 
-static inline int ssh_ptx_tx_start(struct ssh_ptx *ptx)
+static inline int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 {
-	ptx->tx.thread = kthread_run(ssh_ptx_tx_threadfn, ptx, "surface-sh-tx");
-	if (IS_ERR(ptx->tx.thread))
-		return PTR_ERR(ptx->tx.thread);
+	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl, "surface-sh-tx");
+	if (IS_ERR(ptl->tx.thread))
+		return PTR_ERR(ptl->tx.thread);
 
 	return 0;
 }
 
-static inline int ssh_ptx_tx_stop(struct ssh_ptx *ptx)
+static inline int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 {
-	return kthread_stop(ptx->tx.thread);
+	return kthread_stop(ptl->tx.thread);
 }
 
 
-static struct ssh_packet *ssh_ptx_ack_pop(struct ssh_ptx *ptx, u8 seq_id)
+static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 {
 	struct ssh_packet *packet = ERR_PTR(-ENOENT);
 	struct ssh_packet *p, *n;
 
-	spin_lock(&ptx->pending.lock);
-	list_for_each_entry_safe(p, n, &ptx->pending.head, pending_node) {
+	spin_lock(&ptl->pending.lock);
+	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		/*
 		 * We generally expect packets to be in order, so first packet
 		 * to be added to pending is first to be sent, is first to be
@@ -1212,30 +1212,30 @@ static struct ssh_packet *ssh_ptx_ack_pop(struct ssh_ptx *ptx, u8 seq_id)
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
 
-		atomic_dec(&ptx->pending.count);
+		atomic_dec(&ptl->pending.count);
 		list_del(&p->pending_node);
 		packet = p;
 
 		break;
 	}
-	spin_unlock(&ptx->pending.lock);
+	spin_unlock(&ptl->pending.lock);
 
 	return packet;
 }
 
-static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
+static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 {
 	struct ssh_packet *p;
 	int status = 0;
 
-	p = ssh_ptx_ack_pop(ptx, seq);
+	p = ssh_ptl_ack_pop(ptl, seq);
 	if (IS_ERR(p)) {
 		if (PTR_ERR(p) == -ENOENT) {
 			/*
 			 * The packet has not been found in the set of pending
 			 * packets.
 			 */
-			ptx_warn(ptx, "ptx: received ACK for non-pending"
+			ptl_warn(ptl, "ptl: received ACK for non-pending"
 				 " packet\n");
 		} else {
 			/*
@@ -1246,7 +1246,7 @@ static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
 		return;
 	}
 
-	ptx_dbg(ptx, "ptx: received ACK for packet %p\n", p);
+	ptl_dbg(ptl, "ptl: received ACK for packet %p\n", p);
 
 	/*
 	 * It is possible that the packet has been transmitted, but the state
@@ -1269,72 +1269,72 @@ static void ssh_ptx_acknowledge(struct ssh_ptx *ptx, u8 seq)
 	}
 
 	if (unlikely(!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state))) {
-		ptx_err(ptx, "ptx: received ACK before packet had been fully"
+		ptl_err(ptl, "ptl: received ACK before packet had been fully"
 			" transmitted\n");
 		status = -EREMOTEIO;
 	}
 
-	ssh_ptx_remove_and_complete(p, status);
+	ssh_ptl_remove_and_complete(p, status);
 	ssh_packet_put(p);
 
-	ssh_ptx_tx_wakeup(ptx, false);
+	ssh_ptl_tx_wakeup(ptl, false);
 }
 
 
-static int ssh_ptx_submit(struct ssh_ptx *ptx, struct ssh_packet *packet)
+static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
 	int status;
 
 	/*
-	 * This function is currently not intended for re-submission. The ptx
+	 * This function is currently not intended for re-submission. The ptl
 	 * reference only gets set on the first submission. After the first
 	 * submission, it has to be read-only.
 	 *
-	 * Use cmpxchg to ensure safety with regards to ssh_ptx_cancel and
+	 * Use cmpxchg to ensure safety with regards to ssh_ptl_cancel and
 	 * re-entry, where we can't guarantee that the packet has been submitted
 	 * yet.
 	 *
 	 * The implicit barrier of cmpxchg is paired with barrier in
-	 * ssh_ptx_cancel to guarantee cancelation in case the packet has never
+	 * ssh_ptl_cancel to guarantee cancelation in case the packet has never
 	 * been submitted or is currently being submitted.
 	 */
-	if (cmpxchg(&packet->ptx, NULL, ptx) != NULL)
+	if (cmpxchg(&packet->ptl, NULL, ptl) != NULL)
 		return -EALREADY;
 
-	status = ssh_ptx_queue_push(packet);
+	status = ssh_ptl_queue_push(packet);
 	if (status)
 		return status;
 
-	ssh_ptx_tx_wakeup(ptx, !(packet->type & SSH_PACKET_TY_BLOCKING));
+	ssh_ptl_tx_wakeup(ptl, !(packet->type & SSH_PACKET_TY_BLOCKING));
 	return 0;
 }
 
-static int ssh_ptx_resubmit(struct ssh_packet *packet)
+static int ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	bool force_work;
 	int status;
 
-	status = ssh_ptx_queue_push(packet);
+	status = ssh_ptl_queue_push(packet);
 	if (status)
 		return status;
 
 	force_work = test_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state);
 	force_work |= !(packet->type & SSH_PACKET_TY_BLOCKING);
 
-	ssh_ptx_tx_wakeup(packet->ptx, force_work);
+	ssh_ptl_tx_wakeup(packet->ptl, force_work);
 	return 0;
 }
 
-static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
+static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *p;
 	struct list_head *head;
 
-	spin_lock(&ptx->queue.lock);
-	spin_lock(&ptx->pending.lock);
+	spin_lock(&ptl->queue.lock);
+	spin_lock(&ptl->pending.lock);
 
 	// find first node with lower than data resubmission priority
-	list_for_each(head, &ptx->queue.head) {
+	list_for_each(head, &ptl->queue.head) {
 		p = list_entry(head, struct ssh_packet, queue_node);
 
 		if (READ_ONCE(p->priority)
@@ -1343,7 +1343,7 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 	}
 
 	// re-queue all pending packets
-	list_for_each_entry(p, &ptx->pending.head, pending_node) {
+	list_for_each_entry(p, &ptl->pending.head, pending_node) {
 		// avoid further transitions if locked
 		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
@@ -1358,13 +1358,13 @@ static void ssh_ptx_resubmit_pending(struct ssh_ptx *ptx)
 		list_add_tail(&p->queue_node, head);
 	}
 
-	spin_unlock(&ptx->pending.lock);
-	spin_unlock(&ptx->queue.lock);
+	spin_unlock(&ptl->pending.lock);
+	spin_unlock(&ptl->queue.lock);
 
-	ssh_ptx_tx_wakeup(ptx, true);
+	ssh_ptl_tx_wakeup(ptl, true);
 }
 
-static void ssh_ptx_cancel(struct ssh_packet *p)
+static void ssh_ptl_cancel(struct ssh_packet *p)
 {
 	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &p->state))
 		return;
@@ -1382,36 +1382,36 @@ static void ssh_ptx_cancel(struct ssh_packet *p)
 	 * barrier of test_and_set_bit, we have guaranteed that, at this point,
 	 * the packet cannot be added to the queue any more.
 	 *
-	 * In case the packet has never been submitted, packet->ptx is NULL. If
-	 * the packet is currently being submitted, packet->ptx may be NULL or
+	 * In case the packet has never been submitted, packet->ptl is NULL. If
+	 * the packet is currently being submitted, packet->ptl may be NULL or
 	 * non-NULL. Due marking the packet as locked above and committing with
-	 * the memory barrier, we have guaranteed that, if packet->ptx is NULL,
-	 * the packet will never be added to the queue. If packet->ptx is
+	 * the memory barrier, we have guaranteed that, if packet->ptl is NULL,
+	 * the packet will never be added to the queue. If packet->ptl is
 	 * non-NULL, we don't have any guarantees.
 	 */
 
-	if (READ_ONCE(p->ptx)) {
-		ssh_ptx_remove_and_complete(p, -EINTR);
-		ssh_ptx_tx_wakeup(p->ptx, false);
+	if (READ_ONCE(p->ptl)) {
+		ssh_ptl_remove_and_complete(p, -EINTR);
+		ssh_ptl_tx_wakeup(p->ptl, false);
 	} else if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
-		__ssh_ptx_complete(p, -EINTR);
+		__ssh_ptl_complete(p, -EINTR);
 	}
 }
 
 
-static void ssh_ptx_timeout_wfn(struct work_struct *work)
+static void ssh_ptl_timeout_wfn(struct work_struct *work)
 {
 	struct ssh_packet *p;
 
 	p = container_of(work, struct ssh_packet, timeout.work);
 	p->timeout.count += 1;
 
-	ptx_dbg(p->ptx, "ptx: packet timed out (packet = %p)", p);
+	ptl_dbg(p->ptl, "ptl: packet timed out (packet = %p)", p);
 
-	if (likely(p->timeout.count <= SSH_PTX_MAX_PACKET_TIMEOUTS)) {
+	if (likely(p->timeout.count <= SSH_PTL_MAX_PACKET_TIMEOUTS)) {
 		// re-submit with (slightly) higher priority
 		WRITE_ONCE(p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
-		ssh_ptx_resubmit(p);
+		ssh_ptl_resubmit(p);
 
 	} else {
 		// we have reached the max number of timeouts: cancel packet
@@ -1425,20 +1425,20 @@ static void ssh_ptx_timeout_wfn(struct work_struct *work)
 
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 			del_timer_sync(&p->timeout.timer);
-			ssh_ptx_queue_remove(p);
-			ssh_ptx_pending_remove(p);
+			ssh_ptl_queue_remove(p);
+			ssh_ptl_pending_remove(p);
 
-			ssh_ptx_tx_wakeup(p->ptx, false);
-			__ssh_ptx_complete(p, -ETIMEDOUT);
+			ssh_ptl_tx_wakeup(p->ptl, false);
+			__ssh_ptl_complete(p, -ETIMEDOUT);
 
-			ssh_ptx_tx_wakeup(p->ptx, false);
+			ssh_ptl_tx_wakeup(p->ptl, false);
 		}
 	}
 
 	ssh_packet_put(p);
 }
 
-static void ssh_ptx_timeout_tfn(struct timer_list *tl)
+static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 {
 	struct ssh_packet *packet;
 
@@ -1447,31 +1447,31 @@ static void ssh_ptx_timeout_tfn(struct timer_list *tl)
 }
 
 
-static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev) {
-	ptx->serdev = serdev;
+static void ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev) {
+	ptl->serdev = serdev;
 
-	spin_lock_init(&ptx->queue.lock);
-	INIT_LIST_HEAD(&ptx->queue.head);
+	spin_lock_init(&ptl->queue.lock);
+	INIT_LIST_HEAD(&ptl->queue.head);
 
-	spin_lock_init(&ptx->pending.lock);
-	INIT_LIST_HEAD(&ptx->pending.head);
-	atomic_set(&ptx->pending.count, 0);
+	spin_lock_init(&ptl->pending.lock);
+	INIT_LIST_HEAD(&ptl->pending.head);
+	atomic_set(&ptl->pending.count, 0);
 
-	ptx->tx.thread = NULL;
-	init_waitqueue_head(&ptx->tx.wq);
-	ptx->tx.signal = false;
-	ptx->tx.packet = NULL;
-	ptx->tx.offset = 0;
+	ptl->tx.thread = NULL;
+	init_waitqueue_head(&ptl->tx.wq);
+	ptl->tx.signal = false;
+	ptl->tx.packet = NULL;
+	ptl->tx.offset = 0;
 }
 
-static void ssh_ptx_init_packet(struct ssh_packet *packet,
+static void ssh_ptl_init_packet(struct ssh_packet *packet,
 				enum ssh_packet_type_flags type,
 				enum ssh_packet_priority priority,
 				u8 sequence_id, unsigned char *buffer,
 				size_t buffer_length,
 				struct ssh_packet_ops *ops)
 {
-	packet->ptx = NULL;
+	packet->ptl = NULL;
 	packet->type = type;
 	packet->state = 0;
 	packet->priority = priority;
@@ -1482,8 +1482,8 @@ static void ssh_ptx_init_packet(struct ssh_packet *packet,
 
 	packet->timeout.count = 0;
 	mutex_init(&packet->timeout.lock);
-	timer_setup(&packet->timeout.timer, ssh_ptx_timeout_tfn, TIMER_IRQSAFE);
-	INIT_WORK(&packet->timeout.work, ssh_ptx_timeout_wfn);
+	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
+	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
 
 	packet->buffer.ptr = buffer;
 	packet->buffer.length = buffer_length;
@@ -1492,10 +1492,10 @@ static void ssh_ptx_init_packet(struct ssh_packet *packet,
 }
 
 
-/* -- Request transmission system (rtx). ------------------------------------ */
+/* -- Request transport layer (rtl). ---------------------------------------- */
 
-#define SSH_RTX_REQUEST_TIMEOUT		msecs_to_jiffies(1000)
-#define SSH_RTX_MAX_PENDING		3
+#define SSH_RTL_REQUEST_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_RTL_MAX_PENDING		3
 
 enum ssh_request_type_flags {
 	SSH_REQUEST_TY_EXPRESP_BIT,
@@ -1513,10 +1513,10 @@ enum ssh_request_state_flags {
 	SSH_REQUEST_SF_COMPLETED_BIT,
 };
 
-struct ssh_rtx;
+struct ssh_rtl;
 
 struct ssh_request {
-	struct ssh_rtx *rtx;
+	struct ssh_rtl *rtl;
 	struct ssh_packet packet;
 	struct list_head queue_node;
 	struct list_head pending_node;
@@ -1535,8 +1535,8 @@ struct ssh_request {
 	// TODO
 };
 
-struct ssh_rtx {
-	struct ssh_ptx ptx;
+struct ssh_rtl {
+	struct ssh_ptl ptl;
 
 	struct {
 		spinlock_t lock;
@@ -1553,9 +1553,9 @@ struct ssh_rtx {
 };
 
 
-#define rtx_dbg(r, fmt, ...)  ptx_dbg(&(r)->ptx, fmt, ##__VA_ARGS__)
-#define rtx_warn(r, fmt, ...) ptx_warn(&(r)->ptx, fmt, ##__VA_ARGS__)
-#define rtx_err(r, fmt, ...)  ptx_err(&(r)->ptx, fmt, ##__VA_ARGS__)
+#define rtl_dbg(r, fmt, ...)  ptl_dbg(&(r)->ptl, fmt, ##__VA_ARGS__)
+#define rtl_warn(r, fmt, ...) ptl_warn(&(r)->ptl, fmt, ##__VA_ARGS__)
+#define rtl_err(r, fmt, ...)  ptl_err(&(r)->ptl, fmt, ##__VA_ARGS__)
 
 
 static inline void ssh_request_get(struct ssh_request *rqst)
@@ -1569,18 +1569,18 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 }
 
 
-static inline struct ssh_request *ssh_rtx_tx_next(struct ssh_rtx *rtx)
+static inline struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst = ERR_PTR(-ENOENT);
 	struct ssh_request *p, *n;
 
-	if (atomic_read(&rtx->pending.count) >= SSH_RTX_MAX_PENDING)
+	if (atomic_read(&rtl->pending.count) >= SSH_RTL_MAX_PENDING)
 		return ERR_PTR(-EBUSY);
 
-	spin_lock(&rtx->queue.lock);
+	spin_lock(&rtl->queue.lock);
 
 	// find first non-locked request and remove it
-	list_for_each_entry_safe(p, n, &rtx->queue.head, queue_node) {
+	list_for_each_entry_safe(p, n, &rtl->queue.head, queue_node) {
 		if (unlikely(test_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state)))
 			continue;
 
@@ -1598,51 +1598,51 @@ static inline struct ssh_request *ssh_rtx_tx_next(struct ssh_rtx *rtx)
 		break;
 	}
 
-	spin_unlock(&rtx->queue.lock);
+	spin_unlock(&rtl->queue.lock);
 	return rqst;
 }
 
-static inline int ssh_rtx_tx_pending_push(struct ssh_request *rqst)
+static inline int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 {
-	struct ssh_rtx *rtx = rqst->rtx;
+	struct ssh_rtl *rtl = rqst->rtl;
 
-	spin_lock(&rtx->pending.lock);
+	spin_lock(&rtl->pending.lock);
 
 	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
-		spin_unlock(&rtx->pending.lock);
+		spin_unlock(&rtl->pending.lock);
 		return -EINVAL;
 	}
 
 	if (test_and_set_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state)) {
-		spin_unlock(&rtx->pending.lock);
+		spin_unlock(&rtl->pending.lock);
 		return -EALREADY;
 	}
 
-	atomic_inc(&rtx->pending.count);
+	atomic_inc(&rtl->pending.count);
 	ssh_request_get(rqst);
-	list_add_tail(&rqst->pending_node, &rtx->pending.head);
+	list_add_tail(&rqst->pending_node, &rtl->pending.head);
 
-	spin_unlock(&rtx->pending.lock);
+	spin_unlock(&rtl->pending.lock);
 	return 0;
 }
 
-static inline int ssh_rtx_tx_try_process_one(struct ssh_rtx *rtx)
+static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst;
 	int status;
 
-	rqst = ssh_rtx_tx_next(rtx);
+	rqst = ssh_rtl_tx_next(rtl);
 	if (IS_ERR(rqst))
 		return PTR_ERR(rqst);
 
-	status = ssh_rtx_tx_pending_push(rqst);
+	status = ssh_rtl_tx_pending_push(rqst);
 	if (status) {
 		ssh_request_put(rqst);
 		return -EAGAIN;
 	}
 
 	/* Part 3: Submit packet. */
-	status = ssh_ptx_submit(&rtx->ptx, &rqst->packet);
+	status = ssh_ptl_submit(&rtl->ptl, &rqst->packet);
 	if (status) {
 		/*
 		 * If submitting the packet failed, the packet has either been
@@ -1661,17 +1661,17 @@ static inline int ssh_rtx_tx_try_process_one(struct ssh_rtx *rtx)
 	return 0;
 }
 
-static inline bool ssh_rtx_tx_schedule(struct ssh_rtx *rtx)
+static inline bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
 {
-	if (atomic_read(&rtx->pending.count) < SSH_RTX_MAX_PENDING)
-		return schedule_work(&rtx->tx_work);
+	if (atomic_read(&rtl->pending.count) < SSH_RTL_MAX_PENDING)
+		return schedule_work(&rtl->tx_work);
 	else
 		return false;
 }
 
-static void ssh_rtx_tx_work_fn(struct work_struct *work)
+static void ssh_rtl_tx_work_fn(struct work_struct *work)
 {
-	struct ssh_rtx *rtx = container_of(work, struct ssh_rtx, tx_work);
+	struct ssh_rtl *rtl = container_of(work, struct ssh_rtl, tx_work);
 	int i, status;
 
 	/*
@@ -1680,7 +1680,7 @@ static void ssh_rtx_tx_work_fn(struct work_struct *work)
 	 * for normal execution, but guarantee it anyway.
 	 */
 	for (i = 0; i < 10; i++) {
-		status = ssh_rtx_tx_try_process_one(rtx);
+		status = ssh_rtl_tx_try_process_one(rtl);
 		if (status == -ENOENT || status == -EBUSY)
 			return;		// no more requests to process
 
@@ -1688,83 +1688,83 @@ static void ssh_rtx_tx_work_fn(struct work_struct *work)
 	}
 
 	// out of tries, reschedule
-	ssh_rtx_tx_schedule(rtx);
+	ssh_rtl_tx_schedule(rtl);
 }
 
 
-static int ssh_rtx_submit(struct ssh_rtx *rtx, struct ssh_request *rqst)
+static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 {
 	/*
 	 * Ensure that requests expecting a response are sequenced. If this
-	 * invariant ever changes, see the comment in ssh_rtx_complete on what
+	 * invariant ever changes, see the comment in ssh_rtl_complete on what
 	 * is required to be changed in the code.
 	 */
 	if (rqst->type & SSH_REQUEST_TY_EXPRESP)
 		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
 			return -EINVAL;
 
-	// try to set rtx and check if this request has already been submitted
-	if (cmpxchg(&rqst->rtx, NULL, rtx) != NULL)
+	// try to set rtl and check if this request has already been submitted
+	if (cmpxchg(&rqst->rtl, NULL, rtl) != NULL)
 		return -EALREADY;
 
-	spin_lock(&rtx->queue.lock);
+	spin_lock(&rtl->queue.lock);
 
 	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
-		spin_unlock(&rtx->queue.lock);
+		spin_unlock(&rtl->queue.lock);
 		return -EINVAL;
 	}
 
 	if (test_and_set_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
-		spin_unlock(&rtx->queue.lock);
+		spin_unlock(&rtl->queue.lock);
 		return -EALREADY;
 	}
 
 	ssh_request_get(rqst);
-	list_add_tail(&rqst->queue_node, &rtx->queue.head);
+	list_add_tail(&rqst->queue_node, &rtl->queue.head);
 
-	spin_unlock(&rtx->queue.lock);
+	spin_unlock(&rtl->queue.lock);
 
-	ssh_rtx_tx_schedule(rtx);
+	ssh_rtl_tx_schedule(rtl);
 	return 0;
 }
 
 
-static inline void ssh_rtx_queue_remove(struct ssh_request *rqst)
+static inline void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
 	bool remove;
 
-	spin_lock(&rqst->rtx->queue.lock);
+	spin_lock(&rqst->rtl->queue.lock);
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
 	if (remove)
 		list_del(&rqst->queue_node);
 
-	spin_unlock(&rqst->rtx->queue.lock);
+	spin_unlock(&rqst->rtl->queue.lock);
 
 	if (remove)
 		ssh_request_put(rqst);
 }
 
-static inline void ssh_rtx_pending_remove(struct ssh_request *rqst)
+static inline void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
 	bool remove;
 
-	spin_lock(&rqst->rtx->pending.lock);
+	spin_lock(&rqst->rtl->pending.lock);
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
 	if (remove) {
-		atomic_dec(&rqst->rtx->pending.count);
+		atomic_dec(&rqst->rtl->pending.count);
 		list_del(&rqst->pending_node);
 	}
 
-	spin_unlock(&rqst->rtx->pending.lock);
+	spin_unlock(&rqst->rtl->pending.lock);
 
 	if (remove)
 		ssh_request_put(rqst);
 }
 
 
-static inline void ssh_rtx_timeout_start(struct ssh_request *rqst)
+static inline void ssh_rtl_timeout_start(struct ssh_request *rqst)
 {
 	// if this fails, someone else is setting or cancelling the timeout
 	if (!mutex_trylock(&rqst->timeout.lock))
@@ -1774,12 +1774,12 @@ static inline void ssh_rtx_timeout_start(struct ssh_request *rqst)
 		return;
 
 	ssh_request_get(rqst);
-	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTX_REQUEST_TIMEOUT);
+	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTL_REQUEST_TIMEOUT);
 
 	mutex_unlock(&rqst->timeout.lock);
 }
 
-static inline void ssh_rtx_timeout_cancel_sync(struct ssh_request *rqst)
+static inline void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
 {
 	bool pending;
 
@@ -1793,28 +1793,28 @@ static inline void ssh_rtx_timeout_cancel_sync(struct ssh_request *rqst)
 }
 
 
-static void ssh_rtx_complete_with_status(struct ssh_request *rqst, int status)
+static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 {
-	struct ssh_rtx *rtx = READ_ONCE(rqst->rtx);
+	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
-	// rqst->rtx may not be set if we're cancelling before submitting
-	if (rtx) {
-		rtx_dbg(rtx, "rtx: completing request (rqid: 0x%04x,"
+	// rqst->rtl may not be set if we're cancelling before submitting
+	if (rtl) {
+		rtl_dbg(rtl, "rtl: completing request (rqid: 0x%04x,"
 			" status: %d)\n", rqst->request_id, status);
 	}
 
 	// TODO
 }
 
-static void ssh_rtx_complete_with_rsp(struct ssh_request *rqst /* TODO */)
+static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst /* TODO */)
 {
-	rtx_dbg(rqst->rtx, "rtx: completing request with response"
+	rtl_dbg(rqst->rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", rqst->request_id);
 
 	// TODO
 }
 
-static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
+static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid /* TODO */)
 {
 	struct ssh_request *r = NULL;
 	struct ssh_request *p, *n;
@@ -1823,8 +1823,8 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 	 * Get request from pending based on request ID and mark it as response
 	 * received and locked.
 	 */
-	spin_lock(&rtx->pending.lock);
-	list_for_each_entry_safe(p, n, &rtx->pending.head, pending_node) {
+	spin_lock(&rtl->pending.lock);
+	list_for_each_entry_safe(p, n, &rtl->pending.head, pending_node) {
 		// we generally expect requests to be processed in order
 		if (unlikely(p->request_id != rqid))
 			continue;
@@ -1839,16 +1839,16 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &p->state);
 
-		atomic_dec(&rtx->pending.count);
+		atomic_dec(&rtl->pending.count);
 		list_del(&p->pending_node);
 
 		r = p;
 		break;
 	}
-	spin_unlock(&rtx->pending.lock);
+	spin_unlock(&rtl->pending.lock);
 
 	if (!r) {
-		rtx_err(rtx, "rtx: received unexpected command message"
+		rtl_err(rtl, "rtl: received unexpected command message"
 			" (rqid = 0x%04x)\n", rqid);
 		return;
 	}
@@ -1856,12 +1856,12 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 	// if the request hasn't been completed yet, we will do this now
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state)) {
 		ssh_request_put(r);
-		ssh_rtx_tx_schedule(rtx);
+		ssh_rtl_tx_schedule(rtl);
 		return;
 	}
 
 	// disable timeout first
-	ssh_rtx_timeout_cancel_sync(r);
+	ssh_rtl_timeout_cancel_sync(r);
 
 	/*
 	 * Make sure the request has been transmitted. In case of a sequenced
@@ -1873,7 +1873,7 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 	 * has been set and is visible here.
 	 *
 	 * We are currently not handling unsequenced packets here, as those
-	 * should never expect a response as ensured in ssh_rtx_submit. If this
+	 * should never expect a response as ensured in ssh_rtl_submit. If this
 	 * ever changes, one would have to test for
 	 *
 	 * 	(r->state & (transmitting | transmitted))
@@ -1884,7 +1884,7 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 	 * run on the same thread. Thus an exact determination is impossible.
 	 */
 	if (!test_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state)) {
-		rtx_err(rtx, "rtx: received response before ACK for request"
+		rtl_err(rtl, "rtl: received response before ACK for request"
 			" (rqid = 0x%04x)\n", rqid);
 
 		/*
@@ -1893,12 +1893,12 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 		 * we receive a "false" response, the packet might still be
 		 * queued though.
 		 */
-		ssh_rtx_queue_remove(r);
+		ssh_rtl_queue_remove(r);
 
-		ssh_rtx_complete_with_status(r, -EREMOTEIO);
+		ssh_rtl_complete_with_status(r, -EREMOTEIO);
 		ssh_request_put(r);
 
-		ssh_rtx_tx_schedule(rtx);
+		ssh_rtl_tx_schedule(rtl);
 		return;
 	}
 
@@ -1910,14 +1910,14 @@ static void ssh_rtx_complete(struct ssh_rtx *rtx, u16 rqid /* TODO */)
 	 * anywhere.
 	 */
 
-	ssh_rtx_complete_with_rsp(r);
+	ssh_rtl_complete_with_rsp(r);
 	ssh_request_put(r);
 
-	ssh_rtx_tx_schedule(rtx);
+	ssh_rtl_tx_schedule(rtl);
 }
 
 
-static inline bool ssh_rtx_cancel_nonpending(struct ssh_request *r)
+static inline bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
 	unsigned long state;
 	bool remove;
@@ -1927,25 +1927,25 @@ static inline bool ssh_rtx_cancel_nonpending(struct ssh_request *r)
 	 * expecting the state to be zero (i.e. unsubmitted). Note that, if
 	 * setting the state worked, we might still be adding the packet to the
 	 * queue in a currently executing submit call. In that case, however,
-	 * rqst->rtx must have been set previously, as locked is checked after
-	 * setting rqst->rtx. Thus only if we successfully lock this request and
-	 * rqst->rtx is NULL, we have successfully removed the request.
+	 * rqst->rtl must have been set previously, as locked is checked after
+	 * setting rqst->rtl. Thus only if we successfully lock this request and
+	 * rqst->rtl is NULL, we have successfully removed the request.
 	 * Otherwise we need to try and grab it from the queue.
 	 *
-	 * Note that if the CMPXCHG fails, we are guaranteed that rqst->rtx has
+	 * Note that if the CMPXCHG fails, we are guaranteed that rqst->rtl has
 	 * been set and is non-NULL, as states can only be nonzero after this
 	 * has been set.
 	 */
 	state = cmpxchg(&r->state, 0, SSH_REQUEST_SF_LOCKED_BIT);
-	if (!state && !READ_ONCE(r->rtx)) {
+	if (!state && !READ_ONCE(r->rtl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
-		ssh_rtx_complete_with_status(r, -EINTR);
+		ssh_rtl_complete_with_status(r, -EINTR);
 		return true;
 	}
 
-	spin_lock(&r->rtx->queue.lock);
+	spin_lock(&r->rtl->queue.lock);
 
 	/*
 	 * Note: 1) Requests cannot be re-submitted. 2) If a request is queued,
@@ -1956,25 +1956,25 @@ static inline bool ssh_rtx_cancel_nonpending(struct ssh_request *r)
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
 	if (!remove) {
-		spin_unlock(&r->rtx->queue.lock);
+		spin_unlock(&r->rtl->queue.lock);
 		return false;
 	}
 
 	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
 	list_del(&r->queue_node);
 
-	spin_unlock(&r->rtx->queue.lock);
+	spin_unlock(&r->rtl->queue.lock);
 
 	ssh_request_put(r);	// drop reference obtained from queue
 
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 		return true;
 
-	ssh_rtx_complete_with_status(r, -EINTR);
+	ssh_rtl_complete_with_status(r, -EINTR);
 	return true;
 }
 
-static inline bool ssh_rtx_cancel_pending(struct ssh_request *r)
+static inline bool ssh_rtl_cancel_pending(struct ssh_request *r)
 {
 	// if the packet is already locked, it's going to be removed shortly
 	if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
@@ -1982,16 +1982,16 @@ static inline bool ssh_rtx_cancel_pending(struct ssh_request *r)
 
 	/*
 	 * Now that we have locked the packet, we have guaranteed that it can't
-	 * be added to the system any more. If rqst->rtx is zero, the locked
-	 * check in ssh_rtx_submit has not been run and any submission,
+	 * be added to the system any more. If rqst->rtl is zero, the locked
+	 * check in ssh_rtl_submit has not been run and any submission,
 	 * currently in progress or called later, won't add the packet. Thus we
 	 * can directly complete it.
 	 */
-	if (!READ_ONCE(r->rtx)) {
+	if (!READ_ONCE(r->rtl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
-		ssh_rtx_complete_with_status(r, -EINTR);
+		ssh_rtl_complete_with_status(r, -EINTR);
 		return true;
 	}
 
@@ -2000,7 +2000,7 @@ static inline bool ssh_rtx_cancel_pending(struct ssh_request *r)
 	 * this will subsequently (and synchronously) call the completion
 	 * callback of the packet, which will complete the request.
 	 */
-	ssh_ptx_cancel(&r->packet);
+	ssh_ptl_cancel(&r->packet);
 
 	/*
 	 * If the packet has been completed with success, i.e. has not been
@@ -2011,34 +2011,34 @@ static inline bool ssh_rtx_cancel_pending(struct ssh_request *r)
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 		return true;
 
-	ssh_rtx_queue_remove(r);
-	ssh_rtx_timeout_cancel_sync(r);
-	ssh_rtx_pending_remove(r);
-	ssh_rtx_complete_with_status(r, -EINTR);
+	ssh_rtl_queue_remove(r);
+	ssh_rtl_timeout_cancel_sync(r);
+	ssh_rtl_pending_remove(r);
+	ssh_rtl_complete_with_status(r, -EINTR);
 
 	return true;
 }
 
-static bool ssh_rtx_cancel(struct ssh_request *rqst, bool pending)
+static bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 {
-	struct ssh_rtx *rtx;
+	struct ssh_rtl *rtl;
 	bool canceled;
 
 	if (pending)
-		canceled = ssh_rtx_cancel_pending(rqst);
+		canceled = ssh_rtl_cancel_pending(rqst);
 	else
-		canceled = ssh_rtx_cancel_nonpending(rqst);
+		canceled = ssh_rtl_cancel_nonpending(rqst);
 
-	// note: rqst->rtx may be NULL if request has not been submitted yet
-	rtx = READ_ONCE(rqst->rtx);
-	if (canceled && rtx)
-		ssh_rtx_tx_schedule(rtx);
+	// note: rqst->rtl may be NULL if request has not been submitted yet
+	rtl = READ_ONCE(rqst->rtl);
+	if (canceled && rtl)
+		ssh_rtl_tx_schedule(rtl);
 
 	return canceled;
 }
 
 
-static void ssh_rtx_packet_callback(struct ssh_packet *p, int status)
+static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 {
 	struct ssh_request *r = container_of(p, struct ssh_request, packet);
 
@@ -2055,11 +2055,11 @@ static void ssh_rtx_packet_callback(struct ssh_packet *p, int status)
 		 * been started in this function on success, there's no need to
 		 * cancel it here.
 		 */
-		ssh_rtx_queue_remove(r);
-		ssh_rtx_pending_remove(r);
-		ssh_rtx_complete_with_status(r, -EINTR);
+		ssh_rtl_queue_remove(r);
+		ssh_rtl_pending_remove(r);
+		ssh_rtl_complete_with_status(r, -EINTR);
 
-		ssh_rtx_tx_schedule(r->rtx);
+		ssh_rtl_tx_schedule(r->rtl);
 		return;
 	}
 
@@ -2073,7 +2073,7 @@ static void ssh_rtx_packet_callback(struct ssh_packet *p, int status)
 
 	// if we expect a response, we just need to start the timeout
 	if (r->type & SSH_REQUEST_TY_EXPRESP) {
-		ssh_rtx_timeout_start(r);
+		ssh_rtl_timeout_start(r);
 		return;
 	}
 
@@ -2089,20 +2089,20 @@ static void ssh_rtx_packet_callback(struct ssh_packet *p, int status)
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 		return;
 
-	ssh_rtx_pending_remove(r);
-	ssh_rtx_complete_with_status(r, 0);
+	ssh_rtl_pending_remove(r);
+	ssh_rtl_complete_with_status(r, 0);
 
-	ssh_rtx_tx_schedule(r->rtx);
+	ssh_rtl_tx_schedule(r->rtl);
 }
 
 
-static void ssh_rtx_timeout_wfn(struct work_struct *work)
+static void ssh_rtl_timeout_wfn(struct work_struct *work)
 {
 	struct ssh_request *rqst;
-	struct ssh_rtx *rtx;
+	struct ssh_rtl *rtl;
 
 	rqst = container_of(work, struct ssh_request, timeout.work);
-	rtx = rqst->rtx;
+	rtl = rqst->rtl;
 
 	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &rqst->state))
@@ -2113,14 +2113,14 @@ static void ssh_rtx_timeout_wfn(struct work_struct *work)
 	 * the queue. Thus no need to check it. The timeout is guaranteed to run
 	 * only once, so we also don't need to handle that.
 	 */
-	ssh_rtx_pending_remove(rqst);
-	ssh_rtx_complete_with_status(rqst, -ETIMEDOUT);
+	ssh_rtl_pending_remove(rqst);
+	ssh_rtl_complete_with_status(rqst, -ETIMEDOUT);
 	ssh_request_put(rqst);
 
-	ssh_rtx_tx_schedule(rtx);
+	ssh_rtl_tx_schedule(rtl);
 }
 
-static void ssh_rtx_timeout_tfn(struct timer_list *tl)
+static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 {
 	struct ssh_packet *packet;
 
