@@ -170,6 +170,12 @@ enum ssh_receiver_state {
 	SSH_RCV_COMMAND,
 };
 
+struct sshp_buf {
+	u8    *ptr;
+	size_t len;
+	size_t cap;
+};
+
 struct ssh_receiver {
 	spinlock_t lock;
 	enum ssh_receiver_state state;
@@ -183,11 +189,7 @@ struct ssh_receiver {
 		u8 seq;
 		u16 rqid;
 	} expect;
-	struct {
-		u16 cap;
-		u16 len;
-		u8 *ptr;
-	} eval_buf;
+	struct sshp_buf eval_buf;
 };
 
 struct ssh_events {
@@ -428,22 +430,22 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 }
 
 
-/* -- Parser functions for SAM-over-SSH messages. --------------------------- */
+/* -- Parser functions and utilities for SAM-over-SSH messages. ------------- */
 
-struct bufspan {
+struct sshp_span {
 	u8    *ptr;
 	size_t len;
 };
 
-static inline bool sshp_validate_crc(const struct bufspan *data, const u8 *crc)
+static inline bool sshp_validate_crc(const struct sshp_span *src, const u8 *crc)
 {
-	u16 actual = ssh_crc(data->ptr, data->len);
+	u16 actual = ssh_crc(src->ptr, src->len);
 	u16 expected = get_unaligned_le16(crc);
 
 	return actual == expected;
 }
 
-static bool sshp_find_syn(const struct bufspan *src, struct bufspan *rem)
+static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
 {
 	size_t i;
 
@@ -467,13 +469,13 @@ static bool sshp_find_syn(const struct bufspan *src, struct bufspan *rem)
 }
 
 static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
-			       const struct bufspan *source,
+			       const struct sshp_span *source,
 			       struct ssh_frame **frame,
-			       struct bufspan *payload)
+			       struct sshp_span *payload)
 {
-	struct bufspan aligned;
-	struct bufspan sf;
-	struct bufspan sp;
+	struct sshp_span aligned;
+	struct sshp_span sf;
+	struct sshp_span sp;
 	bool syn_found;
 
 	// initialize output
@@ -536,9 +538,9 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 }
 
 static void sshp_parse_command(const struct sam_ssh_ec *ec,
-			       const struct bufspan *source,
+			       const struct sshp_span *source,
 			       struct ssh_command **command,
-			       struct bufspan *command_data)
+			       struct sshp_span *command_data)
 {
 	// check for minimum length
 	if (unlikely(source->len < sizeof(struct ssh_command))) {
@@ -556,6 +558,64 @@ static void sshp_parse_command(const struct sam_ssh_ec *ec,
 
 	ssh_dbg(ec, "rx: parser: valid command found (tc: 0x%02x,"
 		" cid: 0x%02x)\n", (*command)->tc, (*command)->cid);
+}
+
+
+static inline void sshp_buf_init(struct sshp_buf *buf, u8 *ptr, size_t cap)
+{
+	buf->ptr = ptr;
+	buf->len = 0;
+	buf->cap = cap;
+}
+
+static inline int sshp_buf_alloc(struct sshp_buf *buf, size_t cap, gfp_t flags)
+{
+	u8 *ptr;
+
+	ptr = kzalloc(cap, flags);
+	if (!ptr)
+		return -ENOMEM;
+
+	sshp_buf_init(buf, ptr, cap);
+	return 0;
+
+}
+
+static inline void sshp_buf_free(struct sshp_buf *buf)
+{
+	kfree(buf->ptr);
+	buf->ptr = NULL;
+	buf->len = 0;
+	buf->cap = 0;
+}
+
+static inline void sshp_buf_reset(struct sshp_buf *buf)
+{
+	buf->len = 0;
+}
+
+static inline void sshp_buf_drop(struct sshp_buf *buf, size_t n)
+{
+	memmove(buf->ptr, buf->ptr + n, buf->len - n);
+	buf->len -= n;
+}
+
+static inline size_t sshp_buf_read_from_fifo(struct sshp_buf *buf,
+					     struct kfifo *fifo)
+{
+	size_t n;
+
+	n =  kfifo_out(fifo, buf->ptr + buf->len, buf->cap - buf->len);
+	buf->len += n;
+
+	return n;
+}
+
+static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
+				      struct sshp_span *span)
+{
+	span->ptr = buf->ptr + offset;
+	span->len = buf->len - offset;
 }
 
 
@@ -2401,7 +2461,7 @@ static inline void ssh_receiver_restart(struct sam_ssh_ec *ec,
 	ec->receiver.expect.pld = rqst->snc;
 	ec->receiver.expect.seq = ec->counter.seq;
 	ec->receiver.expect.rqid = ec->counter.rqid;
-	ec->receiver.eval_buf.len = 0;
+	sshp_buf_reset(&ec->receiver.eval_buf);
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
 
@@ -2411,7 +2471,7 @@ static inline void ssh_receiver_discard(struct sam_ssh_ec *ec)
 
 	spin_lock_irqsave(&ec->receiver.lock, flags);
 	ec->receiver.state = SSH_RCV_DISCARD;
-	ec->receiver.eval_buf.len = 0;
+	sshp_buf_reset(&ec->receiver.eval_buf);
 	kfifo_reset(&ec->receiver.fifo);
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 }
@@ -2761,7 +2821,7 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 				const struct ssh_frame *frame,
 				const struct ssh_command *command,
-				const struct bufspan *command_data)
+				const struct sshp_span *command_data)
 {
 	struct ssh_event_work *work;
 
@@ -2795,7 +2855,7 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 static void ssh_rx_complete_command(struct sam_ssh_ec *ec,
 				    const struct ssh_frame *frame,
 				    const struct ssh_command *command,
-				    const struct bufspan *command_data)
+				    const struct sshp_span *command_data)
 {
 	struct ssh_receiver *rcv = &ec->receiver;
 	struct ssh_fifo_packet packet;
@@ -2875,7 +2935,7 @@ static void ssh_receive_control_frame(struct sam_ssh_ec *ec,
 static void ssh_receive_command_frame(struct sam_ssh_ec *ec,
 				      const struct ssh_frame *frame,
 				      const struct ssh_command *command,
-				      const struct bufspan *command_data)
+				      const struct sshp_span *command_data)
 {
 	// check if we received an event notification
 	if (ssh_rqid_is_event(get_unaligned_le16(&command->rqid))) {
@@ -2887,10 +2947,10 @@ static void ssh_receive_command_frame(struct sam_ssh_ec *ec,
 
 static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
 				   const struct ssh_frame *frame,
-				   const struct bufspan *payload)
+				   const struct sshp_span *payload)
 {
 	struct ssh_command *command;
-	struct bufspan command_data;
+	struct sshp_span command_data;
 
 	if (likely(payload->ptr[0] == SSH_PLD_TYPE_CMD)) {
 		sshp_parse_command(ec, payload, &command, &command_data);
@@ -2904,15 +2964,14 @@ static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
 	}
 }
 
-static size_t ssh_eval_buf(struct sam_ssh_ec *ec, u8 *buf, size_t size)
+static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
-	struct bufspan source = { .ptr = buf, .len = size };
-	struct bufspan payload;
+	struct sshp_span payload;
 	size_t n;
 
 	// parse and validate frame
-	n = sshp_parse_frame(ec, &source, &frame, &payload);
+	n = sshp_parse_frame(ec, source, &frame, &payload);
 	if (!frame)
 		return n;
 
@@ -2938,6 +2997,7 @@ static int ssh_rx_threadfn(void *data)
 {
 	struct sam_ssh_ec *ec = data;
 	struct ssh_receiver *rcv = &ec->receiver;
+	struct sshp_span span;
 
 	while (true) {
 		size_t offs = 0;
@@ -2950,20 +3010,17 @@ static int ssh_rx_threadfn(void *data)
 			break;
 
 		// copy from fifo to evaluation buffer
-		n = rcv->eval_buf.cap - rcv->eval_buf.len;
-		n = kfifo_out(&rcv->rcvb, rcv->eval_buf.ptr + rcv->eval_buf.len, n);
+		n = sshp_buf_read_from_fifo(&rcv->eval_buf, &rcv->rcvb);
 
 		ssh_dbg(ec, "rx: received data (size: %zu)\n", n);
 		print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1,
-				     rcv->eval_buf.ptr + rcv->eval_buf.len, n,
-				     false);
-
-		rcv->eval_buf.len += n;
+				     rcv->eval_buf.ptr + rcv->eval_buf.len - n,
+				     n, false);
 
 		// evaluate buffer until we need more bytes or eval-buf is empty
 		while (offs < rcv->eval_buf.len) {
-			n = rcv->eval_buf.len - offs;
-			n = ssh_eval_buf(ec, rcv->eval_buf.ptr + offs, n);
+			sshp_buf_span_from(&rcv->eval_buf, offs, &span);
+			n = ssh_eval_buf(ec, &span);
 			if (n == 0)
 				break;	// need more bytes
 
@@ -2971,8 +3028,7 @@ static int ssh_rx_threadfn(void *data)
 		}
 
 		// throw away the evaluated parts
-		rcv->eval_buf.len -= offs;
-		memmove(rcv->eval_buf.ptr, rcv->eval_buf.ptr + offs, rcv->eval_buf.len);
+		sshp_buf_drop(&rcv->eval_buf, offs);
 	}
 
 	return 0;
@@ -3200,9 +3256,9 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	struct sam_ssh_ec *ec;
 	struct workqueue_struct *event_queue_ack;
 	struct workqueue_struct *event_queue_evt;
+	struct sshp_buf eval_buf;
 	u8 *read_buf;
 	u8 *recv_buf;
-	u8 *eval_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
 	int irq, i;
@@ -3227,11 +3283,9 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_recv_buf;
 	}
 
-	eval_buf = kzalloc(SSH_EVAL_BUF_LEN, GFP_KERNEL);
-	if (!eval_buf) {
-		status = -ENOMEM;
+	status = sshp_buf_alloc(&eval_buf, SSH_EVAL_BUF_LEN, GFP_KERNEL);
+	if (status)
 		goto err_eval_buf;
-	}
 
 	event_queue_ack = create_singlethread_workqueue("surface_sh_ackq");
 	if (!event_queue_ack) {
@@ -3269,9 +3323,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	init_waitqueue_head(&ec->receiver.rcvb_wq);
 	kfifo_init(&ec->receiver.fifo, read_buf, SSH_READ_BUF_LEN);
 	kfifo_init(&ec->receiver.rcvb, recv_buf, SSH_RECV_BUF_LEN);
-	ec->receiver.eval_buf.ptr = eval_buf;
-	ec->receiver.eval_buf.cap = SSH_EVAL_BUF_LEN;
-	ec->receiver.eval_buf.len = 0;
+	ec->receiver.eval_buf = eval_buf;
 
 	// initialize event handling
 	ec->events.queue_ack = event_queue_ack;
@@ -3338,7 +3390,7 @@ err_irq:
 err_evtq:
 	destroy_workqueue(event_queue_ack);
 err_ackq:
-	kfree(eval_buf);
+	sshp_buf_free(&eval_buf);
 err_eval_buf:
 	kfree(recv_buf);
 err_recv_buf:
@@ -3405,10 +3457,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	kfifo_free(&ec->receiver.fifo);
 	kfifo_free(&ec->receiver.rcvb);
 
-	kfree(ec->receiver.eval_buf.ptr);
-	ec->receiver.eval_buf.ptr = NULL;
-	ec->receiver.eval_buf.cap = 0;
-	ec->receiver.eval_buf.len = 0;
+	sshp_buf_free(&ec->receiver.eval_buf);
 	spin_unlock_irqrestore(&ec->receiver.lock, flags);
 
 	device_set_wakeup_capable(&serdev->dev, false);
