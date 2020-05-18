@@ -788,8 +788,8 @@ struct ssh_ptx {
 
 	struct {
 		struct task_struct *thread;
-		struct wait_queue_head signal;
-		bool signal_var;
+		struct wait_queue_head wq;
+		bool signal;
 		struct ssh_packet *packet;
 		size_t offset;
 	} tx;
@@ -1126,10 +1126,9 @@ static inline void ssh_ptx_tx_compl_error(struct ssh_packet *packet, int status)
 
 static inline void ssh_ptx_tx_threadfn_wait(struct ssh_ptx *ptx)
 {
-	wait_event_interruptible(ptx->tx.signal,
-				 READ_ONCE(ptx->tx.signal_var)
+	wait_event_interruptible(ptx->tx.wq, READ_ONCE(ptx->tx.signal)
 				 || kthread_should_stop());
-	WRITE_ONCE(ptx->tx.signal_var, false);
+	WRITE_ONCE(ptx->tx.signal, false);
 }
 
 static int ssh_ptx_tx_threadfn(void *data)
@@ -1187,9 +1186,9 @@ static int ssh_ptx_tx_threadfn(void *data)
 static inline void ssh_ptx_tx_wakeup(struct ssh_ptx *ptx, bool force)
 {
 	if (force || atomic_read(&ptx->pending.count) < SSH_PTX_MAX_PENDING) {
-		WRITE_ONCE(ptx->tx.signal_var, true);
+		WRITE_ONCE(ptx->tx.signal, true);
 		smp_mb__after_atomic();
-		wake_up(&ptx->tx.signal);
+		wake_up(&ptx->tx.wq);
 	}
 }
 
@@ -1486,8 +1485,8 @@ static void ssh_ptx_init(struct ssh_ptx *ptx, struct serdev_device *serdev) {
 	atomic_set(&ptx->pending.count, 0);
 
 	ptx->tx.thread = NULL;
-	init_waitqueue_head(&ptx->tx.signal);
-	ptx->tx.signal_var = false;
+	init_waitqueue_head(&ptx->tx.wq);
+	ptx->tx.signal = false;
 	ptx->tx.packet = NULL;
 	ptx->tx.offset = 0;
 }
