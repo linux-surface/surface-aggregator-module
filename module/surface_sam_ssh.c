@@ -772,8 +772,6 @@ struct ssh_packet {
 	struct ssh_packet_ops ops;
 };
 
-typedef void (*ssh_ptx_completion_t)(struct ssh_packet *packet, int status);
-
 struct ssh_ptx {
 	struct serdev_device *serdev;
 
