@@ -2934,26 +2934,22 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, u8 *buf, size_t size)
 	return n + ssh_message_length(frame->len);
 }
 
-static inline int ssh_rx_thread_wait(struct sam_ssh_ec *ec)
-{
-	return wait_event_interruptible(ec->receiver.rcvb_wq,
-					!kfifo_is_empty(&ec->receiver.rcvb)
-					|| kthread_should_stop());
-}
-
 static int ssh_rx_threadfn(void *data)
 {
 	struct sam_ssh_ec *ec = data;
 	struct ssh_receiver *rcv = &ec->receiver;
 
-	while (!kthread_should_stop()) {
+	while (true) {
 		size_t offs = 0;
 		size_t n;
 
-		ssh_rx_thread_wait(ec);
+		wait_event_interruptible(ec->receiver.rcvb_wq,
+					 !kfifo_is_empty(&ec->receiver.rcvb)
+					 || kthread_should_stop());
 		if (kthread_should_stop())
 			break;
 
+		// copy from fifo to evaluation buffer
 		n = rcv->eval_buf.cap - rcv->eval_buf.len;
 		n = kfifo_out(&rcv->rcvb, rcv->eval_buf.ptr + rcv->eval_buf.len, n);
 
