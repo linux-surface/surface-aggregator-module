@@ -379,7 +379,8 @@ static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
 static size_t sshp_parse_frame(const struct device *dev,
 			       const struct sshp_span *source,
 			       struct ssh_frame **frame,
-			       struct sshp_span *payload)
+			       struct sshp_span *payload,
+			       size_t maxlen)
 {
 	struct sshp_span aligned;
 	struct sshp_span sf;
@@ -416,6 +417,15 @@ static size_t sshp_parse_frame(const struct device *dev,
 
 		// skip enough bytes to try and find next SYN
 		return aligned.ptr - source->ptr + sizeof(u16);
+	}
+
+	// ensure packet does not exceed maximum length
+	if (unlikely(((struct ssh_frame *)sf.ptr)->len > maxlen)) {
+		dev_dbg(dev, "rx: parser: frame too large: %u bytes\n",
+			((struct ssh_frame *)sf.ptr)->len);
+
+		*frame = ERR_PTR(-E2BIG);
+		return aligned.ptr - source->ptr;
 	}
 
 	// pin down payload
@@ -2974,9 +2984,12 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 	size_t n;
 
 	// parse and validate frame
-	n = sshp_parse_frame(&ec->serdev->dev, source, &frame, &payload);
+	n = sshp_parse_frame(&ec->serdev->dev, source, &frame, &payload,
+			     SSH_EVAL_BUF_LEN);
 	if (!frame)
 		return n;
+	if (IS_ERR(frame))
+		return n + sizeof(u16);
 
 	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
