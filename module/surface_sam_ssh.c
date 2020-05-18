@@ -1195,7 +1195,14 @@ static inline int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 
 static inline int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 {
-	return kthread_stop(ptl->tx.thread);
+	int status = 0;
+
+	if (ptl->tx.thread) {
+		status = kthread_stop(ptl->tx.thread);
+		ptl->tx.thread = NULL;
+	}
+
+	return status;
 }
 
 
@@ -1565,7 +1572,14 @@ static inline int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 
 static inline int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 {
-	return kthread_stop(ptl->rx.thread);
+	int status = 0;
+
+	if (ptl->rx.thread) {
+		status = kthread_stop(ptl->rx.thread);
+		ptl->rx.thread = NULL;
+	}
+
+	return status;
 }
 
 static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
