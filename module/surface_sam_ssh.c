@@ -151,101 +151,6 @@ static_assert(sizeof(struct ssh_command) == 8);
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
 
-/* -- TODO ------------------------------------------------------------------ */
-
-enum ssh_ec_state {
-	SSH_EC_UNINITIALIZED,
-	SSH_EC_INITIALIZED,
-	SSH_EC_SUSPENDED,
-};
-
-struct ssh_counters {
-	u8  seq;		// control sequence id
-	u16 rqid;		// id for request/response matching
-};
-
-enum ssh_receiver_state {
-	SSH_RCV_DISCARD,
-	SSH_RCV_CONTROL,
-	SSH_RCV_COMMAND,
-};
-
-struct sshp_buf {
-	u8    *ptr;
-	size_t len;
-	size_t cap;
-};
-
-struct ssh_receiver {
-	spinlock_t lock;
-	enum ssh_receiver_state state;
-	struct completion signal;
-	struct kfifo fifo;
-	struct kfifo rcvb;
-	struct wait_queue_head rcvb_wq;
-	struct task_struct *thread;
-	struct {
-		bool pld;
-		u8 seq;
-		u16 rqid;
-	} expect;
-	struct sshp_buf eval_buf;
-};
-
-struct ssh_events {
-	struct workqueue_struct *queue_ack;
-	struct workqueue_struct *queue_evt;
-	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
-	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
-};
-
-struct sam_ssh_ec {
-	struct mutex lock;
-	enum ssh_ec_state state;
-	struct serdev_device *serdev;
-	struct ssh_counters counter;
-	struct ssh_receiver receiver;
-	struct ssh_events events;
-	int irq;
-	bool irq_wakeup_enabled;
-};
-
-struct ssh_fifo_packet {
-	u8 type;	// packet type (ACK/RETRY/CMD)
-	u8 seq;
-	u8 len;
-};
-
-struct ssh_event_work {
-	refcount_t refcount;
-	struct sam_ssh_ec *ec;
-	struct work_struct work_ack;
-	struct work_struct work_evt;
-	struct surface_sam_ssh_event event;
-	u8 seq;
-};
-
-
-static struct sam_ssh_ec ssh_ec = {
-	.lock   = __MUTEX_INITIALIZER(ssh_ec.lock),
-	.state  = SSH_EC_UNINITIALIZED,
-	.serdev = NULL,
-	.counter = {
-		.seq  = 0,
-		.rqid = 0,
-	},
-	.receiver = {
-		.lock = __SPIN_LOCK_UNLOCKED(),
-		.state = SSH_RCV_DISCARD,
-		.expect = {},
-	},
-	.events = {
-		.notifier_count = { 0 },
-	},
-	.irq = -1,
-};
-
-
 /* -- Common/utility functions. --------------------------------------------- */
 
 #define ssh_dbg(ec, fmt, ...)  dev_dbg(&ec->serdev->dev, fmt, ##__VA_ARGS__)
@@ -432,10 +337,17 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 
 /* -- Parser functions and utilities for SAM-over-SSH messages. ------------- */
 
+struct sshp_buf {
+	u8    *ptr;
+	size_t len;
+	size_t cap;
+};
+
 struct sshp_span {
 	u8    *ptr;
 	size_t len;
 };
+
 
 static inline bool sshp_validate_crc(const struct sshp_span *src, const u8 *crc)
 {
@@ -468,7 +380,7 @@ static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
 	}
 }
 
-static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
+static size_t sshp_parse_frame(const struct device *dev,
 			       const struct sshp_span *source,
 			       struct ssh_frame **frame,
 			       struct sshp_span *payload)
@@ -487,14 +399,14 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 	syn_found = sshp_find_syn(source, &aligned);
 
 	if (unlikely(aligned.ptr - source->ptr) > 0)
-		ssh_warn(ec, "rx: parser: invalid start of frame, skipping \n");
+		dev_warn(dev, "rx: parser: invalid start of frame, skipping\n");
 
 	if (unlikely(!syn_found))
 		return aligned.ptr - source->ptr;
 
 	// check for minumum packet length
 	if (unlikely(aligned.len < ssh_message_length(0))) {
-		ssh_dbg(ec, "rx: parser: not enough data for frame\n");
+		dev_dbg(dev, "rx: parser: not enough data for frame\n");
 		return aligned.ptr - source->ptr;
 	}
 
@@ -504,7 +416,7 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 
 	// validate frame CRC
 	if (unlikely(!sshp_validate_crc(&sf, sf.ptr + sf.len))) {
-		ssh_warn(ec, "rx: parser: invalid frame CRC\n");
+		dev_warn(dev, "rx: parser: invalid frame CRC\n");
 
 		// skip enough bytes to try and find next SYN
 		return aligned.ptr - source->ptr + sizeof(u16);
@@ -516,13 +428,13 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 
 	// check for frame + payload length
 	if (aligned.len < ssh_message_length(sp.len)) {
-		ssh_dbg(ec, "rx: parser: not enough data for payload\n");
+		dev_dbg(dev, "rx: parser: not enough data for payload\n");
 		return aligned.ptr - source->ptr;
 	}
 
 	// validate payload crc
 	if (unlikely(!sshp_validate_crc(&sp, sp.ptr + sp.len))) {
-		ssh_warn(ec, "rx: parser: invalid payload CRC\n");
+		dev_warn(dev, "rx: parser: invalid payload CRC\n");
 
 		// skip enough bytes to try and find next SYN
 		return aligned.ptr - source->ptr + sizeof(u16);
@@ -531,13 +443,13 @@ static size_t sshp_parse_frame(const struct sam_ssh_ec *ec,
 	*frame = (struct ssh_frame *)sf.ptr;
 	*payload = sp;
 
-	ssh_dbg(ec, "rx: parser: valid frame found (type: 0x%02x, len: %u)\n",
+	dev_dbg(dev, "rx: parser: valid frame found (type: 0x%02x, len: %u)\n",
 		(*frame)->type, (*frame)->len);
 
 	return aligned.ptr - source->ptr;
 }
 
-static void sshp_parse_command(const struct sam_ssh_ec *ec,
+static void sshp_parse_command(const struct device *dev,
 			       const struct sshp_span *source,
 			       struct ssh_command **command,
 			       struct sshp_span *command_data)
@@ -548,7 +460,7 @@ static void sshp_parse_command(const struct sam_ssh_ec *ec,
 		command_data->ptr = NULL;
 		command_data->len = 0;
 
-		ssh_err(ec, "rx: parser: command payload is too short\n");
+		dev_err(dev, "rx: parser: command payload is too short\n");
 		return;
 	}
 
@@ -556,7 +468,7 @@ static void sshp_parse_command(const struct sam_ssh_ec *ec,
 	command_data->ptr = source->ptr + sizeof(struct ssh_command);
 	command_data->len = source->len - sizeof(struct ssh_command);
 
-	ssh_dbg(ec, "rx: parser: valid command found (tc: 0x%02x,"
+	dev_dbg(dev, "rx: parser: valid command found (tc: 0x%02x,"
 		" cid: 0x%02x)\n", (*command)->tc, (*command)->cid);
 }
 
@@ -2223,6 +2135,95 @@ static void ssh_rtx_timeout_tfn(struct timer_list *tl)
 
 /* -- TODO ------------------------------------------------------------------ */
 
+enum ssh_ec_state {
+	SSH_EC_UNINITIALIZED,
+	SSH_EC_INITIALIZED,
+	SSH_EC_SUSPENDED,
+};
+
+struct ssh_counters {
+	u8  seq;		// control sequence id
+	u16 rqid;		// id for request/response matching
+};
+
+enum ssh_receiver_state {
+	SSH_RCV_DISCARD,
+	SSH_RCV_CONTROL,
+	SSH_RCV_COMMAND,
+};
+
+struct ssh_receiver {
+	spinlock_t lock;
+	enum ssh_receiver_state state;
+	struct completion signal;
+	struct kfifo fifo;
+	struct kfifo rcvb;
+	struct wait_queue_head rcvb_wq;
+	struct task_struct *thread;
+	struct {
+		bool pld;
+		u8 seq;
+		u16 rqid;
+	} expect;
+	struct sshp_buf eval_buf;
+};
+
+struct ssh_events {
+	struct workqueue_struct *queue_ack;
+	struct workqueue_struct *queue_evt;
+	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+};
+
+struct sam_ssh_ec {
+	struct mutex lock;
+	enum ssh_ec_state state;
+	struct serdev_device *serdev;
+	struct ssh_counters counter;
+	struct ssh_receiver receiver;
+	struct ssh_events events;
+	int irq;
+	bool irq_wakeup_enabled;
+};
+
+struct ssh_fifo_packet {
+	u8 type;	// packet type (ACK/RETRY/CMD)
+	u8 seq;
+	u8 len;
+};
+
+struct ssh_event_work {
+	refcount_t refcount;
+	struct sam_ssh_ec *ec;
+	struct work_struct work_ack;
+	struct work_struct work_evt;
+	struct surface_sam_ssh_event event;
+	u8 seq;
+};
+
+
+static struct sam_ssh_ec ssh_ec = {
+	.lock   = __MUTEX_INITIALIZER(ssh_ec.lock),
+	.state  = SSH_EC_UNINITIALIZED,
+	.serdev = NULL,
+	.counter = {
+		.seq  = 0,
+		.rqid = 0,
+	},
+	.receiver = {
+		.lock = __SPIN_LOCK_UNLOCKED(),
+		.state = SSH_RCV_DISCARD,
+		.expect = {},
+	},
+	.events = {
+		.notifier_count = { 0 },
+	},
+	.irq = -1,
+};
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
 {
 	struct sam_ssh_ec *ec = &ssh_ec;
@@ -2949,11 +2950,12 @@ static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
 				   const struct ssh_frame *frame,
 				   const struct sshp_span *payload)
 {
+	struct device *dev = &ec->serdev->dev;
 	struct ssh_command *command;
 	struct sshp_span command_data;
 
 	if (likely(payload->ptr[0] == SSH_PLD_TYPE_CMD)) {
-		sshp_parse_command(ec, payload, &command, &command_data);
+		sshp_parse_command(dev, payload, &command, &command_data);
 		if (unlikely(!command))
 			return;
 
@@ -2971,7 +2973,7 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 	size_t n;
 
 	// parse and validate frame
-	n = sshp_parse_frame(ec, source, &frame, &payload);
+	n = sshp_parse_frame(&ec->serdev->dev, source, &frame, &payload);
 	if (!frame)
 		return n;
 
