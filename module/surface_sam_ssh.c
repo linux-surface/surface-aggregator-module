@@ -56,6 +56,7 @@
 #define SSH_NUM_RETRY			3
 
 #define SSH_READ_BUF_LEN		4096		// must be power of 2
+#define SSH_RECV_BUF_LEN		4096		// must be power of 2
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
 
@@ -174,6 +175,9 @@ struct ssh_receiver {
 	enum ssh_receiver_state state;
 	struct completion signal;
 	struct kfifo fifo;
+	struct kfifo rcvb;
+	struct wait_queue_head rcvb_wq;
+	struct task_struct *thread;
 	struct {
 		bool pld;
 		u8 seq;
@@ -2926,46 +2930,85 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, u8 *buf, size_t size)
 	return n + ssh_message_length(frame->len);
 }
 
+static inline int ssh_rx_thread_wait(struct sam_ssh_ec *ec)
+{
+	return wait_event_interruptible(ec->receiver.rcvb_wq,
+					!kfifo_is_empty(&ec->receiver.rcvb)
+					|| kthread_should_stop());
+}
+
+static int ssh_rx_threadfn(void *data)
+{
+	struct sam_ssh_ec *ec = data;
+	struct ssh_receiver *rcv = &ec->receiver;
+
+	while (!kthread_should_stop()) {
+		size_t offs = 0;
+		size_t n;
+
+		ssh_rx_thread_wait(ec);
+		if (kthread_should_stop())
+			break;
+
+		n = rcv->eval_buf.cap - rcv->eval_buf.len;
+		n = kfifo_out(&rcv->rcvb, rcv->eval_buf.ptr + rcv->eval_buf.len, n);
+
+		ssh_dbg(ec, "rx: received data (size: %zu)\n", n);
+		print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1,
+				     rcv->eval_buf.ptr + rcv->eval_buf.len, n,
+				     false);
+
+		rcv->eval_buf.len += n;
+
+		// evaluate buffer until we need more bytes or eval-buf is empty
+		while (offs < rcv->eval_buf.len) {
+			n = rcv->eval_buf.len - offs;
+			n = ssh_eval_buf(ec, rcv->eval_buf.ptr + offs, n);
+			if (n == 0)
+				break;	// need more bytes
+
+			offs += n;
+		}
+
+		// throw away the evaluated parts
+		rcv->eval_buf.len -= offs;
+		memmove(rcv->eval_buf.ptr, rcv->eval_buf.ptr + offs, rcv->eval_buf.len);
+	}
+
+	return 0;
+}
+
+static void ssh_rx_wakeup(struct sam_ssh_ec *ec)
+{
+	wake_up(&ec->receiver.rcvb_wq);
+}
+
+static inline int ssh_rx_start(struct sam_ssh_ec *ec)
+{
+	ec->receiver.thread = kthread_run(ssh_rx_threadfn, ec, "surface-sh-rx");
+	if (IS_ERR(ec->receiver.thread))
+		return PTR_ERR(ec->receiver.thread);
+
+	return 0;
+}
+
+static inline int ssh_rx_stop(struct sam_ssh_ec *ec)
+{
+	return kthread_stop(ec->receiver.thread);
+}
+
 static int ssh_receive_buf(struct serdev_device *serdev,
 			   const unsigned char *buf, size_t size)
 {
 	struct sam_ssh_ec *ec = serdev_device_get_drvdata(serdev);
 	struct ssh_receiver *rcv = &ec->receiver;
-	unsigned long flags;
-	size_t n, offs = 0, used;
+	size_t n;
 
-	ssh_dbg(ec, "rx: received data (size: %zu)\n", size);
-	print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
+	n = kfifo_in(&rcv->rcvb, buf, size);
+	if (n)
+		ssh_rx_wakeup(ec);
 
-	/*
-	 * The battery _BIX message gets a bit long, thus we have to add some
-	 * additional buffering here.
-	 */
-
-	spin_lock_irqsave(&rcv->lock, flags);
-
-	// copy to eval-buffer
-	used = min(size, (size_t)(rcv->eval_buf.cap - rcv->eval_buf.len));
-	memcpy(rcv->eval_buf.ptr + rcv->eval_buf.len, buf, used);
-	rcv->eval_buf.len += used;
-
-	// evaluate buffer until we need more bytes or eval-buf is empty
-	while (offs < rcv->eval_buf.len) {
-		n = rcv->eval_buf.len - offs;
-		n = ssh_eval_buf(ec, rcv->eval_buf.ptr + offs, n);
-		if (n == 0)
-			break;	// need more bytes
-
-		offs += n;
-	}
-
-	// throw away the evaluated parts
-	rcv->eval_buf.len -= offs;
-	memmove(rcv->eval_buf.ptr, rcv->eval_buf.ptr + offs, rcv->eval_buf.len);
-
-	spin_unlock_irqrestore(&rcv->lock, flags);
-
-	return used;
+	return n;
 }
 
 
@@ -3158,6 +3201,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	struct workqueue_struct *event_queue_ack;
 	struct workqueue_struct *event_queue_evt;
 	u8 *read_buf;
+	u8 *recv_buf;
 	u8 *eval_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	acpi_status status;
@@ -3175,6 +3219,12 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (!read_buf) {
 		status = -ENOMEM;
 		goto err_read_buf;
+	}
+
+	recv_buf = kzalloc(SSH_RECV_BUF_LEN, GFP_KERNEL);
+	if (!read_buf) {
+		status = -ENOMEM;
+		goto err_recv_buf;
 	}
 
 	eval_buf = kzalloc(SSH_EVAL_BUF_LEN, GFP_KERNEL);
@@ -3216,7 +3266,9 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	// initialize receiver
 	init_completion(&ec->receiver.signal);
+	init_waitqueue_head(&ec->receiver.rcvb_wq);
 	kfifo_init(&ec->receiver.fifo, read_buf, SSH_READ_BUF_LEN);
+	kfifo_init(&ec->receiver.rcvb, recv_buf, SSH_RECV_BUF_LEN);
 	ec->receiver.eval_buf.ptr = eval_buf;
 	ec->receiver.eval_buf.cap = SSH_EVAL_BUF_LEN;
 	ec->receiver.eval_buf.len = 0;
@@ -3233,6 +3285,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	serdev_device_set_drvdata(serdev, ec);
 
 	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
+
+	status = ssh_rx_start(ec);
+	if (status)
+		goto err_rxstart;
 
 	serdev_device_set_client_ops(serdev, &ssh_device_ops);
 	status = serdev_device_open(serdev);
@@ -3270,6 +3326,8 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 err_devinit:
 	serdev_device_close(serdev);
 err_open:
+	ssh_rx_stop(ec);
+err_rxstart:
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 	serdev_device_set_drvdata(serdev, NULL);
 	surface_sam_ssh_release(ec);
@@ -3282,6 +3340,8 @@ err_evtq:
 err_ackq:
 	kfree(eval_buf);
 err_eval_buf:
+	kfree(recv_buf);
+err_recv_buf:
 	kfree(read_buf);
 err_read_buf:
 	return status;
@@ -3307,6 +3367,10 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	// make sure all events (received up to now) have been properly handled
 	flush_workqueue(ec->events.queue_ack);
 	flush_workqueue(ec->events.queue_evt);
+
+	status = ssh_rx_stop(ec);
+	if (status)
+		dev_err(&serdev->dev, "error stopping receiver thread: %d\n", status);
 
 	// remove event handlers
 	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
@@ -3339,6 +3403,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	spin_lock_irqsave(&ec->receiver.lock, flags);
 	ec->receiver.state = SSH_RCV_DISCARD;
 	kfifo_free(&ec->receiver.fifo);
+	kfifo_free(&ec->receiver.rcvb);
 
 	kfree(ec->receiver.eval_buf.ptr);
 	ec->receiver.eval_buf.ptr = NULL;
