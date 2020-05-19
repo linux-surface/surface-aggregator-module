@@ -2457,6 +2457,13 @@ static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 }
 
 
+static void ssh_rtl_rx_event(struct ssh_rtl *rtl,
+			     const struct ssh_command *command,
+			     const struct sshp_span *command_data)
+{
+	// TODO
+}
+
 static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
 				      const struct sshp_span *data)
 {
@@ -2469,7 +2476,10 @@ static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
 	if (unlikely(!command))
 		return;
 
-	ssh_rtl_complete(rtl, command, &command_data);
+	if (ssh_rqid_is_event(get_unaligned_le16(command->rqid)))
+		ssh_rtl_rx_event(rtl, command, &command_data);
+	else
+		ssh_rtl_complete(rtl, command, &command_data);
 }
 
 static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
