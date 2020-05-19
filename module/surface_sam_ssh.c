@@ -724,6 +724,9 @@ struct ssh_packet_ops {
 	void (*complete)(struct ssh_packet *packet, int status);
 };
 
+typedef void (*ssh_ptl_data_received_cb)(struct ssh_ptl *ptl,
+				         const struct sshp_span *data);
+
 struct ssh_packet {
 	struct kref refcnt;
 
@@ -793,7 +796,7 @@ struct ssh_ptl {
 			u16 offset;
 		} blacklist;
 
-		// TODO
+		ssh_ptl_data_received_cb data_received;
 	} rx;
 };
 
@@ -1616,7 +1619,7 @@ static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
 	if (ssh_ptl_rx_blacklist_check(ptl, frame->seq))
 		return;
 
-	// TODO: handle frame data
+	ptl->rx.data_received(ptl, payload);
 }
 
 static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
@@ -1768,7 +1771,8 @@ static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 }
 
 
-static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev)
+static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
+			ssh_ptl_data_received_cb data_received)
 {
 	int i, status;
 
@@ -1789,6 +1793,7 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev)
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
+	ptl->rx.data_received = data_received;
 
 	// initialize SEQ blacklist with invalid sequence IDs
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
@@ -2127,7 +2132,9 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	// TODO
 }
 
-static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst /* TODO */)
+static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
+				      const struct ssh_command *command,
+				      const struct sshp_span *command_data)
 {
 	rtl_dbg(rqst->rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", rqst->request_id);
@@ -2135,7 +2142,9 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst /* TODO */)
 	// TODO
 }
 
-static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid /* TODO */)
+static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid,
+			     const struct ssh_command *command,
+			     const struct sshp_span *command_data)
 {
 	struct ssh_request *r = NULL;
 	struct ssh_request *p, *n;
@@ -2231,7 +2240,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid /* TODO */)
 	 * anywhere.
 	 */
 
-	ssh_rtl_complete_with_rsp(r);
+	ssh_rtl_complete_with_rsp(r, command, command_data);
 	ssh_request_put(r);
 
 	ssh_rtl_tx_schedule(rtl);
@@ -2447,6 +2456,35 @@ static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 
 	packet = container_of(tl, struct ssh_packet, timeout.timer);
 	schedule_work(&packet->timeout.work);
+}
+
+
+static inline void ssh_rtl_rx_command(struct ssh_ptl *p, struct sshp_span *data)
+{
+	struct ssh_rtl *rtl = container_of(p, struct ssh_rtl, ptl);
+	struct device *dev = &p->serdev->dev;
+	struct ssh_command *command;
+	struct sshp_span command_data;
+
+	sshp_parse_command(dev, data, &command, &command_data);
+	if (unlikely(!command))
+		return;
+
+	ssh_rtl_complete(rtl, command->rqid, command, &command_data);
+}
+
+static void ssh_rtl_rx_data(struct ssh_ptl *p, struct sshp_span *data)
+{
+	switch (data->ptr[0]) {
+	case SSH_PLD_TYPE_CMD:
+		ssh_rtl_rx_command(p, data);
+		break;
+
+	default:
+		ptl_err(p, "rtl: rx: unknown frame payload type"
+			" (type: 0x%02x)\n", data->ptr[0]);
+		break;
+	}
 }
 
 
