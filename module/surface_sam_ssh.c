@@ -2136,7 +2136,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 {
 	struct ssh_request *r = NULL;
 	struct ssh_request *p, *n;
-	u16 rqid = get_unaligned_le16(command->rqid);
+	u16 rqid = get_unaligned_le16(&command->rqid);
 
 	/*
 	 * Get request from pending based on request ID and mark it as response
@@ -2467,7 +2467,7 @@ static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
 	if (unlikely(!command))
 		return;
 
-	if (ssh_rqid_is_event(get_unaligned_le16(command->rqid)))
+	if (ssh_rqid_is_event(get_unaligned_le16(&command->rqid)))
 		ssh_rtl_rx_event(rtl, command, &command_data);
 	else
 		ssh_rtl_complete(rtl, command, &command_data);
