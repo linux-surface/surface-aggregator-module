@@ -2452,6 +2452,9 @@ static void ssh_rtl_rx_event(struct ssh_rtl *rtl,
 			     const struct ssh_command *command,
 			     const struct sshp_span *command_data)
 {
+	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
+		get_unaligned_le16(command->rqid));
+
 	// TODO
 }
 
