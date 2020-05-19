@@ -1783,7 +1783,7 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	spin_lock_init(&ptl->pending.lock);
 	INIT_LIST_HEAD(&ptl->pending.head);
-	atomic_set(&ptl->pending.count, 0);
+	atomic_set_release(&ptl->pending.count, 0);
 
 	ptl->tx.thread = NULL;
 	init_waitqueue_head(&ptl->tx.wq);
