@@ -748,7 +748,7 @@ struct ssh_packet {
 
 	struct {
 		unsigned char *ptr;
-		size_t length;
+		size_t len;
 	} buffer;
 
 	struct ssh_packet_ops ops;
@@ -858,7 +858,7 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
 
 	packet->buffer.ptr = NULL;
-	packet->buffer.length = 0;
+	packet->buffer.len = 0;
 
 	packet->ops = args->ops;
 
@@ -1245,7 +1245,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 		}
 
 		buf = ptl->tx.packet->buffer.ptr + ptl->tx.offset;
-		len = ptl->tx.packet->buffer.length - ptl->tx.offset;
+		len = ptl->tx.packet->buffer.len - ptl->tx.offset;
 
 		ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
 		print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, buf,
