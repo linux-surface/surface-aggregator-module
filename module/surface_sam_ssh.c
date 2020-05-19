@@ -754,6 +754,12 @@ struct ssh_packet {
 	struct ssh_packet_ops ops;
 };
 
+struct ssh_packet_args {
+	enum ssh_frame_type frame_type;
+	u8 sequence_id;
+	struct ssh_packet_ops ops;
+};
+
 struct ssh_ptl {
 	struct serdev_device *serdev;
 
@@ -805,6 +811,105 @@ static inline void ssh_packet_get(struct ssh_packet *packet)
 static inline void ssh_packet_put(struct ssh_packet *packet)
 {
 	kref_put(&packet->refcnt, __ssh_ptl_packet_release);
+}
+
+
+static void ssh_ptl_timeout_tfn(struct timer_list *tl);
+static void ssh_ptl_timeout_wfn(struct work_struct *w);
+
+static int ssh_packet_init(struct ssh_packet *packet,
+			   const struct ssh_packet_args *args)
+{
+	switch (args->frame_type) {
+	case SSH_FRAME_TYPE_NAK:
+		packet->type = 0;
+		packet->priority = SSH_PACKET_PRIORITY_NAK;
+		break;
+
+	case SSH_FRAME_TYPE_ACK:
+		packet->type = 0;
+		packet->priority = SSH_PACKET_PRIORITY_ACK;
+		break;
+
+	case SSH_FRAME_TYPE_DATA_SEQ:
+		packet->type = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_SEQUENCED;
+		packet->priority = SSH_PACKET_PRIORITY_DATA;
+		break;
+
+	case SSH_FRAME_TYPE_DATA_NSQ:
+		packet->type = SSH_PACKET_TY_BLOCKING;
+		packet->priority = SSH_PACKET_PRIORITY_DATA;
+		break;
+
+	default:
+		return -EINVAL;
+	}
+
+	packet->ptl = NULL;
+	packet->state = 0;
+	packet->sequence_id = args->sequence_id;
+
+	INIT_LIST_HEAD(&packet->queue_node);
+	INIT_LIST_HEAD(&packet->pending_node);
+
+	packet->timeout.count = 0;
+	mutex_init(&packet->timeout.lock);
+	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
+	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
+
+	packet->buffer.ptr = NULL;
+	packet->buffer.length = 0;
+
+	packet->ops = args->ops;
+
+	return 0;
+}
+
+static struct ssh_packet *ssh_packet_alloc(const struct ssh_packet_args *args,
+					   size_t payload_size, gfp_t flags)
+{
+	u32 len = ssh_message_length(payload_size);
+	struct ssh_packet *packet;
+
+	packet = kzalloc(len + sizeof(struct ssh_packet), flags);
+	if (!packet)
+		return NULL;
+
+	ssh_packet_init(packet, args);
+	packet->buffer.ptr = ((u8 *) packet) + sizeof(struct ssh_packet);
+	packet->buffer.len = len;
+
+	return packet;
+}
+
+static inline void ssh_packet_free(struct ssh_packet *p)
+{
+	kfree(p);
+}
+
+
+static inline
+struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
+					 const struct ssh_packet_args *args,
+					 gfp_t flags)
+{
+	// TODO: chache packets
+	return ssh_packet_alloc(args, 0, flags);
+}
+
+static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
+{
+	// TODO: chache packets
+	ssh_packet_free(p);
+}
+
+
+static inline struct msgbuf ssh_packet_msgbuf(struct ssh_packet *p)
+{
+	struct msgbuf msgb;
+
+	msgb_init(&msgb, p->buffer.ptr, p->buffer.len);
+	return msgb;
 }
 
 
@@ -1632,33 +1737,6 @@ static void ssh_ptl_free(struct ssh_ptl *ptl)
 {
 	kfifo_free(&ptl->rx.fifo);
 	sshp_buf_free(&ptl->rx.buf);
-}
-
-static void ssh_ptl_init_packet(struct ssh_packet *packet,
-				enum ssh_packet_type_flags type,
-				enum ssh_packet_priority priority,
-				u8 sequence_id, unsigned char *buffer,
-				size_t buffer_length,
-				struct ssh_packet_ops *ops)
-{
-	packet->ptl = NULL;
-	packet->type = type;
-	packet->state = 0;
-	packet->priority = priority;
-	packet->sequence_id = sequence_id;
-
-	INIT_LIST_HEAD(&packet->queue_node);
-	INIT_LIST_HEAD(&packet->pending_node);
-
-	packet->timeout.count = 0;
-	mutex_init(&packet->timeout.lock);
-	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
-	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
-
-	packet->buffer.ptr = buffer;
-	packet->buffer.length = buffer_length;
-
-	packet->ops = *ops;
 }
 
 
