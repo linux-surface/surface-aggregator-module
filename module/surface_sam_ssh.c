@@ -788,6 +788,11 @@ struct ssh_ptl {
 		struct kfifo fifo;
 		struct sshp_buf buf;
 
+		struct {
+			u16 seqs[8];
+			u16 offset;
+		} blacklist;
+
 		// TODO
 	} rx;
 };
@@ -1583,9 +1588,34 @@ static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl, struct ssh_frame *frame,
-				 struct sshp_span *payload)
+static inline bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
 {
+	int i;
+
+	// check if SEQ is blacklisted
+	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++) {
+		if (likely(ptl->rx.blacklist.seqs[i] == seq))
+			continue;
+
+		ptl_dbg(ptl, "ptl: ignoring repeated data packet\n");
+		return true;
+	}
+
+	// update blacklist
+	ptl->rx.blacklist.seqs[ptl->rx.blacklist.offset] = seq;
+	ptl->rx.blacklist.offset = (ptl->rx.blacklist.offset + 1)
+				   % ARRAY_SIZE(ptl->rx.blacklist.seqs);
+
+	return false;
+}
+
+static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
+				 const struct ssh_frame *frame,
+				 const struct sshp_span *payload)
+{
+	if (ssh_ptl_rx_blacklist_check(ptl, frame->seq))
+		return;
+
 	// TODO: handle frame data
 }
 
@@ -1740,7 +1770,7 @@ static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 
 static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev)
 {
-	int status;
+	int i, status;
 
 	ptl->serdev = serdev;
 
@@ -1759,6 +1789,11 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev)
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
+
+	// initialize SEQ blacklist with invalid sequence IDs
+	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
+		ptl->rx.blacklist.seqs[i] = 0xFFFF;
+	ptl->rx.blacklist.offset = 0;
 
 	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
 	if (status)
