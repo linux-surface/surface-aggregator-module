@@ -877,6 +877,11 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	return 0;
 }
 
+static void ssh_packet_destroy(struct ssh_packet *packet)
+{
+	mutex_destroy(&packet->timeout.lock);
+}
+
 
 static inline
 struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
@@ -902,6 +907,8 @@ struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
 {
 	// TODO: chache packets
+
+	ssh_packet_destroy(p);
 	kfree(p);
 }
 
