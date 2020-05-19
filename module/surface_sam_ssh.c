@@ -1583,7 +1583,8 @@ static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl, struct ssh_frame *frame)
+static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl, struct ssh_frame *frame,
+				 struct sshp_span *payload)
 {
 	// TODO: handle frame data
 }
@@ -1647,7 +1648,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 		/* fallthrough */
 
 	case SSH_FRAME_TYPE_DATA_NSQ:
-		ssh_ptl_rx_dataframe(ptl, frame);
+		ssh_ptl_rx_dataframe(ptl, frame, &payload);
 		break;
 
 	default:
