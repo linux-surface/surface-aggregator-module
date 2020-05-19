@@ -2459,7 +2459,8 @@ static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static inline void ssh_rtl_rx_command(struct ssh_ptl *p, struct sshp_span *data)
+static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
+				      const struct sshp_span *data)
 {
 	struct ssh_rtl *rtl = container_of(p, struct ssh_rtl, ptl);
 	struct device *dev = &p->serdev->dev;
@@ -2473,7 +2474,7 @@ static inline void ssh_rtl_rx_command(struct ssh_ptl *p, struct sshp_span *data)
 	ssh_rtl_complete(rtl, command->rqid, command, &command_data);
 }
 
-static void ssh_rtl_rx_data(struct ssh_ptl *p, struct sshp_span *data)
+static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
 {
 	switch (data->ptr[0]) {
 	case SSH_PLD_TYPE_CMD:
@@ -2485,6 +2486,57 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, struct sshp_span *data)
 			" (type: 0x%02x)\n", data->ptr[0]);
 		break;
 	}
+}
+
+
+static bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
+{
+	return flush_work(&rtl->tx_work);
+}
+
+static int ssh_rtl_tx_start(struct ssh_rtl *rtl)
+{
+	return ssh_ptl_tx_start(&rtl->ptl);
+}
+
+static int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
+{
+	return ssh_ptl_tx_stop(&rtl->ptl);
+}
+
+static int ssh_rtl_rx_start(struct ssh_rtl *rtl)
+{
+	return ssh_ptl_rx_start(&rtl->ptl);
+}
+
+static int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
+{
+	return ssh_ptl_rx_stop(&rtl->ptl);
+}
+
+static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev)
+{
+	int status;
+
+	status = ssh_ptl_init(&rtl->ptl, serdev, ssh_rtl_rx_data);
+	if (status)
+		return status;
+
+	spin_lock_init(&rtl->queue.lock);
+	INIT_LIST_HEAD(&rtl->queue.head);
+
+	spin_lock_init(&rtl->pending.lock);
+	INIT_LIST_HEAD(&rtl->pending.head);
+	atomic_set_release(&rtl->pending.count, 0);
+
+	INIT_WORK(&rtl->tx_work, ssh_rtl_tx_work_fn);
+
+	return 0;
+}
+
+static void ssh_rtl_free(struct ssh_rtl *rtl)
+{
+	ssh_ptl_free(&rtl->ptl);
 }
 
 
