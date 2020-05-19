@@ -1579,6 +1579,35 @@ static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 }
 
 
+static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl, struct ssh_frame *frame)
+{
+	// TODO: handle frame data
+}
+
+static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
+{
+	struct ssh_packet_args args;
+	struct ssh_packet *packet;
+	struct msgbuf msgb;
+
+	args.frame_type = SSH_FRAME_TYPE_ACK;
+	args.sequence_id = seq;
+	args.ops.complete = NULL;
+	args.ops.release = ptl_free_ctrl_packet;
+
+	packet = ptl_alloc_ctrl_packet(ptl, &args, GFP_KERNEL);
+	if (!packet) {
+		ptl_err(ptl, "ptl: failed to allocate ACK packet\n");
+		return;
+	}
+
+	msgb = ssh_packet_msgbuf(packet);
+	msgb_push_ack(&msgb, seq);
+	packet->buffer.len = msgb_bytes_used(&msgb);
+
+	ssh_ptl_submit(ptl, packet);
+}
+
 static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
@@ -1610,13 +1639,17 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 		break;
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
+		ssh_ptl_send_ack(ptl, frame->seq);
+		/* fallthrough */
+
 	case SSH_FRAME_TYPE_DATA_NSQ:
-		// TODO: handle data frame
+		ssh_ptl_rx_dataframe(ptl, frame);
 		break;
 
 	default:
 		ptl_warn(ptl, "ptl: received frame with unknown type 0x%02x\n",
 			 frame->type);
+		break;
 	}
 
 	return n + ssh_message_length(frame->len);
