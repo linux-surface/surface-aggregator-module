@@ -845,12 +845,16 @@ static int ssh_packet_init(struct ssh_packet *packet,
 		return -EINVAL;
 	}
 
+	kref_init(&packet->refcnt);
+
 	packet->ptl = NULL;
+	INIT_LIST_HEAD(&packet->queue_node);
+	INIT_LIST_HEAD(&packet->pending_node);
+
 	packet->state = 0;
 	packet->sequence_id = args->sequence_id;
 
-	INIT_LIST_HEAD(&packet->queue_node);
-	INIT_LIST_HEAD(&packet->pending_node);
+	init_completion(&packet->transmitted);
 
 	packet->timeout.count = 0;
 	mutex_init(&packet->timeout.lock);
