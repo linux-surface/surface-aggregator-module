@@ -2139,12 +2139,13 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 	// TODO
 }
 
-static void ssh_rtl_complete(struct ssh_rtl *rtl, u16 rqid,
+static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			     const struct ssh_command *command,
 			     const struct sshp_span *command_data)
 {
 	struct ssh_request *r = NULL;
 	struct ssh_request *p, *n;
+	u16 rqid = get_unaligned_le16(command->rqid);
 
 	/*
 	 * Get request from pending based on request ID and mark it as response
@@ -2468,7 +2469,7 @@ static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
 	if (unlikely(!command))
 		return;
 
-	ssh_rtl_complete(rtl, command->rqid, command, &command_data);
+	ssh_rtl_complete(rtl, command, &command_data);
 }
 
 static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
