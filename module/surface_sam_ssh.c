@@ -953,7 +953,8 @@ static inline void ssh_ptl_pending_remove(struct ssh_packet *packet)
 static inline void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	ptl_dbg(p->ptl, "ptl: completing packet %p\n", p);
-	p->ops.complete(p, status);
+	if (p->ops.complete)
+		p->ops.complete(p, status);
 }
 
 static inline void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
