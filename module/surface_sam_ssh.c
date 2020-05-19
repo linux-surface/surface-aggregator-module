@@ -913,15 +913,6 @@ static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
 }
 
 
-static inline struct msgbuf ssh_packet_msgbuf(struct ssh_packet *p)
-{
-	struct msgbuf msgb;
-
-	msgb_init(&msgb, p->buffer.ptr, p->buffer.len);
-	return msgb;
-}
-
-
 static inline void ssh_ptl_timeout_start(struct ssh_packet *packet)
 {
 	// if this fails, someone else is setting or cancelling the timeout
@@ -1636,7 +1627,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 		return;
 	}
 
-	msgb = ssh_packet_msgbuf(packet);
+	msgb_init(&msgb, packet->buffer.ptr, packet->buffer.len);
 	msgb_push_ack(&msgb, seq);
 	packet->buffer.len = msgb_bytes_used(&msgb);
 
