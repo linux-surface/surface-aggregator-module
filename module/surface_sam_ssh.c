@@ -877,11 +877,16 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	return 0;
 }
 
-static struct ssh_packet *ssh_packet_alloc(const struct ssh_packet_args *args,
-					   size_t payload_size, gfp_t flags)
+
+static inline
+struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
+					 const struct ssh_packet_args *args,
+					 gfp_t flags)
 {
-	u32 len = ssh_message_length(payload_size);
+	u32 len = ssh_message_length(0);
 	struct ssh_packet *packet;
+
+	// TODO: chache packets
 
 	packet = kzalloc(len + sizeof(struct ssh_packet), flags);
 	if (!packet)
@@ -894,25 +899,10 @@ static struct ssh_packet *ssh_packet_alloc(const struct ssh_packet_args *args,
 	return packet;
 }
 
-static inline void ssh_packet_free(struct ssh_packet *p)
-{
-	kfree(p);
-}
-
-
-static inline
-struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
-					 const struct ssh_packet_args *args,
-					 gfp_t flags)
-{
-	// TODO: chache packets
-	return ssh_packet_alloc(args, 0, flags);
-}
-
 static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
 {
 	// TODO: chache packets
-	ssh_packet_free(p);
+	kfree(p);
 }
 
 
