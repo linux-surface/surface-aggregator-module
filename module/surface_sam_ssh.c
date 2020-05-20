@@ -705,9 +705,13 @@ enum ssh_packet_priority {
 enum ssh_packet_type_flags {
 	SSH_PACKET_TY_SEQUENCED_BIT,
 	SSH_PACKET_TY_BLOCKING_BIT,
+	SSH_PACKET_TY_REQUEST_SEQ_BIT,
 
 	SSH_PACKET_TY_SEQUENCED = BIT(SSH_PACKET_TY_SEQUENCED_BIT),
 	SSH_PACKET_TY_BLOCKING = BIT(SSH_PACKET_TY_BLOCKING_BIT),
+	SSH_PACKET_TY_REQUEST_SEQ = BIT(SSH_PACKET_TY_REQUEST_SEQ_BIT),
+
+	SSH_PACKET_TY_DATA = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_REQUEST_SEQ,
 };
 
 enum ssh_packet_state_flags {
@@ -762,7 +766,6 @@ struct ssh_packet {
 
 struct ssh_packet_args {
 	enum ssh_frame_type frame_type;
-	u8 sequence_id;
 	struct ssh_packet_ops ops;
 };
 
@@ -786,6 +789,7 @@ struct ssh_ptl {
 		bool signal;
 		struct ssh_packet *packet;
 		size_t offset;
+		u8 seq_counter;
 	} tx;
 
 	struct {
@@ -854,12 +858,12 @@ static int ssh_packet_init(struct ssh_packet *packet,
 		break;
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
-		packet->type = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_SEQUENCED;
+		packet->type = SSH_PACKET_TY_DATA | SSH_PACKET_TY_SEQUENCED;
 		packet->priority = SSH_PACKET_PRIORITY_DATA;
 		break;
 
 	case SSH_FRAME_TYPE_DATA_NSQ:
-		packet->type = SSH_PACKET_TY_BLOCKING;
+		packet->type = SSH_PACKET_TY_DATA;
 		packet->priority = SSH_PACKET_PRIORITY_DATA;
 		break;
 
@@ -874,7 +878,6 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->pending_node);
 
 	packet->state = 0;
-	ssh_packet_set_seq(packet, args->sequence_id);
 
 	init_completion(&packet->transmitted);
 
@@ -1179,6 +1182,11 @@ static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	p = ssh_ptl_tx_pop(ptl);
 	if (IS_ERR(p))
 		return p;
+
+	// get new sequence ID, if first transmit and requested
+	if (!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state))
+		if (p->type & SSH_PACKET_TY_REQUEST_SEQ)
+			ssh_packet_set_seq(p, ptl->tx.seq_counter++);
 
 	if (p->type & SSH_PACKET_TY_SEQUENCED) {
 		ptl_dbg(ptl, "ptl: transmitting sequenced packet %p\n", p);
@@ -1631,7 +1639,6 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	struct msgbuf msgb;
 
 	args.frame_type = SSH_FRAME_TYPE_ACK;
-	args.sequence_id = seq;
 	args.ops.complete = NULL;
 	args.ops.release = ptl_free_ctrl_packet;
 
@@ -1792,6 +1799,7 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	ptl->tx.signal = false;
 	ptl->tx.packet = NULL;
 	ptl->tx.offset = 0;
+	ptl->tx.seq_counter = 0;
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
