@@ -143,7 +143,7 @@ static_assert(sizeof(struct ssh_command) == 8);
  * to form a message. The actual message length is SSH_MSG_LEN_BASE plus the
  * length of the frame payload.
  */
-#define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3 * sizeof(u16))
+#define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3ull * sizeof(u16))
 
 /**
  * Length of a control message.
