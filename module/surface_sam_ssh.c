@@ -134,7 +134,7 @@ struct ssh_command {
 static_assert(sizeof(struct ssh_command) == 8);
 
 /**
- * Syncrhonization (SYN) bytes.
+ * SSH message syncrhonization (SYN) bytes.
  */
 #define SSH_MSG_SYN		((u16)0x55aa)
 
@@ -146,12 +146,18 @@ static_assert(sizeof(struct ssh_command) == 8);
 #define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3ull * sizeof(u16))
 
 /**
- * Length of a control message.
+ * Length of a SSH control message.
  */
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
+/**
+ * Offset of the packet sequence ID field in the raw SSH message data.
+ */
 #define SSH_MSG_OFFS_SEQ 	(sizeof(u16) + offsetof(struct ssh_frame, seq))
 
+/**
+ * Offset of the request ID field in the raw SSH message data.
+ */
 #define SSH_MSG_OFFS_RQID	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
 				 + offsetof(struct ssh_command, rqid))
 
