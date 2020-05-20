@@ -150,6 +150,8 @@ static_assert(sizeof(struct ssh_command) == 8);
  */
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
+#define SSH_MSG_OFFS_SEQ 	(sizeof(u16) + offsetof(struct ssh_frame, seq))
+
 
 /* -- Common/utility functions. --------------------------------------------- */
 
@@ -735,10 +737,8 @@ struct ssh_packet {
 	struct list_head pending_node;
 
 	enum ssh_packet_type_flags type;
-	unsigned long state;
-
 	enum ssh_packet_priority priority;
-	u8 sequence_id;
+	unsigned long state;
 
 	struct completion transmitted;
 
@@ -822,6 +822,17 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 }
 
 
+static void ssh_packet_set_seq(struct ssh_packet *packet, u8 seq)
+{
+	packet->buffer.ptr[SSH_MSG_OFFS_SEQ] = seq;
+}
+
+static u8 ssh_packet_get_seq(struct ssh_packet *packet)
+{
+	return packet->buffer.ptr[SSH_MSG_OFFS_SEQ];
+}
+
+
 static void ssh_ptl_timeout_tfn(struct timer_list *tl);
 static void ssh_ptl_timeout_wfn(struct work_struct *w);
 
@@ -860,7 +871,7 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->pending_node);
 
 	packet->state = 0;
-	packet->sequence_id = args->sequence_id;
+	ssh_packet_set_seq(packet, args->sequence_id);
 
 	init_completion(&packet->transmitted);
 
@@ -1324,7 +1335,7 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 		 * to be added to pending is first to be sent, is first to be
 		 * ACKed.
 		 */
-		if (unlikely(p->sequence_id != seq_id))
+		if (unlikely(ssh_packet_get_seq(p) != seq_id))
 			continue;
 
 		/*
