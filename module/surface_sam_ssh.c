@@ -1883,7 +1883,10 @@ struct ssh_rtl {
 		atomic_t count;
 	} pending;
 
-	struct work_struct tx_work;
+	struct {
+		struct work_struct work;
+		u16 rqid_counter;
+	} tx;
 };
 
 
@@ -1980,6 +1983,8 @@ static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 	if (IS_ERR(rqst))
 		return PTR_ERR(rqst);
 
+	ssh_request_set_rqid(rqst, rtl->tx.rqid_counter++);
+
 	status = ssh_rtl_tx_pending_push(rqst);
 	if (status) {
 		ssh_request_put(rqst);
@@ -2009,14 +2014,14 @@ static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 static inline bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
 {
 	if (atomic_read(&rtl->pending.count) < SSH_RTL_MAX_PENDING)
-		return schedule_work(&rtl->tx_work);
+		return schedule_work(&rtl->tx.work);
 	else
 		return false;
 }
 
 static void ssh_rtl_tx_work_fn(struct work_struct *work)
 {
-	struct ssh_rtl *rtl = container_of(work, struct ssh_rtl, tx_work);
+	struct ssh_rtl *rtl = container_of(work, struct ssh_rtl, tx.work);
 	int i, status;
 
 	/*
@@ -2524,7 +2529,7 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
 
 static bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
 {
-	return flush_work(&rtl->tx_work);
+	return flush_work(&rtl->tx.work);
 }
 
 static int ssh_rtl_tx_start(struct ssh_rtl *rtl)
@@ -2562,7 +2567,8 @@ static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev)
 	INIT_LIST_HEAD(&rtl->pending.head);
 	atomic_set_release(&rtl->pending.count, 0);
 
-	INIT_WORK(&rtl->tx_work, ssh_rtl_tx_work_fn);
+	INIT_WORK(&rtl->tx.work, ssh_rtl_tx_work_fn);
+	rtl->tx.rqid_counter = 0;
 
 	return 0;
 }
