@@ -1979,19 +1979,22 @@ static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 	struct ssh_request *rqst;
 	int status;
 
+	// get and prepare next request for transmit
 	rqst = ssh_rtl_tx_next(rtl);
 	if (IS_ERR(rqst))
 		return PTR_ERR(rqst);
 
+	// set request ID
 	ssh_request_set_rqid(rqst, rtl->tx.rqid_counter++);
 
+	// add to/mark as pending
 	status = ssh_rtl_tx_pending_push(rqst);
 	if (status) {
 		ssh_request_put(rqst);
 		return -EAGAIN;
 	}
 
-	/* Part 3: Submit packet. */
+	// submit packet
 	status = ssh_ptl_submit(&rtl->ptl, &rqst->packet);
 	if (status) {
 		/*
