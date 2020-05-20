@@ -152,6 +152,9 @@ static_assert(sizeof(struct ssh_command) == 8);
 
 #define SSH_MSG_OFFS_SEQ 	(sizeof(u16) + offsetof(struct ssh_frame, seq))
 
+#define SSH_MSG_OFFS_RQID	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
+				 + offsetof(struct ssh_command, rqid))
+
 
 /* -- Common/utility functions. --------------------------------------------- */
 
@@ -1849,8 +1852,6 @@ struct ssh_request {
 	enum ssh_request_type_flags type;
 	unsigned long state;
 
-	u16 request_id;
-
 	struct {
 		struct mutex lock;
 		struct timer_list timer;
@@ -1891,6 +1892,17 @@ static inline void ssh_request_get(struct ssh_request *rqst)
 static inline void ssh_request_put(struct ssh_request *rqst)
 {
 	ssh_packet_put(&rqst->packet);
+}
+
+
+static void ssh_request_set_rqid(struct ssh_request *rqst, u16 rqid)
+{
+	put_unaligned_le16(rqid, rqst->packet.buffer.ptr + SSH_MSG_OFFS_RQID);
+}
+
+static u16 ssh_request_get_rqid(struct ssh_request *rqst)
+{
+	return get_unaligned_le16(rqst->packet.buffer.ptr + SSH_MSG_OFFS_RQID);
 }
 
 
@@ -2125,7 +2137,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	// rqst->rtl may not be set if we're cancelling before submitting
 	if (rtl) {
 		rtl_dbg(rtl, "rtl: completing request (rqid: 0x%04x,"
-			" status: %d)\n", rqst->request_id, status);
+			" status: %d)\n", ssh_request_get_rqid(rqst), status);
 	}
 
 	// TODO
@@ -2136,7 +2148,7 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 				      const struct sshp_span *command_data)
 {
 	rtl_dbg(rqst->rtl, "rtl: completing request with response"
-		" (rqid: 0x%04x)\n", rqst->request_id);
+		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
 
 	// TODO
 }
@@ -2156,7 +2168,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	spin_lock(&rtl->pending.lock);
 	list_for_each_entry_safe(p, n, &rtl->pending.head, pending_node) {
 		// we generally expect requests to be processed in order
-		if (unlikely(p->request_id != rqid))
+		if (unlikely(ssh_request_get_rqid(p) != rqid))
 			continue;
 
 		/*
@@ -2464,7 +2476,7 @@ static void ssh_rtl_rx_event(struct ssh_rtl *rtl,
 			     const struct sshp_span *command_data)
 {
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
-		get_unaligned_le16(command->rqid));
+		get_unaligned_le16(&command->rqid));
 
 	// TODO
 }
