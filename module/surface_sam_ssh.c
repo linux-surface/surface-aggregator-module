@@ -911,18 +911,17 @@ struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 					 const struct ssh_packet_args *args,
 					 gfp_t flags)
 {
-	u32 len = ssh_message_length(0);
 	struct ssh_packet *packet;
 
 	// TODO: chache packets
 
-	packet = kzalloc(len + sizeof(struct ssh_packet), flags);
+	packet = kzalloc(sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL, flags);
 	if (!packet)
 		return NULL;
 
 	ssh_packet_init(packet, args);
 	packet->buffer.ptr = ((u8 *) packet) + sizeof(struct ssh_packet);
-	packet->buffer.len = len;
+	packet->buffer.len = SSH_MSG_LEN_CTRL;
 
 	return packet;
 }
