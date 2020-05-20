@@ -174,6 +174,14 @@ static inline u16 ssh_rqid_next(u16 rqid)
 	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID + 1;
 }
 
+static inline u16 ssh_rqid_inc(u16 *rqid)
+{
+	u16 old = *rqid;
+
+	*rqid = ssh_rqid_next(*rqid);
+	return old;
+}
+
 static inline u16 ssh_event_to_rqid(u16 event)
 {
 	return event + 1;
@@ -1990,7 +1998,7 @@ static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 		return PTR_ERR(rqst);
 
 	// set request ID
-	ssh_request_set_rqid(rqst, rtl->tx.rqid_counter++);
+	ssh_request_set_rqid(rqst, ssh_rqid_inc(&rtl->tx.rqid_counter));
 
 	// add to/mark as pending
 	status = ssh_rtl_tx_pending_push(rqst);
