@@ -784,9 +784,6 @@ struct ssh_packet_ops {
 	void (*complete)(struct ssh_packet *packet, int status);
 };
 
-typedef void (*ssh_ptl_data_received_cb)(struct ssh_ptl *ptl,
-				         const struct sshp_span *data);
-
 struct ssh_packet {
 	struct kref refcnt;
 
@@ -815,9 +812,8 @@ struct ssh_packet {
 	struct ssh_packet_ops ops;
 };
 
-struct ssh_packet_args {
-	enum ssh_frame_type frame_type;
-	struct ssh_packet_ops ops;
+struct ssh_ptl_ops {
+	void (*data_received)(struct ssh_ptl *p, const struct sshp_span *data);
 };
 
 struct ssh_ptl {
@@ -852,10 +848,11 @@ struct ssh_ptl {
 			u16 seqs[8];
 			u16 offset;
 		} blacklist;
-
-		ssh_ptl_data_received_cb data_received;
 	} rx;
+
+	struct ssh_ptl_ops ops;
 };
+
 
 #define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
@@ -887,6 +884,11 @@ static u8 ssh_packet_get_seq(struct ssh_packet *packet)
 
 static void ssh_ptl_timeout_tfn(struct timer_list *tl);
 static void ssh_ptl_timeout_wfn(struct work_struct *w);
+
+struct ssh_packet_args {
+	enum ssh_frame_type frame_type;
+	struct ssh_packet_ops ops;
+};
 
 static int ssh_packet_init(struct ssh_packet *packet,
 			   const struct ssh_packet_args *args)
@@ -1668,7 +1670,7 @@ static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
 	if (ssh_ptl_rx_blacklist_check(ptl, frame->seq))
 		return;
 
-	ptl->rx.data_received(ptl, payload);
+	ptl->ops.data_received(ptl, payload);
 }
 
 static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
@@ -1820,7 +1822,7 @@ static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 
 
 static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
-			ssh_ptl_data_received_cb data_received)
+			struct ssh_ptl_ops *ops)
 {
 	int i, status;
 
@@ -1841,7 +1843,8 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
-	ptl->rx.data_received = data_received;
+
+	ptl->ops = *ops;
 
 	// initialize SEQ blacklist with invalid sequence IDs
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
@@ -1859,7 +1862,7 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	return status;
 }
 
-static void ssh_ptl_free(struct ssh_ptl *ptl)
+static void ssh_ptl_destroy(struct ssh_ptl *ptl)
 {
 	kfifo_free(&ptl->rx.fifo);
 	sshp_buf_free(&ptl->rx.buf);
@@ -2603,9 +2606,12 @@ static int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
 static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 			struct ssh_rtl_ops *ops)
 {
+	struct ssh_ptl_ops ptl_ops;
 	int status;
 
-	status = ssh_ptl_init(&rtl->ptl, serdev, ssh_rtl_rx_data);
+	ptl_ops.data_received = ssh_rtl_rx_data;
+
+	status = ssh_ptl_init(&rtl->ptl, serdev, &ptl_ops);
 	if (status)
 		return status;
 
@@ -2623,9 +2629,9 @@ static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 	return 0;
 }
 
-static void ssh_rtl_free(struct ssh_rtl *rtl)
+static void ssh_rtl_destroy(struct ssh_rtl *rtl)
 {
-	ssh_ptl_free(&rtl->ptl);
+	ssh_ptl_destroy(&rtl->ptl);
 }
 
 
