@@ -2635,6 +2635,63 @@ static void ssh_rtl_destroy(struct ssh_rtl *rtl)
 }
 
 
+enum ssh_request_flags {
+	SSH_REQUEST_EXPRESP = BIT(0),
+	SSH_REQUEST_NONSEQ  = BIT(1),
+};
+
+static void ssh_rtl_packet_release(struct ssh_packet *p)
+{
+	struct ssh_request *rqst = container_of(p, struct ssh_request, packet);
+	rqst->ops.release(rqst);
+}
+
+static int ssh_request_init(struct ssh_request *rqst,
+			    enum ssh_request_flags flags,
+			    const struct ssh_request_ops *ops)
+{
+	int status;
+	struct ssh_packet_args packet_args;
+
+	if (flags & SSH_REQUEST_NONSEQ)
+		packet_args.frame_type = SSH_FRAME_TYPE_DATA_NSQ;
+	else
+		packet_args.frame_type = SSH_FRAME_TYPE_DATA_SEQ;
+
+	packet_args.ops.complete = ssh_rtl_packet_callback;
+	packet_args.ops.release = ssh_rtl_packet_release;
+
+	status = ssh_packet_init(&rqst->packet, &packet_args);
+	if (status)
+		return status;
+
+	rqst->rtl = NULL;
+	INIT_LIST_HEAD(&rqst->queue_node);
+	INIT_LIST_HEAD(&rqst->pending_node);
+
+	if (flags & SSH_REQUEST_EXPRESP)
+		rqst->type = SSH_REQUEST_TY_EXPRESP;
+	else
+		rqst->type = 0;
+
+	rqst->state = 0;
+
+	mutex_init(&rqst->timeout.lock);
+	timer_setup(&rqst->timeout.timer, ssh_rtl_timeout_tfn, 0);
+	INIT_WORK(&rqst->timeout.work, ssh_rtl_timeout_wfn);
+
+	rqst->ops = *ops;
+
+	return 0;
+}
+
+static void ssh_request_destroy(struct ssh_request *rqst)
+{
+	ssh_packet_destroy(&rqst->packet);
+	mutex_destroy(&rqst->timeout.lock);
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
