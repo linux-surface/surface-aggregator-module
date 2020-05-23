@@ -1888,6 +1888,14 @@ enum ssh_request_state_flags {
 };
 
 struct ssh_rtl;
+struct ssh_request;
+
+struct ssh_request_ops {
+	void (*release)(struct ssh_request *rqst);
+	void (*complete)(struct ssh_request *rqst,
+			 const struct ssh_command *cmd,
+			 const struct sshp_span *data, int status);
+};
 
 struct ssh_request {
 	struct ssh_rtl *rtl;
@@ -1904,7 +1912,12 @@ struct ssh_request {
 		struct work_struct work;
 	} timeout;
 
-	// TODO
+	struct ssh_request_ops ops;
+};
+
+struct ssh_rtl_ops {
+	void (*handle_event)(const struct ssh_command *cmd,
+			     const struct sshp_span *data);
 };
 
 struct ssh_rtl {
@@ -1924,6 +1937,8 @@ struct ssh_rtl {
 	struct {
 		struct work_struct work;
 	} tx;
+
+	struct ssh_rtl_ops ops;
 };
 
 
@@ -2175,7 +2190,8 @@ static inline void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
 }
 
 
-static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
+static inline void ssh_rtl_complete_with_status(struct ssh_request *rqst,
+						int status)
 {
 	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
@@ -2185,17 +2201,17 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 			" status: %d)\n", ssh_request_get_rqid(rqst), status);
 	}
 
-	// TODO
+	rqst->ops.complete(rqst, NULL, NULL, status);
 }
 
-static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
-				      const struct ssh_command *command,
-				      const struct sshp_span *command_data)
+static inline void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
+					     const struct ssh_command *cmd,
+					     const struct sshp_span *data)
 {
 	rtl_dbg(rqst->rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
 
-	// TODO
+	rqst->ops.complete(rqst, cmd, data, 0);
 }
 
 static void ssh_rtl_complete(struct ssh_rtl *rtl,
@@ -2516,14 +2532,14 @@ static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static void ssh_rtl_rx_event(struct ssh_rtl *rtl,
-			     const struct ssh_command *command,
-			     const struct sshp_span *command_data)
+static inline void ssh_rtl_rx_event(struct ssh_rtl *rtl,
+				    const struct ssh_command *cmd,
+				    const struct sshp_span *data)
 {
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
-		get_unaligned_le16(&command->rqid));
+		get_unaligned_le16(&cmd->rqid));
 
-	// TODO
+	rtl->ops.handle_event(cmd, data);
 }
 
 static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
@@ -2584,7 +2600,8 @@ static int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
 	return ssh_ptl_rx_stop(&rtl->ptl);
 }
 
-static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev)
+static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
+			struct ssh_rtl_ops *ops)
 {
 	int status;
 
@@ -2600,6 +2617,8 @@ static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev)
 	atomic_set_release(&rtl->pending.count, 0);
 
 	INIT_WORK(&rtl->tx.work, ssh_rtl_tx_work_fn);
+
+	rtl->ops = *ops;
 
 	return 0;
 }
