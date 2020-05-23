@@ -164,6 +164,11 @@ static_assert(sizeof(struct ssh_command) == 8);
 
 /* -- Common/utility functions. --------------------------------------------- */
 
+static inline u32 ssh_message_length(u16 payload_size)
+{
+	return SSH_MSG_LEN_BASE + payload_size;
+}
+
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
 	return crc_ccitt_false(0xffff, buf, len);
@@ -202,11 +207,6 @@ static inline int ssh_tc_to_event(u8 tc)
 
 	/* Default path: Set RQID = TC. */
 	return ssh_rqid_to_event(tc);
-}
-
-static inline u32 ssh_message_length(u16 payload_size)
-{
-	return SSH_MSG_LEN_BASE + payload_size;
 }
 
 
