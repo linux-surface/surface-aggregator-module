@@ -169,17 +169,9 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 	return crc_ccitt_false(0xffff, buf, len);
 }
 
-static inline u16 ssh_rqid_next(u16 rqid)
+static inline u16 __ssh_rqid_next(u16 rqid)
 {
 	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID + 1;
-}
-
-static inline u16 ssh_rqid_inc(u16 *rqid)
-{
-	u16 old = *rqid;
-
-	*rqid = ssh_rqid_next(*rqid);
-	return old;
 }
 
 static inline u16 ssh_event_to_rqid(u16 event)
@@ -215,6 +207,55 @@ static inline int ssh_tc_to_event(u8 tc)
 static inline u32 ssh_message_length(u16 payload_size)
 {
 	return SSH_MSG_LEN_BASE + payload_size;
+}
+
+
+/* -- Safe counters. -------------------------------------------------------- */
+
+struct ssh_seq_counter {
+	u8 value;
+};
+
+struct ssh_rqid_counter {
+	u16 value;
+};
+
+static inline void ssh_seq_reset(struct ssh_seq_counter *c)
+{
+	WRITE_ONCE(c->value, 0);
+}
+
+static inline u8 ssh_seq_next(struct ssh_seq_counter *c)
+{
+	u8 old = READ_ONCE(c->value);
+	u8 new = old + 1;
+	u8 ret;
+
+	while (unlikely((ret = cmpxchg(&c->value, old, new)) != old)) {
+		old = ret;
+		new = old + 1;
+	}
+
+	return old;
+}
+
+static inline void ssh_rqid_reset(struct ssh_rqid_counter *c)
+{
+	WRITE_ONCE(c->value, 0);
+}
+
+static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
+{
+	u16 old = READ_ONCE(c->value);
+	u16 new = __ssh_rqid_next(old);
+	u16 ret;
+
+	while (unlikely((ret = cmpxchg(&c->value, old, new)) != old)) {
+		old = ret;
+		new = __ssh_rqid_next(old);
+	}
+
+	return old;
 }
 
 
@@ -2968,7 +3009,7 @@ static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
 	}
 
 	ec->counter.seq += 1;
-	ec->counter.rqid = ssh_rqid_next(ec->counter.rqid);
+	ec->counter.rqid = __ssh_rqid_next(ec->counter.rqid);
 
 	// get command response/payload
 	if (rqst->snc && result) {
