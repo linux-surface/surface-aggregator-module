@@ -719,13 +719,9 @@ enum ssh_packet_priority {
 enum ssh_packet_type_flags {
 	SSH_PACKET_TY_SEQUENCED_BIT,
 	SSH_PACKET_TY_BLOCKING_BIT,
-	SSH_PACKET_TY_REQUEST_SEQ_BIT,
 
 	SSH_PACKET_TY_SEQUENCED = BIT(SSH_PACKET_TY_SEQUENCED_BIT),
 	SSH_PACKET_TY_BLOCKING = BIT(SSH_PACKET_TY_BLOCKING_BIT),
-	SSH_PACKET_TY_REQUEST_SEQ = BIT(SSH_PACKET_TY_REQUEST_SEQ_BIT),
-
-	SSH_PACKET_TY_DATA = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_REQUEST_SEQ,
 };
 
 enum ssh_packet_state_flags {
@@ -803,7 +799,6 @@ struct ssh_ptl {
 		bool signal;
 		struct ssh_packet *packet;
 		size_t offset;
-		u8 seq_counter;
 	} tx;
 
 	struct {
@@ -843,11 +838,6 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 }
 
 
-static void ssh_packet_set_seq(struct ssh_packet *packet, u8 seq)
-{
-	packet->buffer.ptr[SSH_MSG_OFFS_SEQ] = seq;
-}
-
 static u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
 	return packet->buffer.ptr[SSH_MSG_OFFS_SEQ];
@@ -872,12 +862,12 @@ static int ssh_packet_init(struct ssh_packet *packet,
 		break;
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
-		packet->type = SSH_PACKET_TY_DATA | SSH_PACKET_TY_SEQUENCED;
+		packet->type = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_SEQUENCED;
 		packet->priority = SSH_PACKET_PRIORITY_DATA;
 		break;
 
 	case SSH_FRAME_TYPE_DATA_NSQ:
-		packet->type = SSH_PACKET_TY_DATA;
+		packet->type = SSH_PACKET_TY_BLOCKING;
 		packet->priority = SSH_PACKET_PRIORITY_DATA;
 		break;
 
@@ -1195,11 +1185,6 @@ static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	p = ssh_ptl_tx_pop(ptl);
 	if (IS_ERR(p))
 		return p;
-
-	// get new sequence ID, if first transmit and requested
-	if (!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state))
-		if (p->type & SSH_PACKET_TY_REQUEST_SEQ)
-			ssh_packet_set_seq(p, ptl->tx.seq_counter++);
 
 	if (p->type & SSH_PACKET_TY_SEQUENCED) {
 		ptl_dbg(ptl, "ptl: transmitting sequenced packet %p\n", p);
@@ -1812,7 +1797,6 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	ptl->tx.signal = false;
 	ptl->tx.packet = NULL;
 	ptl->tx.offset = 0;
-	ptl->tx.seq_counter = 0;
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
@@ -1898,7 +1882,6 @@ struct ssh_rtl {
 
 	struct {
 		struct work_struct work;
-		u16 rqid_counter;
 	} tx;
 };
 
@@ -1918,11 +1901,6 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 	ssh_packet_put(&rqst->packet);
 }
 
-
-static void ssh_request_set_rqid(struct ssh_request *rqst, u16 rqid)
-{
-	put_unaligned_le16(rqid, rqst->packet.buffer.ptr + SSH_MSG_OFFS_RQID);
-}
 
 static u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
@@ -1996,9 +1974,6 @@ static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 	rqst = ssh_rtl_tx_next(rtl);
 	if (IS_ERR(rqst))
 		return PTR_ERR(rqst);
-
-	// set request ID
-	ssh_request_set_rqid(rqst, ssh_rqid_inc(&rtl->tx.rqid_counter));
 
 	// add to/mark as pending
 	status = ssh_rtl_tx_pending_push(rqst);
@@ -2584,7 +2559,6 @@ static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev)
 	atomic_set_release(&rtl->pending.count, 0);
 
 	INIT_WORK(&rtl->tx.work, ssh_rtl_tx_work_fn);
-	rtl->tx.rqid_counter = 0;
 
 	return 0;
 }
