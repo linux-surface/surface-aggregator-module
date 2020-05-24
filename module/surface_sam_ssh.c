@@ -2692,6 +2692,77 @@ static void ssh_request_destroy(struct ssh_request *rqst)
 }
 
 
+/* -- Event notifier. ------------------------------------------------------- */
+
+struct ssam_event {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 priority;
+	u16 rqid;
+	u16 length;
+	u8 data[0];
+};
+
+struct ssam_event_notifier {
+	struct srcu_notifier_head notif_head[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	unsigned notif_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+};
+
+
+static void ssam_event_notify(struct ssam_event_notifier *en,
+			      struct device *dev,
+			      struct ssam_event *event)
+{
+	struct srcu_notifier_head *nh;
+	int status, ncalls;
+
+	nh = &en->notif_head[ssh_rqid_to_event(event->rqid)];
+	status = __srcu_notifier_call_chain(nh, event->target_category, event,
+					    -1, &ncalls);
+	status = notifier_to_errno(status);
+
+	if (status < 0)
+		dev_err(dev, "event: error handling event: %d\n", status);
+
+	if (ncalls == 0) {
+		dev_warn(dev, "event: unhandled event (rqid: 0x%04x,"
+			 " tc: 0x%02x, cid: 0x%02x)\n", event->rqid,
+			 event->target_category, event->command_id);
+	}
+}
+
+static int ssam_event_notifier_register(struct ssam_event_notifier *en,
+					struct notifier_block *nb, u16 event)
+{
+	int status;
+
+	status = srcu_notifier_chain_register(&en->notif_head[event], nb);
+	if (!status)
+		en->notif_count[event] += 1;
+
+	return status;
+}
+
+static int ssam_event_notifier_unregister(struct ssam_event_notifier *en,
+					  struct notifier_block *nb, u16 event)
+{
+	int status;
+
+	status = srcu_notifier_chain_unregister(&en->notif_head[event], nb);
+	if (!status)
+		en->notif_count[event] -= 1;
+
+	return status;
+}
+
+static inline unsigned ssam_event_notifier_count(struct ssam_event_notifier *en,
+						 u16 event)
+{
+	return en->notif_count[event];
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
