@@ -60,6 +60,19 @@
 #define SSH_EVAL_BUF_LEN		SSH_MAX_WRITE	// also works for reading
 
 
+/* -- Public interface. ----------------------------------------------------- */
+
+struct ssam_event {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 priority;
+	u16 rqid;
+	u16 length;
+	u8 data[0];
+};
+
+
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
 
 /**
@@ -2693,16 +2706,6 @@ static void ssh_request_destroy(struct ssh_request *rqst)
 
 
 /* -- Event notifier. ------------------------------------------------------- */
-
-struct ssam_event {
-	u8 target_category;
-	u8 command_id;
-	u8 instance_id;
-	u8 priority;
-	u16 rqid;
-	u16 length;
-	u8 data[0];
-};
 
 struct ssam_event_notifier {
 	struct srcu_notifier_head notif_head[SURFACE_SAM_SSH_MAX_EVENT_ID];
