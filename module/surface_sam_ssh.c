@@ -2561,10 +2561,10 @@ static void ssh_rtl_timeout_wfn(struct work_struct *work)
 
 static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 {
-	struct ssh_packet *packet;
+	struct ssh_request *rqst;
 
-	packet = container_of(tl, struct ssh_packet, timeout.timer);
-	schedule_work(&packet->timeout.work);
+	rqst = container_of(tl, struct ssh_request, timeout.timer);
+	schedule_work(&rqst->timeout.work);
 }
 
 
