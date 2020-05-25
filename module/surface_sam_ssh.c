@@ -197,10 +197,7 @@ static_assert(sizeof(struct ssh_command) == 8);
 
 /* -- Common/utility functions. --------------------------------------------- */
 
-static inline u32 ssh_message_length(u16 payload_size)
-{
-	return SSH_MSG_LEN_BASE + payload_size;
-}
+#define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + payload_size)
 
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
@@ -495,7 +492,7 @@ static size_t sshp_parse_frame(const struct device *dev,
 		return aligned.ptr - source->ptr;
 
 	// check for minumum packet length
-	if (unlikely(aligned.len < ssh_message_length(0))) {
+	if (unlikely(aligned.len < SSH_MESSAGE_LENGTH(0))) {
 		dev_dbg(dev, "rx: parser: not enough data for frame\n");
 		return aligned.ptr - source->ptr;
 	}
@@ -526,7 +523,7 @@ static size_t sshp_parse_frame(const struct device *dev,
 	sp.len = get_unaligned_le16(&((struct ssh_frame *)sf.ptr)->len);
 
 	// check for frame + payload length
-	if (aligned.len < ssh_message_length(sp.len)) {
+	if (aligned.len < SSH_MESSAGE_LENGTH(sp.len)) {
 		dev_dbg(dev, "rx: parser: not enough data for payload\n");
 		return aligned.ptr - source->ptr;
 	}
@@ -1772,7 +1769,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 		break;
 	}
 
-	return n + ssh_message_length(frame->len);
+	return n + SSH_MESSAGE_LENGTH(frame->len);
 }
 
 static int ssh_ptl_rx_threadfn(void *data)
@@ -3660,7 +3657,7 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 		ssh_warn(ec, "rx: unknown frame type 0x%02x\n", frame->type);
 	}
 
-	return n + ssh_message_length(frame->len);
+	return n + SSH_MESSAGE_LENGTH(frame->len);
 }
 
 static int ssh_rx_threadfn(void *data)
