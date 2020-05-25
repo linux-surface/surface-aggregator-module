@@ -839,7 +839,7 @@ struct ssh_packet {
 		size_t len;
 	} buffer;
 
-	struct ssh_packet_ops ops;
+	const struct ssh_packet_ops *ops;
 };
 
 struct ssh_ptl_ops {
@@ -895,7 +895,7 @@ struct ssh_ptl {
 static void __ssh_ptl_packet_release(struct kref *kref)
 {
 	struct ssh_packet *p = to_ssh_packet(kref, refcnt);
-	p->ops.release(p);
+	p->ops->release(p);
 }
 
 static inline void ssh_packet_get(struct ssh_packet *packet)
@@ -920,7 +920,7 @@ static void ssh_ptl_timeout_wfn(struct work_struct *w);
 
 struct ssh_packet_args {
 	enum ssh_frame_type frame_type;
-	struct ssh_packet_ops ops;
+	const struct ssh_packet_ops *ops;
 };
 
 static int ssh_packet_init(struct ssh_packet *packet,
@@ -1006,6 +1006,11 @@ static void ptl_free_ctrl_packet(struct ssh_packet *p)
 	ssh_packet_destroy(p);
 	kfree(p);
 }
+
+static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
+	.complete = NULL,
+	.release = ptl_free_ctrl_packet,
+};
 
 
 static void ssh_ptl_timeout_start(struct ssh_packet *packet)
@@ -1153,8 +1158,8 @@ static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	ptl_dbg(p->ptl, "ptl: completing packet %p\n", p);
-	if (p->ops.complete)
-		p->ops.complete(p, status);
+	if (p->ops->complete)
+		p->ops->complete(p, status);
 }
 
 static void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
@@ -1709,8 +1714,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	struct msgbuf msgb;
 
 	args.frame_type = SSH_FRAME_TYPE_ACK;
-	args.ops.complete = NULL;
-	args.ops.release = ptl_free_ctrl_packet;
+	args.ops = &ssh_ptl_ctrl_packet_ops;
 
 	packet = ptl_alloc_ctrl_packet(ptl, &args, GFP_KERNEL);
 	if (!packet) {
@@ -2683,6 +2687,11 @@ static void ssh_rtl_packet_release(struct ssh_packet *p)
 	rqst->ops.release(rqst);
 }
 
+static const struct ssh_packet_ops ssh_rtl_packet_ops = {
+	.complete = ssh_rtl_packet_callback,
+	.release = ssh_rtl_packet_release,
+};
+
 static int ssh_request_init(struct ssh_request *rqst,
 			    enum ssh_request_flags flags,
 			    const struct ssh_request_ops *ops)
@@ -2695,8 +2704,7 @@ static int ssh_request_init(struct ssh_request *rqst,
 	else
 		packet_args.frame_type = SSH_FRAME_TYPE_DATA_SEQ;
 
-	packet_args.ops.complete = ssh_rtl_packet_callback;
-	packet_args.ops.release = ssh_rtl_packet_release;
+	packet_args.ops = &ssh_rtl_packet_ops;
 
 	status = ssh_packet_init(&rqst->packet, &packet_args);
 	if (status)
