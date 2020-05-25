@@ -815,14 +815,17 @@ struct ssh_packet_ops {
 };
 
 struct ssh_packet {
+	struct ssh_ptl *ptl;
 	struct kref refcnt;
 
-	struct ssh_ptl *ptl;
+	unsigned char type;
+	unsigned char priority;
+	unsigned short data_length;
+	unsigned char *data;
+
 	struct list_head queue_node;
 	struct list_head pending_node;
 
-	enum ssh_packet_type_flags type;
-	enum ssh_packet_priority priority;
 	unsigned long state;
 
 	struct completion transmitted;
@@ -833,11 +836,6 @@ struct ssh_packet {
 		struct timer_list timer;
 		struct work_struct work;
 	} timeout;
-
-	struct {
-		unsigned char *ptr;
-		size_t len;
-	} buffer;
 
 	const struct ssh_packet_ops *ops;
 };
@@ -911,7 +909,7 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 
 static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
-	return packet->buffer.ptr[SSH_MSG_OFFS_SEQ];
+	return packet->data[SSH_MSG_OFFS_SEQ];
 }
 
 
@@ -966,8 +964,8 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
 	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
 
-	packet->buffer.ptr = NULL;
-	packet->buffer.len = 0;
+	packet->data_length = 0;
+	packet->data = NULL;
 
 	packet->ops = args->ops;
 
@@ -993,8 +991,8 @@ static struct ssh_packet *ptl_alloc_ctrl_packet(
 		return NULL;
 
 	ssh_packet_init(packet, args);
-	packet->buffer.ptr = ((u8 *) packet) + sizeof(struct ssh_packet);
-	packet->buffer.len = SSH_MSG_LEN_CTRL;
+	packet->data_length = SSH_MSG_LEN_CTRL;
+	packet->data = ((u8 *) packet) + sizeof(struct ssh_packet);
 
 	return packet;
 }
@@ -1344,8 +1342,8 @@ static int ssh_ptl_tx_threadfn(void *data)
 			}
 		}
 
-		buf = ptl->tx.packet->buffer.ptr + ptl->tx.offset;
-		len = ptl->tx.packet->buffer.len - ptl->tx.offset;
+		buf = ptl->tx.packet->data + ptl->tx.offset;
+		len = ptl->tx.packet->data_length - ptl->tx.offset;
 
 		ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
 		print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, buf,
@@ -1722,9 +1720,9 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 		return;
 	}
 
-	msgb_init(&msgb, packet->buffer.ptr, packet->buffer.len);
+	msgb_init(&msgb, packet->data, packet->data_length);
 	msgb_push_ack(&msgb, seq);
-	packet->buffer.len = msgb_bytes_used(&msgb);
+	packet->data_length = msgb_bytes_used(&msgb);
 
 	ssh_ptl_submit(ptl, packet);
 }
@@ -2007,7 +2005,7 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 
 static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
-	return get_unaligned_le16(rqst->packet.buffer.ptr + SSH_MSG_OFFS_RQID);
+	return get_unaligned_le16(rqst->packet.data + SSH_MSG_OFFS_RQID);
 }
 
 
