@@ -1854,6 +1854,11 @@ static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 }
 
 
+static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
+{
+	return &ptl->serdev->dev;
+}
+
 static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 			struct ssh_ptl_ops *ops)
 {
@@ -2611,6 +2616,11 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
 	}
 }
 
+
+static inline struct device *ssh_rtl_get_device(struct ssh_rtl *rtl)
+{
+	return ssh_ptl_get_device(&rtl->ptl);
+}
 
 static bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
 {
