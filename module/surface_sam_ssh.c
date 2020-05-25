@@ -1953,7 +1953,7 @@ struct ssh_request {
 		struct work_struct work;
 	} timeout;
 
-	struct ssh_request_ops ops;
+	const struct ssh_request_ops *ops;
 };
 
 struct ssh_rtl_ops {
@@ -2247,7 +2247,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 			" status: %d)\n", ssh_request_get_rqid(rqst), status);
 	}
 
-	rqst->ops.complete(rqst, NULL, NULL, status);
+	rqst->ops->complete(rqst, NULL, NULL, status);
 }
 
 static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
@@ -2257,7 +2257,7 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 	rtl_dbg(rqst->rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
 
-	rqst->ops.complete(rqst, cmd, data, 0);
+	rqst->ops->complete(rqst, cmd, data, 0);
 }
 
 static void ssh_rtl_complete(struct ssh_rtl *rtl,
@@ -2684,7 +2684,7 @@ enum ssh_request_flags {
 static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
 	struct ssh_request *rqst = to_ssh_request(p, packet);
-	rqst->ops.release(rqst);
+	rqst->ops->release(rqst);
 }
 
 static const struct ssh_packet_ops ssh_rtl_packet_ops = {
@@ -2725,7 +2725,7 @@ static int ssh_request_init(struct ssh_request *rqst,
 	timer_setup(&rqst->timeout.timer, ssh_rtl_timeout_tfn, 0);
 	INIT_WORK(&rqst->timeout.work, ssh_rtl_timeout_wfn);
 
-	rqst->ops = *ops;
+	rqst->ops = ops;
 
 	return 0;
 }
