@@ -62,6 +62,26 @@
 
 /* -- Public interface. ----------------------------------------------------- */
 
+enum ssam_request_flags {
+	SSAM_REQUEST_EXPECTS_RESPONSE = BIT(0),
+	SSAM_REQUEST_UNSEQUENCED      = BIT(1),
+};
+
+enum ssam_request_priority {
+	SSAM_PRIORITY_NORMAL = 1,
+	SSAM_PRIORITY_HIGH,
+};
+
+struct ssam_request {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 priority;
+	u16 flags;
+	u16 length;
+	u8 *payload;
+};
+
 struct ssam_event {
 	u8 target_category;
 	u8 command_id;
