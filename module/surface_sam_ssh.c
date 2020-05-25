@@ -891,10 +891,13 @@ struct ssh_ptl {
 #define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 
+#define to_ssh_packet(ptr, member) \
+	container_of(ptr, struct ssh_packet, member)
+
 
 static void __ssh_ptl_packet_release(struct kref *kref)
 {
-	struct ssh_packet *p = container_of(kref, struct ssh_packet, refcnt);
+	struct ssh_packet *p = to_ssh_packet(kref, refcnt);
 	p->ops.release(p);
 }
 
@@ -1629,9 +1632,8 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 
 static void ssh_ptl_timeout_wfn(struct work_struct *work)
 {
-	struct ssh_packet *p;
+	struct ssh_packet *p = to_ssh_packet(work, timeout.work);
 
-	p = container_of(work, struct ssh_packet, timeout.work);
 	p->timeout.count += 1;
 
 	ptl_dbg(p->ptl, "ptl: packet timed out (packet = %p)", p);
@@ -1668,9 +1670,7 @@ static void ssh_ptl_timeout_wfn(struct work_struct *work)
 
 static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 {
-	struct ssh_packet *packet;
-
-	packet = container_of(tl, struct ssh_packet, timeout.timer);
+	struct ssh_packet *packet = to_ssh_packet(tl, timeout.timer);
 	schedule_work(&packet->timeout.work);
 }
 
@@ -1982,6 +1982,12 @@ struct ssh_rtl {
 #define rtl_warn(r, fmt, ...) ptl_warn(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_err(r, fmt, ...)  ptl_err(&(r)->ptl, fmt, ##__VA_ARGS__)
 
+#define to_ssh_rtl(ptr, member) \
+	container_of(ptr, struct ssh_rtl, member)
+
+#define to_ssh_request(ptr, member) \
+	container_of(ptr, struct ssh_request, member)
+
 
 static inline void ssh_request_get(struct ssh_request *rqst)
 {
@@ -2104,7 +2110,7 @@ static inline bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
 
 static void ssh_rtl_tx_work_fn(struct work_struct *work)
 {
-	struct ssh_rtl *rtl = container_of(work, struct ssh_rtl, tx.work);
+	struct ssh_rtl *rtl = to_ssh_rtl(work, tx.work);
 	int i, status;
 
 	/*
@@ -2479,7 +2485,7 @@ static bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 
 static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 {
-	struct ssh_request *r = container_of(p, struct ssh_request, packet);
+	struct ssh_request *r = to_ssh_request(p, packet);
 
 	if (unlikely(status)) {
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
@@ -2537,11 +2543,8 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 
 static void ssh_rtl_timeout_wfn(struct work_struct *work)
 {
-	struct ssh_request *rqst;
-	struct ssh_rtl *rtl;
-
-	rqst = container_of(work, struct ssh_request, timeout.work);
-	rtl = rqst->rtl;
+	struct ssh_request *rqst = to_ssh_request(work, timeout.work);
+	struct ssh_rtl *rtl = rqst->rtl;
 
 	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &rqst->state))
@@ -2561,9 +2564,7 @@ static void ssh_rtl_timeout_wfn(struct work_struct *work)
 
 static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 {
-	struct ssh_request *rqst;
-
-	rqst = container_of(tl, struct ssh_request, timeout.timer);
+	struct ssh_request *rqst = to_ssh_request(tl, timeout.timer);
 	schedule_work(&rqst->timeout.work);
 }
 
@@ -2581,7 +2582,7 @@ static inline void ssh_rtl_rx_event(struct ssh_rtl *rtl,
 static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
 				      const struct sshp_span *data)
 {
-	struct ssh_rtl *rtl = container_of(p, struct ssh_rtl, ptl);
+	struct ssh_rtl *rtl = to_ssh_rtl(p, ptl);
 	struct device *dev = &p->serdev->dev;
 	struct ssh_command *command;
 	struct sshp_span command_data;
@@ -2675,7 +2676,7 @@ enum ssh_request_flags {
 
 static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
-	struct ssh_request *rqst = container_of(p, struct ssh_request, packet);
+	struct ssh_request *rqst = to_ssh_request(p, packet);
 	rqst->ops.release(rqst);
 }
 
