@@ -828,8 +828,6 @@ struct ssh_packet {
 
 	unsigned long state;
 
-	struct completion transmitted;
-
 	struct {
 		unsigned int count;
 		struct mutex lock;
@@ -859,9 +857,10 @@ struct ssh_ptl {
 	} pending;
 
 	struct {
+		bool thread_signal;
 		struct task_struct *thread;
-		struct wait_queue_head wq;
-		bool signal;
+		struct wait_queue_head thread_wq;
+		struct wait_queue_head packet_wq;
 		struct ssh_packet *packet;
 		size_t offset;
 	} tx;
@@ -956,8 +955,6 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->pending_node);
 
 	packet->state = 0;
-
-	init_completion(&packet->transmitted);
 
 	packet->timeout.count = 0;
 	mutex_init(&packet->timeout.lock);
@@ -1237,13 +1234,9 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 		list_del(&p->queue_node);
 
 		/*
-		 * Re-initialize completion for transmit, ensure that this
-		 * happens before we set the "transmitting" bit. Also ensure
-		 * that the "queued" bit gets cleared after setting the
+		 * Ensure that the "queued" bit gets cleared after setting the
 		 * "transmitting" bit to guaranteee non-zero flags.
 		 */
-		reinit_completion(&p->transmitted);
-		smp_mb__before_atomic();
 		set_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state);
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
@@ -1295,7 +1288,11 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 		ssh_ptl_remove_and_complete(packet, 0);
 	}
 
-	complete_all(&packet->transmitted);
+	/*
+	 * Notify that a packet transmission has finished. In general we're only
+	 * waiting for one packet (if any), so wake_up_all should be fine.
+	 */
+	wake_up_all(&ptl->tx.packet_wq);
 }
 
 static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
@@ -1312,14 +1309,19 @@ static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 	ptl_dbg(packet->ptl, "ptl: failed to transmit packet: %p\n", packet);
 
 	ssh_ptl_remove_and_complete(packet, status);
-	complete_all(&packet->transmitted);
+
+	/*
+	 * Notify that a packet transmission has finished. In general we're only
+	 * waiting for one packet (if any), so wake_up_all should be fine.
+	 */
+	wake_up_all(&packet->ptl->tx.packet_wq);
 }
 
 static void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
 {
-	wait_event_interruptible(ptl->tx.wq, READ_ONCE(ptl->tx.signal)
-				 || kthread_should_stop());
-	WRITE_ONCE(ptl->tx.signal, false);
+	wait_event_interruptible(ptl->tx.thread_wq,
+		READ_ONCE(ptl->tx.thread_signal) || kthread_should_stop());
+	WRITE_ONCE(ptl->tx.thread_signal, false);
 }
 
 static int ssh_ptl_tx_threadfn(void *data)
@@ -1382,9 +1384,9 @@ static int ssh_ptl_tx_threadfn(void *data)
 static inline void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
 {
 	if (force || atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING) {
-		WRITE_ONCE(ptl->tx.signal, true);
+		WRITE_ONCE(ptl->tx.thread_signal, true);
 		smp_mb__after_atomic();
-		wake_up(&ptl->tx.wq);
+		wake_up(&ptl->tx.thread_wq);
 	}
 }
 
@@ -1453,6 +1455,13 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 	return packet;
 }
 
+static void ssh_ptl_wait_until_transmitted(struct ssh_packet *packet)
+{
+	wait_event(packet->ptl->tx.packet_wq,
+		   test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &packet->state)
+		   || test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state));
+}
+
 static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 {
 	struct ssh_packet *p;
@@ -1484,9 +1493,8 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	 * In that case, we need to wait for this transition to occur in order
 	 * to determine between success or failure.
 	 */
-	if (unlikely(!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state)))
-		if (likely(test_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state)))
-			wait_for_completion(&p->transmitted);
+	if (test_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state))
+		ssh_ptl_wait_until_transmitted(p);
 
 	/*
 	 * The packet will already be locked in case of a transmission error or
@@ -1872,10 +1880,11 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	atomic_set_release(&ptl->pending.count, 0);
 
 	ptl->tx.thread = NULL;
-	init_waitqueue_head(&ptl->tx.wq);
-	ptl->tx.signal = false;
+	ptl->tx.thread_signal = false;
 	ptl->tx.packet = NULL;
 	ptl->tx.offset = 0;
+	init_waitqueue_head(&ptl->tx.thread_wq);
+	init_waitqueue_head(&ptl->tx.packet_wq);
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
