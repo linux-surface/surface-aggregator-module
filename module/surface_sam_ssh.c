@@ -1952,7 +1952,7 @@ struct ssh_request {
 };
 
 struct ssh_rtl_ops {
-	void (*handle_event)(const struct ssh_command *cmd,
+	void (*handle_event)(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 			     const struct sshp_span *data);
 };
 
@@ -2575,7 +2575,7 @@ static inline void ssh_rtl_rx_event(struct ssh_rtl *rtl,
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
 		get_unaligned_le16(&cmd->rqid));
 
-	rtl->ops.handle_event(cmd, data);
+	rtl->ops.handle_event(rtl, cmd, data);
 }
 
 static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
