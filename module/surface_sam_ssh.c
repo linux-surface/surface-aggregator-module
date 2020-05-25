@@ -912,7 +912,7 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 }
 
 
-static u8 ssh_packet_get_seq(struct ssh_packet *packet)
+static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
 	return packet->buffer.ptr[SSH_MSG_OFFS_SEQ];
 }
@@ -983,10 +983,9 @@ static void ssh_packet_destroy(struct ssh_packet *packet)
 }
 
 
-static inline
-struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
-					 const struct ssh_packet_args *args,
-					 gfp_t flags)
+static struct ssh_packet *ptl_alloc_ctrl_packet(
+			struct ssh_ptl *ptl, const struct ssh_packet_args *args,
+			gfp_t flags)
 {
 	struct ssh_packet *packet;
 
@@ -1003,7 +1002,7 @@ struct ssh_packet *ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 	return packet;
 }
 
-static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
+static void ptl_free_ctrl_packet(struct ssh_packet *p)
 {
 	// TODO: chache packets
 
@@ -1012,7 +1011,7 @@ static inline void ptl_free_ctrl_packet(struct ssh_packet *p)
 }
 
 
-static inline void ssh_ptl_timeout_start(struct ssh_packet *packet)
+static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 {
 	// if this fails, someone else is setting or cancelling the timeout
 	if (!mutex_trylock(&packet->timeout.lock))
@@ -1027,7 +1026,7 @@ static inline void ssh_ptl_timeout_start(struct ssh_packet *packet)
 	mutex_unlock(&packet->timeout.lock);
 }
 
-static inline void ssh_ptl_timeout_cancel_sync(struct ssh_packet *packet)
+static void ssh_ptl_timeout_cancel_sync(struct ssh_packet *packet)
 {
 	bool pending;
 
@@ -1041,7 +1040,7 @@ static inline void ssh_ptl_timeout_cancel_sync(struct ssh_packet *packet)
 }
 
 
-static inline int ssh_ptl_queue_add(struct ssh_packet *p, struct list_head *h)
+static int ssh_ptl_queue_add(struct ssh_packet *p, struct list_head *h)
 {
 	// avoid further transitions when cancelling/completing
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
@@ -1091,7 +1090,7 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 	return status;
 }
 
-static inline void ssh_ptl_queue_remove(struct ssh_packet *packet)
+static void ssh_ptl_queue_remove(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 	bool remove;
@@ -1109,7 +1108,7 @@ static inline void ssh_ptl_queue_remove(struct ssh_packet *packet)
 }
 
 
-static inline void ssh_ptl_pending_push(struct ssh_packet *packet)
+static void ssh_ptl_pending_push(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 
@@ -1134,7 +1133,7 @@ static inline void ssh_ptl_pending_push(struct ssh_packet *packet)
 	spin_unlock(&ptl->pending.lock);
 }
 
-static inline void ssh_ptl_pending_remove(struct ssh_packet *packet)
+static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 	bool remove;
@@ -1154,14 +1153,14 @@ static inline void ssh_ptl_pending_remove(struct ssh_packet *packet)
 }
 
 
-static inline void __ssh_ptl_complete(struct ssh_packet *p, int status)
+static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	ptl_dbg(p->ptl, "ptl: completing packet %p\n", p);
 	if (p->ops.complete)
 		p->ops.complete(p, status);
 }
 
-static inline void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
+static void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 {
 	/*
 	 * A call to this function should in general be preceeded by
@@ -1184,7 +1183,7 @@ static inline void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 }
 
 
-static inline bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
+static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 
@@ -1200,7 +1199,7 @@ static inline bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 	return atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING;
 }
 
-static inline struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
+static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *packet = ERR_PTR(-ENOENT);
 	struct ssh_packet *p, *n;
@@ -1257,7 +1256,7 @@ static inline struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 	return packet;
 }
 
-static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
+static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *p;
 
@@ -1276,7 +1275,7 @@ static inline struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	return p;
 }
 
-static inline void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
+static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 
@@ -1299,7 +1298,7 @@ static inline void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 	complete_all(&packet->transmitted);
 }
 
-static inline void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
+static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 {
 	/*
 	 * Transmission failure: Lock the packet and try to complete it. Ensure
@@ -1316,7 +1315,7 @@ static inline void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 	complete_all(&packet->transmitted);
 }
 
-static inline void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
+static void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
 {
 	wait_event_interruptible(ptl->tx.wq, READ_ONCE(ptl->tx.signal)
 				 || kthread_should_stop());
@@ -1389,7 +1388,7 @@ static inline void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
 	}
 }
 
-static inline int ssh_ptl_tx_start(struct ssh_ptl *ptl)
+static int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 {
 	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl, "surface-sh-tx");
 	if (IS_ERR(ptl->tx.thread))
@@ -1398,7 +1397,7 @@ static inline int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 	return 0;
 }
 
-static inline int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
+static int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 {
 	int status = 0;
 
@@ -1675,7 +1674,7 @@ static void ssh_ptl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static inline bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
+static bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
 {
 	int i;
 
@@ -1821,7 +1820,7 @@ static inline void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
 	wake_up(&ptl->rx.wq);
 }
 
-static inline int ssh_ptl_rx_start(struct ssh_ptl *ptl)
+static int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 {
 	ptl->rx.thread = kthread_run(ssh_ptl_rx_threadfn, ptl, "surface-sh-rx");
 	if (IS_ERR(ptl->rx.thread))
@@ -1830,7 +1829,7 @@ static inline int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 	return 0;
 }
 
-static inline int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
+static int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 {
 	int status = 0;
 
@@ -1842,7 +1841,7 @@ static inline int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 	return status;
 }
 
-static inline int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
+static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 {
 	int used;
 
@@ -2005,13 +2004,13 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 }
 
 
-static u16 ssh_request_get_rqid(struct ssh_request *rqst)
+static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
 	return get_unaligned_le16(rqst->packet.buffer.ptr + SSH_MSG_OFFS_RQID);
 }
 
 
-static inline struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
+static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst = ERR_PTR(-ENOENT);
 	struct ssh_request *p, *n;
@@ -2044,7 +2043,7 @@ static inline struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 	return rqst;
 }
 
-static inline int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
+static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 {
 	struct ssh_rtl *rtl = rqst->rtl;
 
@@ -2068,7 +2067,7 @@ static inline int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 	return 0;
 }
 
-static inline int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
+static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst;
 	int status;
@@ -2173,7 +2172,7 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 }
 
 
-static inline void ssh_rtl_queue_remove(struct ssh_request *rqst)
+static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
 	bool remove;
 
@@ -2189,7 +2188,7 @@ static inline void ssh_rtl_queue_remove(struct ssh_request *rqst)
 		ssh_request_put(rqst);
 }
 
-static inline void ssh_rtl_pending_remove(struct ssh_request *rqst)
+static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
 	bool remove;
 
@@ -2208,7 +2207,7 @@ static inline void ssh_rtl_pending_remove(struct ssh_request *rqst)
 }
 
 
-static inline void ssh_rtl_timeout_start(struct ssh_request *rqst)
+static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 {
 	// if this fails, someone else is setting or cancelling the timeout
 	if (!mutex_trylock(&rqst->timeout.lock))
@@ -2223,7 +2222,7 @@ static inline void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	mutex_unlock(&rqst->timeout.lock);
 }
 
-static inline void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
+static void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
 {
 	bool pending;
 
@@ -2237,8 +2236,7 @@ static inline void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
 }
 
 
-static inline void ssh_rtl_complete_with_status(struct ssh_request *rqst,
-						int status)
+static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 {
 	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
@@ -2251,9 +2249,9 @@ static inline void ssh_rtl_complete_with_status(struct ssh_request *rqst,
 	rqst->ops.complete(rqst, NULL, NULL, status);
 }
 
-static inline void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
-					     const struct ssh_command *cmd,
-					     const struct sshp_span *data)
+static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
+				      const struct ssh_command *cmd,
+				      const struct sshp_span *data)
 {
 	rtl_dbg(rqst->rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
@@ -2367,7 +2365,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 }
 
 
-static inline bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
+static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
 	unsigned long state;
 	bool remove;
@@ -2424,7 +2422,7 @@ static inline bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	return true;
 }
 
-static inline bool ssh_rtl_cancel_pending(struct ssh_request *r)
+static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 {
 	// if the packet is already locked, it's going to be removed shortly
 	if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
@@ -2574,9 +2572,8 @@ static void ssh_rtl_timeout_tfn(struct timer_list *tl)
 }
 
 
-static inline void ssh_rtl_rx_event(struct ssh_rtl *rtl,
-				    const struct ssh_command *cmd,
-				    const struct sshp_span *data)
+static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
+			     const struct sshp_span *data)
 {
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
 		get_unaligned_le16(&cmd->rqid));
@@ -2584,8 +2581,7 @@ static inline void ssh_rtl_rx_event(struct ssh_rtl *rtl,
 	rtl->ops.handle_event(rtl, cmd, data);
 }
 
-static inline void ssh_rtl_rx_command(struct ssh_ptl *p,
-				      const struct sshp_span *data)
+static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct sshp_span *data)
 {
 	struct ssh_rtl *rtl = to_ssh_rtl(p, ptl);
 	struct device *dev = &p->serdev->dev;
@@ -2622,27 +2618,27 @@ static inline struct device *ssh_rtl_get_device(struct ssh_rtl *rtl)
 	return ssh_ptl_get_device(&rtl->ptl);
 }
 
-static bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
+static inline bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
 {
 	return flush_work(&rtl->tx.work);
 }
 
-static int ssh_rtl_tx_start(struct ssh_rtl *rtl)
+static inline int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_tx_start(&rtl->ptl);
 }
 
-static int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
+static inline int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_tx_stop(&rtl->ptl);
 }
 
-static int ssh_rtl_rx_start(struct ssh_rtl *rtl)
+static inline int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_rx_start(&rtl->ptl);
 }
 
-static int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
+static inline int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_rx_stop(&rtl->ptl);
 }
