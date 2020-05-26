@@ -2084,13 +2084,7 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 #define SSH_RTL_REQUEST_TIMEOUT		msecs_to_jiffies(1000)
 #define SSH_RTL_MAX_PENDING		3
 
-enum ssh_request_type_flags {
-	SSH_REQUEST_TY_EXPRESP_BIT,
-
-	SSH_REQUEST_TY_EXPRESP = BIT(SSH_REQUEST_TY_EXPRESP_BIT),
-};
-
-enum ssh_request_state_flags {
+enum ssh_request_flags {
 	SSH_REQUEST_SF_LOCKED_BIT,
 	SSH_REQUEST_SF_QUEUED_BIT,
 	SSH_REQUEST_SF_PENDING_BIT,
@@ -2098,6 +2092,8 @@ enum ssh_request_state_flags {
 	SSH_REQUEST_SF_TRANSMITTED_BIT,
 	SSH_REQUEST_SF_RSPRCVD_BIT,
 	SSH_REQUEST_SF_COMPLETED_BIT,
+
+	SSH_REQUEST_TY_EXPRESP_BIT,
 };
 
 struct ssh_rtl;
@@ -2116,7 +2112,6 @@ struct ssh_request {
 	struct list_head queue_node;
 	struct list_head pending_node;
 
-	enum ssh_request_type_flags type;
 	unsigned long state;
 
 	struct {
@@ -2315,7 +2310,7 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 	 * invariant ever changes, see the comment in ssh_rtl_complete on what
 	 * is required to be changed in the code.
 	 */
-	if (rqst->type & SSH_REQUEST_TY_EXPRESP)
+	if (test_bit(SSH_REQUEST_TY_EXPRESP_BIT, &rqst->state))
 		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
 			return -EINVAL;
 
@@ -2693,7 +2688,7 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 	clear_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &r->state);
 
 	// if we expect a response, we just need to start the timeout
-	if (r->type & SSH_REQUEST_TY_EXPRESP) {
+	if (test_bit(SSH_REQUEST_TY_EXPRESP_BIT, &r->state)) {
 		ssh_rtl_timeout_start(r);
 		return;
 	}
@@ -2848,7 +2843,7 @@ static void ssh_rtl_destroy(struct ssh_rtl *rtl)
 }
 
 
-enum ssh_request_flags {
+enum ssh_request_init_flags {
 	SSH_REQUEST_EXPRESP = BIT(0),
 	SSH_REQUEST_NONSEQ  = BIT(1),
 };
@@ -2865,7 +2860,7 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 };
 
 static int ssh_request_init(struct ssh_request *rqst,
-			    enum ssh_request_flags flags,
+			    enum ssh_request_init_flags flags,
 			    const struct ssh_request_ops *ops)
 {
 	int status;
@@ -2887,11 +2882,9 @@ static int ssh_request_init(struct ssh_request *rqst,
 	INIT_LIST_HEAD(&rqst->pending_node);
 
 	if (flags & SSH_REQUEST_EXPRESP)
-		rqst->type = SSH_REQUEST_TY_EXPRESP;
+		rqst->state = BIT(SSH_REQUEST_TY_EXPRESP_BIT);
 	else
-		rqst->type = 0;
-
-	rqst->state = 0;
+		rqst->state = 0;
 
 	mutex_init(&rqst->timeout.lock);
 	timer_setup(&rqst->timeout.timer, ssh_rtl_timeout_tfn, 0);
