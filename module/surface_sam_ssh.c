@@ -926,9 +926,6 @@ static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 }
 
 
-static void ssh_ptl_timeout_tfn(struct timer_list *tl);
-static void ssh_ptl_timeout_wfn(struct work_struct *w);
-
 struct ssh_packet_args {
 	enum ssh_frame_type frame_type;
 	const struct ssh_packet_ops *ops;
