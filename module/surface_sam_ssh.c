@@ -838,12 +838,17 @@ struct ssh_packet {
 	const struct ssh_packet_ops *ops;
 };
 
+enum ssh_ptl_state_flags {
+	SSH_PTL_SF_SHUTDOWN_BIT,
+};
+
 struct ssh_ptl_ops {
 	void (*data_received)(struct ssh_ptl *p, const struct sshp_span *data);
 };
 
 struct ssh_ptl {
 	struct serdev_device *serdev;
+	unsigned long state;
 
 	struct {
 		spinlock_t lock;
@@ -1013,6 +1018,9 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 	unsigned long delta = msecs_to_jiffies(ktime_ms_delta(expires, now));
 	ktime_t exp_adj = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
 	ktime_t old;
+
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
+		return;
 
 	// re-adjust / schedule reaper if it is above resolution delta
 	old = READ_ONCE(ptl->rtx_timeout.expires);
@@ -1533,6 +1541,9 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
 	int status;
 
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
+		return -ESHUTDOWN;
+
 	/*
 	 * This function is currently not intended for re-submission. The ptl
 	 * reference only gets set on the first submission. After the first
@@ -1930,6 +1941,7 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	int i, status;
 
 	ptl->serdev = serdev;
+	ptl->state = 0;
 
 	spin_lock_init(&ptl->queue.lock);
 	INIT_LIST_HEAD(&ptl->queue.head);
@@ -1974,6 +1986,93 @@ static void ssh_ptl_destroy(struct ssh_ptl *ptl)
 {
 	kfifo_free(&ptl->rx.fifo);
 	sshp_buf_free(&ptl->rx.buf);
+}
+
+static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
+{
+	LIST_HEAD(complete_q);
+	LIST_HEAD(complete_p);
+	struct ssh_packet *p, *n;
+	int status;
+
+	// ensure that reaper cannot be queued and no new packets submitted
+	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
+	smp_mb__after_atomic();
+
+	status = ssh_ptl_rx_stop(ptl);
+	if (status)
+		ptl_err(ptl, "ptl: failed to stop receiver thread\n");
+
+	status = ssh_ptl_tx_stop(ptl);
+	if (status)
+		ptl_err(ptl, "ptl: failed to stop transmitter thread\n");
+
+	cancel_delayed_work_sync(&ptl->rtx_timeout.reaper);
+
+	/*
+	 * At this point, all threads have been stopped. This means that the
+	 * only references to packets from inside the system are in the queue
+	 * and pending set.
+	 *
+	 * Note: We still need locks here because someone could still be
+	 * cancelling packets.
+	 *
+	 * Note 2: We can re-use queue_node (or pending_node) if we mark the
+	 * packet as locked an then remove it from the queue (or pending set
+	 * respecitvely). Marking the packet as locked avoids re-queueing
+	 * (which should already be prevented by having stopped the treads...)
+	 * and not setting QUEUED_BIT (or PENDING_BIT) prevents removal from a
+	 * new list via other threads (e.g. canellation).
+	 *
+	 * Note 3: There may be overlap between complete_p and complete_q.
+	 * This is handled via test_and_set_bit on the "completed" flag
+	 * (also handles cancelation).
+	 */
+
+	// mark queued packets as locked and move them to complete_q
+	spin_lock(&ptl->queue.lock);
+	list_for_each_entry_safe(p, n, &ptl->queue.head, queue_node) {
+		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
+		smp_mb__before_atomic();
+		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
+
+		list_del(&p->queue_node);
+		list_add_tail(&p->queue_node, &complete_q);
+	}
+	spin_unlock(&ptl->queue.lock);
+
+	// mark pending packets as locked and move them to complete_p
+	spin_lock(&ptl->pending.lock);
+	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
+		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
+		smp_mb__before_atomic();
+		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
+
+		list_del(&p->pending_node);
+		list_add_tail(&p->pending_node, &complete_q);
+	}
+	spin_unlock(&ptl->pending.lock);
+
+	// complete and drop packets on complete_q
+	list_for_each_entry(p, &complete_q, queue_node) {
+		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
+			__ssh_ptl_complete(p, -ESHUTDOWN);
+
+		ssh_packet_put(p);
+	}
+
+	// complete and drop packets on complete_p
+	list_for_each_entry(p, &complete_p, pending_node) {
+		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
+			__ssh_ptl_complete(p, -ESHUTDOWN);
+
+		ssh_packet_put(p);
+	}
+
+	/*
+	 * At this point we have guaranteed that the system doesn't reference
+	 * any packets any more.
+	 */
 }
 
 
