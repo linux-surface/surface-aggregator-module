@@ -824,10 +824,10 @@ struct ssh_packet {
 	struct ssh_ptl *ptl;
 	struct kref refcnt;
 
-	unsigned char type;
-	unsigned char priority;
-	unsigned short data_length;
-	unsigned char *data;
+	u8 type;
+	u8 priority;
+	u16 data_length;
+	u8 *data;
 
 	unsigned long state;
 	ktime_t timestamp;
