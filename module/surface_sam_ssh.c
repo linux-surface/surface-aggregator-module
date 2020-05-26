@@ -1601,8 +1601,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 
 static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 {
-	struct ssh_packet *p, *q;
-	struct list_head *head;
+	struct ssh_packet *p;
 	u8 try;
 
 	/*
