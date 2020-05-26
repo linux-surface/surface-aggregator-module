@@ -14,9 +14,10 @@
 #include <linux/interrupt.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
-#include <linux/kthread.h>
 #include <linux/kfifo.h>
 #include <linux/kref.h>
+#include <linux/kthread.h>
+#include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/notifier.h>
@@ -660,7 +661,7 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * - the pending set,
  * - the transmitter thread,
  * - the receiver thread (via ACKing), and
- * - the timeout timer/work item.
+ * - the timeout work item.
  *
  * Normal operation is as follows: The initial reference of the packet is
  * obtained by submitting the packet and queueing it. The receiver thread
@@ -668,11 +669,11 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * refcount but takes over the reference (removing it from the queue).
  * If the packet is sequenced (i.e. needs to be ACKed by the client), the
  * transmitter thread sets-up the timeout and adds the packet to the pending set
- * before starting to transmit it. This effectively increases distributes two
- * additional references, one to the timeout and one to the pending set.
- * After the transmit is done, the reference hold by the transmitter thread
- * is dropped. If the packet is unsequenced (i.e. does not need an ACK), the
- * packet is completed by the transmitter thread before dropping that reference.
+ * before starting to transmit it. As the timeout is handled by a reaper task,
+ * no additional reference for it is needed. After the transmit is done, the
+ * reference hold by the transmitter thread is dropped. If the packet is
+ * unsequenced (i.e. does not need an ACK), the packet is completed by the
+ * transmitter thread before dropping that reference.
  *
  * On receial of an ACK, the receiver thread removes and obtains the refernce to
  * the packet from the pending set. On succes, the receiver thread will then
@@ -688,10 +689,8 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * to the queue, the pending set, and the timeout, or be picked up by the
  * transmitter thread or receiver thread. To remove a packet from the system it
  * has to be marked as locked and subsequently all references from the data
- * structures (queue, pending) have to be removed. It is also advisable to
- * cancel the timeout and removing any implicit references hold by it.
- * References held by threads will eventually be dropped automatically as their
- * execution progresses.
+ * structures (queue, pending) have to be removed. References held by threads
+ * will eventually be dropped automatically as their execution progresses.
  *
  * Note that the packet completion callback is, in case of success and for a
  * sequenced packet, guaranteed to run on the receiver thread, thus providing a
@@ -752,8 +751,8 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  *
  * >> General Notes <<
  *
- * To avoid deadlocks, data structure locks (queue/pending) must always be
- * acquired before the packet lock and released after.
+ * To avoid deadlocks, if both queue and pending locks are required, the pending
+ * lock must be acquired before the queue lock.
  */
 
 /**
@@ -763,10 +762,12 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 #define SSH_PTL_MAX_PACKET_TRIES	3
 
 /**
- * Timeout in jiffies for ACKs. If we have not received an ACK in this
+ * Timeout as ktime_t delta for ACKs. If we have not received an ACK in this
  * time-frame after starting transmission, the packet will be re-submitted.
  */
-#define SSH_PTL_PACKET_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_PTL_PACKET_TIMEOUT			ms_to_ktime(1000)
+
+#define SSH_PTL_PACKET_TIMEOUT_RESOLUTION	ms_to_ktime(50)
 
 /**
  * Maximum number of sequenced packets concurrently waiting for an ACK.
@@ -828,16 +829,11 @@ struct ssh_packet {
 	unsigned short data_length;
 	unsigned char *data;
 
+	unsigned long state;
+	ktime_t timestamp;
+
 	struct list_head queue_node;
 	struct list_head pending_node;
-
-	unsigned long state;
-
-	struct {
-		struct mutex lock;
-		struct timer_list timer;
-		struct work_struct work;
-	} timeout;
 
 	const struct ssh_packet_ops *ops;
 };
@@ -881,6 +877,12 @@ struct ssh_ptl {
 		} blacklist;
 	} rx;
 
+	struct {
+		ktime_t timeout;
+		ktime_t expires;
+		struct delayed_work reaper;
+	} rtx_timeout;
+
 	struct ssh_ptl_ops ops;
 };
 
@@ -891,6 +893,9 @@ struct ssh_ptl {
 
 #define to_ssh_packet(ptr, member) \
 	container_of(ptr, struct ssh_packet, member)
+
+#define to_ssh_ptl(ptr, member) \
+	container_of(ptr, struct ssh_ptl, member)
 
 
 static void __ssh_ptl_packet_release(struct kref *kref)
@@ -959,10 +964,7 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->pending_node);
 
 	packet->state = 0;
-
-	mutex_init(&packet->timeout.lock);
-	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
-	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
+	packet->timestamp = KTIME_MAX;
 
 	packet->data_length = 0;
 	packet->data = NULL;
@@ -970,11 +972,6 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	packet->ops = args->ops;
 
 	return 0;
-}
-
-static void ssh_packet_destroy(struct ssh_packet *packet)
-{
-	mutex_destroy(&packet->timeout.lock);
 }
 
 
@@ -1001,7 +998,6 @@ static void ptl_free_ctrl_packet(struct ssh_packet *p)
 {
 	// TODO: chache packets
 
-	ssh_packet_destroy(p);
 	kfree(p);
 }
 
@@ -1011,32 +1007,36 @@ static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
 };
 
 
+static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
+				       ktime_t expires)
+{
+	unsigned long delta = msecs_to_jiffies(ktime_ms_delta(expires, now));
+	ktime_t exp_adj = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
+	ktime_t old;
+
+	// re-adjust / schedule reaper if it is above resolution delta
+	old = READ_ONCE(ptl->rtx_timeout.expires);
+	while (ktime_before(exp_adj, old))
+		old = cmpxchg64(&ptl->rtx_timeout.expires, old, expires);
+
+	// if we updated the reaper expiration, modify work timeout
+	if (old == expires)
+		mod_delayed_work(system_wq, &ptl->rtx_timeout.reaper, delta);
+}
+
 static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 {
-	// if this fails, someone else is setting or cancelling the timeout
-	if (!mutex_trylock(&packet->timeout.lock))
-		return;
+	struct ssh_ptl *ptl = packet->ptl;
+	ktime_t timestamp = ktime_get_coarse_boottime();
+	ktime_t timeout = ptl->rtx_timeout.timeout;
 
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state))
 		return;
 
-	ssh_packet_get(packet);
-	mod_timer(&packet->timeout.timer, jiffies + SSH_PTL_PACKET_TIMEOUT);
+	WRITE_ONCE(packet->timestamp, timestamp);
+	smp_mb__after_atomic();
 
-	mutex_unlock(&packet->timeout.lock);
-}
-
-static void ssh_ptl_timeout_cancel_sync(struct ssh_packet *packet)
-{
-	bool pending;
-
-	mutex_lock(&packet->timeout.lock);
-	pending = del_timer_sync(&packet->timeout.timer);
-	pending |= cancel_work_sync(&packet->timeout.work);
-	mutex_unlock(&packet->timeout.lock);
-
-	if (pending)
-		ssh_packet_put(packet);
+	ssh_ptl_timeout_reaper_mod(packet->ptl, timestamp, timestamp + timeout);
 }
 
 
@@ -1175,7 +1175,6 @@ static void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 	if (test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
 		return;
 
-	ssh_ptl_timeout_cancel_sync(p);
 	ssh_ptl_queue_remove(p);
 	ssh_ptl_pending_remove(p);
 
@@ -1558,24 +1557,35 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 	return 0;
 }
 
-static int ssh_ptl_resubmit(struct ssh_packet *packet)
+static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
-	u8 num_try = ssh_packet_priority_get_try(READ_ONCE(packet->priority));
-	bool force_work;
-	int status;
+	struct list_head *head;
+	struct ssh_packet *q;
 
-	if (num_try >= SSH_PTL_MAX_PACKET_TRIES)
-		return -EINVAL;
+	spin_lock(&packet->ptl->queue.lock);
 
-	status = ssh_ptl_queue_push(packet);
-	if (status)
-		return status;
+	// if this packet has already been queued, do not add it
+	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state)) {
+		spin_unlock(&packet->ptl->queue.lock);
+		return;
+	}
 
-	force_work = test_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state);
-	force_work |= !(packet->type & SSH_PACKET_TY_BLOCKING);
+	// find first node with lower priority
+	list_for_each(head, &packet->ptl->queue.head) {
+		q = list_entry(head, struct ssh_packet, queue_node);
 
-	ssh_ptl_tx_wakeup(packet->ptl, force_work);
-	return 0;
+		if (READ_ONCE(packet->priority) > READ_ONCE(q->priority))
+			break;
+	}
+
+	WRITE_ONCE(packet->timestamp, KTIME_MAX);
+	smp_mb__after_atomic();
+
+	// add packet
+	ssh_packet_get(packet);
+	list_add_tail(&packet->queue_node, head);
+
+	spin_unlock(&packet->ptl->queue.lock);
 }
 
 static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
@@ -1595,7 +1605,6 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 	 * started yet).
 	 */
 
-	spin_lock(&ptl->queue.lock);
 	spin_lock(&ptl->pending.lock);
 
 	// re-queue all pending packets
@@ -1604,29 +1613,15 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
 
-		// if this packet has already been queued, do not add it
-		if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state))
-			continue;
-
 		// do not re-schedule if packet is out of tries
 		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
 		if (try >= SSH_PTL_MAX_PACKET_TRIES)
 			continue;
 
-		// find first node with lower priority
-		list_for_each(head, &ptl->queue.head) {
-			q = list_entry(head, struct ssh_packet, queue_node);
-
-			if (READ_ONCE(p->priority) > READ_ONCE(q->priority))
-				break;
-		}
-
-		ssh_packet_get(p);
-		list_add_tail(&p->queue_node, head);
+		__ssh_ptl_resubmit(p);
 	}
 
 	spin_unlock(&ptl->pending.lock);
-	spin_unlock(&ptl->queue.lock);
 
 	ssh_ptl_tx_wakeup(ptl, true);
 }
@@ -1666,45 +1661,83 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 }
 
 
-static void ssh_ptl_timeout_wfn(struct work_struct *work)
+static void ssh_ptl_timeout_reap(struct work_struct *work)
 {
-	struct ssh_packet *p = to_ssh_packet(work, timeout.work);
-	u8 try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
+	struct ssh_ptl *ptl = to_ssh_ptl(work, rtx_timeout.reaper.work);
+	struct ssh_packet *p, *n;
+	LIST_HEAD(timedout);
+	ktime_t now = ktime_get_coarse_boottime();
+	ktime_t timeout = ptl->rtx_timeout.timeout;
+	ktime_t next = KTIME_MAX;
 
-	ptl_dbg(p->ptl, "ptl: packet timed out (packet = %p)", p);
+	/*
+	 * Mark reaper as "not pending". This is done before checking any
+	 * packets to avoid lost-update type problems.
+	 */
+	WRITE_ONCE(ptl->rtx_timeout.expires, KTIME_MAX);
+	smp_mb__after_atomic();
 
-	if (likely(try <= SSH_PTL_MAX_PACKET_TRIES)) {
-		ssh_ptl_resubmit(p);
+	spin_lock(&ptl->pending.lock);
 
-	} else {
-		// we have reached the max number of timeouts: cancel packet
+	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
+		ktime_t expires = ktime_add(READ_ONCE(p->timestamp), timeout);
+		u8 try;
 
 		/*
-		 * Mark packet as locked. The memory barrier implied by
-		 * test_and_set_bit ensures that the flag is visible before we
-		 * attempt to remove it below.
+		 * Check if the timeout hasn't expired yet. Find out next
+		 * expiration date to be handled after this run.
 		 */
-		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
-
-		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
-			del_timer_sync(&p->timeout.timer);
-			ssh_ptl_queue_remove(p);
-			ssh_ptl_pending_remove(p);
-
-			ssh_ptl_tx_wakeup(p->ptl, false);
-			__ssh_ptl_complete(p, -ETIMEDOUT);
-
-			ssh_ptl_tx_wakeup(p->ptl, false);
+		if (ktime_after(expires, now)) {
+			next = ktime_before(expires, next) ? expires : next;
+			continue;
 		}
+
+		// avoid further transitions if locked
+		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
+			continue;
+
+		// check if we still have some tries left
+		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
+		if (likely(try < SSH_PTL_MAX_PACKET_TRIES)) {
+			__ssh_ptl_resubmit(p);
+			continue;
+		}
+
+		// no more tries left: cancel the packet
+
+		// if someone else has locked the packet already, don't use it
+		if (test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
+			continue;
+
+		/*
+		 * We have now marked the packet as locked. Thus it cannot be
+		 * added to the pending list again after we've removed it here.
+		 * We can therefore re-use the pending_node of this packet
+		 * temporarily.
+		 */
+
+		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
+		list_del(&p->pending_node);
+		list_add_tail(&p->pending_node, &timedout);
 	}
 
-	ssh_packet_put(p);
-}
+	spin_unlock(&ptl->pending.lock);
 
-static void ssh_ptl_timeout_tfn(struct timer_list *tl)
-{
-	struct ssh_packet *packet = to_ssh_packet(tl, timeout.timer);
-	schedule_work(&packet->timeout.work);
+	// cancel and complete the packet
+	list_for_each_entry(p, &timedout, pending_node) {
+		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
+			ssh_ptl_queue_remove(p);
+			__ssh_ptl_complete(p, -ETIMEDOUT);
+		}
+
+		// drop the reference we've obtained by removing it from pending
+		ssh_packet_put(p);
+	}
+
+	// ensure that reaper doesn't run again immediately
+	next = max(next, ktime_add(now, SSH_PTL_PACKET_TIMEOUT_RESOLUTION));
+	if (next != KTIME_MAX)
+		ssh_ptl_timeout_reaper_mod(ptl, now, next);
 }
 
 
@@ -1914,6 +1947,10 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	ptl->rx.thread = NULL;
 	init_waitqueue_head(&ptl->rx.wq);
+
+	ptl->rtx_timeout.timeout = SSH_PTL_PACKET_TIMEOUT;
+	ptl->rtx_timeout.expires = KTIME_MAX;
+	INIT_DELAYED_WORK(&ptl->rtx_timeout.reaper, ssh_ptl_timeout_reap);
 
 	ptl->ops = *ops;
 
@@ -2765,7 +2802,6 @@ static int ssh_request_init(struct ssh_request *rqst,
 
 static void ssh_request_destroy(struct ssh_request *rqst)
 {
-	ssh_packet_destroy(&rqst->packet);
 	mutex_destroy(&rqst->timeout.lock);
 }
 
