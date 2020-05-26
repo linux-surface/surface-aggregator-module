@@ -758,9 +758,9 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 
 /**
  * Maximum number transmission attempts per sequenced packet in case of
- * time-outs.
+ * time-outs. Must be smaller than 16.
  */
-#define SSH_PTL_MAX_PACKET_TIMEOUTS	3
+#define SSH_PTL_MAX_PACKET_TRIES	3
 
 /**
  * Timeout in jiffies for ACKs. If we have not received an ACK in this
@@ -780,12 +780,17 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 #define SSH_PTL_RX_FIFO_LEN		4096
 
 enum ssh_packet_priority {
-	SSH_PACKET_PRIORITY_MIN = 0,
+	SSH_PACKET_PRIORITY_MIN  = 0,
 	SSH_PACKET_PRIORITY_DATA = SSH_PACKET_PRIORITY_MIN,
-	SSH_PACKET_PRIORITY_DATA_RESUB,
-	SSH_PACKET_PRIORITY_NAK,
-	SSH_PACKET_PRIORITY_ACK,
+	SSH_PACKET_PRIORITY_NAK  = 1 << 4,
+	SSH_PACKET_PRIORITY_ACK  = 2 << 4,
 };
+
+#define SSH_PACKET_PRIORITY(base, n_resub) \
+	((SSH_PACKET_PRIORITY_##base) | ((n_resub) & 0x0f))
+
+#define ssh_packet_priority_get_try(p) ((p) & 0x0f)
+
 
 enum ssh_packet_type_flags {
 	SSH_PACKET_TY_SEQUENCED_BIT,
@@ -829,7 +834,6 @@ struct ssh_packet {
 	unsigned long state;
 
 	struct {
-		unsigned int count;
 		struct mutex lock;
 		struct timer_list timer;
 		struct work_struct work;
@@ -926,22 +930,22 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	switch (args->frame_type) {
 	case SSH_FRAME_TYPE_NAK:
 		packet->type = 0;
-		packet->priority = SSH_PACKET_PRIORITY_NAK;
+		packet->priority = SSH_PACKET_PRIORITY(NAK, 0);
 		break;
 
 	case SSH_FRAME_TYPE_ACK:
 		packet->type = 0;
-		packet->priority = SSH_PACKET_PRIORITY_ACK;
+		packet->priority = SSH_PACKET_PRIORITY(ACK, 0);
 		break;
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
 		packet->type = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_SEQUENCED;
-		packet->priority = SSH_PACKET_PRIORITY_DATA;
+		packet->priority = SSH_PACKET_PRIORITY(DATA, 0);
 		break;
 
 	case SSH_FRAME_TYPE_DATA_NSQ:
 		packet->type = SSH_PACKET_TY_BLOCKING;
-		packet->priority = SSH_PACKET_PRIORITY_DATA;
+		packet->priority = SSH_PACKET_PRIORITY(DATA, 0);
 		break;
 
 	default:
@@ -956,7 +960,6 @@ static int ssh_packet_init(struct ssh_packet *packet,
 
 	packet->state = 0;
 
-	packet->timeout.count = 0;
 	mutex_init(&packet->timeout.lock);
 	timer_setup(&packet->timeout.timer, ssh_ptl_timeout_tfn, TIMER_IRQSAFE);
 	INIT_WORK(&packet->timeout.work, ssh_ptl_timeout_wfn);
@@ -1265,6 +1268,14 @@ static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 		ptl_dbg(ptl, "ptl: transmitting non-sequenced packet %p\n", p);
 	}
 
+	/*
+	 * Update number of tries. This directly influences the priority in case
+	 * the packet is re-submitted (e.g. via timeout/NAK). Note that this is
+	 * the only place where we update the priority in-flight. As this runs
+	 * only on the tx-thread, this read-modify-write procedure is safe.
+	 */
+	WRITE_ONCE(p->priority, READ_ONCE(p->priority) + 1);
+
 	return p;
 }
 
@@ -1549,8 +1560,12 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 
 static int ssh_ptl_resubmit(struct ssh_packet *packet)
 {
+	u8 num_try = ssh_packet_priority_get_try(READ_ONCE(packet->priority));
 	bool force_work;
 	int status;
+
+	if (num_try >= SSH_PTL_MAX_PACKET_TRIES)
+		return -EINVAL;
 
 	status = ssh_ptl_queue_push(packet);
 	if (status)
@@ -1565,20 +1580,23 @@ static int ssh_ptl_resubmit(struct ssh_packet *packet)
 
 static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 {
-	struct ssh_packet *p;
+	struct ssh_packet *p, *q;
 	struct list_head *head;
+	u8 try;
+
+	/*
+	 * Note: We deliberately do not remove/attempt to cancel and complete
+	 * packets that are out of tires in this function. The packet will be
+	 * eventually canceled and completed by the timeout. Removing the packet
+	 * here could lead to overly eager cancelation if the packet has not
+	 * been re-transmitted yet but the tries-counter already updated (i.e
+	 * ssh_ptl_tx_next removed the packet from the queue and updated the
+	 * counter, but re-transmission for the last try has not actually
+	 * started yet).
+	 */
 
 	spin_lock(&ptl->queue.lock);
 	spin_lock(&ptl->pending.lock);
-
-	// find first node with lower than data resubmission priority
-	list_for_each(head, &ptl->queue.head) {
-		p = list_entry(head, struct ssh_packet, queue_node);
-
-		if (READ_ONCE(p->priority)
-		    < SSH_PACKET_PRIORITY_DATA_RESUB)
-			break;
-	}
 
 	// re-queue all pending packets
 	list_for_each_entry(p, &ptl->pending.head, pending_node) {
@@ -1590,7 +1608,18 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 		if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state))
 			continue;
 
-		WRITE_ONCE(p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
+		// do not re-schedule if packet is out of tries
+		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
+		if (try >= SSH_PTL_MAX_PACKET_TRIES)
+			continue;
+
+		// find first node with lower priority
+		list_for_each(head, &ptl->queue.head) {
+			q = list_entry(head, struct ssh_packet, queue_node);
+
+			if (READ_ONCE(p->priority) > READ_ONCE(q->priority))
+				break;
+		}
 
 		ssh_packet_get(p);
 		list_add_tail(&p->queue_node, head);
@@ -1640,14 +1669,11 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 static void ssh_ptl_timeout_wfn(struct work_struct *work)
 {
 	struct ssh_packet *p = to_ssh_packet(work, timeout.work);
-
-	p->timeout.count += 1;
+	u8 try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
 
 	ptl_dbg(p->ptl, "ptl: packet timed out (packet = %p)", p);
 
-	if (likely(p->timeout.count <= SSH_PTL_MAX_PACKET_TIMEOUTS)) {
-		// re-submit with (slightly) higher priority
-		WRITE_ONCE(p->priority, SSH_PACKET_PRIORITY_DATA_RESUB);
+	if (likely(try <= SSH_PTL_MAX_PACKET_TRIES)) {
 		ssh_ptl_resubmit(p);
 
 	} else {
