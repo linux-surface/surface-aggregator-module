@@ -1899,6 +1899,9 @@ static inline void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
 
 static int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 {
+	if (ptl->rx.thread)
+		return 0;
+
 	ptl->rx.thread = kthread_run(ssh_ptl_rx_threadfn, ptl, "surface-sh-rx");
 	if (IS_ERR(ptl->rx.thread))
 		return PTR_ERR(ptl->rx.thread);
