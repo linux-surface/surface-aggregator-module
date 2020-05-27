@@ -64,8 +64,8 @@
 /* -- Public interface. ----------------------------------------------------- */
 
 enum ssam_request_flags {
-	SSAM_REQUEST_EXPECTS_RESPONSE = BIT(0),
-	SSAM_REQUEST_UNSEQUENCED      = BIT(1),
+	SSAM_REQUEST_HAS_RESPONSE = BIT(0),
+	SSAM_REQUEST_UNSEQUENCED  = BIT(1),
 };
 
 enum ssam_request_priority {
@@ -2096,9 +2096,9 @@ enum ssh_request_flags {
 	SSH_REQUEST_SF_RSPRCVD_BIT,
 	SSH_REQUEST_SF_COMPLETED_BIT,
 
-	SSH_REQUEST_TY_EXPRESP_BIT,
+	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
 
-        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_EXPRESP_BIT),
+        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
 };
 
 struct ssh_rtl;
@@ -2314,7 +2314,7 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 	 * invariant ever changes, see the comment in ssh_rtl_complete on what
 	 * is required to be changed in the code.
 	 */
-	if (test_bit(SSH_REQUEST_TY_EXPRESP_BIT, &rqst->state))
+	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &rqst->state))
 		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
 			return -EINVAL;
 
@@ -2446,7 +2446,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			continue;
 
 		/*
-		 * Mark as "responce received" and "locked" as we're going to
+		 * Mark as "response received" and "locked" as we're going to
 		 * complete it. Ensure that the state doesn't get zero by
 		 * employing a memory barrier.
 		 */
@@ -2690,7 +2690,7 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 	clear_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &r->state);
 
 	// if we expect a response, we just need to start the timeout
-	if (test_bit(SSH_REQUEST_TY_EXPRESP_BIT, &r->state)) {
+	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &r->state)) {
 		ssh_rtl_timeout_start(r);
 		return;
 	}
@@ -2845,11 +2845,6 @@ static void ssh_rtl_destroy(struct ssh_rtl *rtl)
 }
 
 
-enum ssh_request_init_flags {
-	SSH_REQUEST_EXPRESP = BIT(0),
-	SSH_REQUEST_NONSEQ  = BIT(1),
-};
-
 static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
 	struct ssh_request *rqst = to_ssh_request(p, packet);
@@ -2862,13 +2857,13 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 };
 
 static int ssh_request_init(struct ssh_request *rqst,
-			    enum ssh_request_init_flags flags,
+			    enum ssam_request_flags flags,
 			    const struct ssh_request_ops *ops)
 {
 	int status;
 	struct ssh_packet_args packet_args;
 
-	if (flags & SSH_REQUEST_NONSEQ)
+	if (flags & SSAM_REQUEST_UNSEQUENCED)
 		packet_args.frame_type = SSH_FRAME_TYPE_DATA_NSQ;
 	else
 		packet_args.frame_type = SSH_FRAME_TYPE_DATA_SEQ;
@@ -2882,10 +2877,9 @@ static int ssh_request_init(struct ssh_request *rqst,
 	rqst->rtl = NULL;
 	INIT_LIST_HEAD(&rqst->node);
 
-	if (flags & SSH_REQUEST_EXPRESP)
-		rqst->state = BIT(SSH_REQUEST_TY_EXPRESP_BIT);
-	else
-		rqst->state = 0;
+	rqst->state = 0;
+	if (flags & SSAM_REQUEST_HAS_RESPONSE)
+		rqst->state |= BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT);
 
 	mutex_init(&rqst->timeout.lock);
 	timer_setup(&rqst->timeout.timer, ssh_rtl_timeout_tfn, 0);
