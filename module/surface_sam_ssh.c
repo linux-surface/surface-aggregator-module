@@ -2117,8 +2117,7 @@ struct ssh_request_ops {
 struct ssh_request {
 	struct ssh_rtl *rtl;
 	struct ssh_packet packet;
-	struct list_head queue_node;
-	struct list_head pending_node;
+	struct list_head node;
 
 	unsigned long state;
 
@@ -2197,7 +2196,7 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 	spin_lock(&rtl->queue.lock);
 
 	// find first non-locked request and remove it
-	list_for_each_entry_safe(p, n, &rtl->queue.head, queue_node) {
+	list_for_each_entry_safe(p, n, &rtl->queue.head, node) {
 		if (unlikely(test_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state)))
 			continue;
 
@@ -2209,7 +2208,7 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &p->state);
 
-		list_del(&p->queue_node);
+		list_del(&p->node);
 
 		rqst = p;
 		break;
@@ -2237,7 +2236,7 @@ static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 
 	atomic_inc(&rtl->pending.count);
 	ssh_request_get(rqst);
-	list_add_tail(&rqst->pending_node, &rtl->pending.head);
+	list_add_tail(&rqst->node, &rtl->pending.head);
 
 	spin_unlock(&rtl->pending.lock);
 	return 0;
@@ -2333,13 +2332,9 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 		return -EINVAL;
 	}
 
-	if (test_and_set_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
-		spin_unlock(&rtl->queue.lock);
-		return -EALREADY;
-	}
-
 	ssh_request_get(rqst);
-	list_add_tail(&rqst->queue_node, &rtl->queue.head);
+	set_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
+	list_add_tail(&rqst->node, &rtl->queue.head);
 
 	spin_unlock(&rtl->queue.lock);
 
@@ -2356,7 +2351,7 @@ static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
 	if (remove)
-		list_del(&rqst->queue_node);
+		list_del(&rqst->node);
 
 	spin_unlock(&rqst->rtl->queue.lock);
 
@@ -2373,7 +2368,7 @@ static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
 	if (remove) {
 		atomic_dec(&rqst->rtl->pending.count);
-		list_del(&rqst->pending_node);
+		list_del(&rqst->node);
 	}
 
 	spin_unlock(&rqst->rtl->pending.lock);
@@ -2448,7 +2443,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	 * received and locked.
 	 */
 	spin_lock(&rtl->pending.lock);
-	list_for_each_entry_safe(p, n, &rtl->pending.head, pending_node) {
+	list_for_each_entry_safe(p, n, &rtl->pending.head, node) {
 		// we generally expect requests to be processed in order
 		if (unlikely(ssh_request_get_rqid(p) != rqid))
 			continue;
@@ -2464,7 +2459,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &p->state);
 
 		atomic_dec(&rtl->pending.count);
-		list_del(&p->pending_node);
+		list_del(&p->node);
 
 		r = p;
 		break;
@@ -2587,7 +2582,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	}
 
 	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
-	list_del(&r->queue_node);
+	list_del(&r->node);
 
 	spin_unlock(&r->rtl->queue.lock);
 
@@ -2888,8 +2883,7 @@ static int ssh_request_init(struct ssh_request *rqst,
 		return status;
 
 	rqst->rtl = NULL;
-	INIT_LIST_HEAD(&rqst->queue_node);
-	INIT_LIST_HEAD(&rqst->pending_node);
+	INIT_LIST_HEAD(&rqst->node);
 
 	if (flags & SSH_REQUEST_EXPRESP)
 		rqst->state = BIT(SSH_REQUEST_TY_EXPRESP_BIT);
