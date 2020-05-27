@@ -2196,6 +2196,65 @@ static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 }
 
 
+static void ssh_rtl_queue_remove(struct ssh_request *rqst)
+{
+	bool remove;
+
+	spin_lock(&rqst->rtl->queue.lock);
+
+	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
+	if (remove)
+		list_del(&rqst->node);
+
+	spin_unlock(&rqst->rtl->queue.lock);
+
+	if (remove)
+		ssh_request_put(rqst);
+}
+
+static void ssh_rtl_pending_remove(struct ssh_request *rqst)
+{
+	bool remove;
+
+	spin_lock(&rqst->rtl->pending.lock);
+
+	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
+	if (remove) {
+		atomic_dec(&rqst->rtl->pending.count);
+		list_del(&rqst->node);
+	}
+
+	spin_unlock(&rqst->rtl->pending.lock);
+
+	if (remove)
+		ssh_request_put(rqst);
+}
+
+
+static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
+{
+	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
+
+	// rqst->rtl may not be set if we're cancelling before submitting
+	if (rtl) {
+		rtl_dbg(rtl, "rtl: completing request (rqid: 0x%04x,"
+			" status: %d)\n", ssh_request_get_rqid(rqst), status);
+	}
+
+	rqst->ops->complete(rqst, NULL, NULL, status);
+}
+
+static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
+				      const struct ssh_command *cmd,
+				      const struct sshp_span *data)
+{
+	rtl_dbg(rqst->rtl, "rtl: completing request with response"
+		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
+
+	rqst->ops->complete(rqst, cmd, data, 0);
+}
+
+
 static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst = ERR_PTR(-ENOENT);
@@ -2272,16 +2331,34 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 
 	// submit packet
 	status = ssh_ptl_submit(&rtl->ptl, &rqst->packet);
-	if (status) {
+	if (status == -ESHUTDOWN) {
 		/*
-		 * If submitting the packet failed, the packet has either been
-		 * submmitted/queued before (which cannot happen as we have
-		 * guaranteed that requests cannot be re-submitted), or the
-		 * packet was marked as locked. To mark the packet locked at
-		 * this stage, the request, and thus the package itself, had to
-		 * have been canceled. Simply drop the reference. Cancellation
-		 * itself will remove it from the set of pending requests.
+		 * Packet has been refused due to the packet layer shutting
+		 * down. Complete it here.
 		 */
+		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
+		smp_mb__after_atomic();
+
+		ssh_rtl_pending_remove(rqst);
+		ssh_rtl_complete_with_status(rqst, -ESHUTDOWN);
+
+		ssh_request_put(rqst);
+		return -ESHUTDOWN;
+
+	} else if (status) {
+		/*
+		 * If submitting the packet failed and the packet layer isn't
+		 * shutting down, the packet has either been submmitted/queued
+		 * before (-EALREADY, which cannot happen as we have guaranteed
+		 * that requests cannot be re-submitted), or the packet was
+		 * marked as locked (-EINVAL). To mark the packet locked at this
+		 * stage, the request, and thus the package itself, had to have
+		 * been canceled. Simply drop the reference. Cancellation itself
+		 * will remove it from the set of pending requests.
+		 */
+
+		BUG_ON(status != -EINVAL);
+
 		ssh_request_put(rqst);
 		return -EAGAIN;
 	}
@@ -2312,6 +2389,15 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 		status = ssh_rtl_tx_try_process_one(rtl);
 		if (status == -ENOENT || status == -EBUSY)
 			return;		// no more requests to process
+
+		if (status == -ESHUTDOWN) {
+			/*
+			 * Packet system shutting down. No new packets can be
+			 * transmitted. Return silently, the party initiating
+			 * the shutdown should handle the rest.
+			 */
+			return;
+		}
 
 		BUG_ON(status != 0 || status != -EAGAIN);
 	}
@@ -2354,41 +2440,6 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 }
 
 
-static void ssh_rtl_queue_remove(struct ssh_request *rqst)
-{
-	bool remove;
-
-	spin_lock(&rqst->rtl->queue.lock);
-
-	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
-	if (remove)
-		list_del(&rqst->node);
-
-	spin_unlock(&rqst->rtl->queue.lock);
-
-	if (remove)
-		ssh_request_put(rqst);
-}
-
-static void ssh_rtl_pending_remove(struct ssh_request *rqst)
-{
-	bool remove;
-
-	spin_lock(&rqst->rtl->pending.lock);
-
-	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
-	if (remove) {
-		atomic_dec(&rqst->rtl->pending.count);
-		list_del(&rqst->node);
-	}
-
-	spin_unlock(&rqst->rtl->pending.lock);
-
-	if (remove)
-		ssh_request_put(rqst);
-}
-
-
 static void ssh_rtl_timeout_reaper_mod(struct ssh_rtl *rtl, ktime_t now,
 				       ktime_t expires)
 {
@@ -2421,29 +2472,6 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	ssh_rtl_timeout_reaper_mod(rqst->rtl, timestamp, timestamp + timeout);
 }
 
-
-static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
-{
-	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
-
-	// rqst->rtl may not be set if we're cancelling before submitting
-	if (rtl) {
-		rtl_dbg(rtl, "rtl: completing request (rqid: 0x%04x,"
-			" status: %d)\n", ssh_request_get_rqid(rqst), status);
-	}
-
-	rqst->ops->complete(rqst, NULL, NULL, status);
-}
-
-static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
-				      const struct ssh_command *cmd,
-				      const struct sshp_span *data)
-{
-	rtl_dbg(rqst->rtl, "rtl: completing request with response"
-		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
-
-	rqst->ops->complete(rqst, cmd, data, 0);
-}
 
 static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			     const struct ssh_command *command,
@@ -2862,7 +2890,24 @@ static inline bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
 
 static inline int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 {
-	return ssh_ptl_tx_start(&rtl->ptl);
+	int status;
+	bool sched;
+
+	status = ssh_ptl_tx_start(&rtl->ptl);
+	if (status)
+		return status;
+
+	/*
+	 * If the packet layer has been shut down and restarted without shutting
+	 * down the request layer, there may still be requests queued and not
+	 * handled.
+	 */
+	spin_lock(&rtl->queue.lock);
+	sched = !list_empty(&rtl->queue.head);
+	spin_unlock(&rtl->queue.lock);
+
+	if (sched)
+		ssh_rtl_tx_schedule(rtl);
 }
 
 static inline int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
