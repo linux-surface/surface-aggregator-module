@@ -1075,6 +1075,11 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 
 	spin_lock(&ptl->queue.lock);
 
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state)) {
+		spin_unlock(&ptl->queue.lock);
+		return -ESHUTDOWN;
+	}
+
 	// fast path: minimum priority packets are always added at the end
 	if (priority == SSH_PACKET_PRIORITY_MIN) {
 		status = ssh_ptl_queue_add(packet, &ptl->queue.head);
@@ -1539,9 +1544,6 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
 	int status;
-
-	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
-		return -ESHUTDOWN;
 
 	/*
 	 * This function is currently not intended for re-submission. The ptl
