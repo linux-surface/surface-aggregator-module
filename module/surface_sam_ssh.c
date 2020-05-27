@@ -1684,7 +1684,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 {
 	struct ssh_ptl *ptl = to_ssh_ptl(work, rtx_timeout.reaper.work);
 	struct ssh_packet *p, *n;
-	LIST_HEAD(timedout);
+	LIST_HEAD(claimed);
 	ktime_t now = ktime_get_coarse_boottime();
 	ktime_t timeout = ptl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
@@ -1740,13 +1740,13 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		atomic_dec(&ptl->pending.count);
 		list_del(&p->pending_node);
 
-		list_add_tail(&p->pending_node, &timedout);
+		list_add_tail(&p->pending_node, &claimed);
 	}
 
 	spin_unlock(&ptl->pending.lock);
 
 	// cancel and complete the packet
-	list_for_each_entry_safe(p, n, &timedout, pending_node) {
+	list_for_each_entry_safe(p, n, &claimed, pending_node) {
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 			ssh_ptl_queue_remove(p);
 			__ssh_ptl_complete(p, -ETIMEDOUT);
