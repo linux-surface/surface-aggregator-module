@@ -1016,9 +1016,6 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 	ktime_t exp_adj = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
 	ktime_t old;
 
-	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
-		return;
-
 	// re-adjust / schedule reaper if it is above resolution delta
 	old = READ_ONCE(ptl->rtx_timeout.expires);
 	while (ktime_before(exp_adj, old))
@@ -2004,7 +2001,7 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	struct ssh_packet *p, *n;
 	int status;
 
-	// ensure that reaper cannot be queued and no new packets submitted
+	// ensure that no new packets can be submitted
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
 	smp_mb__after_atomic();
 
