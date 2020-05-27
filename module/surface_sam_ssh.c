@@ -1668,6 +1668,16 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 }
 
 
+static ktime_t ssh_packet_get_expiration(struct ssh_packet *p, ktime_t timeout)
+{
+	ktime_t timestamp = READ_ONCE(p->timestamp);
+
+	if (timestamp != KTIME_MAX)
+		return ktime_add(timestamp, timeout);
+	else
+		return KTIME_MAX;
+}
+
 static void ssh_ptl_timeout_reap(struct work_struct *work)
 {
 	struct ssh_ptl *ptl = to_ssh_ptl(work, rtx_timeout.reaper.work);
@@ -1687,7 +1697,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	spin_lock(&ptl->pending.lock);
 
 	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
-		ktime_t expires = ktime_add(READ_ONCE(p->timestamp), timeout);
+		ktime_t expires = ssh_packet_get_expiration(p, timeout);
 		u8 try;
 
 		/*
