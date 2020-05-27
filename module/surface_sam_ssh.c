@@ -1013,12 +1013,12 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 				       ktime_t expires)
 {
 	unsigned long delta = msecs_to_jiffies(ktime_ms_delta(expires, now));
-	ktime_t exp_adj = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
+	ktime_t aexp = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
 	ktime_t old;
 
 	// re-adjust / schedule reaper if it is above resolution delta
 	old = READ_ONCE(ptl->rtx_timeout.expires);
-	while (ktime_before(exp_adj, old))
+	while (ktime_before(aexp, old))
 		old = cmpxchg64(&ptl->rtx_timeout.expires, old, expires);
 
 	// if we updated the reaper expiration, modify work timeout
