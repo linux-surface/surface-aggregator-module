@@ -1815,6 +1815,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	packet->data_length = msgb_bytes_used(&msgb);
 
 	ssh_ptl_submit(ptl, packet);
+	ssh_packet_put(packet);
 }
 
 static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
