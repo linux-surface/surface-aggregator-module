@@ -2100,6 +2100,8 @@ enum ssh_request_flags {
 	SSH_REQUEST_SF_COMPLETED_BIT,
 
 	SSH_REQUEST_TY_EXPRESP_BIT,
+
+        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_EXPRESP_BIT),
 };
 
 struct ssh_rtl;
@@ -2541,7 +2543,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 
 static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
-	unsigned long state;
+	unsigned long state, fixed;
 	bool remove;
 
 	/*
@@ -2556,9 +2558,11 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 *
 	 * Note that if the CMPXCHG fails, we are guaranteed that rqst->rtl has
 	 * been set and is non-NULL, as states can only be nonzero after this
-	 * has been set.
+	 * has been set. Also note that we need to fetch the static (type) flags
+         * to ensure that they don't cause the cmpxchg to fail.
 	 */
-	state = cmpxchg(&r->state, 0, SSH_REQUEST_SF_LOCKED_BIT);
+        fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_STATIC_MASK;
+	state = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
 	if (!state && !READ_ONCE(r->rtl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
