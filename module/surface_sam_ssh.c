@@ -1746,13 +1746,14 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	spin_unlock(&ptl->pending.lock);
 
 	// cancel and complete the packet
-	list_for_each_entry(p, &timedout, pending_node) {
+	list_for_each_entry_safe(p, n, &timedout, pending_node) {
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 			ssh_ptl_queue_remove(p);
 			__ssh_ptl_complete(p, -ETIMEDOUT);
 		}
 
 		// drop the reference we've obtained by removing it from pending
+		list_del(&p->pending_node);
 		ssh_packet_put(p);
 	}
 
