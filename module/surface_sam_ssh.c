@@ -2084,7 +2084,9 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
-#define SSH_RTL_REQUEST_TIMEOUT		msecs_to_jiffies(1000)
+#define SSH_RTL_REQUEST_TIMEOUT			ms_to_ktime(1000)
+#define SSH_RTL_REQUEST_TIMEOUT_RESOLUTION	ms_to_ktime(50)
+
 #define SSH_RTL_MAX_PENDING		3
 
 enum ssh_request_flags {
@@ -2117,12 +2119,7 @@ struct ssh_request {
 	struct list_head node;
 
 	unsigned long state;
-
-	struct {
-		struct mutex lock;
-		struct timer_list timer;
-		struct work_struct work;
-	} timeout;
+	ktime_t timestamp;
 
 	const struct ssh_request_ops *ops;
 };
@@ -2149,6 +2146,12 @@ struct ssh_rtl {
 	struct {
 		struct work_struct work;
 	} tx;
+
+	struct {
+		ktime_t timeout;
+		ktime_t expires;
+		struct delayed_work reaper;
+	} rtx_timeout;
 
 	struct ssh_rtl_ops ops;
 };
@@ -2375,32 +2378,36 @@ static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 }
 
 
+static void ssh_rtl_timeout_reaper_mod(struct ssh_rtl *rtl, ktime_t now,
+				       ktime_t expires)
+{
+	unsigned long delta = msecs_to_jiffies(ktime_ms_delta(expires, now));
+	ktime_t aexp = ktime_add(expires, SSH_RTL_REQUEST_TIMEOUT_RESOLUTION);
+	ktime_t old;
+
+	// re-adjust / schedule reaper if it is above resolution delta
+	old = READ_ONCE(rtl->rtx_timeout.expires);
+	while (ktime_before(aexp, old))
+		old = cmpxchg64(&rtl->rtx_timeout.expires, old, expires);
+
+	// if we updated the reaper expiration, modify work timeout
+	if (old == expires)
+		mod_delayed_work(system_wq, &rtl->rtx_timeout.reaper, delta);
+}
+
 static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 {
-	// if this fails, someone else is setting or cancelling the timeout
-	if (!mutex_trylock(&rqst->timeout.lock))
-		return;
+	struct ssh_rtl *rtl = rqst->rtl;
+	ktime_t timestamp = ktime_get_coarse_boottime();
+	ktime_t timeout = rtl->rtx_timeout.timeout;
 
 	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state))
 		return;
 
-	ssh_request_get(rqst);
-	mod_timer(&rqst->timeout.timer, jiffies + SSH_RTL_REQUEST_TIMEOUT);
+	WRITE_ONCE(rqst->timestamp, timestamp);
+	smp_mb__after_atomic();
 
-	mutex_unlock(&rqst->timeout.lock);
-}
-
-static void ssh_rtl_timeout_cancel_sync(struct ssh_request *rqst)
-{
-	bool pending;
-
-	mutex_lock(&rqst->timeout.lock);
-	pending = del_timer_sync(&rqst->timeout.timer);
-	pending |= cancel_work_sync(&rqst->timeout.work);
-	mutex_unlock(&rqst->timeout.lock);
-
-	if (pending)
-		ssh_request_put(rqst);
+	ssh_rtl_timeout_reaper_mod(rqst->rtl, timestamp, timestamp + timeout);
 }
 
 
@@ -2475,9 +2482,6 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		ssh_rtl_tx_schedule(rtl);
 		return;
 	}
-
-	// disable timeout first
-	ssh_rtl_timeout_cancel_sync(r);
 
 	/*
 	 * Make sure the request has been transmitted. In case of a sequenced
@@ -2630,7 +2634,6 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 		return true;
 
 	ssh_rtl_queue_remove(r);
-	ssh_rtl_timeout_cancel_sync(r);
 	ssh_rtl_pending_remove(r);
 	ssh_rtl_complete_with_status(r, -EINTR);
 
@@ -2714,31 +2717,84 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 }
 
 
-static void ssh_rtl_timeout_wfn(struct work_struct *work)
+static ktime_t ssh_request_get_expiration(struct ssh_request *r, ktime_t timeo)
 {
-	struct ssh_request *rqst = to_ssh_request(work, timeout.work);
-	struct ssh_rtl *rtl = rqst->rtl;
+	ktime_t timestamp = READ_ONCE(r->timestamp);
 
-	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
-	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &rqst->state))
-		return;
-
-	/*
-	 * The timeout is activated only after the request has been removed from
-	 * the queue. Thus no need to check it. The timeout is guaranteed to run
-	 * only once, so we also don't need to handle that.
-	 */
-	ssh_rtl_pending_remove(rqst);
-	ssh_rtl_complete_with_status(rqst, -ETIMEDOUT);
-	ssh_request_put(rqst);
-
-	ssh_rtl_tx_schedule(rtl);
+	if (timestamp != KTIME_MAX)
+		return ktime_add(timestamp, timeo);
+	else
+		return KTIME_MAX;
 }
 
-static void ssh_rtl_timeout_tfn(struct timer_list *tl)
+static void ssh_rtl_timeout_reap(struct work_struct *work)
 {
-	struct ssh_request *rqst = to_ssh_request(tl, timeout.timer);
-	schedule_work(&rqst->timeout.work);
+	struct ssh_rtl *rtl = to_ssh_rtl(work, rtx_timeout.reaper.work);
+	struct ssh_request *r, *n;
+	LIST_HEAD(claimed);
+	ktime_t now = ktime_get_coarse_boottime();
+	ktime_t timeout = rtl->rtx_timeout.timeout;
+	ktime_t next = KTIME_MAX;
+
+	/*
+	 * Mark reaper as "not pending". This is done before checking any
+	 * requests to avoid lost-update type problems.
+	 */
+	WRITE_ONCE(rtl->rtx_timeout.expires, KTIME_MAX);
+	smp_mb__after_atomic();
+
+	spin_lock(&rtl->pending.lock);
+	list_for_each_entry_safe(r, n, &rtl->pending.head, node) {
+		ktime_t expires = ssh_request_get_expiration(r, timeout);
+
+		/*
+		 * Check if the timeout hasn't expired yet. Find out next
+		 * expiration date to be handled after this run.
+		 */
+		if (ktime_after(expires, now)) {
+			next = ktime_before(expires, next) ? expires : next;
+			continue;
+		}
+
+		// avoid further transitions if locked
+		if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
+			continue;
+
+		/*
+		 * We have now marked the packet as locked. Thus it cannot be
+		 * added to the pending or queued lists again after we've
+		 * removed it here. We can therefore re-use the node of this
+		 * packet temporarily.
+		 */
+
+		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &r->state);
+
+		atomic_dec(&rtl->pending.count);
+		list_del(&r->node);
+
+		list_add_tail(&r->node, &claimed);
+	}
+	spin_unlock(&rtl->pending.lock);
+
+	// cancel and complete the request
+	list_for_each_entry_safe(r, n, &claimed, node) {
+		/*
+		 * At this point we've removed the packet from pending. This
+		 * means that we've obtained the last (only) reference of the
+		 * system to it. Thus we can just complete it.
+		 */
+		if (!test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+			ssh_rtl_complete_with_status(r, -ETIMEDOUT);
+
+		// drop the reference we've obtained by removing it from pending
+		list_del(&r->node);
+		ssh_request_put(r);
+	}
+
+	// ensure that reaper doesn't run again immediately
+	next = max(next, ktime_add(now, SSH_RTL_REQUEST_TIMEOUT_RESOLUTION));
+	if (next != KTIME_MAX)
+		ssh_rtl_timeout_reaper_mod(rtl, now, next);
 }
 
 
@@ -2834,6 +2890,10 @@ static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 
 	INIT_WORK(&rtl->tx.work, ssh_rtl_tx_work_fn);
 
+	rtl->rtx_timeout.timeout = SSH_RTL_REQUEST_TIMEOUT;
+	rtl->rtx_timeout.expires = KTIME_MAX;
+	INIT_DELAYED_WORK(&rtl->rtx_timeout.reaper, ssh_rtl_timeout_reap);
+
 	rtl->ops = *ops;
 
 	return 0;
@@ -2881,18 +2941,10 @@ static int ssh_request_init(struct ssh_request *rqst,
 	if (flags & SSAM_REQUEST_HAS_RESPONSE)
 		rqst->state |= BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT);
 
-	mutex_init(&rqst->timeout.lock);
-	timer_setup(&rqst->timeout.timer, ssh_rtl_timeout_tfn, 0);
-	INIT_WORK(&rqst->timeout.work, ssh_rtl_timeout_wfn);
-
+	rqst->timestamp = KTIME_MAX;
 	rqst->ops = ops;
 
 	return 0;
-}
-
-static void ssh_request_destroy(struct ssh_request *rqst)
-{
-	mutex_destroy(&rqst->timeout.lock);
 }
 
 
