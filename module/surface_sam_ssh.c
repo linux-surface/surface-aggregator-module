@@ -1047,31 +1047,12 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
-static int ssh_ptl_queue_add(struct ssh_packet *p, struct list_head *h)
-{
-	// avoid further transitions when cancelling/completing
-	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
-		return -EINVAL;
-	}
-
-	// if this packet has already been queued, do not add it
-	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state)) {
-		return -EALREADY;
-	}
-
-	ssh_packet_get(p);
-	list_add_tail(&p->queue_node, h);
-
-	return 0;
-}
-
 static int ssh_ptl_queue_push(struct ssh_packet *packet)
 {
 	enum ssh_packet_priority priority = READ_ONCE(packet->priority);
 	struct ssh_ptl *ptl = packet->ptl;
 	struct list_head *head;
 	struct ssh_packet *p;
-	int status;
 
 	spin_lock(&ptl->queue.lock);
 
@@ -1080,9 +1061,22 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 		return -ESHUTDOWN;
 	}
 
+	// avoid further transitions when cancelling/completing
+	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
+		spin_unlock(&ptl->queue.lock);
+		return -EINVAL;
+	}
+
+	// if this packet has already been queued, do not add it
+	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state)) {
+		spin_unlock(&ptl->queue.lock);
+		return -EALREADY;
+	}
+
 	// fast path: minimum priority packets are always added at the end
 	if (priority == SSH_PACKET_PRIORITY_MIN) {
-		status = ssh_ptl_queue_add(packet, &ptl->queue.head);
+		ssh_packet_get(p);
+		list_add_tail(&p->queue_node, &ptl->queue.head);
 
 	// regular path
 	} else {
@@ -1095,11 +1089,12 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 		}
 
 		// insert before
-		status = ssh_ptl_queue_add(packet, &ptl->queue.head);
+		ssh_packet_get(p);
+		list_add_tail(&p->queue_node, head);
 	}
 
 	spin_unlock(&ptl->queue.lock);
-	return status;
+	return 0;
 }
 
 static void ssh_ptl_queue_remove(struct ssh_packet *packet)
