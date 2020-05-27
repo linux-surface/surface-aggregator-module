@@ -767,7 +767,12 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  */
 #define SSH_PTL_PACKET_TIMEOUT			ms_to_ktime(1000)
 
-#define SSH_PTL_PACKET_TIMEOUT_RESOLUTION	ms_to_ktime(50)
+/**
+ * Maximum time resolution for timeouts. Currently set to max(2 jiffies, 50ms).
+ * Should be larger than one jiffy to avoid direct re-scheduling of reaper
+ * work_struct.
+ */
+#define SSH_PTL_PACKET_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
 /**
  * Maximum number of sequenced packets concurrently waiting for an ACK.
@@ -2085,7 +2090,7 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
 #define SSH_RTL_REQUEST_TIMEOUT			ms_to_ktime(1000)
-#define SSH_RTL_REQUEST_TIMEOUT_RESOLUTION	ms_to_ktime(50)
+#define SSH_RTL_REQUEST_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
 #define SSH_RTL_MAX_PENDING		3
 
