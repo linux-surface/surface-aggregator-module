@@ -1047,12 +1047,30 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
+static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
+{
+	struct list_head *head;
+	u8 priority = READ_ONCE(p->priority);
+
+	// fast path: minimum priority packets are always added at the end
+	if (p == SSH_PACKET_PRIORITY_MIN)
+		return &p->ptl->queue.head;
+
+	// regular path
+	list_for_each(head, &p->ptl->queue.head) {
+		p = list_entry(head, struct ssh_packet, queue_node);
+
+		if (priority > READ_ONCE(p->priority))
+			break;
+	}
+
+	return head;
+}
+
 static int ssh_ptl_queue_push(struct ssh_packet *packet)
 {
-	enum ssh_packet_priority priority = READ_ONCE(packet->priority);
 	struct ssh_ptl *ptl = packet->ptl;
 	struct list_head *head;
-	struct ssh_packet *p;
 
 	spin_lock(&ptl->queue.lock);
 
@@ -1062,36 +1080,21 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 	}
 
 	// avoid further transitions when cancelling/completing
-	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
+	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state)) {
 		spin_unlock(&ptl->queue.lock);
 		return -EINVAL;
 	}
 
 	// if this packet has already been queued, do not add it
-	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state)) {
+	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state)) {
 		spin_unlock(&ptl->queue.lock);
 		return -EALREADY;
 	}
 
-	// fast path: minimum priority packets are always added at the end
-	if (priority == SSH_PACKET_PRIORITY_MIN) {
-		ssh_packet_get(p);
-		list_add_tail(&p->queue_node, &ptl->queue.head);
+	head = __ssh_ptl_queue_find_entrypoint(packet);
 
-	// regular path
-	} else {
-		// find first node with lower priority
-		list_for_each(head, &ptl->queue.head) {
-			p = list_entry(head, struct ssh_packet, queue_node);
-
-			if (priority > READ_ONCE(p->priority))
-				break;
-		}
-
-		// insert before
-		ssh_packet_get(p);
-		list_add_tail(&p->queue_node, head);
-	}
+	ssh_packet_get(packet);
+	list_add_tail(&packet->queue_node, &ptl->queue.head);
 
 	spin_unlock(&ptl->queue.lock);
 	return 0;
@@ -1567,7 +1570,6 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	struct list_head *head;
-	struct ssh_packet *q;
 
 	spin_lock(&packet->ptl->queue.lock);
 
@@ -1578,12 +1580,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	}
 
 	// find first node with lower priority
-	list_for_each(head, &packet->ptl->queue.head) {
-		q = list_entry(head, struct ssh_packet, queue_node);
-
-		if (READ_ONCE(packet->priority) > READ_ONCE(q->priority))
-			break;
-	}
+	head = __ssh_ptl_queue_find_entrypoint(packet);
 
 	WRITE_ONCE(packet->timestamp, KTIME_MAX);
 	smp_mb__after_atomic();
