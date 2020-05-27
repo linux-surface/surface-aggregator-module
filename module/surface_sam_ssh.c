@@ -1736,7 +1736,10 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		 */
 
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
+
+		atomic_dec(&ptl->pending.count);
 		list_del(&p->pending_node);
+
 		list_add_tail(&p->pending_node, &timedout);
 	}
 
@@ -2062,6 +2065,7 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 		list_del(&p->pending_node);
 		list_add_tail(&p->pending_node, &complete_q);
 	}
+	atomic_set(&ptl->pending.count, 0);
 	spin_unlock(&ptl->pending.lock);
 
 	// complete and drop packets on complete_q
