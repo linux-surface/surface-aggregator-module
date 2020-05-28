@@ -1217,6 +1217,15 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 	spin_lock(&ptl->queue.lock);
 	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		/*
+		 * If we are cancelling or completing this packet, ignore it.
+		 * It's going to be removed from this queue shortly.
+		 */
+		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
+			spin_unlock(&ptl->queue.lock);
+			continue;
+		}
+
+		/*
 		 * Packets should be ordered non-blocking/to-be-resent first.
 		 * If we cannot process this packet, assume that we can't
 		 * process any following packet either and abort.
@@ -1225,15 +1234,6 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 			spin_unlock(&ptl->queue.lock);
 			packet = ERR_PTR(-EBUSY);
 			break;
-		}
-
-		/*
-		 * If we are cancelling or completing this packet, ignore it.
-		 * It's going to be removed from this queue shortly.
-		 */
-		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
-			spin_unlock(&ptl->queue.lock);
-			continue;
 		}
 
 		/*
