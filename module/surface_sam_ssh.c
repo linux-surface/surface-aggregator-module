@@ -939,8 +939,8 @@ struct ssh_packet_args {
 	const struct ssh_packet_ops *ops;
 };
 
-static int ssh_packet_init(struct ssh_packet *packet,
-			   const struct ssh_packet_args *args)
+static void ssh_packet_init(struct ssh_packet *packet,
+			    const struct ssh_packet_args *args)
 {
 	kref_init(&packet->refcnt);
 
@@ -957,8 +957,6 @@ static int ssh_packet_init(struct ssh_packet *packet,
 	packet->data = NULL;
 
 	packet->ops = args->ops;
-
-	return 0;
 }
 
 
@@ -3087,11 +3085,10 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 	.release = ssh_rtl_packet_release,
 };
 
-static int ssh_request_init(struct ssh_request *rqst,
-			    enum ssam_request_flags flags,
-			    const struct ssh_request_ops *ops)
+static void ssh_request_init(struct ssh_request *rqst,
+			     enum ssam_request_flags flags,
+			     const struct ssh_request_ops *ops)
 {
-	int status;
 	struct ssh_packet_args packet_args;
 
 	packet_args.type = SSH_PACKET_TY_BLOCKING;
@@ -3101,9 +3098,7 @@ static int ssh_request_init(struct ssh_request *rqst,
 	packet_args.priority = SSH_PACKET_PRIORITY(DATA, 0);
 	packet_args.ops = &ssh_rtl_packet_ops;
 
-	status = ssh_packet_init(&rqst->packet, &packet_args);
-	if (status)
-		return status;
+	ssh_packet_init(&rqst->packet, &packet_args);
 
 	rqst->rtl = NULL;
 	INIT_LIST_HEAD(&rqst->node);
@@ -3114,8 +3109,6 @@ static int ssh_request_init(struct ssh_request *rqst,
 
 	rqst->timestamp = KTIME_MAX;
 	rqst->ops = ops;
-
-	return 0;
 }
 
 
