@@ -786,10 +786,10 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 #define SSH_PTL_RX_FIFO_LEN		4096
 
 enum ssh_packet_priority {
-	SSH_PACKET_PRIORITY_MIN  = 0,
-	SSH_PACKET_PRIORITY_DATA = SSH_PACKET_PRIORITY_MIN,
-	SSH_PACKET_PRIORITY_NAK  = 1 << 4,
-	SSH_PACKET_PRIORITY_ACK  = 2 << 4,
+	SSH_PACKET_PRIORITY_FLUSH = 0,
+	SSH_PACKET_PRIORITY_DATA  = 1 << 4,
+	SSH_PACKET_PRIORITY_NAK   = 2 << 4,
+	SSH_PACKET_PRIORITY_ACK   = 3 << 4,
 };
 
 #define SSH_PACKET_PRIORITY(base, n_resub) \
@@ -1052,17 +1052,37 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	struct list_head *head;
 	u8 priority = READ_ONCE(p->priority);
 
-	// fast path: minimum priority packets are always added at the end
-	if (p == SSH_PACKET_PRIORITY_MIN)
-		return &p->ptl->queue.head;
+	/*
+	 * We generally assume that there are less control (ACK/NAK) packets and
+	 * re-submitted data packets as there are normal data packets (at least
+	 * in situations in which many packets are queued; if there aren't many
+	 * packets queued the decision on how to iterate should be basically
+	 * irrellevant; the number of control/data packets is more or less
+	 * limited via the maximum number of pending packets). Thus, when
+	 * inserting a control or re-submitted data packet, (determined by their
+	 * priority), we search from front to back. Normal data packets are,
+	 * assuming that no flush packet is present, queued directly at the tail
+	 * of the queue, so for those search from back to front.
+	 */
 
-	// regular path
-	list_for_each(head, &p->ptl->queue.head) {
-		p = list_entry(head, struct ssh_packet, queue_node);
+	if (priority > SSH_PACKET_PRIORITY_DATA) {
+		list_for_each(head, &p->ptl->queue.head) {
+			p = list_entry(head, struct ssh_packet, queue_node);
 
-		if (priority > READ_ONCE(p->priority))
-			break;
+			if (READ_ONCE(p->priority) < priority)
+				break;
+		}
+	} else {
+		list_for_each_prev(head, &p->ptl->queue.head) {
+			p = list_entry(head, struct ssh_packet, queue_node);
+
+			if (READ_ONCE(p->priority) >= priority) {
+				head = head->next;
+				break;
+			}
+		}
 	}
+
 
 	return head;
 }
