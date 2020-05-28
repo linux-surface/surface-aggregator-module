@@ -36,6 +36,16 @@ static const struct mfd_cell sid_devs_sb2[] = {
 	{ },
 };
 
+static const struct mfd_cell sid_devs_sb3[] = {
+	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
+	{ .name = "surface_sam_sid_vhf",      .id = -1 },
+	{ .name = "surface_sam_sid_ac",       .id = -1 },
+	{ .name = "surface_sam_sid_battery",  .id =  0 },
+	{ .name = "surface_sam_sid_battery",  .id =  1 },
+	{ .name = "surface_sam_sid_perfmode", .id = -1 },
+	{ },
+};
+
 static const struct mfd_cell sid_devs_sl1[] = {
 	{ .name = "surface_sam_sid_gpelid", .id = -1 },
 	{ },
@@ -75,6 +85,9 @@ static const struct acpi_device_id surface_sam_sid_match[] = {
 
 	/* Surface Book 2 */
 	{ "MSHW0107", (unsigned long)sid_devs_sb2 },
+
+	/* Surface Book 3 */
+	{ "MSHW0117", (unsigned long)sid_devs_sb3 },
 
 	/* Surface Laptop 1 */
 	{ "MSHW0086", (unsigned long)sid_devs_sl1 },
