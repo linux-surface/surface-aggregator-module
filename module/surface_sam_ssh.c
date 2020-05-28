@@ -1955,7 +1955,7 @@ static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 
 
 struct ssh_flush_packet {
-	struct ssh_packet packet;
+	struct ssh_packet base;
 	struct completion completion;
 	int status;
 };
@@ -1964,7 +1964,7 @@ static void ssh_ptl_flush_complete(struct ssh_packet *p, int status)
 {
 	struct ssh_flush_packet *packet;
 
-	packet = container_of(p, struct ssh_flush_packet, packet);
+	packet = container_of(p, struct ssh_flush_packet, base);
 	packet->status = status;
 }
 
@@ -1972,7 +1972,7 @@ static void ssh_ptl_flush_release(struct ssh_packet *p)
 {
 	struct ssh_flush_packet *packet;
 
-	packet = container_of(p, struct ssh_flush_packet, packet);
+	packet = container_of(p, struct ssh_flush_packet, base);
 	complete_all(&packet->completion);
 }
 
@@ -2018,19 +2018,19 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 	args.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
 	args.ops = &ssh_flush_packet_ops;
 
-	ssh_packet_init(&packet.packet, &args);
+	ssh_packet_init(&packet.base, &args);
 	init_completion(&packet.completion);
 
-	status = ssh_ptl_submit(ptl, &packet.packet);
+	status = ssh_ptl_submit(ptl, &packet.base);
 	if (status)
 		return status;
 
-	ssh_packet_put(&packet.packet);
+	ssh_packet_put(&packet.base);
 
 	if (wait_for_completion_timeout(&packet.completion, timeout))
 		return 0;
 
-	ssh_ptl_cancel(&packet.packet);
+	ssh_ptl_cancel(&packet.base);
 	wait_for_completion(&packet.completion);
 
 	BUG_ON(packet.status != 0 && packet.status != -EINTR);
