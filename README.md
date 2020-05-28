@@ -107,7 +107,8 @@ Keeping the dGPU disabled during this initialization phase avoids this problem, 
 ## Testing
 
 To test this module, you need a custom kernel with the patches found in this repository applied.
-For a full set of patches including Jake's linux-surface patches, see [this][patches-linux-surface] fork.
+These patches are in the mainline kernel since v5.6.
+For a full set of patches, see [this][patches-linux-surface] repository.
 Furthermore, you need to ensure that the following config values are set:
 
 ```
@@ -115,12 +116,16 @@ CONFIG_SERIAL_DEV_BUS=y
 CONFIG_SERIAL_DEV_CTRL_TTYPORT=y
 ```
 
+If you're using a mainline v5.6 kernel from one of the common distros (Ubuntu, Debian, Arch, ..., basically anything that's intended for desktop use), this should all be set.
 If you have all the prequisites, you can
 
 ### Build/Test the module
 
-You can build the module with `make`.
+You can build the module by running `make` inside the `module/` directory.
 After that, you can load the module with `insmod surface_sam.ko`, and after testing remove it with `rmmod surface_sam`.
+
+If you have the linux-surface kernel installed, you will need to unload the built-in SAM modules.
+You can do this by running `./scripts/unload.sh`.
 
 ### Permanently install the module
 
