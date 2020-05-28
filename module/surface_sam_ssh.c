@@ -1367,11 +1367,12 @@ static void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
 static int ssh_ptl_tx_threadfn(void *data)
 {
 	struct ssh_ptl *ptl = data;
-	unsigned char *buf;
-	size_t len;
-	int status;
 
 	while (!kthread_should_stop()) {
+		unsigned char *buf;
+		size_t len = 0;
+		int status = 0;
+
 		// if we don't have a packet, get the next and add it to pending
 		if (IS_ERR_OR_NULL(ptl->tx.packet)) {
 			ptl->tx.packet = ssh_ptl_tx_next(ptl);
@@ -1384,14 +1385,17 @@ static int ssh_ptl_tx_threadfn(void *data)
 			}
 		}
 
-		buf = ptl->tx.packet->data + ptl->tx.offset;
-		len = ptl->tx.packet->data_length - ptl->tx.offset;
+		// flush-packets don't have any data
+		if (likely(ptl->tx.packet->data)) {
+			buf = ptl->tx.packet->data + ptl->tx.offset;
+			len = ptl->tx.packet->data_length - ptl->tx.offset;
 
-		ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
-		print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, buf,
-				     len, false);
+			ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
+			print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1,
+					     buf, len, false);
 
-		status = serdev_device_write_buf(ptl->serdev, buf, len);
+			status = serdev_device_write_buf(ptl->serdev, buf, len);
+		}
 
 		if (status < 0) {
 			// complete packet with error
