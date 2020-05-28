@@ -1956,72 +1956,119 @@ static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
 }
 
 
-static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
+struct ssh_flush_packet {
+	struct ssh_packet packet;
+	struct completion completion;
+	int status;
+};
+
+static void ssh_ptl_flush_complete(struct ssh_packet *p, int status)
 {
-	return &ptl->serdev->dev;
+	struct ssh_flush_packet *packet;
+
+	packet = container_of(p, struct ssh_flush_packet, packet);
+	packet->status = status;
 }
 
-static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
-			struct ssh_ptl_ops *ops)
+static void ssh_ptl_flush_release(struct ssh_packet *p)
 {
-	int i, status;
+	struct ssh_flush_packet *packet;
 
-	ptl->serdev = serdev;
-	ptl->state = 0;
+	packet = container_of(p, struct ssh_flush_packet, packet);
+	complete_all(&packet->completion);
+}
 
-	spin_lock_init(&ptl->queue.lock);
-	INIT_LIST_HEAD(&ptl->queue.head);
+static const struct ssh_packet_ops ssh_flush_packet_ops =  {
+	.complete = ssh_ptl_flush_complete,
+	.release = ssh_ptl_flush_release,
+};
 
-	spin_lock_init(&ptl->pending.lock);
-	INIT_LIST_HEAD(&ptl->pending.head);
-	atomic_set_release(&ptl->pending.count, 0);
+/**
+ * ssh_ptl_flush - flush the packet transmission layer
+ * @ptl:     packet transmission layer
+ * @timeout: timeout for the flush operation in jiffies
+ *
+ * Queue a special flush-packet and wait for its completion. This packet will
+ * be completed after all other currently queued and pending packets have been
+ * completed. Flushing guarantees that all previously submitted data packets
+ * have been fully completed before this call returns. Additionally, flushing
+ * blocks execution of all later scheduled data packets until the flush has
+ * been completed.
+ *
+ * Control (i.e. ACK/NAK) packets that have been submitted after this call will
+ * be placed before the flush packet in the queue, as long as the flush-packet
+ * has not been chosen for processing yet.
+ *
+ * Flushing, even when no new data packets are submitted after this call, does
+ * not guarantee that no more packets are scheduled. For example, incoming
+ * messages can promt automated submission of ACK or NAK type packets. If this
+ * happens while the flush-packet is being processed (i.e. after it has been
+ * taken from the queue), such packets may still be queued after this function
+ * returns.
+ *
+ * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
+ * canceled as a result of the timeout, or -ESHUTDOWN if the packet transmission
+ * layer has been shut down before this call.
+ */
+static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
+{
+	struct ssh_flush_packet packet;
+	struct ssh_packet_args args;
+	int status;
 
-	ptl->tx.thread = NULL;
-	ptl->tx.thread_signal = false;
-	ptl->tx.packet = NULL;
-	ptl->tx.offset = 0;
-	init_waitqueue_head(&ptl->tx.thread_wq);
-	init_waitqueue_head(&ptl->tx.packet_wq);
+	args.type = SSH_PACKET_TY_FLUSH | SSH_PACKET_TY_BLOCKING;
+	args.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
+	args.ops = &ssh_flush_packet_ops;
 
-	ptl->rx.thread = NULL;
-	init_waitqueue_head(&ptl->rx.wq);
+	ssh_packet_init(&packet.packet, &args);
+	init_completion(&packet.completion);
 
-	ptl->rtx_timeout.timeout = SSH_PTL_PACKET_TIMEOUT;
-	ptl->rtx_timeout.expires = KTIME_MAX;
-	INIT_DELAYED_WORK(&ptl->rtx_timeout.reaper, ssh_ptl_timeout_reap);
-
-	ptl->ops = *ops;
-
-	// initialize SEQ blacklist with invalid sequence IDs
-	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
-		ptl->rx.blacklist.seqs[i] = 0xFFFF;
-	ptl->rx.blacklist.offset = 0;
-
-	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
+	status = ssh_ptl_submit(ptl, &packet.packet);
 	if (status)
 		return status;
 
-	status = sshp_buf_alloc(&ptl->rx.buf, SSH_PTL_RX_BUF_LEN, GFP_KERNEL);
-	if (status)
-		kfifo_free(&ptl->rx.fifo);
+	ssh_packet_put(&packet.packet);
 
-	return status;
+	if (wait_for_completion_timeout(&packet.completion, timeout))
+		return 0;
+
+	ssh_ptl_cancel(&packet.packet);
+	wait_for_completion(&packet.completion);
+
+	BUG_ON(packet.status != 0 && packet.status != -EINTR);
+	return packet.status == -EINTR ? -ETIMEDOUT : 0;
 }
 
-static void ssh_ptl_destroy(struct ssh_ptl *ptl)
-{
-	kfifo_free(&ptl->rx.fifo);
-	sshp_buf_free(&ptl->rx.buf);
-}
-
-static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
+/**
+ * ssh_ptl_shutdown - shut down the packet transmission layer
+ * @ptl:     packet transmission layer
+ * @timeout: timeout for flushing ptl in jiffies
+ *
+ * Shuts down the packet transmission layer, removing and potentially
+ * canceling all queued and pending packets. If timeout is nonzero, the
+ * transmission layer will be flushed before, with the given timeout
+ * (see ssh_ptl_flush for details). Packets canceled by this operation will be
+ * completed with -ESHUTDOWN as status.
+ *
+ * If the caller chooses to flush the transmission layer, it should ensure
+ * that no new data packets can be submitted before calling this function.
+ * If the flush times out, all packets still in the system will be canceled.
+ *
+ * This function marks the transmission layer as shut down after the optional
+ * flush, preventing new packets to be submitted. Any packets submitted after
+ * or during the call to flush will be canceled.
+ */
+static void ssh_ptl_shutdown(struct ssh_ptl *ptl, unsigned long flush_timeout)
 {
 	LIST_HEAD(complete_q);
 	LIST_HEAD(complete_p);
 	struct ssh_packet *p, *n;
 	int status;
 
-	// ensure that no new packets can be submitted
+	if (flush_timeout)
+		ssh_ptl_flush(ptl, flush_timeout);
+
+	// ensure that no new packets (including ACK/NAK) can be submitted
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
 	smp_mb__after_atomic();
 
@@ -2100,6 +2147,64 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 * At this point we have guaranteed that the system doesn't reference
 	 * any packets any more.
 	 */
+}
+
+static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
+{
+	return &ptl->serdev->dev;
+}
+
+static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
+			struct ssh_ptl_ops *ops)
+{
+	int i, status;
+
+	ptl->serdev = serdev;
+	ptl->state = 0;
+
+	spin_lock_init(&ptl->queue.lock);
+	INIT_LIST_HEAD(&ptl->queue.head);
+
+	spin_lock_init(&ptl->pending.lock);
+	INIT_LIST_HEAD(&ptl->pending.head);
+	atomic_set_release(&ptl->pending.count, 0);
+
+	ptl->tx.thread = NULL;
+	ptl->tx.thread_signal = false;
+	ptl->tx.packet = NULL;
+	ptl->tx.offset = 0;
+	init_waitqueue_head(&ptl->tx.thread_wq);
+	init_waitqueue_head(&ptl->tx.packet_wq);
+
+	ptl->rx.thread = NULL;
+	init_waitqueue_head(&ptl->rx.wq);
+
+	ptl->rtx_timeout.timeout = SSH_PTL_PACKET_TIMEOUT;
+	ptl->rtx_timeout.expires = KTIME_MAX;
+	INIT_DELAYED_WORK(&ptl->rtx_timeout.reaper, ssh_ptl_timeout_reap);
+
+	ptl->ops = *ops;
+
+	// initialize SEQ blacklist with invalid sequence IDs
+	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
+		ptl->rx.blacklist.seqs[i] = 0xFFFF;
+	ptl->rx.blacklist.offset = 0;
+
+	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
+	if (status)
+		return status;
+
+	status = sshp_buf_alloc(&ptl->rx.buf, SSH_PTL_RX_BUF_LEN, GFP_KERNEL);
+	if (status)
+		kfifo_free(&ptl->rx.fifo);
+
+	return status;
+}
+
+static void ssh_ptl_destroy(struct ssh_ptl *ptl)
+{
+	kfifo_free(&ptl->rx.fifo);
+	sshp_buf_free(&ptl->rx.buf);
 }
 
 
