@@ -799,9 +799,11 @@ enum ssh_packet_priority {
 
 
 enum ssh_packet_type_flags {
+	SSH_PACKET_TY_FLUSH_BIT,
 	SSH_PACKET_TY_SEQUENCED_BIT,
 	SSH_PACKET_TY_BLOCKING_BIT,
 
+	SSH_PACKET_TY_FLUSH = BIT(SSH_PACKET_TY_FLUSH_BIT),
 	SSH_PACKET_TY_SEQUENCED = BIT(SSH_PACKET_TY_SEQUENCED_BIT),
 	SSH_PACKET_TY_BLOCKING = BIT(SSH_PACKET_TY_BLOCKING_BIT),
 };
@@ -1216,6 +1218,9 @@ static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 
+	if (packet->type & SSH_PACKET_TY_FLUSH)
+		return !atomic_read(&ptl->pending.count);
+
 	// we can alwas process non-blocking packets
 	if (!(packet->type & SSH_PACKET_TY_BLOCKING))
 		return true;
@@ -1566,6 +1571,14 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
 	int status;
+
+	// validate packet fields
+	if (packet->type & SSH_PACKET_TY_FLUSH) {
+		if (packet->data || (packet->type & SSH_PACKET_TY_SEQUENCED))
+			return -EINVAL;
+	} else if (!packet->data) {
+		return -EINVAL;
+	}
 
 	/*
 	 * This function is currently not intended for re-submission. The ptl
