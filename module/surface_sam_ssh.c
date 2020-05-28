@@ -2033,8 +2033,10 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 	ssh_ptl_cancel(&packet.base);
 	wait_for_completion(&packet.completion);
 
-	BUG_ON(packet.status != 0 && packet.status != -EINTR);
-	return packet.status == -EINTR ? -ETIMEDOUT : 0;
+	BUG_ON(packet.status != 0 && packet.status != -EINTR
+	       && packet.status != -ESHUTDOWN);
+
+	return packet.status == -EINTR ? -ETIMEDOUT : status;
 }
 
 /**
