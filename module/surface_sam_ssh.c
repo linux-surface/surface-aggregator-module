@@ -787,9 +787,9 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
 
 enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_FLUSH = 0,
-	SSH_PACKET_PRIORITY_DATA  = 1 << 4,
-	SSH_PACKET_PRIORITY_NAK   = 2 << 4,
-	SSH_PACKET_PRIORITY_ACK   = 3 << 4,
+	SSH_PACKET_PRIORITY_DATA  = 0,
+	SSH_PACKET_PRIORITY_NAK   = 1 << 4,
+	SSH_PACKET_PRIORITY_ACK   = 2 << 4,
 };
 
 #define SSH_PACKET_PRIORITY(base, n_resub) \
@@ -1041,8 +1041,8 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	 * limited via the maximum number of pending packets). Thus, when
 	 * inserting a control or re-submitted data packet, (determined by their
 	 * priority), we search from front to back. Normal data packets are,
-	 * assuming that no flush packet is present, queued directly at the tail
-	 * of the queue, so for those search from back to front.
+	 * usually queued directly at the tail of the queue, so for those search
+	 * from back to front.
 	 */
 
 	if (priority > SSH_PACKET_PRIORITY_DATA) {
