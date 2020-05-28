@@ -633,7 +633,7 @@ static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
  * To simplify reasoning about the code below, we define a few concepts. The
  * system below is similar to a state-machine for packets, however, there are
  * too many states to explicitly write them down. To (somewhat) manage the
- * states and packages we rely on flags, reference counting, and some simple
+ * states and packets we rely on flags, reference counting, and some simple
  * concepts. State transitions are triggered by actions.
  *
  * >> Actions <<
@@ -2362,7 +2362,7 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 		 * before (-EALREADY, which cannot happen as we have guaranteed
 		 * that requests cannot be re-submitted), or the packet was
 		 * marked as locked (-EINVAL). To mark the packet locked at this
-		 * stage, the request, and thus the package itself, had to have
+		 * stage, the request, and thus the packets itself, had to have
 		 * been canceled. Simply drop the reference. Cancellation itself
 		 * will remove it from the set of pending requests.
 		 */
