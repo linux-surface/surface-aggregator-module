@@ -934,44 +934,22 @@ static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 
 
 struct ssh_packet_args {
-	enum ssh_frame_type frame_type;
+	u8 type;
+	u8 priority;
 	const struct ssh_packet_ops *ops;
 };
 
 static int ssh_packet_init(struct ssh_packet *packet,
 			   const struct ssh_packet_args *args)
 {
-	switch (args->frame_type) {
-	case SSH_FRAME_TYPE_NAK:
-		packet->type = 0;
-		packet->priority = SSH_PACKET_PRIORITY(NAK, 0);
-		break;
-
-	case SSH_FRAME_TYPE_ACK:
-		packet->type = 0;
-		packet->priority = SSH_PACKET_PRIORITY(ACK, 0);
-		break;
-
-	case SSH_FRAME_TYPE_DATA_SEQ:
-		packet->type = SSH_PACKET_TY_BLOCKING | SSH_PACKET_TY_SEQUENCED;
-		packet->priority = SSH_PACKET_PRIORITY(DATA, 0);
-		break;
-
-	case SSH_FRAME_TYPE_DATA_NSQ:
-		packet->type = SSH_PACKET_TY_BLOCKING;
-		packet->priority = SSH_PACKET_PRIORITY(DATA, 0);
-		break;
-
-	default:
-		return -EINVAL;
-	}
-
 	kref_init(&packet->refcnt);
 
 	packet->ptl = NULL;
 	INIT_LIST_HEAD(&packet->queue_node);
 	INIT_LIST_HEAD(&packet->pending_node);
 
+	packet->type = args->type;
+	packet->priority = args->priority;
 	packet->state = 0;
 	packet->timestamp = KTIME_MAX;
 
@@ -1832,7 +1810,8 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	struct ssh_packet *packet;
 	struct msgbuf msgb;
 
-	args.frame_type = SSH_FRAME_TYPE_ACK;
+	args.type = 0;
+	args.priority = SSH_PACKET_PRIORITY(ACK, 0);
 	args.ops = &ssh_ptl_ctrl_packet_ops;
 
 	packet = ptl_alloc_ctrl_packet(ptl, &args, GFP_KERNEL);
@@ -3010,11 +2989,11 @@ static int ssh_request_init(struct ssh_request *rqst,
 	int status;
 	struct ssh_packet_args packet_args;
 
-	if (flags & SSAM_REQUEST_UNSEQUENCED)
-		packet_args.frame_type = SSH_FRAME_TYPE_DATA_NSQ;
-	else
-		packet_args.frame_type = SSH_FRAME_TYPE_DATA_SEQ;
+	packet_args.type = SSH_PACKET_TY_BLOCKING;
+	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
+		packet_args.type = SSH_PACKET_TY_SEQUENCED;
 
+	packet_args.priority = SSH_PACKET_PRIORITY(DATA, 0);
 	packet_args.ops = &ssh_rtl_packet_ops;
 
 	status = ssh_packet_init(&rqst->packet, &packet_args);
