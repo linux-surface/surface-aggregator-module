@@ -1990,8 +1990,8 @@ static const struct ssh_packet_ops ssh_flush_packet_ops =  {
  * be completed after all other currently queued and pending packets have been
  * completed. Flushing guarantees that all previously submitted data packets
  * have been fully completed before this call returns. Additionally, flushing
- * blocks execution of all later scheduled data packets until the flush has
- * been completed.
+ * blocks execution of all later submitted data packets until the flush has been
+ * completed.
  *
  * Control (i.e. ACK/NAK) packets that have been submitted after this call will
  * be placed before the flush packet in the queue, as long as the flush-packet
@@ -2224,9 +2224,11 @@ enum ssh_request_flags {
 	SSH_REQUEST_SF_RSPRCVD_BIT,
 	SSH_REQUEST_SF_COMPLETED_BIT,
 
+	SSH_REQUEST_TY_FLUSH_BIT,
 	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
 
-        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
+        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_FLUSH_BIT)
+					| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
 };
 
 struct ssh_rtl;
@@ -2370,13 +2372,18 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 }
 
 
+static bool ssh_rtl_tx_can_process(struct ssh_request *rqst)
+{
+	if (test_bit(SSH_REQUEST_TY_FLUSH_BIT, &rqst->state))
+		return !atomic_read(&rqst->rtl->pending.count);
+
+	return atomic_read(&rqst->rtl->pending.count) < SSH_RTL_MAX_PENDING;
+}
+
 static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst = ERR_PTR(-ENOENT);
 	struct ssh_request *p, *n;
-
-	if (atomic_read(&rtl->pending.count) >= SSH_RTL_MAX_PENDING)
-		return ERR_PTR(-EBUSY);
 
 	spin_lock(&rtl->queue.lock);
 
@@ -2384,6 +2391,12 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 	list_for_each_entry_safe(p, n, &rtl->queue.head, node) {
 		if (unlikely(test_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state)))
 			continue;
+
+		if (!ssh_rtl_tx_can_process(p)) {
+			spin_unlock(&rtl->queue.lock);
+			rqst = ERR_PTR(-EBUSY);
+			break;
+		}
 
 		/*
 		 * Remove from queue and mark as transmitting. Ensure that the
@@ -3111,6 +3124,90 @@ static void ssh_request_init(struct ssh_request *rqst,
 
 	rqst->timestamp = KTIME_MAX;
 	rqst->ops = ops;
+}
+
+
+struct ssh_flush_request {
+	struct ssh_request base;
+	struct completion completion;
+	int status;
+};
+
+static void ssh_rtl_flush_request_complete(struct ssh_request *r,
+					   const struct ssh_command *cmd,
+					   const struct sshp_span *data,
+					   int status)
+{
+	struct ssh_flush_request *rqst;
+
+	rqst = container_of(r, struct ssh_flush_request, base);
+	rqst->status = status;
+}
+
+static void ssh_rtl_flush_request_release(struct ssh_request *r)
+{
+	struct ssh_flush_request *rqst;
+
+	rqst = container_of(r, struct ssh_flush_request, base);
+	complete_all(&rqst->completion);
+}
+
+static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
+	.complete = ssh_rtl_flush_request_complete,
+	.release = ssh_rtl_flush_request_release,
+};
+
+/**
+ * ssh_rtl_flush - flush the request transmission layer
+ * @rtl:     request transmission layer
+ * @timeout: timeout for the flush operation in jiffies
+ *
+ * Queue a special flush request and wait for its completion. This request
+ * will be completed after all other currently queued and pending requests
+ * have been completed. Instead of a normal data packet, this request submits
+ * a special flush packet, meaning that upon completion, also the underlying
+ * packet transmission layer has been flushed.
+ *
+ * Flushing the request layer gurarantees that all previously submitted
+ * requests have been fully completed before this call returns. Additinally,
+ * flushing blocks execution of all later submitted requests until the flush
+ * has been completed.
+ *
+ * If the caller ensures that no new requests are submitted after a call to
+ * this function, the request transmission layer is guaranteed to have no
+ * remaining requests when this call returns. The same guarantee does not hold
+ * for the packet layer, on which control packets may still be queued after
+ * this call. See the documentation of ssh_ptl_flush for more details on
+ * packet layer flushing.
+ */
+static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
+{
+	struct ssh_flush_request rqst;
+	int status;
+
+	ssh_request_init(&rqst.base, 0, &ssh_rtl_flush_request_ops);
+	rqst.base.packet.type |= SSH_PACKET_TY_FLUSH;
+	rqst.base.packet.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
+	rqst.base.state |= BIT(SSH_REQUEST_TY_FLUSH_BIT);
+
+	init_completion(&rqst.completion);
+
+	status = ssh_rtl_submit(rtl, &rqst.base);
+	if (status)
+		return status;
+
+	ssh_request_put(&rqst.base);
+
+	if (wait_for_completion_timeout(&rqst.completion, timeout))
+		return 0;
+
+	ssh_rtl_cancel(&rqst.base, true);
+	wait_for_completion(&rqst.completion);
+
+	BUG_ON(rqst.status != 0 && rqst.status != -EINTR
+	       && rqst.status != -ESHUTDOWN);
+
+	return rqst.status == -EINTR ? -ETIMEDOUT : status;
 }
 
 
