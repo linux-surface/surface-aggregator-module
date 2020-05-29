@@ -2485,12 +2485,26 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 	return 0;
 }
 
-static inline bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
+static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
 {
-	if (atomic_read(&rtl->pending.count) < SSH_RTL_MAX_PENDING)
-		return schedule_work(&rtl->tx.work);
-	else
+	bool empty;
+
+	spin_lock(&rtl->queue.lock);
+	empty = list_empty(&rtl->queue.head);
+	spin_unlock(&rtl->queue.lock);
+
+	return empty;
+}
+
+static bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
+{
+	if (atomic_read(&rtl->pending.count) >= SSH_RTL_MAX_PENDING)
 		return false;
+
+	if (ssh_rtl_queue_empty(rtl))
+		return false;
+
+	return schedule_work(&rtl->tx.work);
 }
 
 static void ssh_rtl_tx_work_fn(struct work_struct *work)
