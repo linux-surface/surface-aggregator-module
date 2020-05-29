@@ -2042,31 +2042,21 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 /**
  * ssh_ptl_shutdown - shut down the packet transmission layer
  * @ptl:     packet transmission layer
- * @timeout: timeout for flushing ptl in jiffies
  *
- * Shuts down the packet transmission layer, removing and potentially
- * canceling all queued and pending packets. If timeout is nonzero, the
- * transmission layer will be flushed before, with the given timeout
- * (see ssh_ptl_flush for details). Packets canceled by this operation will be
- * completed with -ESHUTDOWN as status.
+ * Shuts down the packet transmission layer, removing and canceling all queued
+ * and pending packets. Packets canceled by this operation will be completed
+ * with -ESHUTDOWN as status.
  *
- * If the caller chooses to flush the transmission layer, it should ensure
- * that no new data packets can be submitted before calling this function.
- * If the flush times out, all packets still in the system will be canceled.
- *
- * This function marks the transmission layer as shut down after the optional
- * flush, preventing new packets to be submitted. Any packets submitted after
- * or during the call to flush will be canceled.
+ * As a result of this function, the transmission layer will be marked as shut
+ * down. Submission of packets after the transmission layer has been shut down
+ * will fail with -ESHUTDOWN.
  */
-static void ssh_ptl_shutdown(struct ssh_ptl *ptl, unsigned long flush_timeout)
+static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 {
 	LIST_HEAD(complete_q);
 	LIST_HEAD(complete_p);
 	struct ssh_packet *p, *n;
 	int status;
-
-	if (flush_timeout)
-		ssh_ptl_flush(ptl, flush_timeout);
 
 	// ensure that no new packets (including ACK/NAK) can be submitted
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
