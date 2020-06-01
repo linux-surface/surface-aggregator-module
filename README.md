@@ -2,7 +2,7 @@
 
 Linux embedded controller driver for 5th generation (and later) Surface devices required for battery status and more.
 
-_Note: This module is integrated into https://github.com/linux-surface/linux-surface._
+_Note: These modules are integrated into https://github.com/linux-surface/linux-surface._
 _There is no need to install it separately if you've already installed one of the kernels provided there._
 If you have a Surface Book 2 you might also want to have a look at the [dtx-daemon][dtx-daemon] and the [surface-control][surface-control] utility.
 
@@ -80,7 +80,7 @@ Unloading the module only succeeds when no program is using the dGPU and is ther
 
 #### Via Module Parameters
 
-The dGPU power-state can also be automatically set when this module is loaded or unloaded via the following module parameters:
+The dGPU power-state can also be automatically set when the HPS module is loaded or unloaded via the following module parameters:
 
 - `dgpu_power_init`:
   - Description: The power-state to set when loading this module.
@@ -99,14 +99,14 @@ The dGPU power-state can also be automatically set when this module is loaded or
   - Default: `-1` (as-is).
 
 _Warning:_
-By default, the dGPU is turned off when the module loads, changing this behavior may have unwanted side-effects.
+By default, the dGPU is turned off when the HPS module loads, changing this behavior may have unwanted side-effects.
 Some desktop-environments (including Gnome) claim the dGPU when it is turned on during their initialization phase.
 This will result in you being unable to unload the graphics driver and ultimately crashes or hang-ups when you disable the dGPU dynamically.
 Keeping the dGPU disabled during this initialization phase avoids this problem, so if you want the dGPU to be permanently powered on, you may want to write a script that runs after you log in into your desktop environment.
 
 ## Testing
 
-To test this module, you need a custom kernel with the patches found in this repository applied.
+To test these modules, you need a custom kernel with the patches found in this repository applied.
 These patches are in the mainline kernel since v5.6.
 For a full set of patches, see [this][patches-linux-surface] repository.
 Furthermore, you need to ensure that the following config values are set:
@@ -119,31 +119,22 @@ CONFIG_SERIAL_DEV_CTRL_TTYPORT=y
 If you're using a mainline v5.6 kernel from one of the common distros (Ubuntu, Debian, Arch, ..., basically anything that's intended for desktop use), this should all be set.
 If you have all the prequisites, you can
 
-### Build/Test the module
+### Build/Test the modules
 
-You can build the module by running `make` inside the `module/` directory.
-After that, you can load the module with `insmod surface_sam.ko`, and after testing remove it with `rmmod surface_sam`.
+You can build the modules by running `make` inside the `module/` directory.
+After that, you can load the modules by running the `ssam-modprobe` script, found in the `scripts/` directory with `insmod` as parameter from the module directory (i.e. `sudo ../scripts/ssam-modprobe insmod`).
+After testing remove it with `ssam-modprobe rmmod`.
 
-If you have the linux-surface kernel installed, you will need to unload the built-in SAM modules.
-You can do this by running `./scripts/unload.sh`.
+If you have the linux-surface kernel installed, you will need to unload the built-in SAM modules first.
+Similar to loading the externally built modules, you can do this by running `sudo ./scripts/ssam-modprobe -r`.
+You can load the in-kernel modules again after testing via `sudo ./scripts/ssam-modprobe`.
 
-### Permanently install the module
+### Permanently install the modules
 
-If you want to permanently install the module (or ensure it is loaded during boot), you can run `make dkms-install`.
+If you want to permanently install the modules (or ensure it is loaded during boot), you can run `make dkms-install`.
 To uninstall it, run `make dkms-uninstall`.
-If you've installed a patched kernel already contiaining the in-kernel version of this module, you may want to keep it from loading by editing/creating `/etc/modprobe.d/surface-sam.conf` and adding
-```
-blacklist surface_sam_ssh
-blacklist surface_sam_san
-blacklist surface_sam_vhf
-blacklist surface_sam_dtx
-blacklist surface_sam_hps
-blacklist surface_sam_sid
-blacklist surface_sam_sid_gpelid
-blacklist surface_sam_sid_perfmode
-blacklist surface_sam_sid_vhf
-```
-Note that you will need to undo these changes when you want to use the in-kernel module again.
+In case you've installed a patched kernel already contiaining the in-kernel version of this module, dkms should detect this and override the in-kernel modules with the externally built ones.
+This should get reverted by uninstalling the modules via the command above.
 
 
 ## Getting Windows Logs for Reverse Engineering
@@ -191,7 +182,7 @@ In addition to these two chips, there are also two different communication inter
 - The Surface Book 1 and Surface Pro 4 use HID-over-I2C.
 
 Currently only the first interface is supported, meaning this module does currently not support the Surface Book 1 and Surface Pro 4.
- 
+
 
 ## Donations
 
