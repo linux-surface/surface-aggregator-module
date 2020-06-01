@@ -39,7 +39,7 @@ static void sid_vhf_hid_stop(struct hid_device *hid)
 
 static int sid_vhf_hid_open(struct hid_device *hid)
 {
-	struct sid_vhf *vhf = platform_get_drvdata(to_platform_device(hid->dev.parent));
+	struct sid_vhf *vhf = dev_get_drvdata(hid->dev.parent);
 
 	hid_dbg(hid, "%s\n", __func__);
 
@@ -50,7 +50,7 @@ static int sid_vhf_hid_open(struct hid_device *hid)
 static void sid_vhf_hid_close(struct hid_device *hid)
 {
 
-	struct sid_vhf *vhf = platform_get_drvdata(to_platform_device(hid->dev.parent));
+	struct sid_vhf *vhf = dev_get_drvdata(hid->dev.parent);
 
 	hid_dbg(hid, "%s\n", __func__);
 
