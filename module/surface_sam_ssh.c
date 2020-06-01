@@ -337,7 +337,9 @@ static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 
 static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
 {
-	BUG_ON(msgb->ptr + sizeof(u16) > msgb->end);
+	WARN_ON(msgb->ptr + sizeof(u16) > msgb->end);
+	if (msgb->ptr + sizeof(u16) > msgb->end)
+		return;
 
 	put_unaligned_le16(value, msgb->ptr);
 	msgb->ptr += sizeof(u16);
@@ -363,7 +365,9 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 	struct ssh_frame *frame = (struct ssh_frame *)msgb->ptr;
 	const u8 *const begin = msgb->ptr;
 
-	BUG_ON(msgb->ptr + sizeof(*frame) > msgb->end);
+	WARN_ON(msgb->ptr + sizeof(*frame) > msgb->end);
+	if (msgb->ptr + sizeof(*frame) > msgb->end)
+		return;
 
 	frame->type = ty;
 	put_unaligned_le16(len, &frame->len);
@@ -400,7 +404,10 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 	msgb_push_frame(msgb, type, sizeof(*cmd) + rqst->cdl, seq);
 
 	// frame payload: command struct + payload
-	BUG_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
+	WARN_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
+	if (msgb->ptr + sizeof(*cmd) > msgb->end)
+		return;
+
 	cmd_begin = msgb->ptr;
 	cmd = (struct ssh_command *)msgb->ptr;
 
@@ -2035,8 +2042,8 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 	ssh_ptl_cancel(&packet.base);
 	wait_for_completion(&packet.completion);
 
-	BUG_ON(packet.status != 0 && packet.status != -EINTR
-	       && packet.status != -ESHUTDOWN);
+	WARN_ON(packet.status != 0 && packet.status != -EINTR
+		&& packet.status != -ESHUTDOWN);
 
 	return packet.status == -EINTR ? -ETIMEDOUT : status;
 }
@@ -2477,7 +2484,7 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 		 * will remove it from the set of pending requests.
 		 */
 
-		BUG_ON(status != -EINVAL);
+		WARN_ON(status != -EINVAL);
 
 		ssh_request_put(rqst);
 		return -EAGAIN;
@@ -2533,7 +2540,7 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 			return;
 		}
 
-		BUG_ON(status != 0 || status != -EAGAIN);
+		WARN_ON(status != 0 || status != -EAGAIN);
 	}
 
 	// out of tries, reschedule
@@ -3212,8 +3219,8 @@ static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 	ssh_rtl_cancel(&rqst.base, true);
 	wait_for_completion(&rqst.completion);
 
-	BUG_ON(rqst.status != 0 && rqst.status != -EINTR
-	       && rqst.status != -ESHUTDOWN);
+	WARN_ON(rqst.status != 0 && rqst.status != -EINTR
+		&& rqst.status != -ESHUTDOWN);
 
 	return rqst.status == -EINTR ? -ETIMEDOUT : status;
 }
