@@ -2251,6 +2251,10 @@ struct ssh_request {
 	const struct ssh_request_ops *ops;
 };
 
+enum ssh_rtl_state_flags {
+	SSH_RTL_SF_SHUTDOWN_BIT,
+};
+
 struct ssh_rtl_ops {
 	void (*handle_event)(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 			     const struct sshp_span *data);
@@ -2258,6 +2262,7 @@ struct ssh_rtl_ops {
 
 struct ssh_rtl {
 	struct ssh_ptl ptl;
+	unsigned long state;
 
 	struct {
 		spinlock_t lock;
@@ -2564,6 +2569,11 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 		return -EALREADY;
 
 	spin_lock(&rtl->queue.lock);
+
+	if (test_bit(SSH_RTL_SF_SHUTDOWN_BIT, &rtl->state)) {
+		spin_unlock(&rtl->queue.lock);
+		return -ESHUTDOWN;
+	}
 
 	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
 		spin_unlock(&rtl->queue.lock);
@@ -3223,6 +3233,75 @@ static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 		&& rqst.status != -ESHUTDOWN);
 
 	return rqst.status == -EINTR ? -ETIMEDOUT : status;
+}
+
+
+static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
+{
+	struct ssh_request *r, *n;
+	LIST_HEAD(claimed);
+	int pending;
+
+	set_bit(SSH_RTL_SF_SHUTDOWN_BIT, &rtl->state);
+	smp_mb__after_atomic();
+
+	// remove requests from queue
+	spin_lock(&rtl->queue.lock);
+	list_for_each_entry_safe(r, n, &rtl->queue.head, node) {
+		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+		smp_mb__before_atomic();
+		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
+
+		list_del(&r->node);
+		list_add_tail(&r->node, &claimed);
+	}
+	spin_unlock(&rtl->queue.lock);
+
+	/*
+	 * We have now guaranteed that the queue is empty and no more new
+	 * requests can be submitted (i.e. it will stay empty). This means that
+	 * calling ssh_rtl_tx_schedule will not schedule tx.work any more. So we
+	 * can simply call cancel_work_sync on tx.work here and when that
+	 * returns, we've locked it down. This also means that after this call,
+	 * we don't submit any more packets to the underlying packet layer, so
+	 * we can also shut that down.
+	 */
+
+	cancel_work_sync(&rtl->tx.work);
+	ssh_ptl_shutdown(&rtl->ptl);
+
+	/*
+	 * Shutting down the packet layer should also have caneled all requests.
+	 * Thus the pending set should be empty. Attempt to handle this
+	 * gracefully anyways, even though this should be dead code.
+	 */
+
+	pending = atomic_read(&rtl->pending.count);
+	WARN_ON(pending);
+
+	if (pending) {
+		spin_lock(&rtl->pending.lock);
+		list_for_each_entry_safe(r, n, &rtl->pending.head, node) {
+			set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+			smp_mb__before_atomic();
+			clear_bit(SSH_REQUEST_SF_PENDING_BIT, &r->state);
+
+			list_del(&r->node);
+			list_add_tail(&r->node, &claimed);
+		}
+		spin_unlock(&rtl->pending.lock);
+	}
+
+	// finally cancel and complete requests
+	list_for_each_entry_safe(r, n, &claimed, node) {
+		// test_and_set because we still might compete with cancellation
+		if (!test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
+			ssh_rtl_complete_with_status(r, -ESHUTDOWN);
+
+		// drop the reference we've obtained by removing it from list
+		list_del(&r->node);
+		ssh_request_put(r);
+	}
 }
 
 
