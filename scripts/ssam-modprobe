@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+#
+# Script to load/unload all Surface System Aggregator modules
+#
+
+unload() {
+    cmd=${1}
+
+    systemctl stop surface-dtx-daemon.service
+
+    modprobe -r battery
+    modprobe -r ac
+
+    ${cmd} surface_sam_sid_vhf
+    ${cmd} surface_sam_sid_power
+    ${cmd} surface_sam_sid_perfmode
+    ${cmd} surface_sam_sid_gpelid
+    ${cmd} surface_sam_sid
+    ${cmd} surface_sam_hps
+    ${cmd} surface_sam_dtx
+    ${cmd} surface_sam_vhf
+    ${cmd} surface_sam_san
+    ${cmd} surface_sam_ssh
+
+    modprobe battery
+    modprobe ac
+}
+
+load() {
+    cmd=${1}
+    ext=${2}
+
+    ${cmd} surface_sam_ssh"${ext}"
+    ${cmd} surface_sam_san"${ext}"
+    ${cmd} surface_sam_vhf"${ext}"
+    ${cmd} surface_sam_dtx"${ext}"
+    ${cmd} surface_sam_hps"${ext}"
+    ${cmd} surface_sam_sid_gpelid"${ext}"
+    ${cmd} surface_sam_sid_perfmode"${ext}"
+    ${cmd} surface_sam_sid_power"${ext}"
+    ${cmd} surface_sam_sid_vhf"${ext}"
+    ${cmd} surface_sam_sid"${ext}"
+
+    systemctl start surface-dtx-daemon.service
+    systemctl restart upower.service
+}
+
+help() {
+    echo "usage:"
+    echo "  ${0}            run 'modprobe' on ssam modules"
+    echo "  ${0} -r         run 'modprobe -r' on ssam modules"
+    echo "  ${0} insmod     run 'insmod' on ssam .ko modules"
+    echo "  ${0} rmmod      run 'rmmod' on ssam .ko modules"
+}
+
+case ${1} in
+    insmod)
+        load "insmod" ".ko"
+        ;;
+
+    rmmod)
+        unload "rmmod"
+        ;;
+
+    "-r")
+        unload "modprobe -r"
+        ;;
+
+    "")
+        load "modprobe"
+        ;;
+
+    *)
+        help
+        ;;
+esac
