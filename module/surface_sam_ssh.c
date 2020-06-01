@@ -1768,6 +1768,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	next = max(next, ktime_add(now, SSH_PTL_PACKET_TIMEOUT_RESOLUTION));
 	if (next != KTIME_MAX)
 		ssh_ptl_timeout_reaper_mod(ptl, now, next);
+
+	ssh_ptl_tx_wakeup(ptl, false);
 }
 
 
@@ -2966,6 +2968,8 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	next = max(next, ktime_add(now, SSH_RTL_REQUEST_TIMEOUT_RESOLUTION));
 	if (next != KTIME_MAX)
 		ssh_rtl_timeout_reaper_mod(rtl, now, next);
+
+	ssh_rtl_tx_schedule(rtl);
 }
 
 
