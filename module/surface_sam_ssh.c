@@ -1407,7 +1407,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 	// cancel active packet before we actually stop
 	if (ptl->tx.packet) {
-		ssh_ptl_tx_compl_error(ptl->tx.packet, -EINTR);
+		ssh_ptl_tx_compl_error(ptl->tx.packet, -ESHUTDOWN);
 		ssh_packet_put(ptl->tx.packet);
 		ptl->tx.packet = NULL;
 	}
@@ -1678,10 +1678,10 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 	 */
 
 	if (READ_ONCE(p->ptl)) {
-		ssh_ptl_remove_and_complete(p, -EINTR);
+		ssh_ptl_remove_and_complete(p, -ECANCELED);
 		ssh_ptl_tx_wakeup(p->ptl, false);
 	} else if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
-		__ssh_ptl_complete(p, -EINTR);
+		__ssh_ptl_complete(p, -ECANCELED);
 	}
 }
 
@@ -2017,7 +2017,8 @@ static const struct ssh_packet_ops ssh_flush_packet_ops =  {
  *
  * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
  * canceled as a result of the timeout, or -ESHUTDOWN if the packet transmission
- * layer has been shut down before this call.
+ * layer has been shut down before this call. May also return -EINTR if the
+ * packet transmission has been interrupted.
  */
 static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 {
@@ -2044,10 +2045,10 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 	ssh_ptl_cancel(&packet.base);
 	wait_for_completion(&packet.completion);
 
-	WARN_ON(packet.status != 0 && packet.status != -EINTR
-		&& packet.status != -ESHUTDOWN);
+	WARN_ON(packet.status != 0 && packet.status != -ECANCELED
+		&& packet.status != -ESHUTDOWN && packet.status != -EINTR);
 
-	return packet.status == -EINTR ? -ETIMEDOUT : status;
+	return packet.status == -ECANCELED ? -ETIMEDOUT : status;
 }
 
 /**
@@ -2755,7 +2756,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
-		ssh_rtl_complete_with_status(r, -EINTR);
+		ssh_rtl_complete_with_status(r, -ECANCELED);
 		return true;
 	}
 
@@ -2784,7 +2785,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 		return true;
 
-	ssh_rtl_complete_with_status(r, -EINTR);
+	ssh_rtl_complete_with_status(r, -ECANCELED);
 	return true;
 }
 
@@ -2805,7 +2806,7 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
-		ssh_rtl_complete_with_status(r, -EINTR);
+		ssh_rtl_complete_with_status(r, -ECANCELED);
 		return true;
 	}
 
@@ -2827,7 +2828,7 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 
 	ssh_rtl_queue_remove(r);
 	ssh_rtl_pending_remove(r);
-	ssh_rtl_complete_with_status(r, -EINTR);
+	ssh_rtl_complete_with_status(r, -ECANCELED);
 
 	return true;
 }
@@ -2870,7 +2871,7 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 		 */
 		ssh_rtl_queue_remove(r);
 		ssh_rtl_pending_remove(r);
-		ssh_rtl_complete_with_status(r, -EINTR);
+		ssh_rtl_complete_with_status(r, status);
 
 		ssh_rtl_tx_schedule(r->rtl);
 		return;
@@ -3205,6 +3206,11 @@ static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
  * for the packet layer, on which control packets may still be queued after
  * this call. See the documentation of ssh_ptl_flush for more details on
  * packet layer flushing.
+ *
+ * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
+ * canceled as a result of the timeout, or -ESHUTDOWN if the packet and/or
+ * request transmission layer has been shut down before this call. May also
+ * return -EINTR if the underlying packet transmission has been interrupted.
  */
 static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 {
@@ -3230,10 +3236,10 @@ static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 	ssh_rtl_cancel(&rqst.base, true);
 	wait_for_completion(&rqst.completion);
 
-	WARN_ON(rqst.status != 0 && rqst.status != -EINTR
-		&& rqst.status != -ESHUTDOWN);
+	WARN_ON(rqst.status != 0 && rqst.status != -ECANCELED
+		&& rqst.status != -ESHUTDOWN && rqst.status != -EINTR);
 
-	return rqst.status == -EINTR ? -ETIMEDOUT : status;
+	return rqst.status == -ECANCELED ? -ETIMEDOUT : status;
 }
 
 
