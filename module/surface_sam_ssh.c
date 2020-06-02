@@ -474,56 +474,51 @@ static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
 	}
 }
 
-static size_t sshp_parse_frame(const struct device *dev,
-			       const struct sshp_span *source,
-			       struct ssh_frame **frame,
-			       struct sshp_span *payload,
-			       size_t maxlen)
+static bool sshp_starts_with_syn(const struct sshp_span *src)
 {
-	struct sshp_span aligned;
+	return src->len >= 2 && get_unaligned_le16(src->ptr) == SSH_MSG_SYN;
+}
+
+static int sshp_parse_frame(const struct device *dev,
+			    const struct sshp_span *source,
+			    struct ssh_frame **frame,
+			    struct sshp_span *payload,
+			    size_t maxlen)
+{
 	struct sshp_span sf;
 	struct sshp_span sp;
-	bool syn_found;
 
 	// initialize output
 	*frame = NULL;
 	payload->ptr = NULL;
 	payload->len = 0;
 
-	// find SYN
-	syn_found = sshp_find_syn(source, &aligned);
-
-	if (unlikely(aligned.ptr - source->ptr) > 0)
-		dev_warn(dev, "rx: parser: invalid start of frame, skipping\n");
-
-	if (unlikely(!syn_found))
-		return aligned.ptr - source->ptr;
+	if (!sshp_starts_with_syn(source)) {
+		dev_warn(dev, "rx: parser: invalid start of frame\n");
+		return -ENOMSG;
+	}
 
 	// check for minumum packet length
-	if (unlikely(aligned.len < SSH_MESSAGE_LENGTH(0))) {
+	if (unlikely(source->len < SSH_MESSAGE_LENGTH(0))) {
 		dev_dbg(dev, "rx: parser: not enough data for frame\n");
-		return aligned.ptr - source->ptr;
+		return 0;
 	}
 
 	// pin down frame
-	sf.ptr = aligned.ptr + sizeof(u16);
+	sf.ptr = source->ptr + sizeof(u16);
 	sf.len = sizeof(struct ssh_frame);
 
 	// validate frame CRC
 	if (unlikely(!sshp_validate_crc(&sf, sf.ptr + sf.len))) {
 		dev_warn(dev, "rx: parser: invalid frame CRC\n");
-
-		// skip enough bytes to try and find next SYN
-		return aligned.ptr - source->ptr + sizeof(u16);
+		return -EBADMSG;
 	}
 
 	// ensure packet does not exceed maximum length
 	if (unlikely(((struct ssh_frame *)sf.ptr)->len > maxlen)) {
-		dev_dbg(dev, "rx: parser: frame too large: %u bytes\n",
-			((struct ssh_frame *)sf.ptr)->len);
-
-		*frame = ERR_PTR(-EMSGSIZE);
-		return aligned.ptr - source->ptr;
+		dev_warn(dev, "rx: parser: frame too large: %u bytes\n",
+			 ((struct ssh_frame *)sf.ptr)->len);
+		return -EMSGSIZE;
 	}
 
 	// pin down payload
@@ -531,17 +526,15 @@ static size_t sshp_parse_frame(const struct device *dev,
 	sp.len = get_unaligned_le16(&((struct ssh_frame *)sf.ptr)->len);
 
 	// check for frame + payload length
-	if (aligned.len < SSH_MESSAGE_LENGTH(sp.len)) {
+	if (source->len < SSH_MESSAGE_LENGTH(sp.len)) {
 		dev_dbg(dev, "rx: parser: not enough data for payload\n");
-		return aligned.ptr - source->ptr;
+		return 0;
 	}
 
 	// validate payload crc
 	if (unlikely(!sshp_validate_crc(&sp, sp.ptr + sp.len))) {
 		dev_warn(dev, "rx: parser: invalid payload CRC\n");
-
-		// skip enough bytes to try and find next SYN
-		return aligned.ptr - source->ptr + sizeof(u16);
+		return -EBADMSG;
 	}
 
 	*frame = (struct ssh_frame *)sf.ptr;
@@ -550,7 +543,7 @@ static size_t sshp_parse_frame(const struct device *dev,
 	dev_dbg(dev, "rx: parser: valid frame found (type: 0x%02x, len: %u)\n",
 		(*frame)->type, (*frame)->len);
 
-	return aligned.ptr - source->ptr;
+	return 0;
 }
 
 static int sshp_parse_command(const struct device *dev,
@@ -1841,22 +1834,26 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
 	struct sshp_span payload;
-	size_t n;
+	struct sshp_span aligned;
+	bool syn_found;
+	int status;
+
+	// find SYN
+	syn_found = sshp_find_syn(source, &aligned);
+
+	if (unlikely(aligned.ptr - source->ptr) > 0)
+		ptl_warn(ptl, "rx: parser: invalid start of frame, skipping\n");
+
+	if (unlikely(!syn_found))
+		return aligned.ptr - source->ptr;
 
 	// parse and validate frame
-	n = sshp_parse_frame(&ptl->serdev->dev, source, &frame, &payload,
-			     SSH_PTL_RX_BUF_LEN);
-	if (!frame)
-		return n;
-
-	if (IS_ERR(frame)) {
-		if (PTR_ERR(frame) == -EMSGSIZE) {
-			ptl_warn(ptl, "ptl: received frame is too large,"
-				 " dropping it\n");
-		}
-
-		return n + sizeof(u16);		// look for next SYN
-	}
+	status = sshp_parse_frame(&ptl->serdev->dev, &aligned, &frame, &payload,
+				  SSH_PTL_RX_BUF_LEN);
+	if (status)	// invalid frame: skip to next syn
+		return aligned.ptr - source->ptr + sizeof(u16);
+	if (!frame)	// not enough data
+		return aligned.ptr - source->ptr;
 
 	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
@@ -1881,7 +1878,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 		break;
 	}
 
-	return n + SSH_MESSAGE_LENGTH(frame->len);
+	return aligned.ptr - source->ptr + SSH_MESSAGE_LENGTH(frame->len);
 }
 
 static int ssh_ptl_rx_threadfn(void *data)
@@ -4214,15 +4211,26 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
 	struct sshp_span payload;
-	size_t n;
+	struct sshp_span aligned;
+	bool syn_found;
+	int status;
+
+	// find SYN
+	syn_found = sshp_find_syn(source, &aligned);
+
+	if (unlikely(aligned.ptr - source->ptr) > 0)
+		ssh_warn(ec, "rx: parser: invalid start of frame, skipping\n");
+
+	if (unlikely(!syn_found))
+		return aligned.ptr - source->ptr;
 
 	// parse and validate frame
-	n = sshp_parse_frame(&ec->serdev->dev, source, &frame, &payload,
-			     SSH_EVAL_BUF_LEN);
-	if (!frame)
-		return n;
-	if (IS_ERR(frame))
-		return n + sizeof(u16);
+	status = sshp_parse_frame(&ec->serdev->dev, &aligned, &frame, &payload,
+				  SSH_EVAL_BUF_LEN);
+	if (status)	// invalid frame: skip to next syn
+		return aligned.ptr - source->ptr + sizeof(u16);
+	if (!frame)	// not enough data
+		return aligned.ptr - source->ptr;
 
 	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
@@ -4239,7 +4247,7 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 		ssh_warn(ec, "rx: unknown frame type 0x%02x\n", frame->type);
 	}
 
-	return n + SSH_MESSAGE_LENGTH(frame->len);
+	return aligned.ptr - source->ptr + SSH_MESSAGE_LENGTH(frame->len);
 }
 
 static int ssh_rx_threadfn(void *data)
