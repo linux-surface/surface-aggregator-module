@@ -553,10 +553,10 @@ static size_t sshp_parse_frame(const struct device *dev,
 	return aligned.ptr - source->ptr;
 }
 
-static void sshp_parse_command(const struct device *dev,
-			       const struct sshp_span *source,
-			       struct ssh_command **command,
-			       struct sshp_span *command_data)
+static int sshp_parse_command(const struct device *dev,
+			      const struct sshp_span *source,
+			      struct ssh_command **command,
+			      struct sshp_span *command_data)
 {
 	// check for minimum length
 	if (unlikely(source->len < sizeof(struct ssh_command))) {
@@ -565,7 +565,7 @@ static void sshp_parse_command(const struct device *dev,
 		command_data->len = 0;
 
 		dev_err(dev, "rx: parser: command payload is too short\n");
-		return;
+		return -ENOMSG;
 	}
 
 	*command = (struct ssh_command *)source->ptr;
@@ -574,6 +574,8 @@ static void sshp_parse_command(const struct device *dev,
 
 	dev_dbg(dev, "rx: parser: valid command found (tc: 0x%02x,"
 		" cid: 0x%02x)\n", (*command)->tc, (*command)->cid);
+
+	return 0;
 }
 
 
@@ -3006,8 +3008,7 @@ static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct sshp_span *data)
 	struct ssh_command *command;
 	struct sshp_span command_data;
 
-	sshp_parse_command(dev, data, &command, &command_data);
-	if (unlikely(!command))
+	if (sshp_parse_command(dev, data, &command, &command_data))
 		return;
 
 	if (ssh_rqid_is_event(get_unaligned_le16(&command->rqid)))
@@ -4193,8 +4194,7 @@ static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
 	struct sshp_span command_data;
 
 	if (likely(payload->ptr[0] == SSH_PLD_TYPE_CMD)) {
-		sshp_parse_command(dev, payload, &command, &command_data);
-		if (unlikely(!command))
+		if (sshp_parse_command(dev, payload, &command, &command_data))
 			return;
 
 		ssh_receive_command_frame(ec, frame, command, &command_data);
