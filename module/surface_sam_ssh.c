@@ -522,7 +522,7 @@ static size_t sshp_parse_frame(const struct device *dev,
 		dev_dbg(dev, "rx: parser: frame too large: %u bytes\n",
 			((struct ssh_frame *)sf.ptr)->len);
 
-		*frame = ERR_PTR(-E2BIG);
+		*frame = ERR_PTR(-EMSGSIZE);
 		return aligned.ptr - source->ptr;
 	}
 
@@ -1848,7 +1848,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 		return n;
 
 	if (IS_ERR(frame)) {
-		if (PTR_ERR(frame) == -E2BIG) {
+		if (PTR_ERR(frame) == -EMSGSIZE) {
 			ptl_warn(ptl, "ptl: received frame is too large,"
 				 " dropping it\n");
 		}
