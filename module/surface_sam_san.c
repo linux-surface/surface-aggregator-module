@@ -672,13 +672,13 @@ static int san_events_register(struct platform_device *pdev)
 	drvdata->nb_tmp.priority = 1;
 	drvdata->nb_tmp.notifier_call = san_evt_thermal_nb;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_PWR_TC, 0x01, &drvdata->nb_pwr);
 	if (status)
 		return status;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_TEMP_TC, 0x01, &drvdata->nb_tmp);
 	if (status)
-		surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+		surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, 0x01, &drvdata->nb_pwr);
 
 	return status;
 }
@@ -687,8 +687,8 @@ static void san_events_unregister(struct platform_device *pdev)
 {
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, 0x01, &drvdata->nb_pwr);
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_TEMP_TC, 0x01, &drvdata->nb_tmp);
 }
 
 

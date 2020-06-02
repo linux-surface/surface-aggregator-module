@@ -79,8 +79,8 @@ struct surface_sam_ssh_event {
 
 int surface_sam_ssh_consumer_register(struct device *consumer);
 
-int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb);
-int surface_sam_ssh_notifier_unregister(u8 tc, struct notifier_block *nb);
+int surface_sam_ssh_notifier_register(u8 tc, u8 pri, struct notifier_block *nb);
+int surface_sam_ssh_notifier_unregister(u8 tc, u8 pri, struct notifier_block *nb);
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result);
 

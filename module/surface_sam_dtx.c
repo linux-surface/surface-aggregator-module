@@ -518,7 +518,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	ddev->sam_nb.priority = 1;
 	ddev->sam_nb.notifier_call = surface_dtx_notification;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_DTX_TC, &ddev->sam_nb);
+	status = surface_sam_ssh_notifier_register(SAM_EVENT_DTX_TC, 0x01, &ddev->sam_nb);
 	if (status)
 		goto err_events_setup;
 
@@ -547,7 +547,7 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	mutex_unlock(&ddev->mutex);
 
 	// After this call we're guaranteed that no more input events will arive
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_DTX_TC, &ddev->sam_nb);
+	surface_sam_ssh_notifier_unregister(SAM_EVENT_DTX_TC, 0x01, &ddev->sam_nb);
 
 	// wake up clients
 	spin_lock(&ddev->client_lock);

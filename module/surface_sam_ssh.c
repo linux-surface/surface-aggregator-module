@@ -184,11 +184,16 @@ struct ssh_receiver {
 	} eval_buf;
 };
 
+struct ssh_event_block {
+	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	// TODO: notifier count per block or once for all blocks?
+};
+
 struct ssh_events {
 	struct workqueue_struct *queue_ack;
 	struct workqueue_struct *queue_evt;
-	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
-	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	struct ssh_event_block block[2];
 };
 
 struct sam_ssh_ec {
@@ -231,9 +236,7 @@ static struct sam_ssh_ec ssh_ec = {
 		.state = SSH_RCV_DISCARD,
 		.expect = {},
 	},
-	.events = {
-		.notifier_count = { 0 },
-	},
+	.events = {},
 	.irq = -1,
 };
 
@@ -692,13 +695,16 @@ static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec, u8 tc,
 }
 
 
-int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb)
+int surface_sam_ssh_notifier_register(u8 tc, u8 pri, struct notifier_block *nb)
 {
 	struct sam_ssh_ec *ec;
 	struct srcu_notifier_head *nh;
 	u16 event = ssh_tc_to_event(tc);
 	u16 rqid = ssh_event_to_rqid(event);
 	int status;
+
+	if (pri < 1 || pri > 2)
+		return -EINVAL;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -707,14 +713,14 @@ int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb)
 	if (!ec)
 		return -ENXIO;
 
-	nh = &ec->events.notifier[event];
+	nh = &ec->events.block[pri - 1].notifier[event];
 	status = srcu_notifier_chain_register(nh, nb);
 	if (status) {
 		surface_sam_ssh_release(ec);
 		return status;
 	}
 
-	if (ec->events.notifier_count[event] == 0) {
+	if (ec->events.block[pri - 1].notifier_count[event] == 0) {
 		status = surface_sam_ssh_event_enable(ec, tc, 0x01, rqid);
 		if (status) {
 			srcu_notifier_chain_unregister(nh, nb);
@@ -722,20 +728,23 @@ int surface_sam_ssh_notifier_register(u8 tc, struct notifier_block *nb)
 			return status;
 		}
 	}
-	ec->events.notifier_count[event] += 1;
+	ec->events.block[pri - 1].notifier_count[event] += 1;
 
 	surface_sam_ssh_release(ec);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_register);
 
-int surface_sam_ssh_notifier_unregister(u8 tc, struct notifier_block *nb)
+int surface_sam_ssh_notifier_unregister(u8 tc, u8 pri, struct notifier_block *nb)
 {
 	struct sam_ssh_ec *ec;
 	struct srcu_notifier_head *nh;
 	u16 event = ssh_tc_to_event(tc);
 	u16 rqid = ssh_event_to_rqid(event);
 	int status;
+
+	if (pri < 1 || pri > 2)
+		return -EINVAL;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -744,15 +753,15 @@ int surface_sam_ssh_notifier_unregister(u8 tc, struct notifier_block *nb)
 	if (!ec)
 		return -ENXIO;
 
-	nh = &ec->events.notifier[event];
+	nh = &ec->events.block[pri - 1].notifier[event];
 	status = srcu_notifier_chain_unregister(nh, nb);
 	if (status) {
 		surface_sam_ssh_release(ec);
 		return status;
 	}
 
-	ec->events.notifier_count[event] -= 1;
-	if (ec->events.notifier_count == 0)
+	ec->events.block[pri - 1].notifier_count[event] -= 1;
+	if (ec->events.block[pri - 1].notifier_count == 0)
 		status = surface_sam_ssh_event_disable(ec, tc, 0x01, rqid);
 
 	surface_sam_ssh_release(ec);
@@ -1126,14 +1135,24 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 	struct surface_sam_ssh_event *event;
 	struct sam_ssh_ec *ec;
 	struct device *dev;
+	u8 pri;
 	int status = 0, ncalls = 0;
 
 	work = container_of(_work, struct ssh_event_work, work_evt);
 	event = &work->event;
 	ec = work->ec;
 	dev = &ec->serdev->dev;
+	pri = event->pri;
 
-	nh = &ec->events.notifier[ssh_rqid_to_event(event->rqid)];
+	if (pri > 2) {
+		ssh_warn(ec, "event: unhandled priority: %d\n", pri);
+		pri = 1;
+	} else if (pri < 1) {
+		ssh_warn(ec, "event: unhandled priority: %d\n", pri);
+		pri = 1;
+	}
+
+	nh = &ec->events.block[pri - 1].notifier[ssh_rqid_to_event(event->rqid)];
 	status = __srcu_notifier_call_chain(nh, event->tc, event, -1, &ncalls);
 	status = notifier_to_errno(status);
 
@@ -1709,8 +1728,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	ec->events.queue_evt = event_queue_evt;
 
 	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
-		srcu_init_notifier_head(&ec->events.notifier[i]);
-		ec->events.notifier_count[i] = 0;
+		srcu_init_notifier_head(&ec->events.block[0].notifier[i]);
+		srcu_init_notifier_head(&ec->events.block[1].notifier[i]);
+		ec->events.block[0].notifier_count[i] = 0;
+		ec->events.block[1].notifier_count[i] = 0;
 	}
 
 	serdev_device_set_drvdata(serdev, ec);
@@ -1798,8 +1819,10 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 
 	// remove event handlers
 	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
-		srcu_cleanup_notifier_head(&ec->events.notifier[i]);
-		ec->events.notifier_count[i] = 0;
+		srcu_cleanup_notifier_head(&ec->events.block[0].notifier[i]);
+		srcu_cleanup_notifier_head(&ec->events.block[1].notifier[i]);
+		ec->events.block[0].notifier_count[i] = 0;
+		ec->events.block[1].notifier_count[i] = 0;
 	}
 
 	// set device to deinitialized state

@@ -894,7 +894,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *p
 	ac->sam_nb.priority = 1;
 	ac->sam_nb.notifier_call = spwr_notify_ac;
 
-	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, &ac->sam_nb);
+	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, 0x01, &ac->sam_nb);
 	if (status)
 		goto err_notif;
 
@@ -909,7 +909,7 @@ err_psy:
 
 static int spwr_ac_unregister(struct spwr_ac_device *ac)
 {
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &ac->sam_nb);
+	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, 0x01, &ac->sam_nb);
 	power_supply_unregister(ac->psy);
 	mutex_destroy(&ac->lock);
 	return 0;
@@ -970,7 +970,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	bat->sam_nb.priority = 1;
 	bat->sam_nb.notifier_call = spwr_notify_bat;
 
-	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, &bat->sam_nb);
+	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, 0x01, &bat->sam_nb);
 	if (status)
 		goto err_notif;
 
@@ -981,7 +981,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	return 0;
 
 err_file:
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &bat->sam_nb);
+	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, 0x01, &bat->sam_nb);
 err_notif:
 	power_supply_unregister(bat->psy);
 err_psy:
@@ -991,7 +991,7 @@ err_psy:
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat)
 {
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &bat->sam_nb);
+	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, 0x01, &bat->sam_nb);
 	cancel_delayed_work_sync(&bat->update_work);
 	device_remove_file(&bat->psy->dev, &alarm_attr);
 	power_supply_unregister(bat->psy);
