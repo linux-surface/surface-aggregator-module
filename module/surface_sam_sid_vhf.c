@@ -327,7 +327,15 @@ static int sid_vhf_event_handler(struct notifier_block *nb, unsigned long action
 	if (!test_bit(VHF_HID_STARTED, &vhf->state))
 		return 0;
 
-	if (event->tc == SAM_EVENT_SID_VHF_TC && (event->cid == 0x00 || event->cid == 0x03 || event->cid == 0x04))
+	if (event->tc != SAM_EVENT_SID_VHF_TC) {
+		dev_warn(&vhf->dev->dev, "invalid target category: %d\n", event->tc);
+		return 0;
+	}
+
+	if (event->iid != vhf->iid)
+		return 0;
+
+	if (event->cid == 0x00 || event->cid == 0x03 || event->cid == 0x04)
 		return hid_input_report(vhf->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
 
 	dev_warn(&vhf->dev->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
