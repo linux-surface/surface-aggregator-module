@@ -389,6 +389,18 @@ static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
 	msgb_push_crc(msgb, msgb->ptr, 0);
 }
 
+static inline void msgb_push_nak(struct msgbuf *msgb)
+{
+	// SYN
+	msgb_push_syn(msgb);
+
+	// NAK-type frame + CRC
+	msgb_push_frame(msgb, SSH_FRAME_TYPE_NAK, 0x00, 0x00);
+
+	// payload CRC (ACK-type frames do not have a payload)
+	msgb_push_crc(msgb, msgb->ptr, 0);
+}
+
 static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 				 const struct surface_sam_ssh_rqst *rqst,
 				 u16 rqid)
@@ -1830,6 +1842,30 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	ssh_packet_put(packet);
 }
 
+static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
+{
+	struct ssh_packet_args args;
+	struct ssh_packet *packet;
+	struct msgbuf msgb;
+
+	args.type = 0;
+	args.priority = SSH_PACKET_PRIORITY(NAK, 0);
+	args.ops = &ssh_ptl_ctrl_packet_ops;
+
+	packet = ptl_alloc_ctrl_packet(ptl, &args, GFP_KERNEL);
+	if (!packet) {
+		ptl_err(ptl, "ptl: failed to allocate NAK packet\n");
+		return;
+	}
+
+	msgb_init(&msgb, packet->data, packet->data_length);
+	msgb_push_nak(&msgb);
+	packet->data_length = msgb_bytes_used(&msgb);
+
+	ssh_ptl_submit(ptl, packet);
+	ssh_packet_put(packet);
+}
+
 static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
@@ -1841,8 +1877,24 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 	// find SYN
 	syn_found = sshp_find_syn(source, &aligned);
 
-	if (unlikely(aligned.ptr - source->ptr) > 0)
+	if (unlikely(aligned.ptr - source->ptr) > 0) {
 		ptl_warn(ptl, "rx: parser: invalid start of frame, skipping\n");
+
+		/*
+		 * Notes:
+		 * - This might send multiple NAKs in case the communication
+		 *   starts with an invalid SYN and is broken down into multiple
+		 *   pieces. This should generally be handled fine, we just
+		 *   might receive duplicate data in this case, which is
+		 *   detected when handling data frames.
+		 * - This path will also be executed on invalid CRCs: When an
+		 *   invalid CRC is encountered, the code below will skip data
+		 *   until direclty after the SYN. This causes the search for
+		 *   the next SYN, which is generally not placed directly after
+		 *   the last one.
+		 */
+		ssh_ptl_send_nak(ptl);
+	}
 
 	if (unlikely(!syn_found))
 		return aligned.ptr - source->ptr;
@@ -4207,6 +4259,22 @@ static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
 	}
 }
 
+static void ssh_send_nak(struct sam_ssh_ec *ec)
+{
+	u8 buf[SSH_MSG_LEN_CTRL];
+	struct msgbuf msgb;
+	int status;
+
+	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
+		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
+		msgb_push_nak(&msgb);
+
+		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
+		if (status)
+			ssh_err(ec, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
+	}
+}
+
 static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 {
 	struct ssh_frame *frame;
@@ -4218,8 +4286,24 @@ static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
 	// find SYN
 	syn_found = sshp_find_syn(source, &aligned);
 
-	if (unlikely(aligned.ptr - source->ptr) > 0)
+	if (unlikely(aligned.ptr - source->ptr) > 0) {
 		ssh_warn(ec, "rx: parser: invalid start of frame, skipping\n");
+
+		/*
+		 * Notes:
+		 * - This might send multiple NAKs in case the communication
+		 *   starts with an invalid SYN and is broken down into multiple
+		 *   pieces. This should generally be handled fine, we just
+		 *   might receive duplicate data in this case, which is
+		 *   detected when handling data frames.
+		 * - This path will also be executed on invalid CRCs: When an
+		 *   invalid CRC is encountered, the code below will skip data
+		 *   until direclty after the SYN. This causes the search for
+		 *   the next SYN, which is generally not placed directly after
+		 *   the last one.
+		 */
+		ssh_send_nak(ec);
+	}
 
 	if (unlikely(!syn_found))
 		return aligned.ptr - source->ptr;
