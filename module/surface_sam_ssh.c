@@ -207,7 +207,7 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 
 static inline u16 __ssh_rqid_next(u16 rqid)
 {
-	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_MAX_EVENT_ID + 1;
+	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_NUM_EVENTS + 1;
 }
 
 static inline u16 ssh_event_to_rqid(u16 event)
@@ -222,11 +222,12 @@ static inline u16 ssh_rqid_to_event(u16 rqid)
 
 static inline bool ssh_rqid_is_event(u16 rqid)
 {
-	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_MAX_EVENT_ID;
+	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_NUM_EVENTS;
 }
 
 static inline int ssh_tc_to_event(u8 tc)
 {
+#if 0	// TODO: check if it works without this
 	/*
 	 * TC=0x08 represents the input subsystem on Surface Laptop 1 and 2.
 	 * This is mapped on Windows to RQID=0x0001. As input events seem to be
@@ -237,6 +238,7 @@ static inline int ssh_tc_to_event(u8 tc)
 		return ssh_rqid_to_event(0x0001);
 
 	/* Default path: Set RQID = TC. */
+#endif
 	return ssh_rqid_to_event(tc);
 }
 
@@ -3364,8 +3366,8 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 /* -- Event notifier. ------------------------------------------------------- */
 
 struct ssam_event_notifier {
-	struct srcu_notifier_head notif_head[SURFACE_SAM_SSH_MAX_EVENT_ID];
-	unsigned notif_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	struct srcu_notifier_head notif_head[SURFACE_SAM_SSH_NUM_EVENTS];
+	unsigned notif_count[SURFACE_SAM_SSH_NUM_EVENTS];
 };
 
 
@@ -3460,8 +3462,8 @@ struct ssh_receiver {
 struct ssh_events {
 	struct workqueue_struct *queue_ack;
 	struct workqueue_struct *queue_evt;
-	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_MAX_EVENT_ID];
-	int notifier_count[SURFACE_SAM_SSH_MAX_EVENT_ID];
+	struct srcu_notifier_head notifier[SURFACE_SAM_SSH_NUM_EVENTS];
+	int notifier_count[SURFACE_SAM_SSH_NUM_EVENTS];
 };
 
 struct sam_ssh_ec {
@@ -4670,7 +4672,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	ec->events.queue_ack = event_queue_ack;
 	ec->events.queue_evt = event_queue_evt;
 
-	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
+	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++) {
 		srcu_init_notifier_head(&ec->events.notifier[i]);
 		ec->events.notifier_count[i] = 0;
 	}
@@ -4766,7 +4768,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 		dev_err(&serdev->dev, "error stopping receiver thread: %d\n", status);
 
 	// remove event handlers
-	for (i = 0; i < SURFACE_SAM_SSH_MAX_EVENT_ID; i++) {
+	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++) {
 		srcu_cleanup_notifier_head(&ec->events.notifier[i]);
 		ec->events.notifier_count[i] = 0;
 	}

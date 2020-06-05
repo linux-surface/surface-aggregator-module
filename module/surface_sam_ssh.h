@@ -34,7 +34,7 @@
  * exception of zero, which is not an event ID. Thus, this is also the
  * absolute maximum number of event handlers that can be registered.
  */
-#define SURFACE_SAM_SSH_MAX_EVENT_ID		32
+#define SURFACE_SAM_SSH_NUM_EVENTS		32
 
 /*
  * Special event-handler delay value indicating that the corresponding event
