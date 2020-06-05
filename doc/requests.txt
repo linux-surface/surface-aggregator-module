@@ -131,7 +131,7 @@ List of Power Subsystem Events (TC = 0x02)
     0x15  #BAT  0x01  no       _BIX data changed                log(+dsdt)
     0x16  #BAT  0x01  no       _BST data changed                log(+dsdt)
     0x17  0x01  0x01  no       Power adapter status changed     log(+dsdt)
-    0x18  #BAT  0x01  ?        Protection status changed        rev
+    0x18  #BAT  0x01  yes      Protection status changed        rev+log
 
     0x4f  0x00  0x01  yes      DPTF notification                log(+dsdt)
     0x53  #BAT  0x01  yes      TpUpdate (?)                     log/rev
