@@ -71,8 +71,14 @@ List of System Requests (TC = 0x01)
 
      CID   IID   PRI  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
+    0x01   0    0x01  ?        yes       Get FWCHK_PENDING      probing
+    0x02   0    0x01  ?        yes       Set FWCHK_PENDING      probing
+    0x03   0    0x01  ?        yes       Clear FWCHK_PENDING    probing
+
     0x0b  0x00  0x01  yes      yes       Enable event source    log
-    0x0c  0x00  0x01  no       yes       Disable event source   log
+    0x0c  0x00  0x01  yes      yes       Disable event source   log
+
+    0x10  0x00  0x01  no       yes       Unix Epoch (seconds)   probing
 
     0x13  0x00  0x01  no       yes       SAM Controller version rev
     0x14  0x00  0x01  no       no        Hard Reset (Reboot)    probing
@@ -90,6 +96,12 @@ List of System Requests (TC = 0x01)
 
     0x33  0x00  0x01  no       yes       Device D3 Entry        rev
     0x34  0x00  0x01  no       yes       Device D0 Entry        rev
+
+
+Abbreviations:
+    - FWCHK: Firmware integrity check (likely UEFI only). If FWCHK_PENDING is
+      set, a FW/UEFI integrity check is triggered after reboot.
+    - RTC: Real-Time Clock.
 
 
 List of Power Subsystem Requests (TC = 0x02)
@@ -220,6 +232,24 @@ awaiting a response. It is also unclear if and what kind of payload these
 commands take. Furthermore, Some commands that we assume are undefined (e.g.
 TC=2, CID=1, IID=6) can lead to unexpected behavior (in this case turning
 off the system), which might be undefined.
+
+
+List of Unknown System Requests (TC = 0x01)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Response  Function/Behavior      Source
+    ------------------------------------------------------------------------
+    0x0d   0    0x01  ?        yes       ?                      probing
+    0x0e   0    0x01  ?        yes       ?                      probing
+    0x1e   0    0x01  ?        yes       ?                      probing
+    0x22   0    0x01  ?        yes       RTC: time + date + ?   probing
+    0x24   0    0x01  ?        yes       RTC: ?                 probing
+    0x27   0    0x01  ?        yes       RTC: ?                 probing
+    0x28   0    0x01  ?        yes       RTC: ?                 probing
+    0x29   0    0x01  ?        yes       RTC: ?                 probing
+    0x2e   0    0x01  ?        yes       RTC: date + ?          probing
+    0x2f   0    0x01  ?        yes       RTC: ?                 probing
+
 
 
 List of Unknown Power Subsystem Requests (TC = 0x02)
