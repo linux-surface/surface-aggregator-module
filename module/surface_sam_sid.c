@@ -13,6 +13,7 @@
 
 static const struct mfd_cell sid_devs_sp4[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
+	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
