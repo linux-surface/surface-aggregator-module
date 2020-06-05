@@ -207,17 +207,17 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 
 static inline u16 __ssh_rqid_next(u16 rqid)
 {
-	return rqid > 0 ? rqid + 1 : rqid + SURFACE_SAM_SSH_NUM_EVENTS + 1;
+	return rqid > 0 ? rqid + 1u : rqid + SURFACE_SAM_SSH_NUM_EVENTS + 1u;
 }
 
 static inline u16 ssh_event_to_rqid(u16 event)
 {
-	return event + 1;
+	return event + 1u;
 }
 
 static inline u16 ssh_rqid_to_event(u16 rqid)
 {
-	return rqid - 1;
+	return rqid - 1u;
 }
 
 static inline bool ssh_rqid_is_event(u16 rqid)
