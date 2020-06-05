@@ -23,6 +23,16 @@ def disable_event(rqid, tc, iid, seq):
     return bytes([0x21, 0x02, 0x00, 0x02, 0x01, 0x05, tc, seq, lo16(rqid), hi16(rqid), iid])
 
 
+def sys_event_enable(rqid, tc, pri):
+    #            [  TC,  CID,  IID,  PRI,  SNC,  CDL, payload...]
+    return bytes([0x01, 0x0b, 0x00, 0x01, 0x01, 0x04, tc, pri, lo16(rqid), hi16(rqid)])
+
+
+def sys_event_disable(rqid, tc, pri):
+    #            [  TC,  CID,  IID,  PRI,  SNC,  CDL, payload...]
+    return bytes([0x01, 0x0c, 0x00, 0x01, 0x01, 0x04, tc, pri, lo16(rqid), hi16(rqid)])
+
+
 def main():
     if len(sys.argv) != 2:
         print("not a valid command: choose one of:")
@@ -38,6 +48,11 @@ def main():
         data = enable_event(0x15, 0x15, 0x01, 0x00)
     elif cmd == "disable":
         data = disable_event(0x15, 0x15, 0x01, 0x00)
+    elif cmd == "kbd-enable":
+        data = sys_event_enable(0x15, 0x15, int(sys.argv[2], 0))
+    elif cmd == "kbd-disable":
+        data = sys_event_disable(0x15, 0x15, int(sys.argv[2], 0))
+        pass
     else:
         print("not a valid command: choose one of:")
         print("    setup, teardown, enable, disable")
