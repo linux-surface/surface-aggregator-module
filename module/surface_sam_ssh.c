@@ -225,7 +225,7 @@ static inline bool ssh_rqid_is_event(u16 rqid)
 	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_NUM_EVENTS;
 }
 
-static inline int ssh_tc_to_event(u8 tc)
+static inline int ssh_tc_to_rqid(u8 tc)
 {
 #if 0	// TODO: check if it works without this
 	/*
@@ -235,11 +235,16 @@ static inline int ssh_tc_to_event(u8 tc)
 	 * enabled by default with a fixed RQID), let's do the same here.
 	 */
 	if (tc == 0x08)
-		return ssh_rqid_to_event(0x0001);
+		return 0x0001;
 
 	/* Default path: Set RQID = TC. */
 #endif
-	return ssh_rqid_to_event(tc);
+	return tc;
+}
+
+static inline int ssh_tc_to_event(u8 tc)
+{
+	return ssh_rqid_to_event(ssh_tc_to_rqid(tc));
 }
 
 static inline u8 ssh_channel_to_index(u8 channel)
@@ -3375,62 +3380,103 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 /* -- Event notifier. ------------------------------------------------------- */
 
-struct ssam_event_notifier {
-	struct srcu_notifier_head notif_head[SURFACE_SAM_SSH_NUM_EVENTS];
-	unsigned notif_count[SURFACE_SAM_SSH_NUM_EVENTS];
+struct ssam_notifier_entry {
+	struct srcu_notifier_head head;
+};
+
+struct ssam_notifier_channel {
+	struct ssam_notifier_entry entry[SURFACE_SAM_SSH_NUM_EVENTS];
+};
+
+struct ssam_notifier {
+	struct ssam_notifier_channel channel[SURFACE_SAM_SSH_NUM_CHANNELS];
 };
 
 
-static void ssam_event_notify(struct ssam_event_notifier *en,
-			      struct device *dev,
-			      struct ssam_event *event)
+static inline struct ssam_notifier_entry *__ssam_notifier_get_entry(
+		struct ssam_notifier *notif, u8 channel, u16 rqid)
 {
-	struct srcu_notifier_head *nh;
+	u16 event = ssh_rqid_to_event(rqid);
+	u8 chan = ssh_channel_to_index(channel);
+
+	return &notif->channel[chan].entry[event];
+}
+
+static struct ssam_notifier_entry *ssam_notifier_get_entry(
+		struct ssam_notifier *notif, u8 channel, u8 target_category)
+{
+	u16 rqid = ssh_tc_to_rqid(target_category);
+
+	if (!ssh_channel_is_valid(channel))
+		return NULL;
+
+	if (!ssh_rqid_is_event(rqid))
+		return NULL;
+
+	return __ssam_notifier_get_entry(notif, channel, rqid);
+}
+
+static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
+			       struct ssam_event *event)
+{
+	struct ssam_notifier_entry *entry;
+	u8 channel = event->priority;
 	int status, ncalls;
 
-	nh = &en->notif_head[ssh_rqid_to_event(event->rqid)];
-	status = __srcu_notifier_call_chain(nh, event->target_category, event,
-					    -1, &ncalls);
+	if (!ssh_rqid_is_event(event->rqid)) {
+		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", event->rqid);
+		return;
+	}
+
+	if (!ssh_channel_is_valid(event->priority)) {
+		dev_warn(dev, "event: unsupported channel: %d, falling back",
+			 event->priority);
+		channel = 1;
+	}
+
+	entry = __ssam_notifier_get_entry(notif, channel, event->rqid);
+	status = __srcu_notifier_call_chain(&entry->head,
+			event->target_category, event, -1, &ncalls);
 	status = notifier_to_errno(status);
 
-	if (status < 0)
-		dev_err(dev, "event: error handling event: %d\n", status);
+	if (status < 0) {
+		dev_err(dev, "event: error handling event: %d (tc: 0x%02x, "
+			 " cid: 0x%02x, channel: 0x%02x)\n",
+			 status, event->target_category, event->command_id,
+			 event->priority);
+	}
 
 	if (ncalls == 0) {
 		dev_warn(dev, "event: unhandled event (rqid: 0x%04x,"
-			 " tc: 0x%02x, cid: 0x%02x)\n", event->rqid,
-			 event->target_category, event->command_id);
+			 " tc: 0x%02x, cid: 0x%02x, channel: 0x%02x)\n",
+			 event->rqid, event->target_category, event->command_id,
+			 event->priority);
 	}
 }
 
-static int ssam_event_notifier_register(struct ssam_event_notifier *en,
-					struct notifier_block *nb, u16 event)
+static int ssam_notifier_register(struct ssam_notifier *notif, u8 channel,
+				  u8 target_category, struct notifier_block *nb)
 {
-	int status;
+	struct ssam_notifier_entry *entry;
 
-	status = srcu_notifier_chain_register(&en->notif_head[event], nb);
-	if (!status)
-		en->notif_count[event] += 1;
+	entry = ssam_notifier_get_entry(notif, channel, target_category);
+	if (!entry)
+		return -EINVAL;
 
-	return status;
+	return srcu_notifier_chain_register(&entry->head, nb);
 }
 
-static int ssam_event_notifier_unregister(struct ssam_event_notifier *en,
-					  struct notifier_block *nb, u16 event)
+static int ssam_notifier_unregister(struct ssam_notifier *notif, u8 channel,
+				    u8 target_category,
+				    struct notifier_block *nb)
 {
-	int status;
+	struct ssam_notifier_entry *entry;
 
-	status = srcu_notifier_chain_unregister(&en->notif_head[event], nb);
-	if (!status)
-		en->notif_count[event] -= 1;
+	entry = ssam_notifier_get_entry(notif, channel, target_category);
+	if (!entry)
+		return -EINVAL;
 
-	return status;
-}
-
-static inline unsigned ssam_event_notifier_count(struct ssam_event_notifier *en,
-						 u16 event)
-{
-	return en->notif_count[event];
+	return srcu_notifier_chain_unregister(&entry->head, nb);
 }
 
 
