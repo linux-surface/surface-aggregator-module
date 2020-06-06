@@ -242,6 +242,16 @@ static inline int ssh_tc_to_event(u8 tc)
 	return ssh_rqid_to_event(tc);
 }
 
+static inline u8 ssh_channel_to_index(u8 channel)
+{
+	return channel - 1u;
+}
+
+static inline bool ssh_channel_is_valid(u8 channel)
+{
+	return ssh_channel_to_index(channel) < SURFACE_SAM_SSH_NUM_CHANNELS;
+}
+
 
 /* -- Safe counters. -------------------------------------------------------- */
 
