@@ -68,16 +68,11 @@ enum ssam_request_flags {
 	SSAM_REQUEST_UNSEQUENCED  = BIT(1),
 };
 
-enum ssam_request_priority {
-	SSAM_PRIORITY_NORMAL = 1,
-	SSAM_PRIORITY_HIGH,
-};
-
 struct ssam_request {
 	u8 target_category;
 	u8 command_id;
 	u8 instance_id;
-	u8 priority;
+	u8 channel;
 	u16 flags;
 	u16 length;
 	u8 *payload;
@@ -87,7 +82,7 @@ struct ssam_event {
 	u8 target_category;
 	u8 command_id;
 	u8 instance_id;
-	u8 priority;
+	u8 channel;
 	u16 rqid;
 	u16 length;
 	u8 data[0];
@@ -146,9 +141,9 @@ enum ssh_payload_type {
  * @type:    The type of the payload. See &enum ssh_payload_type. Should be
  *           SSH_PLD_TYPE_CMD for this struct.
  * @tc:      Command target category.
- * @pri_out: Output priority. Should be zero if this an incoming (EC to host)
+ * @chn_out: Output channel. Should be zero if this an incoming (EC to host)
  *           message.
- * @pri_in:  Input priority. Should be zero if this is an outgoing (hos to EC)
+ * @chn_in:  Input channel. Should be zero if this is an outgoing (hos to EC)
  *           message.
  * @iid:     Instance ID.
  * @rqid:    Request ID. Used to match requests with responses and differentiate
@@ -158,8 +153,8 @@ enum ssh_payload_type {
 struct ssh_command {
 	u8 type;
 	u8 tc;
-	u8 pri_out;
-	u8 pri_in;
+	u8 chn_out;
+	u8 chn_in;
 	u8 iid;
 	__le16 rqid;
 	u8 cid;
@@ -442,8 +437,8 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 
 	cmd->type    = SSH_PLD_TYPE_CMD;
 	cmd->tc      = rqst->tc;
-	cmd->pri_out = rqst->pri;
-	cmd->pri_in  = 0x00;
+	cmd->chn_out = rqst->chn;
+	cmd->chn_in  = 0x00;
 	cmd->iid     = rqst->iid;
 	put_unaligned_le16(rqid, &cmd->rqid);
 	cmd->cid     = rqst->cid;
@@ -3420,7 +3415,7 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 			       struct ssam_event *event)
 {
 	struct ssam_notifier_entry *entry;
-	u8 channel = event->priority;
+	u8 channel = event->channel;
 	int status, ncalls;
 
 	if (!ssh_rqid_is_event(event->rqid)) {
@@ -3428,9 +3423,9 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 		return;
 	}
 
-	if (!ssh_channel_is_valid(event->priority)) {
+	if (!ssh_channel_is_valid(event->channel)) {
 		dev_warn(dev, "event: unsupported channel: %d, falling back",
-			 event->priority);
+			 event->channel);
 		channel = 1;
 	}
 
@@ -3443,14 +3438,14 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 		dev_err(dev, "event: error handling event: %d (tc: 0x%02x, "
 			 " cid: 0x%02x, channel: 0x%02x)\n",
 			 status, event->target_category, event->command_id,
-			 event->priority);
+			 event->channel);
 	}
 
 	if (ncalls == 0) {
 		dev_warn(dev, "event: unhandled event (rqid: 0x%04x,"
 			 " tc: 0x%02x, cid: 0x%02x, channel: 0x%02x)\n",
 			 event->rqid, event->target_category, event->command_id,
-			 event->priority);
+			 event->channel);
 	}
 }
 
@@ -3636,7 +3631,7 @@ static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec, u8 tc,
 		.tc  = 0x01,
 		.cid = 0x0b,
 		.iid = 0x00,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.chn = 0x01,
 		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
@@ -3680,7 +3675,7 @@ static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec, u8 tc,
 		.tc  = 0x01,
 		.cid = 0x0c,
 		.iid = 0x00,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.chn = 0x01,
 		.snc = 0x01,
 		.cdl = 0x04,
 		.pld = pld,
@@ -3967,7 +3962,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 		.tc  = 0x01,
 		.cid = 0x16,
 		.iid = 0x00,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.chn = 0x01,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -4021,7 +4016,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 		.tc  = 0x01,
 		.cid = 0x15,
 		.iid = 0x00,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.chn = 0x01,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -4058,7 +4053,7 @@ static int surface_sam_ssh_get_controller_version(struct sam_ssh_ec *ec, u32 *ve
 		.tc  = 0x01,
 		.cid = 0x13,
 		.iid = 0x00,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
+		.chn = 0x01,
 		.snc = 0x01,
 		.cdl = 0x00,
 		.pld = NULL,
@@ -4189,7 +4184,7 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 	work->event.tc   = command->tc;
 	work->event.cid  = command->cid;
 	work->event.iid  = command->iid;
-	work->event.pri  = command->pri_in;
+	work->event.chn  = command->chn_in;
 	work->event.len  = command_data->len;
 	work->event.pld  = ((u8 *)work) + sizeof(struct ssh_event_work);
 	memcpy(work->event.pld, command_data->ptr, command_data->len);

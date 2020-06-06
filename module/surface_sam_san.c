@@ -529,7 +529,7 @@ san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 	rqst.tc  = gsb_rqst->tc;
 	rqst.cid = gsb_rqst->cid;
 	rqst.iid = gsb_rqst->iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = gsb_rqst->snc;
 	rqst.cdl = gsb_rqst->cdl;
 	rqst.pld = &gsb_rqst->pld[0];

@@ -139,8 +139,8 @@ order:
     ------------------------------------------------------------------------
     TYPE        u8     Type of the payload. For commands always 0x80.
     TC          u8     Target category.
-    PRI (out)   u8     Priority for outgoing (host to EC) commands.
-    PRI (in)    u8     Priority for incoming (EC to host) commands.
+    CHAN (out)  u8     Channel for outgoing (host to EC) commands.
+    CHAN (in)   u8     Channel for incoming (EC to host) commands.
     IID         u8     Instance ID.
     RQID        u16    Request ID.
     CID         u8     Command ID.
@@ -191,12 +191,12 @@ ID, as a single event source can send multiple different event types. In
 general, however, a single target category should map to a single reserved
 event request ID.
 
-Furthermore, requests, responses, and events have an associated priority
-(PRI). This priority is split into output (host to EC) and input (EC to
+Furthermore, requests, responses, and events have an associated channel
+(CHAN). This channel is split into output (host to EC) and input (EC to
 host) fields, with the respecting other field (e.g. output field on
-incoming messages) set to zero. Two priorities are known: Normal priority
+incoming messages) set to zero. Two channels are known: Normal priority
 (0x01) and high priority (0x02). In general, the response to a request
-should have the same priority value, however, the field (output vs. input)
+should have the same channel value, however, the field (output vs. input)
 should be used in accordance to the direction in which the response is sent
 (i.e. on the input field, as responses are generally sent from the EC to
 the host).
@@ -204,8 +204,8 @@ the host).
 Note that, even though requests and events should be uniquely identifiable
 by target category and command ID alone, the EC may require specific
 priority and instance ID values to accept a command. A command that is
-accepted at normal priority, for example, may not be accepted at high
-priority and vice versa.
+accepted for channel 0x01, for example, may not be accepted for channel 0x02
+and vice versa.
 
 
 Limitations and Observations

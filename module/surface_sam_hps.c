@@ -150,10 +150,10 @@ static int dtx_cmd_simple(u8 cid)
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = SAM_DTX_TC,
 		.cid = cid,
-		.iid = 0,
-		.pri = SURFACE_SAM_PRIORITY_NORMAL,
-		.snc = 0,
-		.cdl = 0,
+		.iid = 0x00,
+		.chn = 0x01,
+		.snc = 0x00,
+		.cdl = 0x00,
 		.pld = NULL,
 	};
 

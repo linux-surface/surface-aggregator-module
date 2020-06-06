@@ -49,12 +49,6 @@
 #define SURFACE_SAM_SSH_EVENT_IMMEDIATE		((unsigned long) -1)
 
 
-enum surface_sam_rqst_priority {
-	SURFACE_SAM_PRIORITY_NORMAL = 1,
-	SURFACE_SAM_PRIORITY_HIGH   = 2,
-};
-
-
 struct surface_sam_ssh_buf {
 	u8 cap;
 	u8 len;
@@ -65,18 +59,19 @@ struct surface_sam_ssh_rqst {
 	u8 tc;				// target category
 	u8 cid;				// command ID
 	u8 iid;				// instance ID
-	u8 pri;				// priority
+	u8 chn;				// channel
 	u8 snc;				// expect response flag (bool: 0/1)
 	u8 cdl;				// command data length (length of payload)
 	u8 *pld;			// pointer to payload of length cdl
 };
 
+// TODO: remove rqid on external api
 struct surface_sam_ssh_event {
 	u16 rqid;			// event type/source ID
 	u8  tc;				// target category
 	u8  cid;			// command ID
 	u8  iid;			// instance ID
-	u8  pri;			// priority
+	u8  chn;			// channel
 	u8  len;			// length of payload
 	u8 *pld;			// payload of length len
 };

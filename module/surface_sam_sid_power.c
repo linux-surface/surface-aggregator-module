@@ -110,7 +110,7 @@ static int sam_psy_get_sta(u8 iid, u32 *sta)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_STA;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -131,7 +131,7 @@ static int sam_psy_get_bix(u8 iid, struct spwr_bix *bix)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BIX;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -152,7 +152,7 @@ static int sam_psy_get_bst(u8 iid, struct spwr_bst *bst)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BST;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -172,7 +172,7 @@ static int sam_psy_set_btp(u8 iid, u32 btp)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BTP;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x00;
 	rqst.cdl = sizeof(u32);
 	rqst.pld = (u8 *)&btp;
@@ -189,7 +189,7 @@ static int sam_psy_get_psrc(u8 iid, u32 *psrc)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PSRC;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -211,7 +211,7 @@ static int sam_psy_get_pmax(u8 iid, u32 *pmax)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PMAX;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -233,7 +233,7 @@ static int sam_psy_get_artg(u8 iid, u32 *artg)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_ARTG;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -255,7 +255,7 @@ static int sam_psy_get_psoc(u8 iid, u32 *psoc)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PSOC;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -276,7 +276,7 @@ static int sam_psy_set_chgi(u8 iid, u32 chgi)
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_CHGI;
 	rqst.iid = iid;
-	rqst.pri = SURFACE_SAM_PRIORITY_NORMAL;
+	rqst.chn = 0x01;
 	rqst.snc = 0x00;
 	rqst.cdl = sizeof(u32);
 	rqst.pld = (u8 *)&chgi;

@@ -108,10 +108,10 @@ static int vhf_get_metadata(u8 iid, struct vhf_device_metadata *meta)
 	};
 
 	struct surface_sam_ssh_rqst rqst = {
-		.tc = 0x15,
+		.tc  = 0x15,
 		.cid = 0x04,
 		.iid = iid,
-		.pri = 0x02,
+		.chn = 0x02,
 		.snc = 0x01,
 		.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst),
 		.pld = (u8 *)&resp.rqst,
@@ -147,10 +147,10 @@ static int vhf_get_hid_descriptor(struct hid_device *hid, u8 iid, u8 **desc, int
 	};
 
 	struct surface_sam_ssh_rqst rqst = {
-		.tc = 0x15,
+		.tc  = 0x15,
 		.cid = 0x04,
 		.iid = iid,
-		.pri = 0x02,
+		.chn = 0x02,
 		.snc = 0x01,
 		.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst),
 		.pld = (u8 *)&resp.rqst,
@@ -259,7 +259,7 @@ static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
 	}
 
 	rqst.tc  = SAM_EVENT_SID_VHF_TC;
-	rqst.pri = SURFACE_SAM_PRIORITY_HIGH;
+	rqst.chn = 0x02;
 	rqst.iid = 0x00; // windows tends to distinguish iids, but EC will take it
 	rqst.cid = cid;
 	rqst.snc = reqtype == HID_REQ_GET_REPORT ? 0x01 : 0x00;
