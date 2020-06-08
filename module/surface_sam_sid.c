@@ -46,6 +46,7 @@ static const struct mfd_cell sid_devs_sb3[] = {
 	{ .name = "surface_sam_sid_battery",  .id =  1 },
 	{ .name = "surface_sam_sid_battery",  .id =  2 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
+	{ .name = "surface_sam_dtx",          .id = -1 },
 	{ },
 };
 

@@ -586,3 +586,4 @@ module_platform_driver(surface_sam_dtx);
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Detachment System (DTX) Driver for 5th Generation Surface Devices");
 MODULE_LICENSE("GPL");
+MODULE_ALIAS("platform:surface_sam_dtx");
