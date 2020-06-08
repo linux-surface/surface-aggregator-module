@@ -585,7 +585,7 @@ static int spwr_notify_bat(struct notifier_block *nb, unsigned long action, void
 
 	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x)\n", event->cid);
 
-	// handled here because adapter has IID = 0
+	// handled here because adapter may have IID = 0 on some devices
 	if (event->cid == SAM_EVENT_PWR_CID_ADAPTER)
 		return spwr_notify_adapter_bat(bat);
 
