@@ -4,7 +4,6 @@ import os
 
 PATH_DEV_RQST = '/sys/bus/serial/devices/serial0-0/rqst'
 
-
 EVCMDS = {
     'enable':         {'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
     'disable':        {'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
@@ -49,12 +48,56 @@ def run_command(data):
 
 def main():
     cmd_name = sys.argv[1]
-    channel = int(sys.argv[2], 0)
-    ev_tc = int(sys.argv[3], 0)
-    ev_seq = int(sys.argv[4], 0)
-    ev_iid = int(sys.argv[5], 0)
 
-    run_command(event_command(cmd_name, channel, ev_tc, ev_seq, ev_iid))
+    if cmd_name == 'help':
+        print(f'Usage:')
+        print(f'  {sys.argv[0]} <command> [args...]')
+        print(f'')
+        print(f'Commands:')
+        print(f'  help')
+        print(f'    display this help message')
+        print(f'')
+        print(f'  simple <tc> <cid> <iid> <channel> <snc>')
+        print(f'    simple command without payload')
+        print(f'')
+        print(f'  enable <channel> <ev_tc> <ev_seq> <ev_iid>')
+        print(f'    enable event using REG subsystem')
+        print(f'')
+        print(f'  disable <channel> <ev_tc> <ev_seq> <ev_iid>')
+        print(f'    disable event using REG subsystem')
+        print(f'')
+        print(f'  legacy-enable <channel> <ev_tc> <ev_seq> <ev_iid>')
+        print(f'    enable event via legacy method')
+        print(f'')
+        print(f'  legacy-disable <channel> <ev_tc> <ev_seq> <ev_iid>')
+        print(f'    disable event via legacy method')
+        print(f'')
+        print(f'Arguments:')
+        print(f'  <tc>:       command target category')
+        print(f'  <cid>:      command ID')
+        print(f'  <iid>:      command instance ID')
+        print(f'  <channel>:  communication channel')
+        print(f'  <snc>:      command-expects-response flag')
+        print(f'  <ev_tc>:    event target category')
+        print(f'  <ev_seq>:   event-is-sequenced flag')
+        print(f'  <ev_iid>:   event instance ID')
+
+    elif cmd_name == 'simple':
+        tc = int(sys.argv[2], 0)
+        cid = int(sys.argv[3], 0)
+        iid = int(sys.argv[4], 0)
+        chn = int(sys.argv[5], 0)
+        snc = int(sys.argv[6], 0)
+
+        run_command(command(tc, cid, iid, chn, snc, bytes()))
+
+    else:
+        channel = int(sys.argv[2], 0)
+        ev_tc = int(sys.argv[3], 0)
+        ev_seq = int(sys.argv[4], 0)
+        ev_iid = int(sys.argv[5], 0)
+
+        run_command(event_command(cmd_name, channel, ev_tc, ev_seq, ev_iid))
 
 
 if __name__ == '__main__':
