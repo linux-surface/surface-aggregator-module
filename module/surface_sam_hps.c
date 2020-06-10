@@ -24,6 +24,8 @@
 
 static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix);
 
+#define SHPS_ERR		KERN_ERR "surface_sam_hps "
+
 
 #define SHPS_DSM_REVISION	1
 #define SHPS_DSM_GPU_ADDRS	0x02
@@ -40,7 +42,7 @@ static const guid_t SHPS_DSM_UUID =
 #define SAM_DTX_CID_LATCH_LOCK		0x06
 #define SAM_DTX_CID_LATCH_UNLOCK	0x07
 
-#define SHPS_DSM_GPU_ADDRS_RP		"RP5_PCIE"
+#define SHPS_DSM_GPU_ADDRS_RP		"RP13_PCIE"
 #define SHPS_DSM_GPU_ADDRS_DGPU		"DGPU_PCIE"
 
 
@@ -91,6 +93,8 @@ struct shps_driver_data {
 	unsigned int irq_dgpu_presence;
 	unsigned int irq_base_presence;
 	unsigned long state;
+	struct notifier_block sam_nb;
+	struct platform_device *pdev;
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -173,15 +177,16 @@ static inline int shps_dtx_latch_unlock(void)
 
 static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char *entry)
 {
-	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
-	union acpi_object *result;
-	union acpi_object *e0;
-	union acpi_object *e1;
-	union acpi_object *e2;
-	u64 device_addr = 0;
+	//acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+	//union acpi_object *result;
+	//union acpi_object *e0;
+	//union acpi_object *e1;
+	//union acpi_object *e2;
+	//u64 device_addr = 0;
 	u8 bus, dev, fun;
-	int i;
+	//int i;
 
+	/*
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
 					 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
 
@@ -217,10 +222,11 @@ static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char *
 	if (device_addr == 0)
 		return -ENODEV;
 
+	*/
 	// convert address
-	bus = (device_addr & 0x0FF00000) >> 20;
-	dev = (device_addr & 0x000F8000) >> 15;
-	fun = (device_addr & 0x00007000) >> 12;
+	bus = 0; //(device_addr & 0x0FF00000) >> 20;
+	dev = 29; //(device_addr & 0x000F8000) >> 15;
+	fun = 4; //(device_addr & 0x00007000) >> 12;
 
 	return bus << 8 | PCI_DEVFN(dev, fun);
 }
@@ -299,8 +305,10 @@ static int shps_dgpu_dsm_set_power_unlocked(struct platform_device *pdev, enum s
 		return -EINVAL;
 
 	status = shps_dgpu_dsm_get_power_unlocked(pdev);
-	if (status < 0)
+	if (status < 0) {
+		dev_err(&pdev->dev, "get_power_unlocked returned %d", status);
 		return status;
+	}
 	if (status == power)
 		return 0;
 
@@ -443,7 +451,6 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 
 	return status;
 }
-
 
 static int shps_dgpu_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
@@ -608,6 +615,12 @@ static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix)
 	dev_dbg(&pdev->dev, "%s: RP mastered: %d", prefix, rp->is_busmaster);
 }
 
+static int shps_notification(struct notifier_block *nb, unsigned long action, void *data) {
+	struct shps_driver_data *drvdata = container_of(nb, struct shps_driver_data, sam_nb);
+
+	dev_err(&drvdata->pdev->dev, "notication!");
+	return 0;
+}
 
 static int shps_pm_prepare(struct device *dev)
 {
@@ -852,18 +865,21 @@ static int shps_gpios_setup(struct platform_device *pdev)
 	gpio_dgpu_power = devm_gpiod_get(&pdev->dev, "dgpu_power", GPIOD_IN);
 	if (IS_ERR(gpio_dgpu_power)) {
 		status = PTR_ERR(gpio_dgpu_power);
+		dev_err(&pdev->dev, "unable to get dgpu_power: %d", status);
 		goto err_out;
 	}
 
 	gpio_dgpu_presence = devm_gpiod_get(&pdev->dev, "dgpu_presence", GPIOD_IN);
 	if (IS_ERR(gpio_dgpu_presence)) {
 		status = PTR_ERR(gpio_dgpu_presence);
+		dev_err(&pdev->dev, "unable to get dgpu_presence: %d", status);
 		goto err_out;
 	}
 
 	gpio_base_presence = devm_gpiod_get(&pdev->dev, "base_presence", GPIOD_IN);
 	if (IS_ERR(gpio_base_presence)) {
 		status = PTR_ERR(gpio_base_presence);
+		dev_err(&pdev->dev, "unable to get dgpu_base: %d", status);
 		goto err_out;
 	}
 
@@ -927,7 +943,7 @@ static void shps_gpios_remove(struct platform_device *pdev)
 static int shps_gpios_setup_irq(struct platform_device *pdev)
 {
 	const int irqf_dgpu = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
-	const int irqf_base = IRQF_SHARED | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
+	const int irqf_base = IRQF_SHARED;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
@@ -944,8 +960,10 @@ static int shps_gpios_setup_irq(struct platform_device *pdev)
 	status = request_irq(drvdata->irq_base_presence,
 			     shps_base_presence_irq, irqf_base,
 			     "shps_base_presence_irq", pdev);
-	if (status)
+	if (status) {
+		dev_err(&pdev->dev, "base irq failed: %d", status);
 		return status;
+	}
 
 	status = request_threaded_irq(drvdata->irq_dgpu_presence,
 				      NULL, shps_dgpu_presence_irq, irqf_dgpu,
@@ -973,22 +991,30 @@ static int shps_probe(struct platform_device *pdev)
 	struct device_link *link;
 	int power, status;
 
-	if (gpiod_count(&pdev->dev, NULL) < 0)
+	if (gpiod_count(&pdev->dev, NULL) < 0) {
+		dev_err(&pdev->dev, "gpiod_count returned < 0");
 		return -ENODEV;
+	}
 
 	// link to SSH
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
-	if (status)
+	if (status) {
+		dev_err(&pdev->dev, "failed to register with ssh consumer: %d\n", status);
 		return status == -ENXIO ? -EPROBE_DEFER : status;
+	}
 
 	// link to SAN
-	status = surface_sam_san_consumer_register(&pdev->dev, 0);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
+	//status = surface_sam_san_consumer_register(&pdev->dev, 0);
+	//if (status) {
+	//	dev_err(&pdev->dev, "failed to register with san consumer: %d\n", status);
+	//	return status == -ENXIO ? -EPROBE_DEFER : status;
+	//}
 
 	status = acpi_dev_add_driver_gpios(shps_dev, shps_acpi_gpios);
-	if (status)
+	if (status) {
+		dev_err(&pdev->dev, "failed to add gpios: %d\n", status);
 		return status;
+	}
 
 	drvdata = kzalloc(sizeof(struct shps_driver_data), GFP_KERNEL);
 	if (!drvdata) {
@@ -998,23 +1024,41 @@ static int shps_probe(struct platform_device *pdev)
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
 
+	drvdata->pdev = pdev;
+	drvdata->sam_nb.priority = 1;
+	drvdata->sam_nb.notifier_call = shps_notification;
+	status = surface_sam_ssh_notifier_register(0x15, 0x1, &drvdata->sam_nb);
+	if (status) {
+		dev_err(&pdev->dev, "fialed to register with ssh: %d\n", status);
+	}
+
 	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_RP);
 	if (IS_ERR(drvdata->dgpu_root_port)) {
 		status = PTR_ERR(drvdata->dgpu_root_port);
+		dev_err(&pdev->dev, "failed to get pci dev: %d\n", status);
 		goto err_rp_lookup;
 	}
 
 	status = shps_gpios_setup(pdev);
-	if (status)
+	if (status) {
+		dev_err(&pdev->dev, "unable to set up gpios, %d", status);
 		goto err_gpio;
+	}
 
 	status = shps_gpios_setup_irq(pdev);
-	if (status)
+	if (status) {
+		dev_err(&pdev->dev, "unable to set up irqs %d", status);
 		goto err_gpio_irqs;
+	}
 
 	status = device_add_groups(&pdev->dev, shps_power_groups);
 	if (status)
 		goto err_devattr;
+	
+	status = shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_OFF);
+	if (status) {
+		dev_err(&pdev->dev, "unable to set power off %d", status);
+	}
 
 	link = device_link_add(&pdev->dev, &drvdata->dgpu_root_port->dev,
 			       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
@@ -1067,6 +1111,7 @@ static int shps_remove(struct platform_device *pdev)
 	}
 
 	device_set_wakeup_capable(&pdev->dev, false);
+	surface_sam_ssh_notifier_unregister(0x15, 1, &drvdata->sam_nb);
 	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
