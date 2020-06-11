@@ -51,7 +51,7 @@ the abbreviation found there.
     0x12  SEN
     0x13  SRQ
     0x14  MCU
-    0x15  Laptop 3 HID subsystem (Keyboard + Touchpad) [HID]
+    0x15  User Input/HID subsystem (Keyboard + Touchpad) [HID]
     0x16  TCH
     0x17  BKL
     0x18  TAM
@@ -63,7 +63,7 @@ the abbreviation found there.
     0x1E  AUD
     0x1F  SMC
     0x20  KPD
-    0x21  REG
+    0x21  Event/notifier registry [REG]
 
 
 List of System Requests (TC = 0x01)
@@ -168,6 +168,15 @@ List of SL1/SL2 Keyboard Events (TC = 0x08)
     0x03  0x00  0x02  yes      Keyboard HID input               log
 
 
+List of KIP System Requests (TC = 0x0e)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x27     ?  0x02  yes      Events enable                    rev
+    0x28     ?  0x02  yes      Events disable                   rev
+
+
 List of Detachment System Requests (TC = 0x11)
 --------------------------------------------------------------------------------
 
@@ -219,7 +228,16 @@ List of Input System Events (TC = 0x15)
     ------------------------------------------------------------------------
     0x00  #ID   0x02  yes      input report (touchpad)          log
 
-Note: Keyboard events are sent over IID 0.
+Note: Keyboard events are sent over IID 0 for SL3
+
+
+List of REG System Requests (TC = 0x21)
+--------------------------------------------------------------------------------
+
+     CID   IID   PRI  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x01     ?  0x02  yes      Events enable                    rev
+    0x02     ?  0x02  yes      Events disable                   rev
 
 
 
@@ -350,8 +368,9 @@ List of Unknown KIP Requests (TC = 0x0E)
 
      CID   IID   PRI  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
-    0x0a  0x00  0x02  no       no        ?                      rev
-    0x0b  0x00  0x02  no       no        ?                      rev
+    0x0a  0x00  0x02  no       no        called on display off  rev
+    0x0b  0x00  0x02  no       no        called on display on   rev
+
     0x1d  0x00  0x01  no       u8        ?                      rev
     0x2c  0x00  0x01  no       u8        ?                      rev
 
