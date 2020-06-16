@@ -3425,6 +3425,19 @@ struct ssam_event_registry {
 	u8 cid_disable;
 };
 
+#define SSAM_EVENT_REGISTRY(tc, chn, cid_en, cid_dis)	\
+	((struct ssam_event_registry) {			\
+		.target_category = (tc),		\
+		.channel = (chn),			\
+		.cid_enable = (cid_en),			\
+		.cid_disable = (cid_dis),		\
+	})
+
+#define SSAM_EVENT_REGISTRY_SAM	SSAM_EVENT_REGISTRY(0x01, 0x01, 0x0b, 0x0c)
+#define SSAM_EVENT_REGISTRY_KIP	SSAM_EVENT_REGISTRY(0x0e, 0x02, 0x27, 0x28)
+#define SSAM_EVENT_REGISTRY_REG	SSAM_EVENT_REGISTRY(0x21, 0x02, 0x01, 0x02)
+
+
 struct ssam_event_desc {
 	struct ssam_event_registry reg;
 	u8 target_category;
