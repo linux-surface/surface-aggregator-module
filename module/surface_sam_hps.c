@@ -40,9 +40,9 @@ static const guid_t SHPS_DSM_UUID =
 #define SAM_DTX_CID_LATCH_LOCK		0x06
 #define SAM_DTX_CID_LATCH_UNLOCK	0x07
 
-#define SHPS_DSM_GPU_ADDRS_RP		"RP13_PCIE"
+#define SHPS_DSM_GPU_ADDRS_RP		"RP5_PCIE"
 #define SHPS_DSM_GPU_ADDRS_DGPU		"DGPU_PCIE"
-
+#define SHPS_PCI_GPU_ADDR			"\\_SB.PCI0.RP13._ADR"
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_base_presence     = { 1, 0, false };
@@ -171,19 +171,44 @@ static inline int shps_dtx_latch_unlock(void)
 	return dtx_cmd_simple(SAM_DTX_CID_LATCH_UNLOCK);
 }
 
-
-static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char *entry)
-{
-	//acpi_handle handle = ACPI_HANDLE(&pdev->dev);
-	//union acpi_object *result;
-	//union acpi_object *e0;
-	//union acpi_object *e1;
-	//union acpi_object *e2;
-	//u64 device_addr = 0;
+static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, const char *entry) {
+	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+	int status;
+	struct acpi_object_list input;
+	union acpi_object input_args[0];
+	u64 device_addr;
 	u8 bus, dev, fun;
-	//int i;
 
-	/*
+	input.count = 0;
+	input.pointer = input_args;
+
+	
+	status = acpi_evaluate_integer(handle, (acpi_string)entry, &input, &device_addr);
+	if (status) {
+		return -ENODEV;
+	}
+
+	bus = 0;
+	dev = (device_addr & 0xFF0000) >> 16;
+	fun = device_addr & 0xFF;
+
+	dev_info(&pdev->dev, "found pci device at bus = %d, dev = %x, fun = %x", (u32)bus, (u32)dev, (u32)fun);
+
+	return bus << 8 | PCI_DEVFN(dev, fun);
+}
+
+static int shps_dgpu_dsm_get_pci_addr_from_dsm(struct platform_device *pdev, const char *entry)
+{
+	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
+	union acpi_object *result;
+	union acpi_object *e0;
+	union acpi_object *e1;
+	union acpi_object *e2;
+	u64 device_addr = 0;
+	u8 bus, dev, fun;
+	int i;
+
+	
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
 					 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
 
@@ -219,23 +244,28 @@ static int shps_dgpu_dsm_get_pci_addr(struct platform_device *pdev, const char *
 	if (device_addr == 0)
 		return -ENODEV;
 
-	*/
+	
 	// convert address
-	bus = 0; //(device_addr & 0x0FF00000) >> 20;
-	dev = 29; //(device_addr & 0x000F8000) >> 15;
-	fun = 4; //(device_addr & 0x00007000) >> 12;
+	bus = (device_addr & 0x0FF00000) >> 20;
+	dev = (device_addr & 0x000F8000) >> 15;
+	fun = (device_addr & 0x00007000) >> 12;
 
 	return bus << 8 | PCI_DEVFN(dev, fun);
 }
 
-static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev, const char *entry)
+static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev)
 {
 	struct pci_dev *dev;
 	int addr;
 
-	addr = shps_dgpu_dsm_get_pci_addr(pdev, entry);
-	if (addr < 0)
-		return ERR_PTR(addr);
+	// try RP13._ADR first, this will succeed on newer hardware (SB3)
+	addr = shps_dgpu_dsm_get_pci_addr_from_adr(pdev, SHPS_PCI_GPU_ADDR);
+	if (addr < 0) {
+		// fallback to using the ACPI tables
+		addr = shps_dgpu_dsm_get_pci_addr_from_dsm(pdev, SHPS_DSM_GPU_ADDRS_RP);
+		if (addr < 0)
+			return ERR_PTR(addr);
+	}
 
 	dev = pci_get_domain_bus_and_slot(0, (addr & 0xFF00) >> 8, addr & 0xFF);
 	return dev ? dev : ERR_PTR(-ENODEV);
@@ -1049,7 +1079,7 @@ static int shps_probe(struct platform_device *pdev)
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
 
-	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_RP);
+	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev);
 	if (IS_ERR(drvdata->dgpu_root_port)) {
 		status = PTR_ERR(drvdata->dgpu_root_port);
 		dev_err(&pdev->dev, "failed to get pci dev: %d\n", status);
