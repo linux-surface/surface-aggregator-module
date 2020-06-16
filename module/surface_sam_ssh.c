@@ -3461,6 +3461,7 @@ struct ssam_notifier_channel {
 };
 
 struct ssam_notifier {
+	struct mutex lock;
 	struct ssam_notifier_channel channel[SURFACE_SAM_SSH_NUM_CHANNELS];
 };
 
@@ -3544,13 +3545,18 @@ static int ssam_notifier_register(struct ssam_notifier *notif,
 	if (!entry)
 		return -EINVAL;
 
-	if (entry->refcnt[nb->event.instance] == 0xff)
+	mutex_lock(&notif->lock);
+
+	if (entry->refcnt[nb->event.instance] == 0xff) {
+		mutex_unlock(&notif->lock);
 		return -ENOSPC;
+	}
 
 	status = srcu_notifier_chain_register(&entry->head, &nb->base);
 	if (!status)
 		entry->refcnt[nb->event.instance] += 1;
 
+	mutex_unlock(&notif->lock);
 	return status;
 }
 
@@ -3568,13 +3574,18 @@ static int ssam_notifier_unregister(struct ssam_notifier *notif,
 	if (!entry)
 		return -EINVAL;
 
-	if (entry->refcnt[nb->event.instance] == 0x00)
+	mutex_lock(&notif->lock);
+
+	if (entry->refcnt[nb->event.instance] == 0x00) {
+		mutex_unlock(&notif->lock);
 		return -EINVAL;
+	}
 
 	status = srcu_notifier_chain_unregister(&entry->head, &nb->base);
 	if (!status)
 		entry->refcnt[nb->event.instance] -= 1;
 
+	mutex_unlock(&notif->lock);
 	return status;
 }
 
