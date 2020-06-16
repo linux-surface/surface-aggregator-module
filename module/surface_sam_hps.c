@@ -17,7 +17,6 @@
 
 #include "surface_sam_ssh.h"
 #include "surface_sam_san.h"
-#include "surface_sam_sgcp.h"
 
 
 // TODO: vgaswitcheroo integration
@@ -92,6 +91,7 @@ struct shps_driver_data {
 	unsigned int irq_dgpu_presence;
 	unsigned int irq_base_presence;
 	unsigned long state;
+	acpi_handle sgpc_handle;
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -969,12 +969,44 @@ static void shps_gpios_remove_irq(struct platform_device *pdev)
 	free_irq(drvdata->irq_dgpu_presence, pdev);
 }
 
-static void shps_dgpu_handle_sgcp_notification(int event, void *data) {
-	struct platform_device *pdev = data;
-	if (event == 128) {
+static void shps_sgcp_notify(acpi_handle device, u32 value, void *context) {
+	struct platform_device *pdev = context;
+	switch (value) {
+		case 129:
+			shps_dgpu_powered_on(pdev);
+	}
+}
 
-	} else if (event == 129) {
-		shps_dgpu_powered_on(pdev);
+static int shps_try_start_sgcp_notification(struct platform_device *pdev, acpi_handle *sgpc_handle) {
+	acpi_handle handle;
+	int status;
+
+	status = acpi_get_handle(NULL, "\\_SB.SGPC", &handle);
+	if (status) {
+		dev_err(&pdev->dev, "error in get_handle %d", status);
+		return 0;
+	}
+
+	status = acpi_install_notify_handler(handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify, pdev);
+	if (status) {
+		dev_err(&pdev->dev, "error in install notify %d", status);
+		*sgpc_handle = NULL;
+		return status;
+	}
+
+	*sgpc_handle = handle; 
+	return 0;
+}
+
+static void shps_try_remove_sgcp_notification(struct platform_device *pdev) {
+	int status;
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
+
+	if (drvdata->sgpc_handle) {
+		status = acpi_remove_notify_handler(drvdata->sgpc_handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify);
+		if (status) {
+			dev_err(&pdev->dev, "failed to remove notify handler: %d", status);
+		}
 	}
 }
 
@@ -1039,35 +1071,32 @@ static int shps_probe(struct platform_device *pdev)
 	status = device_add_groups(&pdev->dev, shps_power_groups);
 	if (status)
 		goto err_devattr;
-	
-	status = shps_dgpu_set_power(pdev, SHPS_DGPU_POWER_OFF);
-	if (status) {
-		dev_err(&pdev->dev, "unable to set power off %d", status);
-	}
 
 	link = device_link_add(&pdev->dev, &drvdata->dgpu_root_port->dev,
 			       DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER);
 	if (!link)
 		goto err_devlink;
 
+	shps_try_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
 	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
-	surface_sam_sgcp_register_notification(shps_dgpu_handle_sgcp_notification, pdev);
 
 	// if dGPU is not present turn-off root-port, else obey module param
 	status = shps_dgpu_is_present(pdev);
 	if (status < 0)
-		goto err_devlink;
+		goto err_post_notification;
 
 	power = status == 0 ? SHPS_DGPU_POWER_OFF : param_dgpu_power_init;
 	if (power != SHPS_DGPU_MP_POWER_ASIS) {
 		status = shps_dgpu_set_power(pdev, power);
 		if (status)
-			goto err_devlink;
+			goto err_post_notification;
 	}
 
 	device_init_wakeup(&pdev->dev, true);
 	return 0;
 
+err_post_notification:
+	shps_try_remove_sgcp_notification(pdev);
 err_devlink:
 	device_remove_groups(&pdev->dev, shps_power_groups);
 err_devattr:
@@ -1097,7 +1126,8 @@ static int shps_remove(struct platform_device *pdev)
 	}
 
 	device_set_wakeup_capable(&pdev->dev, false);
-	surface_sam_sgcp_register_notification(NULL, NULL);
+
+	shps_try_remove_sgcp_notification(pdev);
 	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
@@ -1134,6 +1164,7 @@ static struct platform_driver surface_sam_hps = {
 		.pm = &shps_pm_ops,
 	},
 };
+
 module_platform_driver(surface_sam_hps);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
