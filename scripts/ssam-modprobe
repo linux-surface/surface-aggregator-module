@@ -17,6 +17,7 @@ unload() {
     ${cmd} surface_sam_sid_gpelid
     ${cmd} surface_sam_sid
     ${cmd} surface_sam_hps
+    ${cmd} surface_sam_sgcp
     ${cmd} surface_sam_dtx
     ${cmd} surface_sam_vhf
     ${cmd} surface_sam_san
@@ -34,6 +35,7 @@ load() {
     ${cmd} surface_sam_san"${ext}"
     ${cmd} surface_sam_vhf"${ext}"
     ${cmd} surface_sam_dtx"${ext}"
+    ${cmd} surface_sam_sgcp"${ext}"
     ${cmd} surface_sam_hps"${ext}"
     ${cmd} surface_sam_sid_gpelid"${ext}"
     ${cmd} surface_sam_sid_perfmode"${ext}"

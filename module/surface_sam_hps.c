@@ -17,14 +17,13 @@
 
 #include "surface_sam_ssh.h"
 #include "surface_sam_san.h"
+#include "surface_sam_sgcp.h"
 
 
 // TODO: vgaswitcheroo integration
 
 
 static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix);
-
-#define SHPS_ERR		KERN_ERR "surface_sam_hps "
 
 
 #define SHPS_DSM_REVISION	1
@@ -93,8 +92,6 @@ struct shps_driver_data {
 	unsigned int irq_dgpu_presence;
 	unsigned int irq_base_presence;
 	unsigned long state;
-	struct notifier_block sam_nb;
-	struct platform_device *pdev;
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -305,10 +302,8 @@ static int shps_dgpu_dsm_set_power_unlocked(struct platform_device *pdev, enum s
 		return -EINVAL;
 
 	status = shps_dgpu_dsm_get_power_unlocked(pdev);
-	if (status < 0) {
-		dev_err(&pdev->dev, "get_power_unlocked returned %d", status);
+	if (status < 0)
 		return status;
-	}
 	if (status == power)
 		return 0;
 
@@ -451,6 +446,7 @@ static int shps_dgpu_rp_set_power(struct platform_device *pdev, enum shps_dgpu_p
 
 	return status;
 }
+
 
 static int shps_dgpu_set_power(struct platform_device *pdev, enum shps_dgpu_power power)
 {
@@ -613,13 +609,6 @@ static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix)
 	dev_dbg(&pdev->dev, "%s: RP state stored: %d", prefix, !!drvdata->dgpu_root_port_state);
 	dev_dbg(&pdev->dev, "%s: RP enabled: %d", prefix, atomic_read(&rp->enable_cnt));
 	dev_dbg(&pdev->dev, "%s: RP mastered: %d", prefix, rp->is_busmaster);
-}
-
-static int shps_notification(struct notifier_block *nb, unsigned long action, void *data) {
-	struct shps_driver_data *drvdata = container_of(nb, struct shps_driver_data, sam_nb);
-
-	dev_err(&drvdata->pdev->dev, "notication!");
-	return 0;
 }
 
 static int shps_pm_prepare(struct device *dev)
@@ -808,7 +797,6 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	return 0;
 }
 
-
 static int shps_dgpu_handle_rqsg(struct surface_sam_san_rqsg *rqsg, void *data)
 {
 	struct platform_device *pdev = data;
@@ -865,21 +853,18 @@ static int shps_gpios_setup(struct platform_device *pdev)
 	gpio_dgpu_power = devm_gpiod_get(&pdev->dev, "dgpu_power", GPIOD_IN);
 	if (IS_ERR(gpio_dgpu_power)) {
 		status = PTR_ERR(gpio_dgpu_power);
-		dev_err(&pdev->dev, "unable to get dgpu_power: %d", status);
 		goto err_out;
 	}
 
 	gpio_dgpu_presence = devm_gpiod_get(&pdev->dev, "dgpu_presence", GPIOD_IN);
 	if (IS_ERR(gpio_dgpu_presence)) {
 		status = PTR_ERR(gpio_dgpu_presence);
-		dev_err(&pdev->dev, "unable to get dgpu_presence: %d", status);
 		goto err_out;
 	}
 
 	gpio_base_presence = devm_gpiod_get(&pdev->dev, "base_presence", GPIOD_IN);
 	if (IS_ERR(gpio_base_presence)) {
 		status = PTR_ERR(gpio_base_presence);
-		dev_err(&pdev->dev, "unable to get dgpu_base: %d", status);
 		goto err_out;
 	}
 
@@ -984,6 +969,15 @@ static void shps_gpios_remove_irq(struct platform_device *pdev)
 	free_irq(drvdata->irq_dgpu_presence, pdev);
 }
 
+static void shps_dgpu_handle_sgcp_notification(int event, void *data) {
+	struct platform_device *pdev = data;
+	if (event == 128) {
+
+	} else if (event == 129) {
+		shps_dgpu_powered_on(pdev);
+	}
+}
+
 static int shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
@@ -999,7 +993,6 @@ static int shps_probe(struct platform_device *pdev)
 	// link to SSH
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
 	if (status) {
-		dev_err(&pdev->dev, "failed to register with ssh consumer: %d\n", status);
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
@@ -1023,14 +1016,6 @@ static int shps_probe(struct platform_device *pdev)
 	}
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
-
-	drvdata->pdev = pdev;
-	drvdata->sam_nb.priority = 1;
-	drvdata->sam_nb.notifier_call = shps_notification;
-	status = surface_sam_ssh_notifier_register(0x15, 0x1, &drvdata->sam_nb);
-	if (status) {
-		dev_err(&pdev->dev, "fialed to register with ssh: %d\n", status);
-	}
 
 	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev, SHPS_DSM_GPU_ADDRS_RP);
 	if (IS_ERR(drvdata->dgpu_root_port)) {
@@ -1066,6 +1051,7 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_devlink;
 
 	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+	surface_sam_sgcp_register_notification(shps_dgpu_handle_sgcp_notification, pdev);
 
 	// if dGPU is not present turn-off root-port, else obey module param
 	status = shps_dgpu_is_present(pdev);
@@ -1111,7 +1097,7 @@ static int shps_remove(struct platform_device *pdev)
 	}
 
 	device_set_wakeup_capable(&pdev->dev, false);
-	surface_sam_ssh_notifier_unregister(0x15, 1, &drvdata->sam_nb);
+	surface_sam_sgcp_register_notification(NULL, NULL);
 	surface_sam_san_set_rqsg_handler(NULL, NULL);
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
