@@ -3375,6 +3375,8 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 /* -- Event notifier. ------------------------------------------------------- */
 
+#define SSAM_NUM_INSTANCES	0x20
+
 #define SSAM_NOTIFIER_VALUE(tc, chn, iid, cid) \
 	((((u32) (tc )) & 0xff) \
 	 | ((((u32) (chn)) & 0xff) << 8) \
@@ -3409,6 +3411,7 @@ struct ssam_notifier_block {
 
 struct ssam_notifier_entry {
 	struct srcu_notifier_head head;
+	u8 refcnt[SSAM_NUM_INSTANCES];
 };
 
 struct ssam_notifier_channel {
@@ -3489,26 +3492,48 @@ static int ssam_notifier_register(struct ssam_notifier *notif,
 				  struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_entry *entry;
+	int status;
+
+	if (nb->event.instance >= SSAM_NUM_INSTANCES)
+		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
 					nb->event.target_category);
 	if (!entry)
 		return -EINVAL;
 
-	return srcu_notifier_chain_register(&entry->head, &nb->base);
+	if (entry->refcnt[nb->event.instance] == 0xff)
+		return -ENOSPC;
+
+	status = srcu_notifier_chain_register(&entry->head, &nb->base);
+	if (!status)
+		entry->refcnt[nb->event.instance] += 1;
+
+	return status;
 }
 
 static int ssam_notifier_unregister(struct ssam_notifier *notif,
 				    struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_entry *entry;
+	int status;
+
+	if (nb->event.instance >= SSAM_NUM_INSTANCES)
+		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
 					nb->event.target_category);
 	if (!entry)
 		return -EINVAL;
 
-	return srcu_notifier_chain_unregister(&entry->head, &nb->base);
+	if (entry->refcnt[nb->event.instance] == 0x00)
+		return -EINVAL;
+
+	status = srcu_notifier_chain_unregister(&entry->head, &nb->base);
+	if (!status)
+		entry->refcnt[nb->event.instance] -= 1;
+
+	return status;
 }
 
 
