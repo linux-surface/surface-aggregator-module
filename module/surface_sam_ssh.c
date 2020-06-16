@@ -3375,6 +3375,26 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 /* -- Event notifier. ------------------------------------------------------- */
 
+struct ssam_event_registry {
+	u8 target_category;
+	u8 channel;
+	u8 cid_enable;
+	u8 cid_disable;
+};
+
+struct ssam_event_desc {
+	struct ssam_event_registry reg;
+	u8 target_category;
+	u8 instance;
+	u8 flags;
+};
+
+struct ssam_notifier_block {
+	struct notifier_block base;
+	struct ssam_event_desc event;
+};
+
+
 struct ssam_notifier_entry {
 	struct srcu_notifier_head head;
 };
@@ -3449,29 +3469,30 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 	}
 }
 
-static int ssam_notifier_register(struct ssam_notifier *notif, u8 channel,
-				  u8 target_category, struct notifier_block *nb)
+static int ssam_notifier_register(struct ssam_notifier *notif,
+				  struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_entry *entry;
 
-	entry = ssam_notifier_get_entry(notif, channel, target_category);
+	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
+					nb->event.target_category);
 	if (!entry)
 		return -EINVAL;
 
-	return srcu_notifier_chain_register(&entry->head, nb);
+	return srcu_notifier_chain_register(&entry->head, &nb->base);
 }
 
-static int ssam_notifier_unregister(struct ssam_notifier *notif, u8 channel,
-				    u8 target_category,
-				    struct notifier_block *nb)
+static int ssam_notifier_unregister(struct ssam_notifier *notif,
+				    struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_entry *entry;
 
-	entry = ssam_notifier_get_entry(notif, channel, target_category);
+	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
+					nb->event.target_category);
 	if (!entry)
 		return -EINVAL;
 
-	return srcu_notifier_chain_unregister(&entry->head, nb);
+	return srcu_notifier_chain_unregister(&entry->head, &nb->base);
 }
 
 
