@@ -3375,6 +3375,18 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 /* -- Event notifier. ------------------------------------------------------- */
 
+#define SSAM_NOTIFIER_VALUE(tc, chn, iid, cid) \
+	((((u32) (tc )) & 0xff) \
+	 | ((((u32) (chn)) & 0xff) << 8) \
+	 | ((((u32) (iid)) & 0xff) << 16) \
+	 | ((((u32) (cid)) & 0xff) << 24))
+
+#define SSAM_NOTIFIER_TARGET_CATEGORY(val)	(((u32) (val)) & 0xff)
+#define SSAM_NOTIFIER_CHANNEL(val)		((((u32) (val)) >> 8) & 0xff)
+#define SSAM_NOTIFIER_INSTANCE(val)		((((u32) (val)) >> 16) & 0xff)
+#define SSAM_NOTIFIER_COMMAND(val)		((((u32) (val)) >> 24) & 0xff)
+
+
 struct ssam_event_registry {
 	u8 target_category;
 	u8 channel;
@@ -3436,6 +3448,7 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 {
 	struct ssam_notifier_entry *entry;
 	u8 channel = event->channel;
+	unsigned long value;
 	int status, ncalls;
 
 	if (!ssh_rqid_is_event(event->rqid)) {
@@ -3449,9 +3462,12 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 		channel = 1;
 	}
 
+	value = SSAM_NOTIFIER_VALUE(event->target_category, event->channel,
+				    event->instance_id, event->command_id);
+
 	entry = __ssam_notifier_get_entry(notif, channel, event->rqid);
-	status = __srcu_notifier_call_chain(&entry->head,
-			event->target_category, event, -1, &ncalls);
+	status = __srcu_notifier_call_chain(&entry->head, value, event, -1,
+					    &ncalls);
 	status = notifier_to_errno(status);
 
 	if (status < 0) {
