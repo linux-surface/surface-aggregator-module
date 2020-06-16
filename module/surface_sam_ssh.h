@@ -42,6 +42,11 @@
 #define SURFACE_SAM_SSH_NUM_CHANNELS		2
 
 /*
+ * The number of instance IDs usable in events.
+ */
+#define SURFACE_SAM_SSH_NUM_INSTANCES		32
+
+/*
  * Special event-handler delay value indicating that the corresponding event
  * should be handled immediately in the interrupt and not be relayed through
  * the workqueue. Intended for low-latency events, such as keyboard events.

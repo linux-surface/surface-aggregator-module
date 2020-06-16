@@ -3404,8 +3404,6 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 /* -- Event notifier. ------------------------------------------------------- */
 
-#define SSAM_NUM_INSTANCES	0x20
-
 #define SSAM_NOTIFIER_VALUE(tc, chn, iid, cid) \
 	((((u32) (tc )) & 0xff) \
 	 | ((((u32) (chn)) & 0xff) << 8) \
@@ -3453,7 +3451,7 @@ struct ssam_notifier_block {
 
 struct ssam_notifier_entry {
 	struct srcu_notifier_head head;
-	u8 refcnt[SSAM_NUM_INSTANCES];
+	u8 refcnt[SURFACE_SAM_SSH_NUM_INSTANCES];
 };
 
 struct ssam_notifier_channel {
@@ -3537,7 +3535,7 @@ static int ssam_notifier_register(struct ssam_notifier *notif,
 	struct ssam_notifier_entry *entry;
 	int status;
 
-	if (nb->event.instance >= SSAM_NUM_INSTANCES)
+	if (nb->event.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
 		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
@@ -3566,7 +3564,7 @@ static int ssam_notifier_unregister(struct ssam_notifier *notif,
 	struct ssam_notifier_entry *entry;
 	int status;
 
-	if (nb->event.instance >= SSAM_NUM_INSTANCES)
+	if (nb->event.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
 		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
