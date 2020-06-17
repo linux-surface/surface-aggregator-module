@@ -3459,6 +3459,12 @@ struct ssam_event_registry {
 	u8 cid_disable;
 };
 
+struct ssam_event_id {
+	u8 target_category;
+	u8 instance;
+};
+
+
 #define SSAM_EVENT_REGISTRY(tc, chn, cid_en, cid_dis)	\
 	((struct ssam_event_registry) {			\
 		.target_category = (tc),		\
@@ -3466,6 +3472,13 @@ struct ssam_event_registry {
 		.cid_enable = (cid_en),			\
 		.cid_disable = (cid_dis),		\
 	})
+
+#define SSAM_EVENT_ID(tc, iid)				\
+	((struct ssam_event_id) {			\
+		.target_category = tc,			\
+		.instance = iid,			\
+	})
+
 
 #define SSAM_EVENT_REGISTRY_SAM	\
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_SAM, 0x01, 0x0b, 0x0c)
@@ -3479,8 +3492,7 @@ struct ssam_event_registry {
 
 struct ssam_event_desc {
 	struct ssam_event_registry reg;
-	u8 target_category;
-	u8 instance;
+	struct ssam_event_id id;
 	u8 flags;
 };
 
@@ -3576,24 +3588,24 @@ static int ssam_notifier_register(struct ssam_notifier *notif,
 	struct ssam_notifier_entry *entry;
 	int status;
 
-	if (nb->event.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
+	if (nb->event.id.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
 		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
-					nb->event.target_category);
+					nb->event.id.target_category);
 	if (!entry)
 		return -EINVAL;
 
 	mutex_lock(&notif->lock);
 
-	if (entry->refcnt[nb->event.instance] == 0xff) {
+	if (entry->refcnt[nb->event.id.instance] == 0xff) {
 		mutex_unlock(&notif->lock);
 		return -ENOSPC;
 	}
 
 	status = srcu_notifier_chain_register(&entry->head, &nb->base);
 	if (!status)
-		entry->refcnt[nb->event.instance] += 1;
+		entry->refcnt[nb->event.id.instance] += 1;
 
 	mutex_unlock(&notif->lock);
 	return status;
@@ -3605,24 +3617,24 @@ static int ssam_notifier_unregister(struct ssam_notifier *notif,
 	struct ssam_notifier_entry *entry;
 	int status;
 
-	if (nb->event.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
+	if (nb->event.id.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
 		return -EINVAL;
 
 	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
-					nb->event.target_category);
+					nb->event.id.target_category);
 	if (!entry)
 		return -EINVAL;
 
 	mutex_lock(&notif->lock);
 
-	if (entry->refcnt[nb->event.instance] == 0x00) {
+	if (entry->refcnt[nb->event.id.instance] == 0x00) {
 		mutex_unlock(&notif->lock);
 		return -EINVAL;
 	}
 
 	status = srcu_notifier_chain_unregister(&entry->head, &nb->base);
 	if (!status)
-		entry->refcnt[nb->event.instance] -= 1;
+		entry->refcnt[nb->event.id.instance] -= 1;
 
 	mutex_unlock(&notif->lock);
 	return status;
