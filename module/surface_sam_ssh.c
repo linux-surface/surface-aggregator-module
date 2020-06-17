@@ -3475,7 +3475,6 @@ static inline int ssam_notifier_to_errno(u32 ret)
 	return -(ret >> 2);
 }
 
-
 int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
 {
 	struct ssam_notifier_block *nb, *next_nb;
@@ -3711,7 +3710,6 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 	return -ENOENT;
 }
 
-
 static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 			 struct ssam_event *event)
 {
@@ -3741,7 +3739,6 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 			 event->channel);
 	}
 }
-
 
 static int ssam_nf_register(struct ssam_nf *nf, struct ssam_event_notifier *n)
 {
@@ -3796,7 +3793,6 @@ static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_event_notifier *n)
 
 	return 0;
 }
-
 
 static int ssam_nf_init(struct ssam_nf *nf)
 {
