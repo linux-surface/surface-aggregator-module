@@ -191,6 +191,42 @@ enum ssh_notification_flags {
 	SSH_NOTIFICATION_SEQUENCED = BIT(0),
 };
 
+enum ssam_ssh_tc {
+	SSAM_SSH_TC_SAM = 0x01,	// generic system functionality, real-time clock
+	SSAM_SSH_TC_BAT = 0x02,	// battery/power subsystem
+	SSAM_SSH_TC_TMP = 0x03,	// thermal subsystem
+	SSAM_SSH_TC_PMC = 0x04,
+	SSAM_SSH_TC_FAN = 0x05,
+	SSAM_SSH_TC_PoM = 0x06,
+	SSAM_SSH_TC_DBG = 0x07,
+	SSAM_SSH_TC_KBD = 0x08,	// legacy keyboard (Laptop 1/2)
+	SSAM_SSH_TC_FWU = 0x09,
+	SSAM_SSH_TC_UNI = 0x0a,
+	SSAM_SSH_TC_LPC = 0x0b,
+	SSAM_SSH_TC_TCL = 0x0c,
+	SSAM_SSH_TC_SFL = 0x0d,
+	SSAM_SSH_TC_KIP = 0x0e,
+	SSAM_SSH_TC_EXT = 0x0f,
+	SSAM_SSH_TC_BLD = 0x10,
+	SSAM_SSH_TC_BAS = 0x11,	// detachment system (Surface Book 2/3)
+	SSAM_SSH_TC_SEN = 0x12,
+	SSAM_SSH_TC_SRQ = 0x13,
+	SSAM_SSH_TC_MCU = 0x14,
+	SSAM_SSH_TC_HID = 0x15,	// generic HID input subsystem
+	SSAM_SSH_TC_TCH = 0x16,
+	SSAM_SSH_TC_BKL = 0x17,
+	SSAM_SSH_TC_TAM = 0x18,
+	SSAM_SSH_TC_ACC = 0x19,
+	SSAM_SSH_TC_UFI = 0x1a,
+	SSAM_SSH_TC_USC = 0x1b,
+	SSAM_SSH_TC_PEN = 0x1c,
+	SSAM_SSH_TC_VID = 0x1d,
+	SSAM_SSH_TC_AUD = 0x1e,
+	SSAM_SSH_TC_SMC = 0x1f,
+	SSAM_SSH_TC_KPD = 0x20,
+	SSAM_SSH_TC_REG = 0x21,
+};
+
 /**
  * SSH message syncrhonization (SYN) bytes.
  */
@@ -3431,9 +3467,14 @@ struct ssam_event_registry {
 		.cid_disable = (cid_dis),		\
 	})
 
-#define SSAM_EVENT_REGISTRY_SAM	SSAM_EVENT_REGISTRY(0x01, 0x01, 0x0b, 0x0c)
-#define SSAM_EVENT_REGISTRY_KIP	SSAM_EVENT_REGISTRY(0x0e, 0x02, 0x27, 0x28)
-#define SSAM_EVENT_REGISTRY_REG	SSAM_EVENT_REGISTRY(0x21, 0x02, 0x01, 0x02)
+#define SSAM_EVENT_REGISTRY_SAM	\
+	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_SAM, 0x01, 0x0b, 0x0c)
+
+#define SSAM_EVENT_REGISTRY_KIP	\
+	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_KIP, 0x02, 0x27, 0x28)
+
+#define SSAM_EVENT_REGISTRY_REG \
+	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_REG, 0x02, 0x01, 0x02)
 
 
 struct ssam_event_desc {
