@@ -3438,7 +3438,9 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
  * and identify new/currently unimplemented features.
  */
 
-#define SSAM_NOTIF_STATE_MASK		0x03
+#define SSAM_NOTIF_STATE_SHIFT		2
+#define SSAM_NOTIF_STATE_MASK		((1 << SSAM_NOTIF_STATE_SHIFT) - 1)
+
 #define SSAM_NOTIF_HANDLED		BIT(0)
 #define SSAM_NOTIF_STOP			BIT(1)
 
@@ -3467,12 +3469,12 @@ static inline u32 ssam_notifier_from_errno(int err)
 	if (err >= 0)
 		return 0;
 	else
-		return -err << 2 | SSAM_NOTIF_STOP;
+		return ((-err) << SSAM_NOTIF_STATE_SHIFT) | SSAM_NOTIF_STOP;
 }
 
 static inline int ssam_notifier_to_errno(u32 ret)
 {
-	return -(ret >> 2);
+	return -(ret >> SSAM_NOTIF_STATE_SHIFT);
 }
 
 int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
