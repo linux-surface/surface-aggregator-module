@@ -80,6 +80,22 @@ static const char *shps_dgpu_power_str(enum shps_dgpu_power power)
 		return "<invalid>";
 }
 
+enum shps_generation {
+	SHPS_GENERATION_UNKNOWN = 0,
+	SHPS_GENERATION_1       = 1, // SB1, SB2, etc
+	SHPS_GENERATION_2	   = 2  // SB3
+};
+
+enum shps_notification_method {
+	SHPS_NOTIFICATION_METHOD_SAN = 1,
+	SHPS_NOTIFICATION_METHOD_SGCP = 2
+};
+
+struct shps_hardware_traits {
+	enum shps_notification_method notification_method;
+	acpi_string dgpu_pci_address;
+};
+
 
 struct shps_driver_data {
 	struct mutex lock;
@@ -92,6 +108,25 @@ struct shps_driver_data {
 	unsigned int irq_base_presence;
 	unsigned long state;
 	acpi_handle sgpc_handle;
+	struct shps_hardware_traits hardware_traits;
+};
+
+struct shps_hardware_probe {
+	const char *hardware_id;
+	enum shps_generation generation;
+};
+
+static struct shps_hardware_traits shps_hardware_trait_map[] = {
+	{ },
+	{ .notification_method = SHPS_NOTIFICATION_METHOD_SAN  },
+	{ .notification_method = SHPS_NOTIFICATION_METHOD_SGCP, .dgpu_pci_address = SHPS_PCI_GPU_ADDR }
+};
+
+static const struct shps_hardware_probe shps_hardware_probe_match[] = {
+	/* Surface Book 3 */
+	{ "MSHW0117", SHPS_GENERATION_2 },
+
+	{ }
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -144,7 +179,6 @@ MODULE_PARM_DESC(dgpu_power_init, "dGPU power state to be set on init (0: off / 
 MODULE_PARM_DESC(dgpu_power_exit, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: on)");
 MODULE_PARM_DESC(dgpu_power_susp, "dGPU power state to be set on exit (0: off / 1: on / 2: as-is, default: as-is)");
 MODULE_PARM_DESC(dtx_latch, "lock/unlock DTX base latch in accordance to power-state (Y/n)");
-
 
 static int dtx_cmd_simple(u8 cid)
 {
@@ -255,18 +289,20 @@ static int shps_dgpu_dsm_get_pci_addr_from_dsm(struct platform_device *pdev, con
 
 static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev)
 {
+	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct pci_dev *dev;
 	int addr;
 
-	// try RP13._ADR first, this will succeed on newer hardware (SB3)
-	addr = shps_dgpu_dsm_get_pci_addr_from_adr(pdev, SHPS_PCI_GPU_ADDR);
-	if (addr < 0) {
-		// fallback to using the ACPI tables
+
+	if (drvdata->hardware_traits.dgpu_pci_address) {
+		addr = shps_dgpu_dsm_get_pci_addr_from_adr(pdev, drvdata->hardware_traits.dgpu_pci_address);
+	} else {
 		addr = shps_dgpu_dsm_get_pci_addr_from_dsm(pdev, SHPS_DSM_GPU_ADDRS_RP);
-		if (addr < 0)
-			return ERR_PTR(addr);
 	}
 
+	if (addr < 0)
+		return ERR_PTR(addr);
+	
 	dev = pci_get_domain_bus_and_slot(0, (addr & 0xFF00) >> 8, addr & 0xFF);
 	return dev ? dev : ERR_PTR(-ENODEV);
 }
@@ -1014,7 +1050,7 @@ static int shps_try_start_sgcp_notification(struct platform_device *pdev, acpi_h
 	status = acpi_get_handle(NULL, "\\_SB.SGPC", &handle);
 	if (status) {
 		dev_err(&pdev->dev, "error in get_handle %d", status);
-		return 0;
+		return status;
 	}
 
 	status = acpi_install_notify_handler(handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify, pdev);
@@ -1040,12 +1076,33 @@ static void shps_try_remove_sgcp_notification(struct platform_device *pdev) {
 	}
 }
 
+static enum shps_generation shps_detect_generation(struct platform_device *pdev) {
+	const struct shps_hardware_probe *p;
+
+	for (p = shps_hardware_probe_match; p->hardware_id; ++p) {
+		if (acpi_dev_present(p->hardware_id, NULL, -1)) {
+			dev_info(&pdev->dev, 
+				"shps_detect_generation found device %s, generation %d", 
+				p->hardware_id,
+				p->generation);
+			return p->generation;
+		}	
+	}
+	
+	return SHPS_GENERATION_1;
+}
+
 static int shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata;
 	struct device_link *link;
 	int power, status;
+	enum shps_generation detected_generation;
+	struct shps_hardware_traits detected_traits; 
+
+	detected_generation = shps_detect_generation(pdev);
+	detected_traits = shps_hardware_trait_map[detected_generation];
 
 	if (gpiod_count(&pdev->dev, NULL) < 0) {
 		dev_err(&pdev->dev, "gpiod_count returned < 0");
@@ -1058,12 +1115,14 @@ static int shps_probe(struct platform_device *pdev)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
 
-	// link to SAN
-	//status = surface_sam_san_consumer_register(&pdev->dev, 0);
-	//if (status) {
-	//	dev_err(&pdev->dev, "failed to register with san consumer: %d\n", status);
-	//	return status == -ENXIO ? -EPROBE_DEFER : status;
-	//}
+	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
+		// link to SAN
+		status = surface_sam_san_consumer_register(&pdev->dev, 0);
+		if (status) {
+			dev_err(&pdev->dev, "failed to register with san consumer: %d\n", status);
+			return status == -ENXIO ? -EPROBE_DEFER : status;
+		}
+	}
 
 	status = acpi_dev_add_driver_gpios(shps_dev, shps_acpi_gpios);
 	if (status) {
@@ -1078,6 +1137,8 @@ static int shps_probe(struct platform_device *pdev)
 	}
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
+
+	drvdata->hardware_traits = detected_traits;
 
 	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev);
 	if (IS_ERR(drvdata->dgpu_root_port)) {
@@ -1107,8 +1168,11 @@ static int shps_probe(struct platform_device *pdev)
 	if (!link)
 		goto err_devlink;
 
-	shps_try_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
-	surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
+		surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+	} else if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
+		shps_try_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
+	}
 
 	// if dGPU is not present turn-off root-port, else obey module param
 	status = shps_dgpu_is_present(pdev);
@@ -1157,8 +1221,11 @@ static int shps_remove(struct platform_device *pdev)
 
 	device_set_wakeup_capable(&pdev->dev, false);
 
-	shps_try_remove_sgcp_notification(pdev);
-	surface_sam_san_set_rqsg_handler(NULL, NULL);
+	if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
+		shps_try_remove_sgcp_notification(pdev);
+	} else if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
+		surface_sam_san_set_rqsg_handler(NULL, NULL);
+	}
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);
 	shps_gpios_remove(pdev);
