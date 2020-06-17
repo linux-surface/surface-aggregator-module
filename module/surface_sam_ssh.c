@@ -3438,19 +3438,144 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 }
 
 
-/* -- Event notifier. ------------------------------------------------------- */
+/* -- Event notifier/callbacks. --------------------------------------------- */
+/*
+ * The notifier system is based on linux/notifier.h, specifically the SRCU
+ * implementation. The difference to that is, that some bits of the notifier
+ * call return value can be tracked accross multiple calls. This is done so that
+ * handling of events can be tracked and a warning can be issued in case an
+ * event goes unhandled. The idea of that waring is that it should help discover
+ * and identify new/currently unimplemented features.
+ */
 
-#define SSAM_NOTIFIER_VALUE(tc, chn, iid, cid) \
-	((((u32) (tc )) & 0xff) \
-	 | ((((u32) (chn)) & 0xff) << 8) \
-	 | ((((u32) (iid)) & 0xff) << 16) \
-	 | ((((u32) (cid)) & 0xff) << 24))
+#define SSAM_NOTIF_STATE_MASK		0x03
+#define SSAM_NOTIF_HANDLED		BIT(0)
+#define SSAM_NOTIF_STOP			BIT(1)
 
-#define SSAM_NOTIFIER_TARGET_CATEGORY(val)	(((u32) (val)) & 0xff)
-#define SSAM_NOTIFIER_CHANNEL(val)		((((u32) (val)) >> 8) & 0xff)
-#define SSAM_NOTIFIER_INSTANCE(val)		((((u32) (val)) >> 16) & 0xff)
-#define SSAM_NOTIFIER_COMMAND(val)		((((u32) (val)) >> 24) & 0xff)
 
+struct ssam_notifier_block;
+
+typedef u32 (*ssam_notifier_fn_t)(struct ssam_notifier_block *nb,
+				  struct ssam_event *event);
+
+struct ssam_notifier_block {
+	struct ssam_notifier_block __rcu *next;
+	ssam_notifier_fn_t fn;
+	int priority;
+};
+
+struct ssam_nf_head {
+	struct srcu_struct srcu;
+	struct ssam_notifier_block __rcu *head;
+};
+
+
+static inline u32 ssam_notifier_from_errno(int err)
+{
+	WARN_ON(err > 0);
+
+	if (err >= 0)
+		return 0;
+	else
+		return -err << 2 | SSAM_NOTIF_STOP;
+}
+
+static inline int ssam_notifier_to_errno(u32 ret)
+{
+	return -(ret >> 2);
+}
+
+
+int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
+{
+	struct ssam_notifier_block *nb, *next_nb;
+	int ret = 0, idx;
+
+	idx = srcu_read_lock(&nh->srcu);
+
+	nb = rcu_dereference_raw(nh->head);
+	while (nb) {
+		next_nb = rcu_dereference_raw(nb->next);
+
+		ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nb, event);
+		if (ret & SSAM_NOTIF_STOP)
+			break;
+
+		nb = next_nb;
+	}
+
+	srcu_read_unlock(&nh->srcu, idx);
+	return ret;
+}
+
+/*
+ * Note: This function must be synchronized by the caller with respect to other
+ * insert and/or remove calls.
+ */
+int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+{
+	struct ssam_notifier_block **link = &nh->head;
+
+	while ((*link) != NULL) {
+		if (unlikely((*link) == nb)) {
+			WARN(1, "double register detected");
+			return -EINVAL;
+		}
+
+		if (nb->priority > (*link)->priority)
+			break;
+
+		link = &((*link)->next);
+	}
+
+	nb->next = *link;
+	rcu_assign_pointer(*link, nb);
+
+	return 0;
+}
+
+/*
+ * Note: This function must be synchronized by the caller with respect to other
+ * insert and/or remove calls. On success, the caller _must_ ensure SRCU
+ * synchronization by calling `synchronize_srcu(&nh->srcu)` after leaving the
+ * critical section, to ensure that the removed notifier block is not in use any
+ * more.
+ */
+int __ssam_nfblk_remove(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+{
+	struct ssam_notifier_block **link = &nh->head;
+
+	while ((*link) != NULL) {
+		if ((*link) == nb) {
+			rcu_assign_pointer(*link, nb->next);
+			return 0;
+		}
+
+		link = &((*link)->next);
+	}
+
+	return -ENOENT;
+}
+
+static int ssam_nf_head_init(struct ssam_nf_head *nh)
+{
+	int status;
+
+	status = init_srcu_struct(&nh->srcu);
+	if (status)
+		return status;
+
+	nh->head = NULL;
+	return 0;
+}
+
+static void ssam_nf_head_destroy(struct ssam_nf_head *nh)
+{
+	cleanup_srcu_struct(&nh->srcu);
+}
+
+
+/* -- Event/notification registry. ------------------------------------------ */
 
 struct ssam_event_registry {
 	u8 target_category;
@@ -3490,8 +3615,9 @@ struct ssam_event_id {
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_REG, 0x02, 0x01, 0x02)
 
 
-struct ssam_notifier_block {
-	struct notifier_block base;
+struct ssam_event_notifier {
+	struct ssam_notifier_block base;
+
 	struct {
 		struct ssam_event_registry reg;
 		struct ssam_event_id id;
@@ -3514,7 +3640,7 @@ struct ssam_nf_refcount_entry {
 struct ssam_nf {
 	struct mutex lock;
 	struct rb_root refcount;
-	struct srcu_notifier_head head[SURFACE_SAM_SSH_NUM_EVENTS];
+	struct ssam_nf_head head[SURFACE_SAM_SSH_NUM_EVENTS];
 };
 
 
@@ -3599,9 +3725,8 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 			 struct ssam_event *event)
 {
-	struct srcu_notifier_head *nf_head;
-	unsigned long value;
-	int ncalls = 0, status;
+	struct ssam_nf_head *nf_head;
+	int status, nf_ret;
 
 	if (!ssh_rqid_is_event(event->rqid)) {
 		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", event->rqid);
@@ -3609,12 +3734,8 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 	}
 
 	nf_head = &nf->head[ssh_rqid_to_event(event->rqid)];
-
-	value = SSAM_NOTIFIER_VALUE(event->target_category, event->channel,
-				    event->instance_id, event->command_id);
-
-	status = __srcu_notifier_call_chain(nf_head, value, event, -1, &ncalls);
-	status = notifier_to_errno(status);
+	nf_ret = ssam_nfblk_call_chain(nf_head, event);
+	status = ssam_notifier_to_errno(nf_ret);
 
 	if (status < 0) {
 		dev_err(dev, "event: error handling event: %d (tc: 0x%02x, "
@@ -3623,7 +3744,7 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 			 event->channel);
 	}
 
-	if (ncalls == 0) {
+	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
 		dev_warn(dev, "event: unhandled event (rqid: 0x%04x,"
 			 " tc: 0x%02x, cid: 0x%02x, channel: 0x%02x)\n",
 			 event->rqid, event->target_category, event->command_id,
@@ -3631,10 +3752,11 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
 	}
 }
 
-static int ssam_nf_register(struct ssam_nf *nf, struct ssam_notifier_block *nb)
+
+static int ssam_nf_register(struct ssam_nf *nf, struct ssam_event_notifier *n)
 {
-	u16 rqid = ssh_tc_to_rqid(nb->event.id.target_category);
-	struct srcu_notifier_head *nf_head;
+	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_head *nf_head;
 	int rc, status;
 
 	if (!ssh_rqid_is_event(rqid))
@@ -3644,24 +3766,24 @@ static int ssam_nf_register(struct ssam_nf *nf, struct ssam_notifier_block *nb)
 
 	mutex_lock(&nf->lock);
 
-	rc = ssam_nf_refcount_inc(nf, nb->event.reg, nb->event.id);
+	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
 		mutex_lock(&nf->lock);
 		return rc;
 	}
 
-	status = srcu_notifier_chain_register(nf_head, &nb->base);
+	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status)
-		ssam_nf_refcount_dec(nf, nb->event.reg, nb->event.id);
+		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 
 	mutex_unlock(&nf->lock);
 	return status;
 }
 
-static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_notifier_block *nb)
+static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_event_notifier *n)
 {
-	u16 rqid = ssh_tc_to_rqid(nb->event.id.target_category);
-	struct srcu_notifier_head *nf_head;
+	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_head *nf_head;
 	int status;
 
 	if (!ssh_rqid_is_event(rqid))
@@ -3671,14 +3793,17 @@ static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_notifier_block *nb
 
 	mutex_lock(&nf->lock);
 
-	status = srcu_notifier_chain_unregister(nf_head, &nb->base);
+	status = __ssam_nfblk_remove(nf_head, &n->base);
 	if (status) {
 		mutex_unlock(&nf->lock);
 		return status;
 	}
 
-	ssam_nf_refcount_dec(nf, nb->event.reg, nb->event.id);
+	ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+
 	mutex_unlock(&nf->lock);
+	synchronize_srcu(&nf_head->srcu);
+
 	return 0;
 }
 
