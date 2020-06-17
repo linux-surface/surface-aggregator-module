@@ -3798,6 +3798,38 @@ static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_event_notifier *n)
 }
 
 
+static int ssam_nf_init(struct ssam_nf *nf)
+{
+	int i, status;
+
+	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++) {
+		status = ssam_nf_head_init(&nf->head[i]);
+		if (status)
+			break;
+	}
+
+	if (status) {
+		for (i = i - 1; i >= 0; i--)
+			ssam_nf_head_destroy(&nf->head[i]);
+
+		return status;
+	}
+
+	mutex_init(&nf->lock);
+	return 0;
+}
+
+static void ssam_nf_destroy(struct ssam_nf *nf)
+{
+	int i;
+
+	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++)
+		ssam_nf_head_destroy(&nf->head[i]);
+
+	mutex_destroy(&nf->lock);
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
