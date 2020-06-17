@@ -3490,81 +3490,130 @@ struct ssam_event_id {
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_REG, 0x02, 0x01, 0x02)
 
 
-struct ssam_event_desc {
-	struct ssam_event_registry reg;
-	struct ssam_event_id id;
-	u8 flags;
-};
-
 struct ssam_notifier_block {
 	struct notifier_block base;
-	struct ssam_event_desc event;
+	struct {
+		struct ssam_event_registry reg;
+		struct ssam_event_id id;
+		u8 flags;
+	} event;
 };
 
 
-struct ssam_notifier_entry {
-	struct srcu_notifier_head head;
-	u8 refcnt[SURFACE_SAM_SSH_NUM_INSTANCES];
+struct ssam_nf_refcount_key {
+	struct ssam_event_registry reg;
+	struct ssam_event_id id;
 };
 
-struct ssam_notifier_channel {
-	struct ssam_notifier_entry entry[SURFACE_SAM_SSH_NUM_EVENTS];
+struct ssam_nf_refcount_entry {
+	struct rb_node node;
+	struct ssam_nf_refcount_key key;
+	int refcount;
 };
 
-struct ssam_notifier {
+struct ssam_nf {
 	struct mutex lock;
-	struct ssam_notifier_channel channel[SURFACE_SAM_SSH_NUM_CHANNELS];
+	struct rb_root refcount;
+	struct srcu_notifier_head head[SURFACE_SAM_SSH_NUM_EVENTS];
 };
 
 
-static inline struct ssam_notifier_entry *__ssam_notifier_get_entry(
-		struct ssam_notifier *notif, u8 channel, u16 rqid)
+static int ssam_nf_refcount_inc(struct ssam_nf *nf,
+				struct ssam_event_registry reg,
+				struct ssam_event_id id)
 {
-	u16 event = ssh_rqid_to_event(rqid);
-	u8 chan = ssh_channel_to_index(channel);
+	struct ssam_nf_refcount_entry *entry;
+	struct ssam_nf_refcount_key key;
+	struct rb_node **link = &nf->refcount.rb_node;
+	struct rb_node *parent;
+	int cmp;
 
-	return &notif->channel[chan].entry[event];
+	key.reg = reg;
+	key.id = id;
+
+	while (*link) {
+		entry = rb_entry(*link, struct ssam_nf_refcount_entry, node);
+		parent = *link;
+
+		cmp = memcmp(&key, &entry->key, sizeof(key));
+		if (cmp < 0) {
+			link = &(*link)->rb_left;
+		} else if (cmp > 0) {
+			link = &(*link)->rb_right;
+		} else if (entry->refcount < INT_MAX) {
+			return ++entry->refcount;
+		} else {
+			return -ENOSPC;
+		}
+	}
+
+	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
+	if (!entry)
+		return -ENOMEM;
+
+	entry->key = key;
+	entry->refcount = 1;
+
+	rb_link_node(&entry->node, parent, link);
+	rb_insert_color(&entry->node, &nf->refcount);
+
+	return entry->refcount;
 }
 
-static struct ssam_notifier_entry *ssam_notifier_get_entry(
-		struct ssam_notifier *notif, u8 channel, u8 target_category)
+static int ssam_nf_refcount_dec(struct ssam_nf *nf,
+				struct ssam_event_registry reg,
+				struct ssam_event_id id)
 {
-	u16 rqid = ssh_tc_to_rqid(target_category);
+	struct ssam_nf_refcount_entry *entry;
+	struct ssam_nf_refcount_key key;
+	struct rb_node *node = nf->refcount.rb_node;
+	int cmp, rc;
 
-	if (!ssh_channel_is_valid(channel))
-		return NULL;
+	key.reg = reg;
+	key.id = id;
 
-	if (!ssh_rqid_is_event(rqid))
-		return NULL;
+	while (node) {
+		entry = rb_entry(node, struct ssam_nf_refcount_entry, node);
 
-	return __ssam_notifier_get_entry(notif, channel, rqid);
+		cmp = memcmp(&key, &entry->key, sizeof(key));
+		if (cmp < 0) {
+			node = node->rb_left;
+		} else if (cmp > 0) {
+			node = node->rb_right;
+		} else {
+			rc = --entry->refcount;
+
+			if (rc == 0) {
+				rb_erase(&entry->node, &nf->refcount);
+				kfree(entry);
+			}
+
+			return rc;
+		}
+	}
+
+	return -ENOENT;
 }
 
-static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
-			       struct ssam_event *event)
+
+static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
+			 struct ssam_event *event)
 {
-	struct ssam_notifier_entry *entry;
-	u8 channel = event->channel;
+	struct srcu_notifier_head *nf_head;
 	unsigned long value;
-	int status, ncalls;
+	int ncalls = 0, status;
 
 	if (!ssh_rqid_is_event(event->rqid)) {
 		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", event->rqid);
 		return;
 	}
 
-	if (!ssh_channel_is_valid(event->channel)) {
-		dev_warn(dev, "event: unsupported channel: %d, falling back",
-			 event->channel);
-		channel = 1;
-	}
+	nf_head = &nf->head[ssh_rqid_to_event(event->rqid)];
 
 	value = SSAM_NOTIFIER_VALUE(event->target_category, event->channel,
 				    event->instance_id, event->command_id);
 
-	entry = __ssam_notifier_get_entry(notif, channel, event->rqid);
-	status = __srcu_notifier_call_chain(&entry->head, value, event, -1,
-					    &ncalls);
+	status = __srcu_notifier_call_chain(nf_head, value, event, -1, &ncalls);
 	status = notifier_to_errno(status);
 
 	if (status < 0) {
@@ -3582,62 +3631,55 @@ static void ssam_notifier_call(struct ssam_notifier *notif, struct device *dev,
 	}
 }
 
-static int ssam_notifier_register(struct ssam_notifier *notif,
-				  struct ssam_notifier_block *nb)
+static int ssam_nf_register(struct ssam_nf *nf, struct ssam_notifier_block *nb)
 {
-	struct ssam_notifier_entry *entry;
-	int status;
+	u16 rqid = ssh_tc_to_rqid(nb->event.id.target_category);
+	struct srcu_notifier_head *nf_head;
+	int rc, status;
 
-	if (nb->event.id.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
-					nb->event.id.target_category);
-	if (!entry)
-		return -EINVAL;
+	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 
-	mutex_lock(&notif->lock);
+	mutex_lock(&nf->lock);
 
-	if (entry->refcnt[nb->event.id.instance] == 0xff) {
-		mutex_unlock(&notif->lock);
-		return -ENOSPC;
+	rc = ssam_nf_refcount_inc(nf, nb->event.reg, nb->event.id);
+	if (rc < 0) {
+		mutex_lock(&nf->lock);
+		return rc;
 	}
 
-	status = srcu_notifier_chain_register(&entry->head, &nb->base);
-	if (!status)
-		entry->refcnt[nb->event.id.instance] += 1;
+	status = srcu_notifier_chain_register(nf_head, &nb->base);
+	if (status)
+		ssam_nf_refcount_dec(nf, nb->event.reg, nb->event.id);
 
-	mutex_unlock(&notif->lock);
+	mutex_unlock(&nf->lock);
 	return status;
 }
 
-static int ssam_notifier_unregister(struct ssam_notifier *notif,
-				    struct ssam_notifier_block *nb)
+static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_notifier_block *nb)
 {
-	struct ssam_notifier_entry *entry;
+	u16 rqid = ssh_tc_to_rqid(nb->event.id.target_category);
+	struct srcu_notifier_head *nf_head;
 	int status;
 
-	if (nb->event.id.instance >= SURFACE_SAM_SSH_NUM_INSTANCES)
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	entry = ssam_notifier_get_entry(notif, nb->event.reg.channel,
-					nb->event.id.target_category);
-	if (!entry)
-		return -EINVAL;
+	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 
-	mutex_lock(&notif->lock);
+	mutex_lock(&nf->lock);
 
-	if (entry->refcnt[nb->event.id.instance] == 0x00) {
-		mutex_unlock(&notif->lock);
-		return -EINVAL;
+	status = srcu_notifier_chain_unregister(nf_head, &nb->base);
+	if (status) {
+		mutex_unlock(&nf->lock);
+		return status;
 	}
 
-	status = srcu_notifier_chain_unregister(&entry->head, &nb->base);
-	if (!status)
-		entry->refcnt[nb->event.id.instance] -= 1;
-
-	mutex_unlock(&notif->lock);
-	return status;
+	ssam_nf_refcount_dec(nf, nb->event.reg, nb->event.id);
+	mutex_unlock(&nf->lock);
+	return 0;
 }
 
 
