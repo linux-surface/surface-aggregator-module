@@ -435,7 +435,7 @@ static u32 surface_dtx_notification(struct ssam_notifier_block *nb, const struct
 
 	// update device mode
 	if (in_event->command_id == SAM_EVENT_DTX_CID_CONNECTION) {
-		delay = in_event->data[0] ? DTX_CONNECT_OPMODE_DELAY : 0;
+		delay = event.arg0 ? DTX_CONNECT_OPMODE_DELAY : 0;
 		schedule_delayed_work(&ddev->opmode_work, delay);
 	}
 
