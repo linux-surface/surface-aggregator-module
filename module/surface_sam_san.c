@@ -26,13 +26,11 @@ static const guid_t SAN_DSM_UUID =
 #define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
 #define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
-#define SAM_EVENT_PWR_TC		0x02
 #define SAM_EVENT_PWR_CID_BIX		0x15
 #define SAM_EVENT_PWR_CID_BST		0x16
 #define SAM_EVENT_PWR_CID_ADAPTER	0x17
 #define SAM_EVENT_PWR_CID_DPTF		0x4f
 
-#define SAM_EVENT_TEMP_TC		0x03
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
 #define SAN_RQST_TAG			"surface_sam_san: rqst: "
@@ -67,14 +65,14 @@ struct san_drvdata {
 	struct san_consumers consumers;
 
 	struct platform_device *dev;
-	struct notifier_block nb_pwr;
-	struct notifier_block nb_tmp;
+	struct ssam_event_notifier nf_bat;
+	struct ssam_event_notifier nf_tmp;
 };
 
 struct san_event_work {
 	struct delayed_work work;
 	struct platform_device *dev;
-	struct surface_sam_ssh_event event;
+	struct ssam_event event;		// must be last
 };
 
 struct gsb_data_in {
@@ -263,7 +261,7 @@ static int san_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
 }
 
 
-static inline int san_evt_power_adapter(struct device *dev, struct surface_sam_ssh_event *event)
+static inline int san_evt_power_adapter(struct device *dev, const struct ssam_event *event)
 {
 	int status;
 
@@ -285,11 +283,11 @@ static inline int san_evt_power_adapter(struct device *dev, struct surface_sam_s
 	return san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT2_STAT);
 }
 
-static inline int san_evt_power_bix(struct device *dev, struct surface_sam_ssh_event *event)
+static inline int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
 {
 	enum san_pwr_event evcode;
 
-	if (event->iid == 0x02)
+	if (event->instance_id == 0x02)
 		evcode = SAN_PWR_EVENT_BAT2_INFO;
 	else
 		evcode = SAN_PWR_EVENT_BAT1_INFO;
@@ -297,11 +295,11 @@ static inline int san_evt_power_bix(struct device *dev, struct surface_sam_ssh_e
 	return san_acpi_notify_power_event(dev, evcode);
 }
 
-static inline int san_evt_power_bst(struct device *dev, struct surface_sam_ssh_event *event)
+static inline int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
 {
 	enum san_pwr_event evcode;
 
-	if (event->iid == 0x02)
+	if (event->instance_id == 0x02)
 		evcode = SAN_PWR_EVENT_BAT2_STAT;
 	else
 		evcode = SAN_PWR_EVENT_BAT1_STAT;
@@ -309,7 +307,7 @@ static inline int san_evt_power_bst(struct device *dev, struct surface_sam_ssh_e
 	return san_acpi_notify_power_event(dev, evcode);
 }
 
-static inline int san_evt_power_dptf(struct device *dev, struct surface_sam_ssh_event *event)
+static inline int san_evt_power_dptf(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object payload;
 	acpi_handle san = ACPI_HANDLE(dev);
@@ -324,10 +322,10 @@ static inline int san_evt_power_dptf(struct device *dev, struct surface_sam_ssh_
 	 * acpica/nsarguments.c, but this can safely be ignored.
 	 */
 	payload.type = ACPI_TYPE_BUFFER;
-	payload.buffer.length = event->len;
-	payload.buffer.pointer = event->pld;
+	payload.buffer.length = event->length;
+	payload.buffer.pointer = (u8 *)&event->data[0];
 
-	dev_dbg(dev, "notify power event 0x%02x\n", event->cid);
+	dev_dbg(dev, "notify power event 0x%02x\n", event->command_id);
 	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
 				      SAN_PWR_EVENT_DPTF, &payload,
 				      ACPI_TYPE_BUFFER);
@@ -366,11 +364,11 @@ static unsigned long san_evt_power_delay(u8 cid)
 	}
 }
 
-static void san_evt_power(struct surface_sam_ssh_event *event, struct device *dev)
+static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 {
-	int status = 0;
+	int status;
 
-	switch (event->cid) {
+	switch (event->command_id) {
 	case SAM_EVENT_PWR_CID_BIX:
 		status = san_evt_power_bix(dev, event);
 		break;
@@ -388,12 +386,14 @@ static void san_evt_power(struct surface_sam_ssh_event *event, struct device *de
 		break;
 
 	default:
-		dev_warn(dev, "unhandled power event (cid = %x)\n", event->cid);
-		break;
+		return false;
 	}
 
 	if (status)
-		dev_err(dev, "error handling power event (cid = %x)\n", event->cid);
+		dev_err(dev, "error handling power event (cid = %x)\n",
+			event->command_id);
+
+	return true;
 }
 
 static void san_evt_power_workfn(struct work_struct *work)
@@ -405,65 +405,68 @@ static void san_evt_power_workfn(struct work_struct *work)
 }
 
 
-static int san_evt_power_nb(struct notifier_block *nb, unsigned long action, void *data)
+static u32 san_evt_power_nb(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct surface_sam_ssh_event *event = (struct surface_sam_ssh_event *)data;
-	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nb_pwr);
+	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nf_bat.base);
 	struct san_event_work *work;
-	unsigned long delay = san_evt_power_delay(event->cid);
+	unsigned long delay = san_evt_power_delay(event->command_id);
 
 	if (delay == 0) {
-		san_evt_power(event, &drvdata->dev->dev);
-		return 0;
+		if (san_evt_power(event, &drvdata->dev->dev))
+			return SSAM_NOTIF_HANDLED;
+		else
+			return 0;
 	}
 
-	work = kzalloc(sizeof(struct san_event_work) + event->len, GFP_KERNEL);
+	work = kzalloc(sizeof(struct san_event_work) + event->length, GFP_KERNEL);
 	if (!work)
-		return -ENOMEM;
+		return ssam_notifier_from_errno(-ENOMEM);
 
 	INIT_DELAYED_WORK(&work->work, san_evt_power_workfn);
 	work->dev = drvdata->dev;
 
-	memcpy(&work->event, event, sizeof(struct surface_sam_ssh_event));
-	work->event.pld = ((u8 *)work) + sizeof(struct san_event_work);
-	memcpy(work->event.pld, event->pld, event->len);
+	memcpy(&work->event, event, sizeof(struct ssam_event) + event->length);
 
 	schedule_delayed_work(&work->work, delay);
-	return 0;
+	return SSAM_NOTIF_HANDLED;
 }
 
 
-static inline int san_evt_thermal_notify(struct device *dev, struct surface_sam_ssh_event *event)
+static inline int san_evt_thermal_notify(struct device *dev, const struct ssam_event *event)
 {
-	return san_acpi_notify_sensor_trip_point(dev, event->iid);
+	return san_acpi_notify_sensor_trip_point(dev, event->instance_id);
 }
 
-static void san_evt_thermal(struct surface_sam_ssh_event *event, struct device *dev)
+static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
 {
-	int status = 0;
+	int status;
 
-	switch (event->cid) {
+	switch (event->command_id) {
 	case SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
 		status = san_evt_thermal_notify(dev, event);
 		break;
 
 	default:
-		dev_warn(dev, "unhandled thermal event (cid = %x)\n", event->cid);
-		break;
+		return false;
 	}
 
-	if (status)
-		dev_err(dev, "error handling thermal event (cid = %x)\n", event->cid);
+	if (status) {
+		dev_err(dev, "error handling thermal event (cid = %x)\n",
+			event->command_id);
+	}
+
+	return true;
 }
 
-static int san_evt_thermal_nb(struct notifier_block *nb, unsigned long action, void *data)
+static u32 san_evt_thermal_nb(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct surface_sam_ssh_event *event = (struct surface_sam_ssh_event *)data;
-	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nb_tmp);
+	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nf_tmp.base);
 	struct platform_device *pdev = drvdata->dev;
 
-	san_evt_thermal(event, &pdev->dev);
-	return 0;
+	if (san_evt_thermal(event, &pdev->dev))
+		return SSAM_NOTIF_HANDLED;
+	else
+		return 0;
 }
 
 
@@ -666,19 +669,27 @@ static int san_events_register(struct platform_device *pdev)
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 	int status;
 
-	drvdata->nb_pwr.priority = 1;
-	drvdata->nb_pwr.notifier_call = san_evt_power_nb;
+	drvdata->nf_bat.base.priority = 1;
+	drvdata->nf_bat.base.fn = san_evt_power_nb;
+	drvdata->nf_bat.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	drvdata->nf_bat.event.id.target_category = SSAM_SSH_TC_BAT;
+	drvdata->nf_bat.event.id.instance = 0;
+	drvdata->nf_bat.event.flags = SSAM_EVENT_SEQUENCED;
 
-	drvdata->nb_tmp.priority = 1;
-	drvdata->nb_tmp.notifier_call = san_evt_thermal_nb;
+	drvdata->nf_tmp.base.priority = 1;
+	drvdata->nf_tmp.base.fn = san_evt_thermal_nb;
+	drvdata->nf_tmp.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	drvdata->nf_tmp.event.id.target_category = SSAM_SSH_TC_TMP;
+	drvdata->nf_tmp.event.id.instance = 0;
+	drvdata->nf_tmp.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+	status = surface_sam_ssh_notifier_register(&drvdata->nf_bat);
 	if (status)
 		return status;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
+	status = surface_sam_ssh_notifier_register(&drvdata->nf_tmp);
 	if (status)
-		surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
+		surface_sam_ssh_notifier_unregister(&drvdata->nf_bat);
 
 	return status;
 }
@@ -687,8 +698,8 @@ static void san_events_unregister(struct platform_device *pdev)
 {
 	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_PWR_TC, &drvdata->nb_pwr);
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_TEMP_TC, &drvdata->nb_tmp);
+	surface_sam_ssh_notifier_unregister(&drvdata->nf_bat);
+	surface_sam_ssh_notifier_unregister(&drvdata->nf_tmp);
 }
 
 

@@ -301,7 +301,7 @@ struct spwr_battery_device {
 
 	struct delayed_work update_work;
 
-	struct notifier_block sam_nb;
+	struct ssam_event_notifier notif;
 
 	struct mutex lock;
 	unsigned long timestamp;
@@ -319,7 +319,7 @@ struct spwr_ac_device {
 	struct power_supply *psy;
 	struct power_supply_desc psy_desc;
 
-	struct notifier_block sam_nb;
+	struct ssam_event_notifier notif;
 
 	struct mutex lock;
 
@@ -572,51 +572,56 @@ static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 	return status;
 }
 
-static int spwr_notify_bat(struct notifier_block *nb, unsigned long action, void *data)
+static u32 spwr_notify_bat(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct surface_sam_ssh_event *event = data;
-	struct spwr_battery_device *bat = container_of(nb, struct spwr_battery_device, sam_nb);
+	struct spwr_battery_device *bat = container_of(nb, struct spwr_battery_device, notif.base);
+	int status;
 
-	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x)\n", event->cid);
+	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x)\n", event->command_id);
 
 	// handled here because adapter has IID = 0
-	if (event->cid == SAM_EVENT_PWR_CID_ADAPTER)
-		return spwr_notify_adapter_bat(bat);
+	if (event->command_id == SAM_EVENT_PWR_CID_ADAPTER) {
+		status = spwr_notify_adapter_bat(bat);
+		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
+	}
 
 	// check for the correct battery IID
-	if (event->iid != bat->iid)
+	if (event->instance_id != bat->iid)
 		return 0;
 
-	switch (event->cid) {
+	switch (event->command_id) {
 	case SAM_EVENT_PWR_CID_BIX:
-		return spwr_notify_bix(bat);
+		status = spwr_notify_bix(bat);
+		break;
 
 	case SAM_EVENT_PWR_CID_BST:
-		return spwr_notify_bst(bat);
+		status = spwr_notify_bst(bat);
+		break;
 
 	default:
-		dev_warn(&bat->pdev->dev, "unhandled power event (cid = 0x%02x)\n", event->cid);
 		return 0;
 	}
+
+	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
-static int spwr_notify_ac(struct notifier_block *nb, unsigned long action, void *data)
+static u32 spwr_notify_ac(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct surface_sam_ssh_event *event = data;
-	struct spwr_ac_device *ac = container_of(nb, struct spwr_ac_device, sam_nb);
+	struct spwr_ac_device *ac = container_of(nb, struct spwr_ac_device, notif.base);
+	int status;
 
-	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x)\n", event->cid);
+	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x)\n", event->command_id);
 
 	// AC has IID = 0
-	if (event->iid != 0)
+	if (event->instance_id != 0)
 		return 0;
 
-	switch (event->cid) {
+	switch (event->command_id) {
 	case SAM_EVENT_PWR_CID_ADAPTER:
-		return spwr_notify_adapter_ac(ac);
+		status = spwr_notify_adapter_ac(ac);
+		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 
 	default:
-		dev_warn(&ac->pdev->dev, "unhandled power event (cid = 0x%02x)\n", event->cid);
 		return 0;
 	}
 }
@@ -891,10 +896,14 @@ static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *p
 		goto err_psy;
 	}
 
-	ac->sam_nb.priority = 1;
-	ac->sam_nb.notifier_call = spwr_notify_ac;
+	ac->notif.base.priority = 1;
+	ac->notif.base.fn = spwr_notify_ac;
+	ac->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	ac->notif.event.id.target_category = SSAM_SSH_TC_BAT;
+	ac->notif.event.id.instance = 0;
+	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, &ac->sam_nb);
+	status = surface_sam_ssh_notifier_register(&ac->notif);
 	if (status)
 		goto err_notif;
 
@@ -909,7 +918,7 @@ err_psy:
 
 static int spwr_ac_unregister(struct spwr_ac_device *ac)
 {
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &ac->sam_nb);
+	surface_sam_ssh_notifier_unregister(&ac->notif);
 	power_supply_unregister(ac->psy);
 	mutex_destroy(&ac->lock);
 	return 0;
@@ -967,10 +976,14 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 		goto err_psy;
 	}
 
-	bat->sam_nb.priority = 1;
-	bat->sam_nb.notifier_call = spwr_notify_bat;
+	bat->notif.base.priority = 1;
+	bat->notif.base.fn = spwr_notify_bat;
+	bat->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	bat->notif.event.id.target_category = SSAM_SSH_TC_BAT;
+	bat->notif.event.id.instance = 0;
+	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(SAM_PWR_TC, &bat->sam_nb);
+	status = surface_sam_ssh_notifier_register(&bat->notif);
 	if (status)
 		goto err_notif;
 
@@ -981,7 +994,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 	return 0;
 
 err_file:
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &bat->sam_nb);
+	surface_sam_ssh_notifier_unregister(&bat->notif);
 err_notif:
 	power_supply_unregister(bat->psy);
 err_psy:
@@ -991,7 +1004,7 @@ err_psy:
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat)
 {
-	surface_sam_ssh_notifier_unregister(SAM_PWR_TC, &bat->sam_nb);
+	surface_sam_ssh_notifier_unregister(&bat->notif);
 	cancel_delayed_work_sync(&bat->update_work);
 	device_remove_file(&bat->psy->dev, &alarm_attr);
 	power_supply_unregister(bat->psy);

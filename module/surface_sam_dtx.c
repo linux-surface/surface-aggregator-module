@@ -40,7 +40,6 @@
 #define SAM_RQST_DTX_CID_LATCH_OPEN			0x09
 #define SAM_RQST_DTX_CID_GET_OPMODE			0x0D
 
-#define SAM_EVENT_DTX_TC				0x11
 #define SAM_EVENT_DTX_CID_CONNECTION			0x0c
 #define SAM_EVENT_DTX_CID_BUTTON			0x0e
 #define SAM_EVENT_DTX_CID_ERROR				0x0f
@@ -71,7 +70,7 @@ struct surface_dtx_event {
 } __packed;
 
 struct surface_dtx_dev {
-	struct notifier_block sam_nb;
+	struct ssam_event_notifier notif;
 	struct delayed_work opmode_work;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
@@ -406,42 +405,41 @@ static void surface_dtx_opmode_workfn(struct work_struct *work)
 	surface_dtx_update_opmpde(ddev);
 }
 
-static int surface_dtx_notification(struct notifier_block *nb, unsigned long action, void *data)
+static u32 surface_dtx_notification(struct ssam_notifier_block *nb, const struct ssam_event *in_event)
 {
-	struct surface_sam_ssh_event *in_event = data;
-	struct surface_dtx_dev *ddev = container_of(nb, struct surface_dtx_dev, sam_nb);
+	struct surface_dtx_dev *ddev = container_of(nb, struct surface_dtx_dev, notif.base);
 	struct surface_dtx_event event;
 	unsigned long delay;
 
-	switch (in_event->cid) {
+	switch (in_event->command_id) {
 	case SAM_EVENT_DTX_CID_CONNECTION:
 	case SAM_EVENT_DTX_CID_BUTTON:
 	case SAM_EVENT_DTX_CID_ERROR:
 	case SAM_EVENT_DTX_CID_LATCH_STATUS:
-		if (in_event->len > 2) {
+		if (in_event->length > 2) {
 			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
-			       in_event->cid, in_event->len);
-			return 0;
+			       in_event->command_id, in_event->length);
+			return SSAM_NOTIF_HANDLED;
 		}
 
-		event.type = in_event->tc;
-		event.code = in_event->cid;
-		event.arg0 = in_event->len >= 1 ? in_event->pld[0] : 0x00;
-		event.arg1 = in_event->len >= 2 ? in_event->pld[1] : 0x00;
+		event.type = in_event->target_category;
+		event.code = in_event->command_id;
+		event.arg0 = in_event->length >= 1 ? in_event->data[0] : 0x00;
+		event.arg1 = in_event->length >= 2 ? in_event->data[1] : 0x00;
 		surface_dtx_push_event(ddev, &event);
 		break;
 
 	default:
-		printk(DTX_WARN "unhandled dtx event (cid: %x)\n", in_event->cid);
+		return 0;
 	}
 
 	// update device mode
-	if (in_event->cid == SAM_EVENT_DTX_CID_CONNECTION) {
-		delay = in_event->pld[0] ? DTX_CONNECT_OPMODE_DELAY : 0;
+	if (in_event->command_id == SAM_EVENT_DTX_CID_CONNECTION) {
+		delay = in_event->data[0] ? DTX_CONNECT_OPMODE_DELAY : 0;
 		schedule_delayed_work(&ddev->opmode_work, delay);
 	}
 
-	return 0;
+	return SSAM_NOTIF_HANDLED;
 }
 
 
@@ -515,10 +513,14 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 		goto err_register;
 
 	// set up events
-	ddev->sam_nb.priority = 1;
-	ddev->sam_nb.notifier_call = surface_dtx_notification;
+	ddev->notif.base.priority = 1;
+	ddev->notif.base.fn = surface_dtx_notification;
+	ddev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	ddev->notif.event.id.target_category = SSAM_SSH_TC_BAS;
+	ddev->notif.event.id.instance = 0;
+	ddev->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_DTX_TC, &ddev->sam_nb);
+	status = surface_sam_ssh_notifier_register(&ddev->notif);
 	if (status)
 		goto err_events_setup;
 
@@ -547,7 +549,7 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	mutex_unlock(&ddev->mutex);
 
 	// After this call we're guaranteed that no more input events will arive
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_DTX_TC, &ddev->sam_nb);
+	surface_sam_ssh_notifier_unregister(&ddev->notif);
 
 	// wake up clients
 	spin_lock(&ddev->client_lock);

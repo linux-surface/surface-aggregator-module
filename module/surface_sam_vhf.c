@@ -18,13 +18,11 @@
 
 #define VHF_INPUT_NAME			"Microsoft Virtual HID Framework Device"
 
-#define SAM_EVENT_VHF_TC		0x08
-
 
 struct vhf_drvdata {
 	struct platform_device *dev;
 	struct hid_device *hid;
-	struct notifier_block sam_nb;
+	struct ssam_event_notifier notif;
 };
 
 
@@ -161,15 +159,19 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 	return hid;
 }
 
-static int vhf_event_handler(struct notifier_block *nb, unsigned long action, void *data)
+static u32 vhf_event_handler(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct surface_sam_ssh_event *event = data;
-	struct vhf_drvdata *drvdata = container_of(nb, struct vhf_drvdata, sam_nb);
+	struct vhf_drvdata *drvdata = container_of(nb, struct vhf_drvdata, notif.base);
+	int status;
 
-	if (event->tc == 0x08 && (event->cid == 0x03 || event->cid == 0x04))
-		return hid_input_report(drvdata->hid, HID_INPUT_REPORT, event->pld, event->len, 1);
+	if (event->target_category != 0x08)
+		return 0;
 
-	dev_warn(&drvdata->dev->dev, "unsupported event (tc = %d, cid = %d)\n", event->tc, event->cid);
+	if (event->command_id == 0x03 || event->command_id == 0x04) {
+		status = hid_input_report(drvdata->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
+		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
+	}
+
 	return 0;
 }
 
@@ -200,12 +202,17 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 
 	drvdata->dev = pdev;
 	drvdata->hid = hid;
-	drvdata->sam_nb.priority = 1;
-	drvdata->sam_nb.notifier_call = vhf_event_handler;
+
+	drvdata->notif.base.priority = 1;
+	drvdata->notif.base.fn = vhf_event_handler;
+	drvdata->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	drvdata->notif.event.id.target_category = SSAM_SSH_TC_KBD;
+	drvdata->notif.event.id.instance = 0;
+	drvdata->notif.event.flags = 0;
 
 	platform_set_drvdata(pdev, drvdata);
 
-	status = surface_sam_ssh_notifier_register(SAM_EVENT_VHF_TC, &drvdata->sam_nb);
+	status = surface_sam_ssh_notifier_register(&drvdata->notif);
 	if (status)
 		goto err_add_hid;
 
@@ -223,7 +230,7 @@ static int surface_sam_vhf_remove(struct platform_device *pdev)
 {
 	struct vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(SAM_EVENT_VHF_TC, &drvdata->sam_nb);
+	surface_sam_ssh_notifier_unregister(&drvdata->notif);
 	hid_destroy_device(drvdata->hid);
 	kfree(drvdata);
 
