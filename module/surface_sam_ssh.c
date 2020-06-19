@@ -3573,33 +3573,33 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 	return -ENOENT;
 }
 
-static void ssam_nf_call(struct ssam_nf *nf, struct device *dev,
+static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 			 struct ssam_event *event)
 {
 	struct ssam_nf_head *nf_head;
 	int status, nf_ret;
 
-	if (!ssh_rqid_is_event(event->rqid)) {
-		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", event->rqid);
+	if (!ssh_rqid_is_event(rqid)) {
+		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", rqid);
 		return;
 	}
 
-	nf_head = &nf->head[ssh_rqid_to_event(event->rqid)];
+	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 	nf_ret = ssam_nfblk_call_chain(nf_head, event);
 	status = ssam_notifier_to_errno(nf_ret);
 
 	if (status < 0) {
-		dev_err(dev, "event: error handling event: %d (tc: 0x%02x, "
-			 " cid: 0x%02x, channel: 0x%02x)\n",
-			 status, event->target_category, event->command_id,
-			 event->channel);
+		dev_err(dev, "event: error handling event: %d "
+			"(tc: 0x%02x, cid: 0x%02x, iid: 0x%02x, chn: 0x%02x)\n",
+			status, event->target_category, event->command_id,
+			event->instance_id, event->channel);
 	}
 
 	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
-		dev_warn(dev, "event: unhandled event (rqid: 0x%04x,"
-			 " tc: 0x%02x, cid: 0x%02x, channel: 0x%02x)\n",
-			 event->rqid, event->target_category, event->command_id,
-			 event->channel);
+		dev_warn(dev, "event: unhandled event (rqid: 0x%02x, "
+			 "tc: 0x%02x, cid: 0x%02x, iid: 0x%02x, chn: 0x%02x)\n",
+			 rqid, event->target_category, event->command_id,
+			 event->instance_id, event->channel);
 	}
 }
 
@@ -3753,6 +3753,7 @@ struct ssh_event_work {
 	struct work_struct work_ack;
 	struct work_struct work_evt;
 	u8 seq;
+	u16 rqid;
 	struct ssam_event event;	// must be last
 };
 
@@ -4393,7 +4394,8 @@ static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
 	work = container_of(_work, struct ssh_event_work, work_evt);
 	ec = work->ec;
 
-	ssam_nf_call(&ec->events.notifier, &ec->serdev->dev, &work->event);
+	ssam_nf_call(&ec->events.notifier, &ec->serdev->dev, work->rqid,
+		     &work->event);
 
 	if (refcount_dec_and_test(&work->refcount))
 		kfree(work);
@@ -4413,11 +4415,11 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 	refcount_set(&work->refcount, 1);
 	work->ec = ec;
 	work->seq = frame->seq;
+	work->rqid = get_unaligned_le16(&command->rqid);
 	work->event.target_category = command->tc;
 	work->event.command_id = command->cid;
 	work->event.instance_id = command->iid;
 	work->event.channel = command->chn_in;
-	work->event.rqid = get_unaligned_le16(&command->rqid);
 	work->event.length  = command_data->len;
 	memcpy(&work->event.data[0], command_data->ptr, command_data->len);
 
