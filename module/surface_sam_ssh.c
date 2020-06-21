@@ -3699,6 +3699,185 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 }
 
 
+/* -- Event/async request completion system. -------------------------------- */
+
+#define SSAM_CPLT_WQ_NAME	"ssam_cpltq"
+
+
+struct ssam_cplt;
+
+struct ssam_event_item {
+	struct list_head node;
+	u16 rqid;
+	struct ssam_event event;	// must be last
+};
+
+struct ssam_event_queue {
+	struct ssam_cplt *cplt;
+
+	spinlock_t lock;
+	struct list_head head;
+	struct work_struct work;
+};
+
+struct ssam_event_channel {
+	struct ssam_event_queue queue[SURFACE_SAM_SSH_NUM_EVENTS];
+};
+
+struct ssam_cplt {
+	struct device *dev;
+	struct workqueue_struct *wq;
+
+	struct {
+		struct ssam_event_channel channel[SURFACE_SAM_SSH_NUM_CHANNELS];
+		struct ssam_nf notif;
+	} event;
+};
+
+
+static void ssam_event_queue_push(struct ssam_event_queue *q,
+				  struct ssam_event_item *item)
+{
+	spin_lock(&q->lock);
+	list_add_tail(&item->node, &q->head);
+	spin_unlock(&q->lock);
+}
+
+static struct ssam_event_item *ssam_event_queue_pop(struct ssam_event_queue *q)
+{
+	struct ssam_event_item *item;
+
+	spin_lock(&q->lock);
+	item = list_first_entry_or_null(&q->head, struct ssam_event_item, node);
+	if (item)
+		list_del(&item->node);
+	spin_unlock(&q->lock);
+
+	return item;
+}
+
+static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
+{
+	bool empty;
+
+	spin_lock(&q->lock);
+	empty = list_empty(&q->head);
+	spin_unlock(&q->lock);
+
+	return empty;
+}
+
+static struct ssam_event_queue *ssam_cplt_get_event_queue(
+		struct ssam_cplt *cplt, u8 channel, u16 rqid)
+{
+	u16 event = ssh_rqid_to_event(rqid);
+	u16 chidx = ssh_channel_to_index(channel);
+
+	if (!ssh_rqid_is_event(rqid)) {
+		dev_err(cplt->dev, "event: unsupported rqid: 0x%04x\n", rqid);
+		return NULL;
+	}
+
+	if (!ssh_channel_is_valid(channel)) {
+		dev_warn(cplt->dev, "event: unsupported channel: %u\n",
+			 channel);
+		chidx = 0;
+	}
+
+	return &cplt->event.channel[chidx].queue[event];
+}
+
+static inline bool ssam_cplt_submit(struct ssam_cplt *cplt,
+				    struct work_struct *work)
+{
+	return queue_work(cplt->wq, work);
+}
+
+static int ssam_cplt_submit_event(struct ssam_cplt *cplt,
+				  struct ssam_event_item *item)
+{
+	struct ssam_event_queue *evq;
+
+	evq = ssam_cplt_get_event_queue(cplt, item->event.channel, item->rqid);
+	if (!evq)
+		return -EINVAL;
+
+	ssam_event_queue_push(evq, item);
+	ssam_cplt_submit(cplt, &evq->work);
+	return 0;
+}
+
+static void ssam_cplt_flush(struct ssam_cplt *cplt)
+{
+	flush_workqueue(cplt->wq);
+}
+
+static void ssam_event_queue_work_fn(struct work_struct *work)
+{
+	struct ssam_event_queue *queue;
+	struct ssam_event_item *item;
+	struct ssam_nf *nf;
+	struct device *dev;
+	int i;
+
+	queue = container_of(work, struct ssam_event_queue, work);
+	nf = &queue->cplt->event.notif;
+	dev = queue->cplt->dev;
+
+	for (i = 0; i < 10; i++) {
+		item = ssam_event_queue_pop(queue);
+		if (item == NULL)
+			return;
+
+		ssam_nf_call(nf, dev, item->rqid, &item->event);
+		kfree(item);
+	}
+
+	if (!ssam_event_queue_is_empty(queue))
+		ssam_cplt_submit(queue->cplt, &queue->work);
+}
+
+static void ssam_event_queue_init(struct ssam_cplt *cplt,
+				  struct ssam_event_queue *evq)
+{
+	evq->cplt = cplt;
+	spin_lock_init(&evq->lock);
+	INIT_LIST_HEAD(&evq->head);
+	INIT_WORK(&evq->work, ssam_event_queue_work_fn);
+}
+
+static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
+{
+	struct ssam_event_channel *channel;
+	int status, c, i;
+
+	cplt->dev = dev;
+
+	cplt->wq = create_workqueue(SSAM_CPLT_WQ_NAME);
+	if (!cplt->wq)
+		return -ENOMEM;
+
+	for (c = 0; c < ARRAY_SIZE(cplt->event.channel); c++) {
+		channel = &cplt->event.channel[c];
+
+		for (i = 0; i < ARRAY_SIZE(channel->queue); i++)
+			ssam_event_queue_init(cplt, &channel->queue[i]);
+	}
+
+	status = ssam_nf_init(&cplt->event.notif);
+	if (status)
+		destroy_workqueue(cplt->wq);
+
+	return status;
+}
+
+static void ssam_cplt_destroy(struct ssam_cplt *cplt)
+{
+	destroy_workqueue(cplt->wq);
+	ssam_nf_destroy(&cplt->event.notif);
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
