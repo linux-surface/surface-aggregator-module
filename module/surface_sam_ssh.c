@@ -3913,19 +3913,13 @@ struct ssh_receiver {
 	struct sshp_buf eval_buf;
 };
 
-struct ssh_events {
-	struct workqueue_struct *queue_ack;
-	struct workqueue_struct *queue_evt;
-	struct ssam_nf notifier;
-};
-
 struct sam_ssh_ec {
 	struct mutex lock;
 	enum ssh_ec_state state;
 	struct serdev_device *serdev;
 	struct ssh_counters counter;
 	struct ssh_receiver receiver;
-	struct ssh_events events;
+	struct ssam_cplt cplt;
 	int irq;
 	bool irq_wakeup_enabled;
 };
@@ -3935,17 +3929,6 @@ struct ssh_fifo_packet {
 	u8 seq;
 	u8 len;
 };
-
-struct ssh_event_work {
-	refcount_t refcount;
-	struct sam_ssh_ec *ec;
-	struct work_struct work_ack;
-	struct work_struct work_evt;
-	u8 seq;
-	u16 rqid;
-	struct ssam_event event;	// must be last
-};
-
 
 static struct sam_ssh_ec ssh_ec = {
 	.lock   = __MUTEX_INITIALIZER(ssh_ec.lock),
@@ -3960,7 +3943,6 @@ static struct sam_ssh_ec ssh_ec = {
 		.state = SSH_RCV_DISCARD,
 		.expect = {},
 	},
-	.events = {},
 	.irq = -1,
 };
 
@@ -4129,6 +4111,7 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 {
 	struct ssam_nf_head *nf_head;
 	struct sam_ssh_ec *ec;
+	struct ssam_nf *nf;
 	u16 event = ssh_tc_to_event(n->event.id.target_category);
 	u16 rqid = ssh_event_to_rqid(event);
 	int rc, status;
@@ -4140,13 +4123,14 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 	if (!ec)
 		return -ENXIO;
 
-	nf_head = &ec->events.notifier.head[event];
+	nf = &ec->cplt.event.notif;
+	nf_head = &nf->head[event];
 
-	mutex_lock(&ec->events.notifier.lock);
+	mutex_lock(&nf->lock);
 
-	rc = ssam_nf_refcount_inc(&ec->events.notifier, n->event.reg, n->event.id);
+	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
-		mutex_unlock(&ec->events.notifier.lock);
+		mutex_unlock(&nf->lock);
 		surface_sam_ssh_release(ec);
 		return rc;
 	}
@@ -4155,8 +4139,8 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 
 	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
-		ssam_nf_refcount_dec(&ec->events.notifier, n->event.reg, n->event.id);
-		mutex_unlock(&ec->events.notifier.lock);
+		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+		mutex_unlock(&nf->lock);
 		surface_sam_ssh_release(ec);
 		return status;
 	}
@@ -4165,14 +4149,14 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 		status = surface_sam_ssh_event_enable(ec, n->event.reg, n->event.id, n->event.flags);
 		if (status) {
 			__ssam_nfblk_remove(nf_head, &n->base);
-			ssam_nf_refcount_dec(&ec->events.notifier, n->event.reg, n->event.id);
-			mutex_unlock(&ec->events.notifier.lock);
+			ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+			mutex_unlock(&nf->lock);
 			surface_sam_ssh_release(ec);
 			return status;
 		}
 	}
 
-	mutex_unlock(&ec->events.notifier.lock);
+	mutex_unlock(&nf->lock);
 	surface_sam_ssh_release(ec);
 	return 0;
 }
@@ -4182,6 +4166,7 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 {
 	struct ssam_nf_head *nf_head;
 	struct sam_ssh_ec *ec;
+	struct ssam_nf *nf;
 	u16 event = ssh_tc_to_event(n->event.id.target_category);
 	u16 rqid = ssh_event_to_rqid(event);
 	int rc, status = 0;
@@ -4193,13 +4178,14 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 	if (!ec)
 		return -ENXIO;
 
-	nf_head = &ec->events.notifier.head[event];
+	nf = &ec->cplt.event.notif;
+	nf_head = &nf->head[event];
 
-	mutex_lock(&ec->events.notifier.lock);
+	mutex_lock(&nf->lock);
 
-	rc = ssam_nf_refcount_dec(&ec->events.notifier, n->event.reg, n->event.id);
+	rc = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
-		mutex_unlock(&ec->events.notifier.lock);
+		mutex_unlock(&nf->lock);
 		surface_sam_ssh_release(ec);
 		return rc;
 	}
@@ -4210,7 +4196,7 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 		status = surface_sam_ssh_event_disable(ec, n->event.reg, n->event.id, n->event.flags);
 
 	__ssam_nfblk_remove(nf_head, &n->base);
-	mutex_unlock(&ec->events.notifier.lock);
+	mutex_unlock(&nf->lock);
 	synchronize_srcu(&nf_head->srcu);
 
 	surface_sam_ssh_release(ec);
@@ -4549,45 +4535,20 @@ static inline bool ssh_is_valid_crc(const u8 *begin, const u8 *end)
 }
 
 
-static void surface_sam_ssh_event_work_ack_handler(struct work_struct *_work)
+static void ssh_send_ack(struct sam_ssh_ec *ec, u8 seq)
 {
 	u8 buf[SSH_MSG_LEN_CTRL];
 	struct msgbuf msgb;
-	struct ssh_event_work *work;
-	struct sam_ssh_ec *ec;
-	struct device *dev;
 	int status;
-
-	work = container_of(_work, struct ssh_event_work, work_ack);
-	ec = work->ec;
-	dev = &ec->serdev->dev;
 
 	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
 		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
-		msgb_push_ack(&msgb, work->seq);
+		msgb_push_ack(&msgb, seq);
 
 		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
 		if (status)
 			ssh_err(ec, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
 	}
-
-	if (refcount_dec_and_test(&work->refcount))
-		kfree(work);
-}
-
-static void surface_sam_ssh_event_work_evt_handler(struct work_struct *_work)
-{
-	struct ssh_event_work *work;
-	struct sam_ssh_ec *ec;
-
-	work = container_of(_work, struct ssh_event_work, work_evt);
-	ec = work->ec;
-
-	ssam_nf_call(&ec->events.notifier, &ec->serdev->dev, work->rqid,
-		     &work->event);
-
-	if (refcount_dec_and_test(&work->refcount))
-		kfree(work);
 }
 
 static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
@@ -4595,32 +4556,25 @@ static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
 				const struct ssh_command *command,
 				const struct sshp_span *command_data)
 {
-	struct ssh_event_work *work;
+	struct ssam_event_item *item;
 
-	work = kzalloc(sizeof(struct ssh_event_work) + command_data->len, GFP_ATOMIC);
-	if (!work)
+	item = kzalloc(sizeof(struct ssam_event_item) + command_data->len, GFP_KERNEL);
+	if (!item)
 		return;
 
-	refcount_set(&work->refcount, 1);
-	work->ec = ec;
-	work->seq = frame->seq;
-	work->rqid = get_unaligned_le16(&command->rqid);
-	work->event.target_category = command->tc;
-	work->event.command_id = command->cid;
-	work->event.instance_id = command->iid;
-	work->event.channel = command->chn_in;
-	work->event.length  = command_data->len;
-	memcpy(&work->event.data[0], command_data->ptr, command_data->len);
+	item->rqid = get_unaligned_le16(&command->rqid);
+	item->event.target_category = command->tc;
+	item->event.command_id = command->cid;
+	item->event.instance_id = command->iid;
+	item->event.channel = command->chn_in;
+	item->event.length  = command_data->len;
+	memcpy(&item->event.data[0], command_data->ptr, command_data->len);
+
+	ssam_cplt_submit_event(&ec->cplt, item);
 
 	// queue ACK for if required
-	if (frame->type == SSH_FRAME_TYPE_DATA_SEQ) {
-		refcount_set(&work->refcount, 2);
-		INIT_WORK(&work->work_ack, surface_sam_ssh_event_work_ack_handler);
-		queue_work(ec->events.queue_ack, &work->work_ack);
-	}
-
-	INIT_WORK(&work->work_evt, surface_sam_ssh_event_work_evt_handler);
-	queue_work(ec->events.queue_evt, &work->work_evt);
+	if (frame->type == SSH_FRAME_TYPE_DATA_SEQ)
+		ssh_send_ack(ec, frame->seq);
 }
 
 static void ssh_rx_complete_command(struct sam_ssh_ec *ec,
@@ -5142,13 +5096,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	kfifo_init(&ec->receiver.rcvb, recv_buf, SSH_RECV_BUF_LEN);
 	ec->receiver.eval_buf = eval_buf;
 
-	// initialize event handling
-	ec->events.queue_ack = event_queue_ack;
-	ec->events.queue_evt = event_queue_evt;
-
-	status = ssam_nf_init(&ec->events.notifier);
+	// initialize event/request completion system
+	status = ssam_cplt_init(&ec->cplt, &serdev->dev);
 	if (status)
-		goto err_nf_init;
+		goto err_cplt_init;
 
 	serdev_device_set_drvdata(serdev, ec);
 
@@ -5198,8 +5149,8 @@ err_open:
 err_rxstart:
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 	serdev_device_set_drvdata(serdev, NULL);
-	ssam_nf_destroy(&ec->events.notifier);
-err_nf_init:
+	ssam_cplt_destroy(&ec->cplt);
+err_cplt_init:
 	surface_sam_ssh_release(ec);
 err_busy:
 	free_irq(irq, serdev);
@@ -5235,16 +5186,13 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 		dev_err(&serdev->dev, "failed to suspend EC: %d\n", status);
 
 	// make sure all events (received up to now) have been properly handled
-	flush_workqueue(ec->events.queue_ack);
-	flush_workqueue(ec->events.queue_evt);
+	ssam_cplt_flush(&ec->cplt);
 
 	status = ssh_rx_stop(ec);
 	if (status)
 		dev_err(&serdev->dev, "error stopping receiver thread: %d\n", status);
 
-	// remove event handlers
 	// TODO: disable all registered events
-	ssam_nf_destroy(&ec->events.notifier);
 
 	// set device to deinitialized state
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
@@ -5252,10 +5200,9 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 
 	/*
 	 * Flush any event that has not been processed yet to ensure we're not going to
-	 * use the serial device any more (e.g. for ACKing).
+	 * use the serial device any more.
 	 */
-	flush_workqueue(ec->events.queue_ack);
-	flush_workqueue(ec->events.queue_evt);
+	ssam_cplt_flush(&ec->cplt);
 
 	serdev_device_close(serdev);
 
@@ -5264,8 +5211,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	 * workqueue here flushes all remaining events. Those events will be
 	 * silently ignored and neither ACKed nor any handler gets called.
 	 */
-	destroy_workqueue(ec->events.queue_ack);
-	destroy_workqueue(ec->events.queue_evt);
+	ssam_cplt_destroy(&ec->cplt);
 
 	// free receiver
 	spin_lock_irqsave(&ec->receiver.lock, flags);
