@@ -181,6 +181,11 @@ struct ssam_event_notifier {
 #define SURFACE_SAM_SSH_NUM_EVENTS		32
 
 /*
+ * The number of communication channels used in the protocol.
+ */
+#define SURFACE_SAM_SSH_NUM_CHANNELS		2
+
+/*
  * Special event-handler delay value indicating that the corresponding event
  * should be handled immediately in the interrupt and not be relayed through
  * the workqueue. Intended for low-latency events, such as keyboard events.
