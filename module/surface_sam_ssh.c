@@ -3886,6 +3886,71 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 }
 
 
+/* -- Top-Level Request Interface ------------------------------------------- */
+
+struct ssam_response {
+	int status;
+	u16 capacity;
+	u16 length;
+	u8 *pointer;
+};
+
+struct ssam_request_sync {
+	struct ssh_request base;
+	struct completion comp;
+	struct ssam_response resp;
+};
+
+
+static void ssam_request_sync_complete(struct ssh_request *rqst,
+				       const struct ssh_command *cmd,
+				       const struct sshp_span *data, int status)
+{
+	struct ssam_request_sync *r;
+	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
+
+	r = container_of(rqst, struct ssam_request_sync, base);
+	r->resp.status = status;
+	r->resp.length = 0;
+
+	if (status) {
+		rtl_dbg_cond(rtl, "rsp: request failed: %d\n", status);
+		return;
+	}
+
+	if (!r->resp.pointer && data->len) {
+		rtl_warn(rtl, "rsp: no response buffer provided, dropping data\n");
+		return;
+	}
+
+	if (data->len > r->resp.capacity) {
+		rtl_err(rtl, "rsp: response buffer too small,"
+			" capacity: %u bytes, got: %zu bytes\n",
+			r->resp.capacity, data->len);
+		status = -ENOSPC;
+		return;
+	}
+
+	r->resp.length = data->len;
+	memcpy(r->resp.pointer, data->ptr, data->len);
+}
+
+static void ssam_request_sync_release(struct ssh_request *rqst)
+{
+	complete_all(&container_of(rqst, struct ssam_request_sync, base)->comp);
+}
+
+static const struct ssh_request_ops ssam_request_sync_ops = {
+	.release = ssam_request_sync_release,
+	.complete = ssam_request_sync_complete,
+};
+
+static void ssam_request_sync_wait_complete(struct ssam_request_sync *rqst)
+{
+	wait_for_completion(&rqst->comp);
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 enum ssh_ec_state {
