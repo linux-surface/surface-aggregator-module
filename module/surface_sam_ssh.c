@@ -933,9 +933,18 @@ struct ssh_ptl {
 };
 
 
+#define __sam_prcond(func, p, fmt, ...)			\
+	do {						\
+		if ((p))				\
+			func((p), fmt, ##__VA_ARGS__);	\
+	} while (0);
+
 #define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptl_dbg_cond(p, fmt, ...)  __sam_prcond(ptl_dbg, p, fmt, ##__VA_ARGS__)
+#define ptl_warn_cond(p, fmt, ...) __sam_prcond(ptl_warn, p, fmt, ##__VA_ARGS__)
+#define ptl_err_cond(p, fmt, ...)  __sam_prcond(ptl_err, p, fmt, ##__VA_ARGS__)
 
 #define to_ssh_packet(ptr, member) \
 	container_of(ptr, struct ssh_packet, member)
@@ -2364,6 +2373,9 @@ struct ssh_rtl {
 #define rtl_dbg(r, fmt, ...)  ptl_dbg(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_warn(r, fmt, ...) ptl_warn(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_err(r, fmt, ...)  ptl_err(&(r)->ptl, fmt, ##__VA_ARGS__)
+#define rtl_dbg_cond(r, fmt, ...)  __sam_prcond(rtl_warn, r, fmt, ##__VA_ARGS__)
+#define rtl_warn_cond(r, fmt, ...) __sam_prcond(rtl_warn, r, fmt, ##__VA_ARGS__)
+#define rtl_err_cond(r, fmt, ...)  __sam_prcond(rtl_err, r, fmt, ##__VA_ARGS__)
 
 #define to_ssh_rtl(ptr, member) \
 	container_of(ptr, struct ssh_rtl, member)
@@ -2429,10 +2441,8 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
 	// rqst->rtl may not be set if we're cancelling before submitting
-	if (rtl) {
-		rtl_dbg(rtl, "rtl: completing request (rqid: 0x%04x,"
-			" status: %d)\n", ssh_request_get_rqid(rqst), status);
-	}
+	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x,"
+		     " status: %d)\n", ssh_request_get_rqid(rqst), status);
 
 	rqst->ops->complete(rqst, NULL, NULL, status);
 }
