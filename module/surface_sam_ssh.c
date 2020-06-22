@@ -1206,7 +1206,9 @@ static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 
 static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
-	ptl_dbg(p->ptl, "ptl: completing packet %p\n", p);
+	struct ssh_ptl *ptl = READ_ONCE(p->ptl);
+
+	ptl_dbg_cond(ptl, "ptl: completing packet %p\n", p);
 	if (p->ops->complete)
 		p->ops->complete(p, status);
 }
