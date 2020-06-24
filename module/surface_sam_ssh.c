@@ -3140,6 +3140,8 @@ static inline int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 
 	if (sched)
 		ssh_rtl_tx_schedule(rtl);
+
+	return 0;
 }
 
 static inline int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
