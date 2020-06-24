@@ -954,6 +954,8 @@ struct ssh_ptl {
 static void __ssh_ptl_packet_release(struct kref *kref)
 {
 	struct ssh_packet *p = to_ssh_packet(kref, refcnt);
+
+	ptl_dbg_cond(p->ptl, "ptl: releasing packet %p\n", p);
 	p->ops->release(p);
 }
 
