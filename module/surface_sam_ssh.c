@@ -1258,7 +1258,7 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 	struct ssh_packet *p, *n;
 
 	spin_lock(&ptl->queue.lock);
-	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
+	list_for_each_entry_safe(p, n, &ptl->queue.head, queue_node) {
 		/*
 		 * If we are cancelling or completing this packet, ignore it.
 		 * It's going to be removed from this queue shortly.
