@@ -2033,7 +2033,7 @@ static int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 	return status;
 }
 
-static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, u8 *buf, size_t n)
+static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 {
 	int used;
 
