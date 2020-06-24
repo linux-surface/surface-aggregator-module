@@ -2625,7 +2625,7 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 			return;
 		}
 
-		WARN_ON(status != 0 || status != -EAGAIN);
+		WARN_ON(status != 0 && status != -EAGAIN);
 	}
 
 	// out of tries, reschedule
