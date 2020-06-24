@@ -1822,7 +1822,7 @@ static bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
 
 	// check if SEQ is blacklisted
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++) {
-		if (likely(ptl->rx.blacklist.seqs[i] == seq))
+		if (likely(ptl->rx.blacklist.seqs[i] != seq))
 			continue;
 
 		ptl_dbg(ptl, "ptl: ignoring repeated data packet\n");
