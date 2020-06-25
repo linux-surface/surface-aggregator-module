@@ -4822,6 +4822,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
+	ssh_rtl_tx_flush(&ec->rtl);
 	ssh_rtl_shutdown(&ec->rtl);
 	ssh_rtl_tx_stop(&ec->rtl);
 	ssh_rtl_rx_stop(&ec->rtl);
