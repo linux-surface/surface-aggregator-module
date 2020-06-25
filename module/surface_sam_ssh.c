@@ -3930,6 +3930,9 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 		return;
 	}
 
+	if (!data)	// handle requests without a response
+		return;
+
 	if (!r->resp.pointer && data->len) {
 		rtl_warn(rtl, "rsp: no response buffer provided, dropping data\n");
 		return;
