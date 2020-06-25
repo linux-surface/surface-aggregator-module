@@ -1442,7 +1442,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 	}
 
 	// cancel active packet before we actually stop
-	if (ptl->tx.packet) {
+	if (!IS_ERR_OR_NULL(ptl->tx.packet)) {
 		ssh_ptl_tx_compl_error(ptl->tx.packet, -ESHUTDOWN);
 		ssh_packet_put(ptl->tx.packet);
 		ptl->tx.packet = NULL;
