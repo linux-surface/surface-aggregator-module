@@ -178,7 +178,7 @@ struct ssam_event_notifier {
  * exception of zero, which is not an event ID. Thus, this is also the
  * absolute maximum number of event handlers that can be registered.
  */
-#define SURFACE_SAM_SSH_NUM_EVENTS		32
+#define SURFACE_SAM_SSH_NUM_EVENTS		0x22
 
 /*
  * The number of communication channels used in the protocol.
