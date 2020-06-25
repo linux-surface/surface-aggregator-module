@@ -1469,6 +1469,9 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 static inline void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
 {
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
+		return;
+
 	if (force || atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING) {
 		WRITE_ONCE(ptl->tx.thread_signal, true);
 		smp_mb__after_atomic();
@@ -2052,6 +2055,9 @@ static int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 {
 	int used;
+
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
+		return used;
 
 	used = kfifo_in(&ptl->rx.fifo, buf, n);
 	if (used)
