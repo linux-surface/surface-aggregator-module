@@ -116,6 +116,12 @@ struct ssh_frame {
 
 static_assert(sizeof(struct ssh_frame) == 4);
 
+/*
+ * Maximum SSH frame payload length in bytes. This is the physical maximum
+ * length of the protocol. Implementations may set a more constrained limit.
+ */
+#define SSH_FRAME_MAX_PAYLOAD_SIZE	U16_MAX
+
 /**
  * enum ssh_payload_type - Type indicator for the SSH payload.
  * @SSH_PLD_TYPE_CMD: The payload is a command structure with optional command
@@ -150,6 +156,13 @@ struct ssh_command {
 } __packed;
 
 static_assert(sizeof(struct ssh_command) == 8);
+
+/*
+ * Maximum SSH command payload length in bytes. This is the physical maximum
+ * length of the protocol. Implementations may set a more constrained limit.
+ */
+#define SSH_COMMAND_MAX_PAYLOAD_SIZE \
+	(SSH_FRAME_MAX_PAYLOAD_SIZE - sizeof(struct ssh_command))
 
 /**
  * struct ssh_notification_params - Command payload to enable/disable SSH
@@ -202,6 +215,9 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 /* -- Common/utility functions. --------------------------------------------- */
 
 #define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + payload_size)
+
+#define SSH_COMMAND_MESSAGE_LENGTH(payload_size) \
+	SSH_MESSAGE_LENGTH(sizeof(struct ssh_command) + payload_size)
 
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
@@ -3974,64 +3990,26 @@ enum ssh_ec_state {
 	SSH_EC_SUSPENDED,
 };
 
-struct ssh_counters {
-	u8  seq;		// control sequence id
-	u16 rqid;		// id for request/response matching
-};
-
-enum ssh_receiver_state {
-	SSH_RCV_DISCARD,
-	SSH_RCV_CONTROL,
-	SSH_RCV_COMMAND,
-};
-
-struct ssh_receiver {
-	spinlock_t lock;
-	enum ssh_receiver_state state;
-	struct completion signal;
-	struct kfifo fifo;
-	struct kfifo rcvb;
-	struct wait_queue_head rcvb_wq;
-	struct task_struct *thread;
-	struct {
-		bool pld;
-		u8 seq;
-		u16 rqid;
-	} expect;
-	struct sshp_buf eval_buf;
-};
-
 struct sam_ssh_ec {
-	struct mutex lock;
-	enum ssh_ec_state state;
 	struct serdev_device *serdev;
-	struct ssh_counters counter;
-	struct ssh_receiver receiver;
+
+	struct ssh_rtl rtl;
 	struct ssam_cplt cplt;
+
+	struct {
+		struct ssh_seq_counter seq;
+		struct ssh_rqid_counter rqid;
+	} counter;
+
+	enum ssh_ec_state state;
+
 	int irq;
 	bool irq_wakeup_enabled;
 };
 
-struct ssh_fifo_packet {
-	u8 type;	// packet type (ACK/RETRY/CMD)
-	u8 seq;
-	u8 len;
-};
-
 static struct sam_ssh_ec ssh_ec = {
-	.lock   = __MUTEX_INITIALIZER(ssh_ec.lock),
 	.state  = SSH_EC_UNINITIALIZED,
 	.serdev = NULL,
-	.counter = {
-		.seq  = 0,
-		.rqid = 0,
-	},
-	.receiver = {
-		.lock = __SPIN_LOCK_UNLOCKED(),
-		.state = SSH_RCV_DISCARD,
-		.expect = {},
-	},
-	.irq = -1,
 };
 
 
@@ -4044,25 +4022,15 @@ static struct sam_ssh_ec ssh_ec = {
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
 {
-	struct sam_ssh_ec *ec = &ssh_ec;
-
-	mutex_lock(&ec->lock);
-	return ec;
-}
-
-static inline void surface_sam_ssh_release(struct sam_ssh_ec *ec)
-{
-	mutex_unlock(&ec->lock);
+	return &ssh_ec;
 }
 
 static inline struct sam_ssh_ec *surface_sam_ssh_acquire_init(void)
 {
 	struct sam_ssh_ec *ec = surface_sam_ssh_acquire();
 
-	if (smp_load_acquire(&ec->state) == SSH_EC_UNINITIALIZED) {
-		surface_sam_ssh_release(ec);
+	if (smp_load_acquire(&ec->state) == SSH_EC_UNINITIALIZED)
 		return NULL;
-	}
 
 	return ec;
 }
@@ -4081,15 +4049,14 @@ int surface_sam_ssh_consumer_register(struct device *consumer)
 	if (!link)
 		return -EFAULT;
 
-	surface_sam_ssh_release(ec);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
 
-static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
-					 const struct surface_sam_ssh_rqst *rqst,
-					 struct surface_sam_ssh_buf *result);
+static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
+				  const struct surface_sam_ssh_rqst *rqst,
+				  struct surface_sam_ssh_buf *result);
 
 static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec,
 					struct ssam_event_registry reg,
@@ -4125,7 +4092,7 @@ static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec,
 	result.len = 0;
 	result.data = buf;
 
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 
 	if (status) {
 		dev_err(&ec->serdev->dev, "failed to enable event source"
@@ -4177,7 +4144,7 @@ static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec,
 	result.len = 0;
 	result.data = buf;
 
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 
 	if (status) {
 		dev_err(&ec->serdev->dev, "failed to disable event source"
@@ -4219,7 +4186,6 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
 		mutex_unlock(&nf->lock);
-		surface_sam_ssh_release(ec);
 		return rc;
 	}
 
@@ -4229,7 +4195,6 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 	if (status) {
 		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 		mutex_unlock(&nf->lock);
-		surface_sam_ssh_release(ec);
 		return status;
 	}
 
@@ -4239,13 +4204,11 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 			__ssam_nfblk_remove(nf_head, &n->base);
 			ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 			mutex_unlock(&nf->lock);
-			surface_sam_ssh_release(ec);
 			return status;
 		}
 	}
 
 	mutex_unlock(&nf->lock);
-	surface_sam_ssh_release(ec);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_register);
@@ -4274,7 +4237,6 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 	rc = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
 		mutex_unlock(&nf->lock);
-		surface_sam_ssh_release(ec);
 		return rc;
 	}
 
@@ -4287,154 +4249,69 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 	mutex_unlock(&nf->lock);
 	synchronize_srcu(&nf_head->srcu);
 
-	surface_sam_ssh_release(ec);
 	return status;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
 
 
-static int ssh_send_msgbuf(struct sam_ssh_ec *ec, const struct msgbuf *msgb,
-			   long timeout)
+static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
+				  const struct surface_sam_ssh_rqst *rqst,
+				  struct surface_sam_ssh_buf *result)
 {
-	struct serdev_device *serdev = ec->serdev;
-	size_t len = msgb_bytes_used(msgb);
+	struct ssam_request_sync actual;
+	struct msgbuf msgb;
+	size_t msglen = SSH_COMMAND_MESSAGE_LENGTH(rqst->cdl);
+	unsigned flags = 0;
+	u16 rqid;
+	u8 seq;
 	int status;
 
-	ssh_dbg(ec, "tx: sending data (length: %zu)\n", len);
-	print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1, msgb->buffer,
-			     len, false);
-
-	status = serdev_device_write(serdev, msgb->buffer, len, timeout);
-	if (status < 0)
-		return status;
-	if ((size_t)status < len)
-		return -EINTR;
-
-	serdev_device_wait_until_sent(serdev, 0);
-	return 0;
-}
-
-static inline void ssh_receiver_restart(struct sam_ssh_ec *ec,
-					const struct surface_sam_ssh_rqst *rqst)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	reinit_completion(&ec->receiver.signal);
-	ec->receiver.state = SSH_RCV_CONTROL;
-	ec->receiver.expect.pld = rqst->snc;
-	ec->receiver.expect.seq = ec->counter.seq;
-	ec->receiver.expect.rqid = ec->counter.rqid;
-	sshp_buf_reset(&ec->receiver.eval_buf);
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
-}
-
-static inline void ssh_receiver_discard(struct sam_ssh_ec *ec)
-{
-	unsigned long flags;
-
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	ec->receiver.state = SSH_RCV_DISCARD;
-	sshp_buf_reset(&ec->receiver.eval_buf);
-	kfifo_reset(&ec->receiver.fifo);
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
-}
-
-static int surface_sam_ssh_rqst_unlocked(struct sam_ssh_ec *ec,
-					 const struct surface_sam_ssh_rqst *rqst,
-					 struct surface_sam_ssh_buf *result)
-{
-	struct ssh_fifo_packet packet = {};
-	struct msgbuf msgb;
-	u16 rqid = ec->counter.rqid;
-	int status, try;
-	unsigned int rem;
-
-	// TODO: assumption doesn't hold any more, allow larger payloads
-	if (rqst->cdl > SURFACE_SAM_SSH_MAX_RQST_PAYLOAD) {
+	// prevent overflow
+	if (rqst->cdl > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
 		ssh_err(ec, SSH_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
-	// TODO: calculate actual message length
-	status = msgb_alloc(&msgb, SSH_MAX_WRITE, GFP_KERNEL);
+	if (result && result->data && rqst->snc)
+		flags |= SSAM_REQUEST_HAS_RESPONSE;
+
+	ssh_request_init(&actual.base, flags, &ssam_request_sync_ops);
+	init_completion(&actual.comp);
+
+	actual.resp.pointer = result->data;
+	actual.resp.capacity = result->cap;
+	actual.resp.length = 0;
+	actual.resp.status = 0;
+
+	// alloc and create message
+	status = msgb_alloc(&msgb, msglen, GFP_KERNEL);
 	if (status)
 		return status;
 
-	// write command in buffer, we may need it multiple times
-	msgb_push_cmd(&msgb, ec->counter.seq, rqst, rqid);
+	seq = ssh_seq_next(&ec->counter.seq);
+	rqid = ssh_rqid_next(&ec->counter.rqid);
+	msgb_push_cmd(&msgb, seq, rqst, rqid);
 
-	ssh_receiver_restart(ec, rqst);
+	actual.base.packet.data = msgb.buffer;
+	actual.base.packet.data_length = msgb.ptr - msgb.buffer;
 
-	// send command, try to get an ack response
-	for (try = 0; try < SSH_NUM_RETRY; try++) {
-		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
-		if (status)
-			goto out;
-
-		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_RX_TIMEOUT);
-		if (rem) {
-			// completion assures valid packet, thus ignore returned length
-			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
-
-			if (packet.type == SSH_FRAME_TYPE_ACK)
-				break;
-		}
+	status = ssh_rtl_submit(&ec->rtl, &actual.base);
+	if (status) {
+		msgb_free(&msgb);
+		return status;
 	}
 
-	// check if we ran out of tries?
-	if (try >= SSH_NUM_RETRY) {
-		ssh_err(ec, SSH_RQST_TAG "communication failed %d times, giving up\n", try);
-		status = -EIO;
-		goto out;
-	}
-
-	ec->counter.seq += 1;
-	ec->counter.rqid = __ssh_rqid_next(ec->counter.rqid);
-
-	// get command response/payload
-	if (rqst->snc && result) {
-		rem = wait_for_completion_timeout(&ec->receiver.signal, SSH_RX_TIMEOUT);
-		if (rem) {
-			// completion assures valid packet, thus ignore returned length
-			(void) !kfifo_out(&ec->receiver.fifo, &packet, sizeof(packet));
-
-			if (result->cap < packet.len) {
-				status = -EINVAL;
-				goto out;
-			}
-
-			// completion assures valid packet, thus ignore returned length
-			(void) !kfifo_out(&ec->receiver.fifo, result->data, packet.len);
-			result->len = packet.len;
-		} else {
-			ssh_err(ec, SSH_RQST_TAG "communication timed out\n");
-			status = -EIO;
-			goto out;
-		}
-
-		// send ACK
-		if (packet.type == SSH_FRAME_TYPE_DATA_SEQ) {
-			// TODO: add send_ack function?
-			msgb_reset(&msgb);
-			msgb_push_ack(&msgb, packet.seq);
-
-			status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
-			if (status)
-				goto out;
-		}
-	}
-
-out:
-	ssh_receiver_discard(ec);
+	ssh_request_put(&actual.base);
+	ssam_request_sync_wait_complete(&actual);
 	msgb_free(&msgb);
-	return status;
+
+	result->len = actual.resp.length;
+	return actual.resp.status;
 }
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
 {
 	struct sam_ssh_ec *ec;
-	int status;
 
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec) {
@@ -4444,15 +4321,10 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 
 	if (smp_load_acquire(&ec->state) == SSH_EC_SUSPENDED) {
 		ssh_warn(ec, SSH_RQST_TAG "embedded controller is suspended\n");
-
-		surface_sam_ssh_release(ec);
 		return -EPERM;
 	}
 
-	status = surface_sam_ssh_rqst_unlocked(ec, rqst, result);
-
-	surface_sam_ssh_release(ec);
-	return status;
+	return __surface_sam_ssh_rqst(ec, rqst, result);
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
@@ -4491,7 +4363,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 	};
 
 	ssh_dbg(ec, "pm: resuming system aggregator module\n");
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 	if (status)
 		return status;
 
@@ -4545,7 +4417,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 	};
 
 	ssh_dbg(ec, "pm: suspending system aggregator module\n");
-	status = surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 	if (status)
 		return status;
 
@@ -4582,7 +4454,7 @@ static int surface_sam_ssh_get_controller_version(struct sam_ssh_ec *ec, u32 *ve
 	};
 
 	*version = 0;
-	return surface_sam_ssh_rqst_unlocked(ec, &rqst, &result);
+	return __surface_sam_ssh_rqst(ec, &rqst, &result);
 }
 
 static int surface_sam_ssh_log_controller_version(struct sam_ssh_ec *ec)
@@ -4601,329 +4473,6 @@ static int surface_sam_ssh_log_controller_version(struct sam_ssh_ec *ec)
 	dev_info(&ec->serdev->dev, "SAM controller version: %u.%u.%u\n",
 		 a, b, c);
 	return 0;
-}
-
-
-static inline bool ssh_is_valid_syn(const u8 *ptr)
-{
-	return ptr[0] == 0xaa && ptr[1] == 0x55;
-}
-
-static inline bool ssh_is_valid_ter(const u8 *ptr)
-{
-	return ptr[0] == 0xff && ptr[1] == 0xff;
-}
-
-static inline bool ssh_is_valid_crc(const u8 *begin, const u8 *end)
-{
-	u16 crc;
-
-	crc = ssh_crc(begin, end - begin);
-	return (end[0] == (crc & 0xff)) && (end[1] == (crc >> 8));
-}
-
-
-static void ssh_send_ack(struct sam_ssh_ec *ec, u8 seq)
-{
-	u8 buf[SSH_MSG_LEN_CTRL];
-	struct msgbuf msgb;
-	int status;
-
-	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
-		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
-		msgb_push_ack(&msgb, seq);
-
-		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
-		if (status)
-			ssh_err(ec, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
-	}
-}
-
-static void ssh_rx_handle_event(struct sam_ssh_ec *ec,
-				const struct ssh_frame *frame,
-				const struct ssh_command *command,
-				const struct sshp_span *command_data)
-{
-	struct ssam_event_item *item;
-
-	item = kzalloc(sizeof(struct ssam_event_item) + command_data->len, GFP_KERNEL);
-	if (!item)
-		return;
-
-	item->rqid = get_unaligned_le16(&command->rqid);
-	item->event.target_category = command->tc;
-	item->event.command_id = command->cid;
-	item->event.instance_id = command->iid;
-	item->event.channel = command->chn_in;
-	item->event.length  = command_data->len;
-	memcpy(&item->event.data[0], command_data->ptr, command_data->len);
-
-	ssam_cplt_submit_event(&ec->cplt, item);
-
-	// queue ACK for if required
-	if (frame->type == SSH_FRAME_TYPE_DATA_SEQ)
-		ssh_send_ack(ec, frame->seq);
-}
-
-static void ssh_rx_complete_command(struct sam_ssh_ec *ec,
-				    const struct ssh_frame *frame,
-				    const struct ssh_command *command,
-				    const struct sshp_span *command_data)
-{
-	struct ssh_receiver *rcv = &ec->receiver;
-	struct ssh_fifo_packet packet;
-
-	// check if we expect the message
-	if (unlikely(rcv->state != SSH_RCV_COMMAND)) {
-		ssh_dbg(ec, "rx: discarding message: command not expected\n");
-		return;
-	}
-
-	// check if response is for our request
-	if (unlikely(rcv->expect.rqid != get_unaligned_le16(&command->rqid))) {
-		ssh_dbg(ec, "rx: discarding message: command not a match\n");
-		return;
-	}
-
-	// we now have a valid & expected command message
-	ssh_dbg(ec, "rx: valid command message received\n");
-
-	packet.type = frame->type;
-	packet.seq = frame->seq;
-	packet.len = command_data->len;
-
-	if (unlikely(kfifo_avail(&rcv->fifo) < sizeof(packet) + packet.len)) {
-		ssh_warn(ec, "rx: dropping frame: not enough space in fifo (type = %d)\n",
-			 frame->type);
-		return;
-	}
-
-	kfifo_in(&rcv->fifo, &packet, sizeof(packet));
-	kfifo_in(&rcv->fifo, command_data->ptr, command_data->len);
-
-	rcv->state = SSH_RCV_DISCARD;
-	complete(&rcv->signal);
-}
-
-static void ssh_receive_control_frame(struct sam_ssh_ec *ec,
-				      const struct ssh_frame *frame)
-{
-	struct ssh_receiver *rcv = &ec->receiver;
-	struct ssh_fifo_packet packet;
-
-	// check if we expect the message
-	if (unlikely(rcv->state != SSH_RCV_CONTROL)) {
-		ssh_err(ec, "rx: discarding message: control not expected\n");
-		return;
-	}
-
-	// check if it is for our request
-	if (unlikely(frame->type == SSH_FRAME_TYPE_ACK && frame->seq != rcv->expect.seq)) {
-		ssh_err(ec, "rx: discarding message: ACK does not match\n");
-		return;
-	}
-
-	// we now have a valid & expected ACK/RETRY message
-	ssh_dbg(ec, "rx: valid control message received (type: 0x%02x)\n", frame->type);
-
-	packet.type = frame->type;
-	packet.seq  = frame->seq;
-	packet.len  = 0;
-
-	if (unlikely(kfifo_avail(&rcv->fifo) < sizeof(packet))) {
-		ssh_warn(ec, "rx: dropping frame: not enough space in fifo (type = %d)\n",
-			 frame->type);
-		return;
-	}
-
-	kfifo_in(&rcv->fifo, (u8 *) &packet, sizeof(packet));
-
-	// update decoder state
-	if (frame->type == SSH_FRAME_TYPE_ACK)
-		rcv->state = rcv->expect.pld ? SSH_RCV_COMMAND : SSH_RCV_DISCARD;
-
-	complete(&rcv->signal);
-}
-
-static void ssh_receive_command_frame(struct sam_ssh_ec *ec,
-				      const struct ssh_frame *frame,
-				      const struct ssh_command *command,
-				      const struct sshp_span *command_data)
-{
-	// check if we received an event notification
-	if (ssh_rqid_is_event(get_unaligned_le16(&command->rqid))) {
-		ssh_rx_handle_event(ec, frame, command, command_data);
-	} else {
-		ssh_rx_complete_command(ec, frame, command, command_data);
-	}
-}
-
-static void ssh_receive_data_frame(struct sam_ssh_ec *ec,
-				   const struct ssh_frame *frame,
-				   const struct sshp_span *payload)
-{
-	struct device *dev = &ec->serdev->dev;
-	struct ssh_command *command;
-	struct sshp_span command_data;
-
-	if (likely(payload->ptr[0] == SSH_PLD_TYPE_CMD)) {
-		if (sshp_parse_command(dev, payload, &command, &command_data))
-			return;
-
-		ssh_receive_command_frame(ec, frame, command, &command_data);
-	} else {
-		ssh_err(ec, "rx: unknown frame payload type (type: 0x%02x)\n",
-			payload->ptr[0]);
-	}
-}
-
-static void ssh_send_nak(struct sam_ssh_ec *ec)
-{
-	u8 buf[SSH_MSG_LEN_CTRL];
-	struct msgbuf msgb;
-	int status;
-
-	if (smp_load_acquire(&ec->state) == SSH_EC_INITIALIZED) {
-		msgb_init(&msgb, buf, ARRAY_SIZE(buf));
-		msgb_push_nak(&msgb);
-
-		status = ssh_send_msgbuf(ec, &msgb, SSH_TX_TIMEOUT);
-		if (status)
-			ssh_err(ec, SSH_EVENT_TAG "failed to send ACK: %d\n", status);
-	}
-}
-
-static size_t ssh_eval_buf(struct sam_ssh_ec *ec, struct sshp_span *source)
-{
-	struct ssh_frame *frame;
-	struct sshp_span payload;
-	struct sshp_span aligned;
-	bool syn_found;
-	int status;
-
-	// find SYN
-	syn_found = sshp_find_syn(source, &aligned);
-
-	if (unlikely(aligned.ptr - source->ptr) > 0) {
-		ssh_warn(ec, "rx: parser: invalid start of frame, skipping\n");
-
-		/*
-		 * Notes:
-		 * - This might send multiple NAKs in case the communication
-		 *   starts with an invalid SYN and is broken down into multiple
-		 *   pieces. This should generally be handled fine, we just
-		 *   might receive duplicate data in this case, which is
-		 *   detected when handling data frames.
-		 * - This path will also be executed on invalid CRCs: When an
-		 *   invalid CRC is encountered, the code below will skip data
-		 *   until direclty after the SYN. This causes the search for
-		 *   the next SYN, which is generally not placed directly after
-		 *   the last one.
-		 */
-		ssh_send_nak(ec);
-	}
-
-	if (unlikely(!syn_found))
-		return aligned.ptr - source->ptr;
-
-	// parse and validate frame
-	status = sshp_parse_frame(&ec->serdev->dev, &aligned, &frame, &payload,
-				  SSH_EVAL_BUF_LEN);
-	if (status)	// invalid frame: skip to next syn
-		return aligned.ptr - source->ptr + sizeof(u16);
-	if (!frame)	// not enough data
-		return aligned.ptr - source->ptr;
-
-	switch (frame->type) {
-	case SSH_FRAME_TYPE_ACK:
-	case SSH_FRAME_TYPE_NAK:
-		ssh_receive_control_frame(ec, frame);
-		break;
-
-	case SSH_FRAME_TYPE_DATA_SEQ:
-	case SSH_FRAME_TYPE_DATA_NSQ:
-		ssh_receive_data_frame(ec, frame, &payload);
-		break;
-
-	default:
-		ssh_warn(ec, "rx: unknown frame type 0x%02x\n", frame->type);
-	}
-
-	return aligned.ptr - source->ptr + SSH_MESSAGE_LENGTH(frame->len);
-}
-
-static int ssh_rx_threadfn(void *data)
-{
-	struct sam_ssh_ec *ec = data;
-	struct ssh_receiver *rcv = &ec->receiver;
-	struct sshp_span span;
-
-	while (true) {
-		size_t offs = 0;
-		size_t n;
-
-		wait_event_interruptible(ec->receiver.rcvb_wq,
-					 !kfifo_is_empty(&ec->receiver.rcvb)
-					 || kthread_should_stop());
-		if (kthread_should_stop())
-			break;
-
-		// copy from fifo to evaluation buffer
-		n = sshp_buf_read_from_fifo(&rcv->eval_buf, &rcv->rcvb);
-
-		ssh_dbg(ec, "rx: received data (size: %zu)\n", n);
-		print_hex_dump_debug("rx: ", DUMP_PREFIX_OFFSET, 16, 1,
-				     rcv->eval_buf.ptr + rcv->eval_buf.len - n,
-				     n, false);
-
-		// evaluate buffer until we need more bytes or eval-buf is empty
-		while (offs < rcv->eval_buf.len) {
-			sshp_buf_span_from(&rcv->eval_buf, offs, &span);
-			n = ssh_eval_buf(ec, &span);
-			if (n == 0)
-				break;	// need more bytes
-
-			offs += n;
-		}
-
-		// throw away the evaluated parts
-		sshp_buf_drop(&rcv->eval_buf, offs);
-	}
-
-	return 0;
-}
-
-static void ssh_rx_wakeup(struct sam_ssh_ec *ec)
-{
-	wake_up(&ec->receiver.rcvb_wq);
-}
-
-static inline int ssh_rx_start(struct sam_ssh_ec *ec)
-{
-	ec->receiver.thread = kthread_run(ssh_rx_threadfn, ec, "surface-sh-rx");
-	if (IS_ERR(ec->receiver.thread))
-		return PTR_ERR(ec->receiver.thread);
-
-	return 0;
-}
-
-static inline int ssh_rx_stop(struct sam_ssh_ec *ec)
-{
-	return kthread_stop(ec->receiver.thread);
-}
-
-static int ssh_receive_buf(struct serdev_device *serdev,
-			   const unsigned char *buf, size_t size)
-{
-	struct sam_ssh_ec *ec = serdev_device_get_drvdata(serdev);
-	struct ssh_receiver *rcv = &ec->receiver;
-	size_t n;
-
-	n = kfifo_in(&rcv->rcvb, buf, size);
-	if (n)
-		ssh_rx_wakeup(ec);
-
-	return n;
 }
 
 
@@ -5044,17 +4593,13 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
 		status = surface_sam_ssh_ec_suspend(ec);
-		if (status) {
-			surface_sam_ssh_release(ec);
+		if (status)
 			return status;
-		}
 
 		if (device_may_wakeup(dev)) {
 			status = enable_irq_wake(ec->irq);
-			if (status) {
-				surface_sam_ssh_release(ec);
+			if (status)
 				return status;
-			}
 
 			ec->irq_wakeup_enabled = true;
 		} else {
@@ -5062,7 +4607,6 @@ static int surface_sam_ssh_suspend(struct device *dev)
 		}
 
 		smp_store_release(&ec->state, SSH_EC_SUSPENDED);
-		surface_sam_ssh_release(ec);
 	}
 
 	return 0;
@@ -5081,21 +4625,15 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 		if (ec->irq_wakeup_enabled) {
 			status = disable_irq_wake(ec->irq);
-			if (status) {
-				surface_sam_ssh_release(ec);
+			if (status)
 				return status;
-			}
 
 			ec->irq_wakeup_enabled = false;
 		}
 
 		status = surface_sam_ssh_ec_resume(ec);
-		if (status) {
-			surface_sam_ssh_release(ec);
+		if (status)
 			return status;
-		}
-
-		surface_sam_ssh_release(ec);
 	}
 
 	return 0;
@@ -5105,22 +4643,56 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
 
 
-static const struct serdev_device_ops ssh_device_ops = {
-	.receive_buf  = ssh_receive_buf,
-	.write_wakeup = serdev_device_write_wakeup,
+static void ssam_handle_event(struct ssh_rtl *rtl,
+			      const struct ssh_command *cmd,
+			      const struct sshp_span *data)
+{
+	struct sam_ssh_ec *ec = container_of(rtl, struct sam_ssh_ec, rtl);
+	struct ssam_event_item *item;
+
+	item = kzalloc(sizeof(struct ssam_event_item) + data->len, GFP_KERNEL);
+	if (!item)
+		return;
+
+	item->rqid = get_unaligned_le16(&cmd->rqid);
+	item->event.target_category = cmd->tc;
+	item->event.command_id = cmd->cid;
+	item->event.instance_id = cmd->iid;
+	item->event.channel = cmd->chn_in;
+	item->event.length  = data->len;
+	memcpy(&item->event.data[0], data->ptr, data->len);
+
+	ssam_cplt_submit_event(&ec->cplt, item);
+}
+
+static struct ssh_rtl_ops ssam_rtl_ops = {
+	.handle_event = ssam_handle_event,
 };
+
+
+static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf, size_t n)
+{
+	struct sam_ssh_ec *ec = serdev_device_get_drvdata(dev);
+	return ssh_ptl_rx_rcvbuf(&ec->rtl.ptl, buf, n);
+}
+
+static void ssam_write_wakeup(struct serdev_device *dev)
+{
+	struct sam_ssh_ec *ec = serdev_device_get_drvdata(dev);
+	ssh_ptl_tx_wakeup(&ec->rtl.ptl, true);
+}
+
+struct serdev_device_ops ssam_serdev_ops = {
+	.receive_buf = ssam_receive_buf,
+	.write_wakeup = ssam_write_wakeup,
+};
+
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
 	struct sam_ssh_ec *ec;
-	struct workqueue_struct *event_queue_ack;
-	struct workqueue_struct *event_queue_evt;
-	struct sshp_buf eval_buf;
-	u8 *read_buf;
-	u8 *recv_buf;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
-	acpi_status status;
-	int irq;
+	int status, irq;
 
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
@@ -5129,75 +4701,38 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		return status;
 
-	// allocate buffers
-	read_buf = kzalloc(SSH_READ_BUF_LEN, GFP_KERNEL);
-	if (!read_buf) {
-		status = -ENOMEM;
-		goto err_read_buf;
-	}
-
-	recv_buf = kzalloc(SSH_RECV_BUF_LEN, GFP_KERNEL);
-	if (!read_buf) {
-		status = -ENOMEM;
-		goto err_recv_buf;
-	}
-
-	status = sshp_buf_alloc(&eval_buf, SSH_EVAL_BUF_LEN, GFP_KERNEL);
-	if (status)
-		goto err_eval_buf;
-
-	event_queue_ack = create_singlethread_workqueue("surface_sh_ackq");
-	if (!event_queue_ack) {
-		status = -ENOMEM;
-		goto err_ackq;
-	}
-
-	event_queue_evt = create_workqueue("surface_sh_evtq");
-	if (!event_queue_evt) {
-		status = -ENOMEM;
-		goto err_evtq;
-	}
-
+	// setup IRQ
 	irq = ssh_setup_irq(serdev);
-	if (irq < 0) {
-		status = irq;
-		goto err_irq;
-	}
+	if (irq < 0)
+		return irq;
 
 	// set up EC
 	ec = surface_sam_ssh_acquire();
 	if (smp_load_acquire(&ec->state) != SSH_EC_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
-		surface_sam_ssh_release(ec);
 
 		status = -EBUSY;
-		goto err_busy;
+		goto err_ecinit;
 	}
 
 	ec->serdev = serdev;
 	ec->irq    = irq;
-
-	// initialize receiver
-	init_completion(&ec->receiver.signal);
-	init_waitqueue_head(&ec->receiver.rcvb_wq);
-	kfifo_init(&ec->receiver.fifo, read_buf, SSH_READ_BUF_LEN);
-	kfifo_init(&ec->receiver.rcvb, recv_buf, SSH_RECV_BUF_LEN);
-	ec->receiver.eval_buf = eval_buf;
+	ssh_seq_reset(&ec->counter.seq);
+	ssh_rqid_reset(&ec->counter.rqid);
 
 	// initialize event/request completion system
 	status = ssam_cplt_init(&ec->cplt, &serdev->dev);
 	if (status)
-		goto err_cplt_init;
+		goto err_ecinit;
+
+	// initialize request and packet transmission layers
+	status = ssh_rtl_init(&ec->rtl, serdev, &ssam_rtl_ops);
+	if (status)
+		goto err_rtl;
 
 	serdev_device_set_drvdata(serdev, ec);
 
-	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
-
-	status = ssh_rx_start(ec);
-	if (status)
-		goto err_rxstart;
-
-	serdev_device_set_client_ops(serdev, &ssh_device_ops);
+	serdev_device_set_client_ops(serdev, &ssam_serdev_ops);
 	status = serdev_device_open(serdev);
 	if (status)
 		goto err_open;
@@ -5207,15 +4742,23 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (ACPI_FAILURE(status))
 		goto err_devinit;
 
-	status = surface_sam_ssh_log_controller_version(ec);
+	status = ssh_rtl_tx_start(&ec->rtl);
 	if (status)
 		goto err_devinit;
+
+	status = ssh_rtl_rx_start(&ec->rtl);
+	if (status)
+		goto err_start_rx;
+
+	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
+
+	status = surface_sam_ssh_log_controller_version(ec);
+	if (status)
+		goto err_finalize;
 
 	status = surface_sam_ssh_ec_resume(ec);
 	if (status)
-		goto err_devinit;
-
-	surface_sam_ssh_release(ec);
+		goto err_finalize;
 
 	// TODO: The EC can wake up the system via the associated GPIO interrupt in
 	// multiple situations. One of which is the remaining battery capacity
@@ -5230,36 +4773,29 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	return 0;
 
+err_finalize:
+	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
+	ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
+	ssh_rtl_rx_stop(&ec->rtl);
+err_start_rx:
+	ssh_rtl_tx_stop(&ec->rtl);
 err_devinit:
 	serdev_device_close(serdev);
 err_open:
-	ssh_rx_stop(ec);
-err_rxstart:
-	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
-	serdev_device_set_drvdata(serdev, NULL);
+	ssh_rtl_shutdown(&ec->rtl);
+	ssh_rtl_destroy(&ec->rtl);
+err_rtl:
+	ssam_cplt_flush(&ec->cplt);
 	ssam_cplt_destroy(&ec->cplt);
-err_cplt_init:
-	surface_sam_ssh_release(ec);
-err_busy:
+err_ecinit:
 	free_irq(irq, serdev);
-err_irq:
-	destroy_workqueue(event_queue_evt);
-err_evtq:
-	destroy_workqueue(event_queue_ack);
-err_ackq:
-	sshp_buf_free(&eval_buf);
-err_eval_buf:
-	kfree(recv_buf);
-err_recv_buf:
-	kfree(read_buf);
-err_read_buf:
+	serdev_device_set_drvdata(serdev, NULL);
 	return status;
 }
 
 static void surface_sam_ssh_remove(struct serdev_device *serdev)
 {
 	struct sam_ssh_ec *ec;
-	unsigned long flags;
 	int status;
 
 	ec = surface_sam_ssh_acquire_init();
@@ -5273,46 +4809,41 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	if (status)
 		dev_err(&serdev->dev, "failed to suspend EC: %d\n", status);
 
-	// make sure all events (received up to now) have been properly handled
-	ssam_cplt_flush(&ec->cplt);
-
-	status = ssh_rx_stop(ec);
+	// flush pending events and requests while everything still works
+	status = ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
 	if (status)
-		dev_err(&serdev->dev, "error stopping receiver thread: %d\n", status);
+		dev_err(&serdev->dev, "failed to flush request transmission layer: %d\n", status);
 
-	// TODO: disable all registered events
+	ssam_cplt_flush(&ec->cplt);
 
-	// set device to deinitialized state
+	// mark device as uninitialized
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
-	ec->serdev = NULL;
+
+	// cancel rem. requests, ensure no new ones can be queued, stop threads
+	ssh_rtl_shutdown(&ec->rtl);
+	ssh_rtl_tx_stop(&ec->rtl);
+	ssh_rtl_rx_stop(&ec->rtl);
+
+	// shut down actual transport
+	serdev_device_close(ec->serdev);
 
 	/*
-	 * Flush any event that has not been processed yet to ensure we're not going to
-	 * use the serial device any more.
+	 * Ensure _all_ events are completed. New ones could still have been
+	 * received after the last flush, before the request transport layer
+	 * has been shut down. At this point we can be sure that no requests
+	 * will remain after this call.
 	 */
 	ssam_cplt_flush(&ec->cplt);
 
-	serdev_device_close(serdev);
-
-	/*
-	 * Only at this point, no new events can be received. Destroying the
-	 * workqueue here flushes all remaining events. Those events will be
-	 * silently ignored and neither ACKed nor any handler gets called.
-	 */
+	// actually free resources
 	ssam_cplt_destroy(&ec->cplt);
+	ssh_rtl_destroy(&ec->rtl);
 
-	// free receiver
-	spin_lock_irqsave(&ec->receiver.lock, flags);
-	ec->receiver.state = SSH_RCV_DISCARD;
-	kfifo_free(&ec->receiver.fifo);
-	kfifo_free(&ec->receiver.rcvb);
-
-	sshp_buf_free(&ec->receiver.eval_buf);
-	spin_unlock_irqrestore(&ec->receiver.lock, flags);
+	ec->serdev = NULL;
+	ec->irq = -1;
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
-	surface_sam_ssh_release(ec);
 }
 
 
