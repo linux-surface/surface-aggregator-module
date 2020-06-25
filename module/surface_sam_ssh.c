@@ -4750,7 +4750,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	status = ssh_rtl_rx_start(&ec->rtl);
 	if (status)
-		goto err_start_rx;
+		goto err_devinit;
 
 	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
 
@@ -4778,9 +4778,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 err_finalize:
 	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
 	ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
-	ssh_rtl_rx_stop(&ec->rtl);
-err_start_rx:
-	ssh_rtl_tx_stop(&ec->rtl);
 err_devinit:
 	serdev_device_close(serdev);
 err_open:
@@ -4824,8 +4821,6 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
 	ssh_rtl_tx_flush(&ec->rtl);
 	ssh_rtl_shutdown(&ec->rtl);
-	ssh_rtl_tx_stop(&ec->rtl);
-	ssh_rtl_rx_stop(&ec->rtl);
 
 	// shut down actual transport
 	serdev_device_close(ec->serdev);
