@@ -4813,6 +4813,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	ssh_rtl_shutdown(&ec->rtl);
 
 	// shut down actual transport
+	serdev_device_wait_until_sent(ec->serdev, 0);
 	serdev_device_close(ec->serdev);
 
 	/*
