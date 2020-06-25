@@ -11,5 +11,6 @@ obj-m += surface_sam_sid_perfmode.o
 obj-m += surface_sam_sid_power.o
 obj-m += surface_sam_sid_vhf.o
 
+#ccflags-y += -DDEBUG
 ccflags-y += -Wall -Wextra
 ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
