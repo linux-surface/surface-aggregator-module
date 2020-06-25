@@ -4276,10 +4276,15 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	ssh_request_init(&actual.base, flags, &ssam_request_sync_ops);
 	init_completion(&actual.comp);
 
-	actual.resp.pointer = result->data;
-	actual.resp.capacity = result->cap;
+	actual.resp.pointer = NULL;
+	actual.resp.capacity = 0;
 	actual.resp.length = 0;
 	actual.resp.status = 0;
+
+	if (result) {
+		actual.resp.pointer = result->data;
+		actual.resp.capacity = result->cap;
+	}
 
 	// alloc and create message
 	status = msgb_alloc(&msgb, msglen, GFP_KERNEL);
@@ -4303,7 +4308,9 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	ssam_request_sync_wait_complete(&actual);
 	msgb_free(&msgb);
 
-	result->len = actual.resp.length;
+	if (result)
+		result->len = actual.resp.length;
+
 	return actual.resp.status;
 }
 
