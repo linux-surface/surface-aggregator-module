@@ -22,7 +22,7 @@ struct sid_vhf {
 	struct platform_device *dev;
 	struct hid_device *hid;
 	struct ssam_event_notifier notif;
-	unsigned long flags;
+	unsigned long state;
 };
 
 
@@ -43,7 +43,7 @@ static int sid_vhf_hid_open(struct hid_device *hid)
 
 	hid_dbg(hid, "%s\n", __func__);
 
-	set_bit(VHF_HID_STARTED, &vhf->flags);
+	set_bit(VHF_HID_STARTED, &vhf->state);
 	return 0;
 }
 
@@ -54,7 +54,7 @@ static void sid_vhf_hid_close(struct hid_device *hid)
 
 	hid_dbg(hid, "%s\n", __func__);
 
-	clear_bit(VHF_HID_STARTED, &vhf->flags);
+	clear_bit(VHF_HID_STARTED, &vhf->state);
 }
 
 struct surface_sam_sid_vhf_meta_rqst {
@@ -327,7 +327,7 @@ static u32 sid_vhf_event_handler(struct ssam_notifier_block *nb, const struct ss
 		return 0;
 
 	// skip if HID hasn't started yet
-	if (!test_bit(VHF_HID_STARTED, &vhf->flags))
+	if (!test_bit(VHF_HID_STARTED, &vhf->state))
 		return SSAM_NOTIF_HANDLED;
 
 	status = hid_input_report(vhf->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 0);
