@@ -3170,19 +3170,9 @@ static inline int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 	return 0;
 }
 
-static inline int ssh_rtl_tx_stop(struct ssh_rtl *rtl)
-{
-	return ssh_ptl_tx_stop(&rtl->ptl);
-}
-
 static inline int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_rx_start(&rtl->ptl);
-}
-
-static inline int ssh_rtl_rx_stop(struct ssh_rtl *rtl)
-{
-	return ssh_ptl_rx_stop(&rtl->ptl);
 }
 
 static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
