@@ -3319,10 +3319,11 @@ static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
  */
 static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 {
+	const unsigned init_flags = SSAM_REQUEST_UNSEQUENCED;
 	struct ssh_flush_request rqst;
 	int status;
 
-	ssh_request_init(&rqst.base, 0, &ssh_rtl_flush_request_ops);
+	ssh_request_init(&rqst.base, init_flags, &ssh_rtl_flush_request_ops);
 	rqst.base.packet.type |= SSH_PACKET_TY_FLUSH;
 	rqst.base.packet.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
 	rqst.base.state |= BIT(SSH_REQUEST_TY_FLUSH_BIT);
