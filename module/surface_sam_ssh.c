@@ -3382,6 +3382,7 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 
 	cancel_work_sync(&rtl->tx.work);
 	ssh_ptl_shutdown(&rtl->ptl);
+	cancel_delayed_work_sync(&rtl->rtx_timeout.reaper);
 
 	/*
 	 * Shutting down the packet layer should also have caneled all requests.
