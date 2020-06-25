@@ -2400,6 +2400,14 @@ static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 	return get_unaligned_le16(rqst->packet.data + SSH_MSG_OFFS_RQID);
 }
 
+static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
+{
+	if (!rqst->packet.data)
+		return -1;
+
+	return get_unaligned_le16(rqst->packet.data + SSH_MSG_OFFS_RQID);
+}
+
 
 static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
@@ -2442,7 +2450,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 
 	// rqst->rtl may not be set if we're cancelling before submitting
 	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x,"
-		     " status: %d)\n", ssh_request_get_rqid(rqst), status);
+		     " status: %d)\n", ssh_request_get_rqid_safe(rqst), status);
 
 	rqst->ops->complete(rqst, NULL, NULL, status);
 }
