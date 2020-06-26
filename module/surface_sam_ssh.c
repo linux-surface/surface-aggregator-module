@@ -2430,7 +2430,7 @@ static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 	if (!rqst->packet.data)
 		return -1;
 
-	return get_unaligned_le16(rqst->packet.data + SSH_MSG_OFFS_RQID);
+	return ssh_request_get_rqid(rqst);
 }
 
 
