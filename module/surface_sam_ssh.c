@@ -28,6 +28,9 @@
 
 #include "surface_sam_ssh.h"
 
+#define CREATE_TRACE_POINTS
+#include "surface_sam_ssh_trace.h"
+
 
 #define SSH_RQST_TAG_FULL			"surface_sam_ssh_rqst: "
 #define SSH_RQST_TAG				"rqst: "
