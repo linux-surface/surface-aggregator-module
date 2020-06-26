@@ -14,6 +14,262 @@
 #include <linux/types.h>
 #include <linux/device.h>
 
+
+/* -- Data structures for SAM-over-SSH communication. ----------------------- */
+
+/**
+ * enum ssh_frame_type - Frame types for SSH frames.
+ * @SSH_FRAME_TYPE_DATA_SEQ: Indicates a data frame, followed by a payload with
+ *                      the length specified in the ssh_frame.len field. This
+ *                      frame is sequenced, meaning that an ACK is required.
+ * @SSH_FRAME_TYPE_DATA_NSQ: Same as SSH_FRAME_TYPE_DATA_SEQ, but unsequenced,
+ *                      meaning that the message does not have to be ACKed.
+ * @SSH_FRAME_TYPE_ACK: Indicates an ACK message.
+ * @SSH_FRAME_TYPE_NAK: Indicates an error response for previously sent
+ *                      frame. In general, this means that the frame and/or
+ *                      payload is malformed, e.g. a CRC is wrong. For command-
+ *                      type payloads, this can also mean that the command is
+ *                      invalid.
+ */
+enum ssh_frame_type {
+	SSH_FRAME_TYPE_DATA_SEQ = 0x80,
+	SSH_FRAME_TYPE_DATA_NSQ = 0x00,
+	SSH_FRAME_TYPE_ACK	= 0x40,
+	SSH_FRAME_TYPE_NAK	= 0x04,
+};
+
+/**
+ * struct ssh_frame - SSH communication frame.
+ * @type: The type of the frame. See &enum ssh_frame_type.
+ * @len:  The length of the frame payload directly following the CRC for this
+ *        frame. Does not include the final CRC for that payload.
+ * @seq:  The sequence number for this message/exchange.
+ */
+struct ssh_frame {
+	u8 type;
+	__le16 len;
+	u8 seq;
+} __packed;
+
+static_assert(sizeof(struct ssh_frame) == 4);
+
+/*
+ * Maximum SSH frame payload length in bytes. This is the physical maximum
+ * length of the protocol. Implementations may set a more constrained limit.
+ */
+#define SSH_FRAME_MAX_PAYLOAD_SIZE	U16_MAX
+
+/**
+ * enum ssh_payload_type - Type indicator for the SSH payload.
+ * @SSH_PLD_TYPE_CMD: The payload is a command structure with optional command
+ *                    payload.
+ */
+enum ssh_payload_type {
+	SSH_PLD_TYPE_CMD = 0x80,
+};
+
+/**
+ * struct ssh_command - Payload of a command-type frame.
+ * @type:    The type of the payload. See &enum ssh_payload_type. Should be
+ *           SSH_PLD_TYPE_CMD for this struct.
+ * @tc:      Command target category.
+ * @chn_out: Output channel. Should be zero if this an incoming (EC to host)
+ *           message.
+ * @chn_in:  Input channel. Should be zero if this is an outgoing (hos to EC)
+ *           message.
+ * @iid:     Instance ID.
+ * @rqid:    Request ID. Used to match requests with responses and differentiate
+ *           between responses and events.
+ * @cid:     Command ID.
+ */
+struct ssh_command {
+	u8 type;
+	u8 tc;
+	u8 chn_out;
+	u8 chn_in;
+	u8 iid;
+	__le16 rqid;
+	u8 cid;
+} __packed;
+
+static_assert(sizeof(struct ssh_command) == 8);
+
+/*
+ * Maximum SSH command payload length in bytes. This is the physical maximum
+ * length of the protocol. Implementations may set a more constrained limit.
+ */
+#define SSH_COMMAND_MAX_PAYLOAD_SIZE \
+	(SSH_FRAME_MAX_PAYLOAD_SIZE - sizeof(struct ssh_command))
+
+/**
+ * struct ssh_notification_params - Command payload to enable/disable SSH
+ * notifications.
+ * @target_category: The target category for which notifications should be
+ *                   enabled/disabled.
+ * @flags:           Flags determining how notifications are being sent.
+ * @request_id:      The request ID that is used to send these notifications.
+ * @instance_id:     The specific instance in the given target category for
+ *                   which notifications should be enabled.
+ */
+struct ssh_notification_params {
+	u8 target_category;
+	u8 flags;
+	__le16 request_id;
+	u8 instance_id;
+} __packed;
+
+static_assert(sizeof(struct ssh_notification_params) == 5);
+
+/**
+ * SSH message syncrhonization (SYN) bytes.
+ */
+#define SSH_MSG_SYN		((u16)0x55aa)
+
+/**
+ * Base-length of a SSH message. This is the minimum number of bytes required
+ * to form a message. The actual message length is SSH_MSG_LEN_BASE plus the
+ * length of the frame payload.
+ */
+#define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3ull * sizeof(u16))
+
+/**
+ * Length of a SSH control message.
+ */
+#define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
+
+/**
+ * Length of a SSH message with payload of specified size.
+ */
+#define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + payload_size)
+
+/**
+ * Length of a SSH command message with command payload of specified size.
+ */
+#define SSH_COMMAND_MESSAGE_LENGTH(payload_size) \
+	SSH_MESSAGE_LENGTH(sizeof(struct ssh_command) + payload_size)
+
+/**
+ * Offset of the specified struct ssh_frame field in the raw SSH message data.
+ */
+#define SSH_MSGOFFSET_FRAME(field) \
+	(sizeof(u16) + offsetof(struct ssh_frame, field))
+
+/**
+ * Offset of the specified struct ssh_command field in the raw SSH message data.
+ */
+#define SSH_MSGOFFSET_COMMAND(field) \
+	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
+		+ offsetof(struct ssh_command, field))
+
+struct sshp_span {
+	u8    *ptr;
+	size_t len;
+};
+
+
+/* -- Packet transport layer (ptl). ----------------------------------------- */
+
+enum ssh_packet_priority {
+	SSH_PACKET_PRIORITY_FLUSH = 0,
+	SSH_PACKET_PRIORITY_DATA  = 0,
+	SSH_PACKET_PRIORITY_NAK   = 1 << 4,
+	SSH_PACKET_PRIORITY_ACK   = 2 << 4,
+};
+
+#define SSH_PACKET_PRIORITY(base, try) \
+	((SSH_PACKET_PRIORITY_##base) | ((try) & 0x0f))
+
+#define ssh_packet_priority_get_try(p) ((p) & 0x0f)
+
+
+enum ssh_packet_type_flags {
+	SSH_PACKET_TY_FLUSH_BIT,
+	SSH_PACKET_TY_SEQUENCED_BIT,
+	SSH_PACKET_TY_BLOCKING_BIT,
+
+	SSH_PACKET_TY_FLUSH = BIT(SSH_PACKET_TY_FLUSH_BIT),
+	SSH_PACKET_TY_SEQUENCED = BIT(SSH_PACKET_TY_SEQUENCED_BIT),
+	SSH_PACKET_TY_BLOCKING = BIT(SSH_PACKET_TY_BLOCKING_BIT),
+};
+
+enum ssh_packet_state_flags {
+	SSH_PACKET_SF_LOCKED_BIT,
+	SSH_PACKET_SF_QUEUED_BIT,
+	SSH_PACKET_SF_PENDING_BIT,
+	SSH_PACKET_SF_TRANSMITTING_BIT,
+	SSH_PACKET_SF_TRANSMITTED_BIT,
+	SSH_PACKET_SF_ACKED_BIT,
+	SSH_PACKET_SF_CANCELED_BIT,
+	SSH_PACKET_SF_COMPLETED_BIT,
+};
+
+struct ssh_ptl;
+struct ssh_packet;
+
+struct ssh_packet_ops {
+	void (*release)(struct ssh_packet *packet);
+	void (*complete)(struct ssh_packet *packet, int status);
+};
+
+struct ssh_packet {
+	struct ssh_ptl *ptl;
+	struct kref refcnt;
+
+	u8 type;
+	u8 priority;
+	u16 data_length;
+	u8 *data;
+
+	unsigned long state;
+	ktime_t timestamp;
+
+	struct list_head queue_node;
+	struct list_head pending_node;
+
+	const struct ssh_packet_ops *ops;
+};
+
+
+/* -- Request transport layer (rtl). ---------------------------------------- */
+
+enum ssh_request_flags {
+	SSH_REQUEST_SF_LOCKED_BIT,
+	SSH_REQUEST_SF_QUEUED_BIT,
+	SSH_REQUEST_SF_PENDING_BIT,
+	SSH_REQUEST_SF_TRANSMITTING_BIT,
+	SSH_REQUEST_SF_TRANSMITTED_BIT,
+	SSH_REQUEST_SF_RSPRCVD_BIT,
+	SSH_REQUEST_SF_COMPLETED_BIT,
+
+	SSH_REQUEST_TY_FLUSH_BIT,
+	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
+
+        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_FLUSH_BIT)
+					| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
+};
+
+struct ssh_rtl;
+struct ssh_request;
+
+struct ssh_request_ops {
+	void (*release)(struct ssh_request *rqst);
+	void (*complete)(struct ssh_request *rqst,
+			 const struct ssh_command *cmd,
+			 const struct sshp_span *data, int status);
+};
+
+struct ssh_request {
+	struct ssh_rtl *rtl;
+	struct ssh_packet packet;
+	struct list_head node;
+
+	unsigned long state;
+	ktime_t timestamp;
+
+	const struct ssh_request_ops *ops;
+};
+
+
 /* -- Main data types and definitions --------------------------------------- */
 
 enum ssam_ssh_tc {
@@ -161,12 +417,6 @@ struct ssam_event_notifier {
 /* -- TODO -------------------------------------------------------------------*/
 
 /*
- * Maximum request payload size in bytes.
- * Value based on ACPI (255 bytes minus header/status bytes).
- */
-#define SURFACE_SAM_SSH_MAX_RQST_PAYLOAD	(255 - 10)
-
-/*
  * Maximum response payload size in bytes.
  * Value based on ACPI (255 bytes minus header/status bytes).
  */
@@ -184,13 +434,6 @@ struct ssam_event_notifier {
  * The number of communication channels used in the protocol.
  */
 #define SURFACE_SAM_SSH_NUM_CHANNELS		2
-
-/*
- * Special event-handler delay value indicating that the corresponding event
- * should be handled immediately in the interrupt and not be relayed through
- * the workqueue. Intended for low-latency events, such as keyboard events.
- */
-#define SURFACE_SAM_SSH_EVENT_IMMEDIATE		((unsigned long) -1)
 
 
 struct surface_sam_ssh_buf {
