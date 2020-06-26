@@ -204,15 +204,17 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
 /**
- * Offset of the packet sequence ID field in the raw SSH message data.
+ * Offset of the specified struct ssh_frame field in the raw SSH message data.
  */
-#define SSH_MSG_OFFS_SEQ 	(sizeof(u16) + offsetof(struct ssh_frame, seq))
+#define SSH_MSGOFFSET_FRAME(field) \
+	(sizeof(u16) + offsetof(struct ssh_frame, field))
 
 /**
- * Offset of the request ID field in the raw SSH message data.
+ * Offset of the specified struct ssh_command field in the raw SSH message data.
  */
-#define SSH_MSG_OFFS_RQID	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
-				 + offsetof(struct ssh_command, rqid))
+#define SSH_MSGOFFSET_COMMAND(field) \
+	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
+		+ offsetof(struct ssh_command, field))
 
 
 /* -- Common/utility functions. --------------------------------------------- */
@@ -991,7 +993,7 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 
 static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
-	return packet->data[SSH_MSG_OFFS_SEQ];
+	return packet->data[SSH_MSGOFFSET_FRAME(seq)];
 }
 
 
@@ -2422,7 +2424,8 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 
 static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
-	return get_unaligned_le16(rqst->packet.data + SSH_MSG_OFFS_RQID);
+	return get_unaligned_le16(rqst->packet.data
+				  + SSH_MSGOFFSET_COMMAND(rqid));
 }
 
 static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
