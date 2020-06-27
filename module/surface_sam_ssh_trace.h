@@ -11,6 +11,7 @@
 
 #define SSAM_PTR_UID_LEN		9
 #define SSAM_SEQ_NOT_APPLICABLE		((u16)-1)
+#define SSAM_RQID_NOT_APPLICABLE	((u32)-1)
 
 
 #ifndef _SURFACE_SAM_SSH_TRACE_HELPERS
@@ -25,12 +26,20 @@ static inline void ssam_trace_ptr_uid(const void *ptr, char* uid_str)
 	       SSAM_PTR_UID_LEN);
 }
 
-static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *packet)
+static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *p)
 {
-	if (!packet->data || packet->data_length < SSH_MESSAGE_LENGTH(0))
+	if (!p->data || p->data_length < SSH_MESSAGE_LENGTH(0))
 		return SSAM_SEQ_NOT_APPLICABLE;
 
-	return packet->data[SSH_MSGOFFSET_FRAME(seq)];
+	return p->data[SSH_MSGOFFSET_FRAME(seq)];
+}
+
+static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
+{
+	if (!p->data || p->data_length < SSH_COMMAND_MESSAGE_LENGTH(0))
+		return SSAM_RQID_NOT_APPLICABLE;
+
+	return get_unaligned_le16(&p->data[SSH_MSGOFFSET_COMMAND(rqid)]);
 }
 
 #endif /* _SURFACE_SAM_SSH_TRACE_HELPERS */
@@ -59,6 +68,31 @@ static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *packet)
 	__print_symbolic(seq,					\
 		{ SSAM_SEQ_NOT_APPLICABLE, 		"N/A" }	\
 	)
+
+
+#define ssam_show_request_type(flags)				\
+	__print_flags(flags & SSH_REQUEST_FLAGS_TY_MASK, "",	\
+		{ BIT(SSH_REQUEST_TY_FLUSH_BIT),	"F" },	\
+		{ BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),	"R" }	\
+	)
+
+#define ssam_show_request_state(flags)				\
+	__print_flags(flags & SSH_REQUEST_FLAGS_SF_MASK, "",	\
+		{ BIT(SSH_REQUEST_SF_LOCKED_BIT), 	"L" },	\
+		{ BIT(SSH_REQUEST_SF_QUEUED_BIT), 	"Q" },	\
+		{ BIT(SSH_REQUEST_SF_PENDING_BIT), 	"P" },	\
+		{ BIT(SSH_REQUEST_SF_TRANSMITTING_BIT),	"S" },	\
+		{ BIT(SSH_REQUEST_SF_TRANSMITTED_BIT), 	"T" },	\
+		{ BIT(SSH_REQUEST_SF_RSPRCVD_BIT), 	"A" },	\
+		{ BIT(SSH_REQUEST_SF_CANCELED_BIT), 	"C" },	\
+		{ BIT(SSH_REQUEST_SF_COMPLETED_BIT), 	"F" }	\
+	)
+
+#define ssam_show_request_id(rqid)				\
+	__print_symbolic(rqid,					\
+		{ SSAM_RQID_NOT_APPLICABLE, 		"N/A" }	\
+	)
+
 
 DECLARE_EVENT_CLASS(ssam_packet_class,
 	TP_PROTO(const struct ssh_packet *packet),
@@ -97,6 +131,39 @@ DECLARE_EVENT_CLASS(ssam_packet_class,
 	DEFINE_EVENT(ssam_packet_class, ssam_packet_##name,	\
 		TP_PROTO(const struct ssh_packet *packet),	\
 		TP_ARGS(packet)					\
+	)
+
+
+DECLARE_EVENT_CLASS(ssam_request_class,
+	TP_PROTO(const struct ssh_request *request),
+
+	TP_ARGS(request),
+
+	TP_STRUCT__entry(
+		__array(char, uid, SSAM_PTR_UID_LEN)
+		__field(unsigned long, state)
+		__field(u32, rqid)
+	),
+
+	TP_fast_assign(
+		// use packet for UID so we can match requests to packets
+		ssam_trace_ptr_uid(&request->packet, __entry->uid);
+		__entry->state = READ_ONCE(request->state);
+		__entry->rqid = ssam_trace_get_request_id(&request->packet);
+	),
+
+	TP_printk("uid=%s, rqid=%s, ty=%s, sta=%s",
+		__entry->uid,
+		ssam_show_request_id(__entry->rqid),
+		ssam_show_request_type(__entry->state),
+		ssam_show_request_state(__entry->state)
+	)
+);
+
+#define DEFINE_SSAM_REQUEST_EVENT(name)				\
+	DEFINE_EVENT(ssam_request_class, ssam_request_##name,	\
+		TP_PROTO(const struct ssh_request *request),	\
+		TP_ARGS(request)				\
 	)
 
 

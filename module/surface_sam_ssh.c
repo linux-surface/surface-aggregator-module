@@ -2599,7 +2599,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 * has been set. Also note that we need to fetch the static (type) flags
          * to ensure that they don't cause the cmpxchg to fail.
 	 */
-        fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_STATIC_MASK;
+        fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_TY_MASK;
 	state = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
 	if (!state && !READ_ONCE(r->rtl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
@@ -2686,6 +2686,9 @@ static bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 {
 	struct ssh_rtl *rtl;
 	bool canceled;
+
+	if (test_and_set_bit(SSH_REQUEST_SF_CANCELED_BIT, &rqst->state))
+		return true;
 
 	if (pending)
 		canceled = ssh_rtl_cancel_pending(rqst);

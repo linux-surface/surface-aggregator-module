@@ -230,21 +230,28 @@ struct ssh_packet {
 
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
-enum ssh_request_flags {
-	SSH_REQUEST_SF_LOCKED_BIT,
-	SSH_REQUEST_SF_QUEUED_BIT,
-	SSH_REQUEST_SF_PENDING_BIT,
-	SSH_REQUEST_SF_TRANSMITTING_BIT,
-	SSH_REQUEST_SF_TRANSMITTED_BIT,
-	SSH_REQUEST_SF_RSPRCVD_BIT,
-	SSH_REQUEST_SF_COMPLETED_BIT,
+/*
+ * The following defines may not be converted to enums as they are used for
+ * tracing. See reasoning for packet flags above. The masks are set explicitly
+ * as big OR statements confuse some user-space tools parsing the trace event
+ * format.
+ */
 
-	SSH_REQUEST_TY_FLUSH_BIT,
-	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
+#define SSH_REQUEST_SF_LOCKED_BIT		0
+#define SSH_REQUEST_SF_QUEUED_BIT		1
+#define SSH_REQUEST_SF_PENDING_BIT		2
+#define SSH_REQUEST_SF_TRANSMITTING_BIT		3
+#define SSH_REQUEST_SF_TRANSMITTED_BIT		4
+#define SSH_REQUEST_SF_RSPRCVD_BIT		5
+#define SSH_REQUEST_SF_CANCELED_BIT		6
+#define SSH_REQUEST_SF_COMPLETED_BIT		7
 
-        SSH_REQUEST_FLAGS_STATIC_MASK = BIT(SSH_REQUEST_TY_FLUSH_BIT)
-					| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
-};
+#define SSH_REQUEST_TY_FLUSH_BIT		8
+#define SSH_REQUEST_TY_HAS_RESPONSE_BIT		9
+
+#define SSH_REQUEST_FLAGS_SF_MASK		0x0ff
+#define SSH_REQUEST_FLAGS_TY_MASK		0x300
+
 
 struct ssh_rtl;
 struct ssh_request;
