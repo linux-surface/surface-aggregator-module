@@ -42,8 +42,10 @@ TRACE_DEFINE_ENUM(SSH_REQUEST_FLAGS_TY_MASK);
 
 
 #define SSAM_PTR_UID_LEN		9
+#define SSAM_U8_FIELD_NOT_APPLICABLE	((u16)-1)
 #define SSAM_SEQ_NOT_APPLICABLE		((u16)-1)
 #define SSAM_RQID_NOT_APPLICABLE	((u32)-1)
+#define SSAM_SSH_TC_NOT_APPLICABLE	0
 
 
 #ifndef _SURFACE_SAM_SSH_TRACE_HELPERS
@@ -74,7 +76,24 @@ static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
 	return get_unaligned_le16(&p->data[SSH_MSGOFFSET_COMMAND(rqid)]);
 }
 
+static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
+{
+	if (!p->data || p->data_length < SSH_COMMAND_MESSAGE_LENGTH(0))
+		return SSAM_SSH_TC_NOT_APPLICABLE;
+
+	return get_unaligned_le16(&p->data[SSH_MSGOFFSET_COMMAND(tc)]);
+}
+
 #endif /* _SURFACE_SAM_SSH_TRACE_HELPERS */
+
+#define ssam_trace_get_command_field_u8(packet, field) \
+	((!packet || packet->data_length < SSH_COMMAND_MESSAGE_LENGTH(0)) \
+	 ? 0 : p->data[SSH_MSGOFFSET_COMMAND(field)])
+
+#define ssam_show_generic_u8_field(value)			\
+	__print_symbolic(value,					\
+		{ SSAM_U8_FIELD_NOT_APPLICABLE, 	"N/A" }	\
+	)
 
 
 #define ssam_show_packet_type(type)				\
@@ -123,6 +142,11 @@ static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
 #define ssam_show_request_id(rqid)				\
 	__print_symbolic(rqid,					\
 		{ SSAM_RQID_NOT_APPLICABLE, 		"N/A" }	\
+	)
+
+#define ssam_show_request_tc(rqid)				\
+	__print_symbolic(rqid,					\
+		{ SSAM_SSH_TC_NOT_APPLICABLE, 		"N/A" }	\
 	)
 
 
@@ -175,20 +199,31 @@ DECLARE_EVENT_CLASS(ssam_request_class,
 		__array(char, uid, SSAM_PTR_UID_LEN)
 		__field(unsigned long, state)
 		__field(u32, rqid)
+		__field(u8, tc)
+		__field(u16, cid)
+		__field(u16, iid)
 	),
 
 	TP_fast_assign(
+		const struct ssh_packet *p = &request->packet;
+
 		// use packet for UID so we can match requests to packets
-		ssam_trace_ptr_uid(&request->packet, __entry->uid);
+		ssam_trace_ptr_uid(p, __entry->uid);
 		__entry->state = READ_ONCE(request->state);
-		__entry->rqid = ssam_trace_get_request_id(&request->packet);
+		__entry->rqid = ssam_trace_get_request_id(p);
+		__entry->tc = ssam_trace_get_request_tc(p);
+		__entry->cid = ssam_trace_get_command_field_u8(p, cid);
+		__entry->iid = ssam_trace_get_command_field_u8(p, iid);
 	),
 
-	TP_printk("uid=%s, rqid=%s, ty=%s, sta=%s",
+	TP_printk("uid=%s, rqid=%s, ty=%s, sta=%s, tc=%s, cid=%s, iid=%s",
 		__entry->uid,
 		ssam_show_request_id(__entry->rqid),
 		ssam_show_request_type(__entry->state),
-		ssam_show_request_state(__entry->state)
+		ssam_show_request_state(__entry->state),
+		ssam_show_request_tc(__entry->tc),
+		ssam_show_generic_u8_field(__entry->cid),
+		ssam_show_generic_u8_field(__entry->iid)
 	)
 );
 
