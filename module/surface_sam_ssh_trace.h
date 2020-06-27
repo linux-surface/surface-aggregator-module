@@ -40,6 +40,40 @@ TRACE_DEFINE_ENUM(SSH_REQUEST_TY_HAS_RESPONSE_BIT);
 TRACE_DEFINE_ENUM(SSH_REQUEST_FLAGS_SF_MASK);
 TRACE_DEFINE_ENUM(SSH_REQUEST_FLAGS_TY_MASK);
 
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_SAM);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_BAT);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_TMP);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_PMC);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_FAN);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_PoM);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_DBG);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_KBD);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_FWU);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_UNI);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_LPC);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_TCL);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_SFL);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_KIP);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_EXT);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_BLD);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_BAS);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_SEN);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_SRQ);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_MCU);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_HID);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_TCH);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_BKL);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_TAM);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_ACC);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_UFI);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_USC);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_PEN);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_VID);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_AUD);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_SMC);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_KPD);
+TRACE_DEFINE_ENUM(SSAM_SSH_TC_REG);
+
 
 #define SSAM_PTR_UID_LEN		9
 #define SSAM_U8_FIELD_NOT_APPLICABLE	((u16)-1)
@@ -90,63 +124,96 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 	((!packet || packet->data_length < SSH_COMMAND_MESSAGE_LENGTH(0)) \
 	 ? 0 : p->data[SSH_MSGOFFSET_COMMAND(field)])
 
-#define ssam_show_generic_u8_field(value)			\
-	__print_symbolic(value,					\
-		{ SSAM_U8_FIELD_NOT_APPLICABLE, 	"N/A" }	\
+#define ssam_show_generic_u8_field(value)				\
+	__print_symbolic(value,						\
+		{ SSAM_U8_FIELD_NOT_APPLICABLE, 	"N/A" }		\
 	)
 
 
-#define ssam_show_packet_type(type)				\
-	__print_flags(type, "",					\
-		{ SSH_PACKET_TY_FLUSH,			"F" },	\
-		{ SSH_PACKET_TY_SEQUENCED,		"S" },	\
-		{ SSH_PACKET_TY_BLOCKING,		"B" }	\
+#define ssam_show_packet_type(type)					\
+	__print_flags(type, "",						\
+		{ SSH_PACKET_TY_FLUSH,			"F" },		\
+		{ SSH_PACKET_TY_SEQUENCED,		"S" },		\
+		{ SSH_PACKET_TY_BLOCKING,		"B" }		\
 	)
 
-#define ssam_show_packet_state(state)				\
-	__print_flags(state, "",				\
-		{ BIT(SSH_PACKET_SF_LOCKED_BIT), 	"L" },	\
-		{ BIT(SSH_PACKET_SF_QUEUED_BIT), 	"Q" },	\
-		{ BIT(SSH_PACKET_SF_PENDING_BIT), 	"P" },	\
-		{ BIT(SSH_PACKET_SF_TRANSMITTING_BIT), 	"S" },	\
-		{ BIT(SSH_PACKET_SF_TRANSMITTED_BIT), 	"T" },	\
-		{ BIT(SSH_PACKET_SF_ACKED_BIT), 	"A" },	\
-		{ BIT(SSH_PACKET_SF_CANCELED_BIT), 	"C" },	\
-		{ BIT(SSH_PACKET_SF_COMPLETED_BIT), 	"F" }	\
+#define ssam_show_packet_state(state)					\
+	__print_flags(state, "",					\
+		{ BIT(SSH_PACKET_SF_LOCKED_BIT), 	"L" },		\
+		{ BIT(SSH_PACKET_SF_QUEUED_BIT), 	"Q" },		\
+		{ BIT(SSH_PACKET_SF_PENDING_BIT), 	"P" },		\
+		{ BIT(SSH_PACKET_SF_TRANSMITTING_BIT), 	"S" },		\
+		{ BIT(SSH_PACKET_SF_TRANSMITTED_BIT), 	"T" },		\
+		{ BIT(SSH_PACKET_SF_ACKED_BIT), 	"A" },		\
+		{ BIT(SSH_PACKET_SF_CANCELED_BIT), 	"C" },		\
+		{ BIT(SSH_PACKET_SF_COMPLETED_BIT), 	"F" }		\
 	)
 
-#define ssam_show_packet_seq(seq)				\
-	__print_symbolic(seq,					\
-		{ SSAM_SEQ_NOT_APPLICABLE, 		"N/A" }	\
+#define ssam_show_packet_seq(seq)					\
+	__print_symbolic(seq,						\
+		{ SSAM_SEQ_NOT_APPLICABLE, 		"N/A" }		\
 	)
 
 
-#define ssam_show_request_type(flags)				\
-	__print_flags(flags & SSH_REQUEST_FLAGS_TY_MASK, "",	\
-		{ BIT(SSH_REQUEST_TY_FLUSH_BIT),	"F" },	\
-		{ BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),	"R" }	\
+#define ssam_show_request_type(flags)					\
+	__print_flags(flags & SSH_REQUEST_FLAGS_TY_MASK, "",		\
+		{ BIT(SSH_REQUEST_TY_FLUSH_BIT),	"F" },		\
+		{ BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),	"R" }		\
 	)
 
-#define ssam_show_request_state(flags)				\
-	__print_flags(flags & SSH_REQUEST_FLAGS_SF_MASK, "",	\
-		{ BIT(SSH_REQUEST_SF_LOCKED_BIT), 	"L" },	\
-		{ BIT(SSH_REQUEST_SF_QUEUED_BIT), 	"Q" },	\
-		{ BIT(SSH_REQUEST_SF_PENDING_BIT), 	"P" },	\
-		{ BIT(SSH_REQUEST_SF_TRANSMITTING_BIT),	"S" },	\
-		{ BIT(SSH_REQUEST_SF_TRANSMITTED_BIT), 	"T" },	\
-		{ BIT(SSH_REQUEST_SF_RSPRCVD_BIT), 	"A" },	\
-		{ BIT(SSH_REQUEST_SF_CANCELED_BIT), 	"C" },	\
-		{ BIT(SSH_REQUEST_SF_COMPLETED_BIT), 	"F" }	\
+#define ssam_show_request_state(flags)					\
+	__print_flags(flags & SSH_REQUEST_FLAGS_SF_MASK, "",		\
+		{ BIT(SSH_REQUEST_SF_LOCKED_BIT), 	"L" },		\
+		{ BIT(SSH_REQUEST_SF_QUEUED_BIT), 	"Q" },		\
+		{ BIT(SSH_REQUEST_SF_PENDING_BIT), 	"P" },		\
+		{ BIT(SSH_REQUEST_SF_TRANSMITTING_BIT),	"S" },		\
+		{ BIT(SSH_REQUEST_SF_TRANSMITTED_BIT), 	"T" },		\
+		{ BIT(SSH_REQUEST_SF_RSPRCVD_BIT), 	"A" },		\
+		{ BIT(SSH_REQUEST_SF_CANCELED_BIT), 	"C" },		\
+		{ BIT(SSH_REQUEST_SF_COMPLETED_BIT), 	"F" }		\
 	)
 
-#define ssam_show_request_id(rqid)				\
-	__print_symbolic(rqid,					\
-		{ SSAM_RQID_NOT_APPLICABLE, 		"N/A" }	\
+#define ssam_show_request_id(rqid)					\
+	__print_symbolic(rqid,						\
+		{ SSAM_RQID_NOT_APPLICABLE, 		"N/A" }		\
 	)
 
-#define ssam_show_request_tc(rqid)				\
-	__print_symbolic(rqid,					\
-		{ SSAM_SSH_TC_NOT_APPLICABLE, 		"N/A" }	\
+#define ssam_show_request_tc(rqid)					\
+	__print_symbolic(rqid,						\
+		{ SSAM_SSH_TC_NOT_APPLICABLE, 		"N/A" },	\
+		{ SSAM_SSH_TC_SAM, 			"SAM" },	\
+		{ SSAM_SSH_TC_BAT, 			"BAT" },	\
+		{ SSAM_SSH_TC_TMP, 			"TMP" },	\
+		{ SSAM_SSH_TC_PMC, 			"PMC" },	\
+		{ SSAM_SSH_TC_FAN, 			"FAN" },	\
+		{ SSAM_SSH_TC_PoM, 			"PoM" },	\
+		{ SSAM_SSH_TC_DBG, 			"DBG" },	\
+		{ SSAM_SSH_TC_KBD, 			"KBD" },	\
+		{ SSAM_SSH_TC_FWU, 			"FWU" },	\
+		{ SSAM_SSH_TC_UNI, 			"UNI" },	\
+		{ SSAM_SSH_TC_LPC, 			"LPC" },	\
+		{ SSAM_SSH_TC_TCL, 			"TCL" },	\
+		{ SSAM_SSH_TC_SFL, 			"SFL" },	\
+		{ SSAM_SSH_TC_KIP, 			"KIP" },	\
+		{ SSAM_SSH_TC_EXT, 			"EXT" },	\
+		{ SSAM_SSH_TC_BLD, 			"BLD" },	\
+		{ SSAM_SSH_TC_BAS, 			"BAS" },	\
+		{ SSAM_SSH_TC_SEN, 			"SEN" },	\
+		{ SSAM_SSH_TC_SRQ, 			"SRQ" },	\
+		{ SSAM_SSH_TC_MCU, 			"MCU" },	\
+		{ SSAM_SSH_TC_HID, 			"HID" },	\
+		{ SSAM_SSH_TC_TCH, 			"TCH" },	\
+		{ SSAM_SSH_TC_BKL, 			"BKL" },	\
+		{ SSAM_SSH_TC_TAM, 			"TAM" },	\
+		{ SSAM_SSH_TC_ACC, 			"ACC" },	\
+		{ SSAM_SSH_TC_UFI, 			"UFI" },	\
+		{ SSAM_SSH_TC_USC, 			"USC" },	\
+		{ SSAM_SSH_TC_PEN, 			"PEN" },	\
+		{ SSAM_SSH_TC_VID, 			"VID" },	\
+		{ SSAM_SSH_TC_AUD, 			"AUD" },	\
+		{ SSAM_SSH_TC_SMC, 			"SMC" },	\
+		{ SSAM_SSH_TC_KPD, 			"KPD" },	\
+		{ SSAM_SSH_TC_REG, 			"REG" }		\
 	)
 
 
