@@ -181,25 +181,28 @@ enum ssh_packet_priority {
 
 #define ssh_packet_priority_get_try(p) ((p) & 0x0f)
 
-/*
- * The following defines may not be converted to enums as they are used for
- * tracing. Converting them to enums will break external trace utilities (e.g.
- * trace-cmd), depending on the explicit values being present in the event
- * format specifier.
- */
 
-#define SSH_PACKET_TY_FLUSH		BIT(0)
-#define SSH_PACKET_TY_SEQUENCED		BIT(1)
-#define SSH_PACKET_TY_BLOCKING		BIT(2)
+enum ssh_packet_type_flags {
+	SSH_PACKET_TY_FLUSH_BIT,
+	SSH_PACKET_TY_SEQUENCED_BIT,
+	SSH_PACKET_TY_BLOCKING_BIT,
 
-#define SSH_PACKET_SF_LOCKED_BIT	0
-#define SSH_PACKET_SF_QUEUED_BIT	1
-#define SSH_PACKET_SF_PENDING_BIT	2
-#define SSH_PACKET_SF_TRANSMITTING_BIT	3
-#define SSH_PACKET_SF_TRANSMITTED_BIT	4
-#define SSH_PACKET_SF_ACKED_BIT		5
-#define SSH_PACKET_SF_CANCELED_BIT	6
-#define SSH_PACKET_SF_COMPLETED_BIT	7
+	SSH_PACKET_TY_FLUSH	= BIT(SSH_PACKET_TY_FLUSH_BIT),
+	SSH_PACKET_TY_SEQUENCED	= BIT(SSH_PACKET_TY_SEQUENCED_BIT),
+	SSH_PACKET_TY_BLOCKING	= BIT(SSH_PACKET_TY_BLOCKING_BIT),
+};
+
+enum ssh_packet_state_flags {
+	SSH_PACKET_SF_LOCKED_BIT,
+	SSH_PACKET_SF_QUEUED_BIT,
+	SSH_PACKET_SF_PENDING_BIT,
+	SSH_PACKET_SF_TRANSMITTING_BIT,
+	SSH_PACKET_SF_TRANSMITTED_BIT,
+	SSH_PACKET_SF_ACKED_BIT,
+	SSH_PACKET_SF_CANCELED_BIT,
+	SSH_PACKET_SF_COMPLETED_BIT,
+};
+
 
 struct ssh_ptl;
 struct ssh_packet;
@@ -230,27 +233,33 @@ struct ssh_packet {
 
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
-/*
- * The following defines may not be converted to enums as they are used for
- * tracing. See reasoning for packet flags above. The masks are set explicitly
- * as big OR statements confuse some user-space tools parsing the trace event
- * format.
- */
+enum ssh_request_flags {
+	SSH_REQUEST_SF_LOCKED_BIT,
+	SSH_REQUEST_SF_QUEUED_BIT,
+	SSH_REQUEST_SF_PENDING_BIT,
+	SSH_REQUEST_SF_TRANSMITTING_BIT,
+	SSH_REQUEST_SF_TRANSMITTED_BIT,
+	SSH_REQUEST_SF_RSPRCVD_BIT,
+	SSH_REQUEST_SF_CANCELED_BIT,
+	SSH_REQUEST_SF_COMPLETED_BIT,
 
-#define SSH_REQUEST_SF_LOCKED_BIT		0
-#define SSH_REQUEST_SF_QUEUED_BIT		1
-#define SSH_REQUEST_SF_PENDING_BIT		2
-#define SSH_REQUEST_SF_TRANSMITTING_BIT		3
-#define SSH_REQUEST_SF_TRANSMITTED_BIT		4
-#define SSH_REQUEST_SF_RSPRCVD_BIT		5
-#define SSH_REQUEST_SF_CANCELED_BIT		6
-#define SSH_REQUEST_SF_COMPLETED_BIT		7
+	SSH_REQUEST_TY_FLUSH_BIT,
+	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
 
-#define SSH_REQUEST_TY_FLUSH_BIT		8
-#define SSH_REQUEST_TY_HAS_RESPONSE_BIT		9
+	SSH_REQUEST_FLAGS_SF_MASK =
+		  BIT(SSH_REQUEST_SF_LOCKED_BIT)
+		| BIT(SSH_REQUEST_SF_QUEUED_BIT)
+		| BIT(SSH_REQUEST_SF_PENDING_BIT)
+		| BIT(SSH_REQUEST_SF_TRANSMITTING_BIT)
+		| BIT(SSH_REQUEST_SF_TRANSMITTED_BIT)
+		| BIT(SSH_REQUEST_SF_RSPRCVD_BIT)
+		| BIT(SSH_REQUEST_SF_CANCELED_BIT)
+		| BIT(SSH_REQUEST_SF_COMPLETED_BIT),
 
-#define SSH_REQUEST_FLAGS_SF_MASK		0x0ff
-#define SSH_REQUEST_FLAGS_TY_MASK		0x300
+	SSH_REQUEST_FLAGS_TY_MASK =
+		  BIT(SSH_REQUEST_TY_FLUSH_BIT)
+		| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
+};
 
 
 struct ssh_rtl;
