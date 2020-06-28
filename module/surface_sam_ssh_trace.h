@@ -257,6 +257,49 @@ DECLARE_EVENT_CLASS(ssam_packet_class,
 	)
 
 
+DECLARE_EVENT_CLASS(ssam_packet_status_class,
+	TP_PROTO(const struct ssh_packet *packet, int status),
+
+	TP_ARGS(packet, status),
+
+	TP_STRUCT__entry(
+		__array(char, uid, SSAM_PTR_UID_LEN)
+		__field(u8, type)
+		__field(u8, priority)
+		__field(u16, length)
+		__field(unsigned long, state)
+		__field(u16, seq)
+		__field(int, status)
+	),
+
+	TP_fast_assign(
+		ssam_trace_ptr_uid(packet, __entry->uid);
+		__entry->type = packet->type;
+		__entry->priority = READ_ONCE(packet->priority);
+		__entry->length = packet->data_length;
+		__entry->state = READ_ONCE(packet->state);
+		__entry->seq = ssam_trace_get_packet_seq(packet);
+		__entry->status = status;
+	),
+
+	TP_printk("uid=%s, seq=%s, ty=%s, pri=0x%02x, len=%u, sta=%s, status=%d",
+		__entry->uid,
+		ssam_show_packet_seq(__entry->seq),
+		ssam_show_packet_type(__entry->type),
+		__entry->priority,
+		__entry->length,
+		ssam_show_packet_state(__entry->state),
+		__entry->status
+	)
+);
+
+#define DEFINE_SSAM_PACKET_STATUS_EVENT(name)				\
+	DEFINE_EVENT(ssam_packet_status_class, ssam_packet_##name,	\
+		TP_PROTO(const struct ssh_packet *packet, int status),	\
+		TP_ARGS(packet, status)					\
+	)
+
+
 DECLARE_EVENT_CLASS(ssam_request_class,
 	TP_PROTO(const struct ssh_request *request),
 
@@ -298,6 +341,53 @@ DECLARE_EVENT_CLASS(ssam_request_class,
 	DEFINE_EVENT(ssam_request_class, ssam_request_##name,	\
 		TP_PROTO(const struct ssh_request *request),	\
 		TP_ARGS(request)				\
+	)
+
+
+DECLARE_EVENT_CLASS(ssam_request_status_class,
+	TP_PROTO(const struct ssh_request *request, int status),
+
+	TP_ARGS(request, status),
+
+	TP_STRUCT__entry(
+		__array(char, uid, SSAM_PTR_UID_LEN)
+		__field(unsigned long, state)
+		__field(u32, rqid)
+		__field(u8, tc)
+		__field(u16, cid)
+		__field(u16, iid)
+		__field(int, status)
+	),
+
+	TP_fast_assign(
+		const struct ssh_packet *p = &request->packet;
+
+		// use packet for UID so we can match requests to packets
+		ssam_trace_ptr_uid(p, __entry->uid);
+		__entry->state = READ_ONCE(request->state);
+		__entry->rqid = ssam_trace_get_request_id(p);
+		__entry->tc = ssam_trace_get_request_tc(p);
+		__entry->cid = ssam_trace_get_command_field_u8(p, cid);
+		__entry->iid = ssam_trace_get_command_field_u8(p, iid);
+		__entry->status = status;
+	),
+
+	TP_printk("uid=%s, rqid=%s, ty=%s, sta=%s, tc=%s, cid=%s, iid=%s, status=%d",
+		__entry->uid,
+		ssam_show_request_id(__entry->rqid),
+		ssam_show_request_type(__entry->state),
+		ssam_show_request_state(__entry->state),
+		ssam_show_request_tc(__entry->tc),
+		ssam_show_generic_u8_field(__entry->cid),
+		ssam_show_generic_u8_field(__entry->iid),
+		__entry->status
+	)
+);
+
+#define DEFINE_SSAM_REQUEST_STATUS_EVENT(name)				\
+	DEFINE_EVENT(ssam_request_status_class, ssam_request_##name,	\
+		TP_PROTO(const struct ssh_request *request, int status),\
+		TP_ARGS(request, status)				\
 	)
 
 
