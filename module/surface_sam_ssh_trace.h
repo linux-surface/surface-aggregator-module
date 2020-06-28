@@ -391,16 +391,47 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 	)
 
 
+DECLARE_EVENT_CLASS(ssam_timeout_class,
+	TP_PROTO(ktime_t timeout),
+
+	TP_ARGS(timeout),
+
+	TP_STRUCT__entry(
+		__field(time64_t, timeout_sec)
+		__field(long, timeout_nsec)
+	),
+
+	TP_fast_assign(
+		struct timespec64 ts = ktime_to_timespec64(timeout);
+		__entry->timeout_sec = ts.tv_sec;
+		__entry->timeout_nsec = ts.tv_nsec;
+	),
+
+	TP_printk("timeout=%lld.%02ld",
+		__entry->timeout_sec,
+		__entry->timeout_nsec / 10000000
+	)
+);
+
+#define DEFINE_SSAM_TIMEOUT_EVENT(name)				\
+	DEFINE_EVENT(ssam_timeout_class, ssam_##name,		\
+		TP_PROTO(ktime_t timeout),			\
+		TP_ARGS(timeout)				\
+	)
+
+
 DEFINE_SSAM_PACKET_EVENT(submit);
 DEFINE_SSAM_PACKET_EVENT(resubmit);
 DEFINE_SSAM_PACKET_EVENT(timeout);
 DEFINE_SSAM_PACKET_EVENT(cancel);
 DEFINE_SSAM_PACKET_STATUS_EVENT(complete);
+DEFINE_SSAM_TIMEOUT_EVENT(ptl_timeout_reap);
 
 DEFINE_SSAM_REQUEST_EVENT(submit);
 DEFINE_SSAM_REQUEST_EVENT(timeout);
 DEFINE_SSAM_REQUEST_EVENT(cancel);
 DEFINE_SSAM_REQUEST_STATUS_EVENT(complete);
+DEFINE_SSAM_TIMEOUT_EVENT(rtl_timeout_reap);
 
 // TODO
 

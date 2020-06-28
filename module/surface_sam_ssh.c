@@ -1543,6 +1543,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	ktime_t timeout = ptl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
 
+	trace_ssam_ptl_timeout_reap(timeout);
+
 	/*
 	 * Mark reaper as "not pending". This is done before checking any
 	 * packets to avoid lost-update type problems.
@@ -2798,6 +2800,8 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	ktime_t now = ktime_get_coarse_boottime();
 	ktime_t timeout = rtl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
+
+	trace_ssam_rtl_timeout_reap(timeout);
 
 	/*
 	 * Mark reaper as "not pending". This is done before checking any
