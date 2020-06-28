@@ -39,10 +39,11 @@ static const guid_t SHPS_DSM_UUID =
 #define SAM_DTX_TC			0x11
 #define SAM_DTX_CID_LATCH_LOCK		0x06
 #define SAM_DTX_CID_LATCH_UNLOCK	0x07
+#define ACPI_SGCP_NOTIFY_POWER_ON   0x81
 
 #define SHPS_DSM_GPU_ADDRS_RP		"RP5_PCIE"
 #define SHPS_DSM_GPU_ADDRS_DGPU		"DGPU_PCIE"
-#define SHPS_PCI_GPU_ADDR			"\\_SB.PCI0.RP13._ADR"
+#define SHPS_PCI_GPU_ADDR_RP			"\\_SB.PCI0.RP13._ADR"
 
 static const struct acpi_gpio_params gpio_base_presence_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_base_presence     = { 1, 0, false };
@@ -80,12 +81,6 @@ static const char *shps_dgpu_power_str(enum shps_dgpu_power power)
 		return "<invalid>";
 }
 
-enum shps_generation {
-	SHPS_GENERATION_UNKNOWN = 0,
-	SHPS_GENERATION_1       = 1, // SB1, SB2, etc
-	SHPS_GENERATION_2	   = 2  // SB3
-};
-
 enum shps_notification_method {
 	SHPS_NOTIFICATION_METHOD_SAN = 1,
 	SHPS_NOTIFICATION_METHOD_SGCP = 2
@@ -93,9 +88,8 @@ enum shps_notification_method {
 
 struct shps_hardware_traits {
 	enum shps_notification_method notification_method;
-	acpi_string dgpu_pci_address;
+	const char *dgpu_rp_pci_address;
 };
-
 
 struct shps_driver_data {
 	struct mutex lock;
@@ -113,20 +107,24 @@ struct shps_driver_data {
 
 struct shps_hardware_probe {
 	const char *hardware_id;
-	enum shps_generation generation;
+	int generation;
+	struct shps_hardware_traits *hardware_traits;
 };
 
-static struct shps_hardware_traits shps_hardware_trait_map[] = {
-	{ },
-	{ .notification_method = SHPS_NOTIFICATION_METHOD_SAN  },
-	{ .notification_method = SHPS_NOTIFICATION_METHOD_SGCP, .dgpu_pci_address = SHPS_PCI_GPU_ADDR }
+static struct shps_hardware_traits shps_gen1_hwtraits = { 
+	.notification_method = SHPS_NOTIFICATION_METHOD_SAN  
+};
+
+static struct shps_hardware_traits shps_gen2_hwtraits = { 
+	.notification_method = SHPS_NOTIFICATION_METHOD_SGCP,
+	.dgpu_rp_pci_address = SHPS_PCI_GPU_ADDR_RP  
 };
 
 static const struct shps_hardware_probe shps_hardware_probe_match[] = {
 	/* Surface Book 3 */
-	{ "MSHW0117", SHPS_GENERATION_2 },
+	{ "MSHW0117", 2, &shps_gen2_hwtraits },
 
-	{ }
+	{ NULL }
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -294,8 +292,8 @@ static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev)
 	int addr;
 
 
-	if (drvdata->hardware_traits.dgpu_pci_address) {
-		addr = shps_dgpu_dsm_get_pci_addr_from_adr(pdev, drvdata->hardware_traits.dgpu_pci_address);
+	if (drvdata->hardware_traits.dgpu_rp_pci_address) {
+		addr = shps_dgpu_dsm_get_pci_addr_from_adr(pdev, drvdata->hardware_traits.dgpu_rp_pci_address);
 	} else {
 		addr = shps_dgpu_dsm_get_pci_addr_from_dsm(pdev, SHPS_DSM_GPU_ADDRS_RP);
 	}
@@ -1038,12 +1036,12 @@ static void shps_gpios_remove_irq(struct platform_device *pdev)
 static void shps_sgcp_notify(acpi_handle device, u32 value, void *context) {
 	struct platform_device *pdev = context;
 	switch (value) {
-		case 129:
+		case ACPI_SGCP_NOTIFY_POWER_ON:
 			shps_dgpu_powered_on(pdev);
 	}
 }
 
-static int shps_try_start_sgcp_notification(struct platform_device *pdev, acpi_handle *sgpc_handle) {
+static int shps_start_sgcp_notification(struct platform_device *pdev, acpi_handle *sgpc_handle) {
 	acpi_handle handle;
 	int status;
 
@@ -1064,7 +1062,7 @@ static int shps_try_start_sgcp_notification(struct platform_device *pdev, acpi_h
 	return 0;
 }
 
-static void shps_try_remove_sgcp_notification(struct platform_device *pdev) {
+static void shps_remove_sgcp_notification(struct platform_device *pdev) {
 	int status;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
@@ -1076,20 +1074,23 @@ static void shps_try_remove_sgcp_notification(struct platform_device *pdev) {
 	}
 }
 
-static enum shps_generation shps_detect_generation(struct platform_device *pdev) {
+static struct shps_hardware_traits shps_detect_hardware_traits(struct platform_device *pdev) {
 	const struct shps_hardware_probe *p;
 
 	for (p = shps_hardware_probe_match; p->hardware_id; ++p) {
 		if (acpi_dev_present(p->hardware_id, NULL, -1)) {
 			dev_info(&pdev->dev, 
-				"shps_detect_generation found device %s, generation %d", 
+				"shps_detect_hardware_traits found device %s, generation %d", 
 				p->hardware_id,
 				p->generation);
-			return p->generation;
+			return *p->hardware_traits;
 		}	
 	}
 	
-	return SHPS_GENERATION_1;
+	dev_info(
+		&pdev->dev, 
+		"shps_detect_hardware_traits: no specific device found, using defaults");
+	return shps_gen1_hwtraits;
 }
 
 static int shps_probe(struct platform_device *pdev)
@@ -1098,11 +1099,9 @@ static int shps_probe(struct platform_device *pdev)
 	struct shps_driver_data *drvdata;
 	struct device_link *link;
 	int power, status;
-	enum shps_generation detected_generation;
 	struct shps_hardware_traits detected_traits; 
 
-	detected_generation = shps_detect_generation(pdev);
-	detected_traits = shps_hardware_trait_map[detected_generation];
+	detected_traits = shps_detect_hardware_traits(pdev);
 
 	if (gpiod_count(&pdev->dev, NULL) < 0) {
 		dev_err(&pdev->dev, "gpiod_count returned < 0");
@@ -1169,9 +1168,17 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_devlink;
 
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
-		surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+		status = surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+		if (status) {
+			dev_err(&pdev->dev, "unable to set SAN notification handler (%d)", status);
+			goto err_devlink;
+		}
 	} else if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
-		shps_try_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
+		status = shps_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
+		if (status) {
+			dev_err(&pdev->dev, "unable to install SGCP notification handler (%d)", status);
+			goto err_devlink;
+		}
 	}
 
 	// if dGPU is not present turn-off root-port, else obey module param
@@ -1190,7 +1197,11 @@ static int shps_probe(struct platform_device *pdev)
 	return 0;
 
 err_post_notification:
-	shps_try_remove_sgcp_notification(pdev);
+	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
+		shps_remove_sgcp_notification(pdev);
+	} else if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
+		surface_sam_san_set_rqsg_handler(NULL, NULL);
+	}
 err_devlink:
 	device_remove_groups(&pdev->dev, shps_power_groups);
 err_devattr:
@@ -1222,7 +1233,7 @@ static int shps_remove(struct platform_device *pdev)
 	device_set_wakeup_capable(&pdev->dev, false);
 
 	if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
-		shps_try_remove_sgcp_notification(pdev);
+		shps_remove_sgcp_notification(pdev);
 	} else if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
 		surface_sam_san_set_rqsg_handler(NULL, NULL);
 	}
