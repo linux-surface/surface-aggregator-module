@@ -999,6 +999,8 @@ static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	struct ssh_ptl *ptl = READ_ONCE(p->ptl);
 
+	trace_ssam_packet_complete(p, status);
+
 	ptl_dbg_cond(ptl, "ptl: completing packet %p\n", p);
 	if (p->ops->complete)
 		p->ops->complete(p, status);
@@ -1387,6 +1389,8 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
 	int status;
 
+	trace_ssam_packet_submit(packet);
+
 	// validate packet fields
 	if (packet->type & SSH_PACKET_TY_FLUSH) {
 		if (packet->data || (packet->type & SSH_PACKET_TY_SEQUENCED))
@@ -1422,6 +1426,8 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	struct list_head *head;
+
+	trace_ssam_packet_resubmit(packet);
 
 	spin_lock(&packet->ptl->queue.lock);
 
@@ -1485,6 +1491,8 @@ static void ssh_ptl_cancel(struct ssh_packet *p)
 {
 	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &p->state))
 		return;
+
+	trace_ssam_packet_cancel(p);
 
 	/*
 	 * Lock packet and commit with memory barrier. If this packet has
@@ -1560,6 +1568,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		// avoid further transitions if locked
 		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
+
+		trace_ssam_packet_timeout(p);
 
 		// check if we still have some tries left
 		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
