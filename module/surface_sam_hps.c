@@ -124,7 +124,8 @@ static const struct shps_hardware_probe shps_hardware_probe_match[] = {
 	/* Surface Book 3 */
 	{ "MSHW0117", 2, &shps_gen2_hwtraits },
 
-	{ NULL }
+	/* Surface Book 2 (default, must be last entry) */
+	{ NULL, 1, &shps_gen1_hwtraits }
 };
 
 #define SHPS_STATE_BIT_PWRTGT		0	/* desired power state: 1 for on, 0 for off */
@@ -1079,18 +1080,16 @@ static struct shps_hardware_traits shps_detect_hardware_traits(struct platform_d
 
 	for (p = shps_hardware_probe_match; p->hardware_id; ++p) {
 		if (acpi_dev_present(p->hardware_id, NULL, -1)) {
-			dev_info(&pdev->dev, 
-				"shps_detect_hardware_traits found device %s, generation %d", 
-				p->hardware_id,
-				p->generation);
-			return *p->hardware_traits;
-		}	
+			break;
+		}
 	}
-	
-	dev_info(
-		&pdev->dev, 
-		"shps_detect_hardware_traits: no specific device found, using defaults");
-	return shps_gen1_hwtraits;
+
+	dev_info(&pdev->dev, 
+		"shps_detect_hardware_traits found device %s, generation %d", 
+		p->hardware_id ? p->hardware_id : "SAN (default)",
+		p->generation);
+
+	return *p->hardware_traits;
 }
 
 static int shps_probe(struct platform_device *pdev)
@@ -1100,8 +1099,6 @@ static int shps_probe(struct platform_device *pdev)
 	struct device_link *link;
 	int power, status;
 	struct shps_hardware_traits detected_traits; 
-
-	detected_traits = shps_detect_hardware_traits(pdev);
 
 	if (gpiod_count(&pdev->dev, NULL) < 0) {
 		dev_err(&pdev->dev, "gpiod_count returned < 0");
@@ -1113,6 +1110,9 @@ static int shps_probe(struct platform_device *pdev)
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
+
+	// detect what kind of hardware we're running
+	detected_traits = shps_detect_hardware_traits(pdev);
 
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
 		// link to SAN
