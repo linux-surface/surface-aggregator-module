@@ -1744,6 +1744,8 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 	if (!frame)	// not enough data
 		return aligned.ptr - source->ptr;
 
+	trace_ssam_frame_received(frame);
+
 	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
 		ssh_ptl_acknowledge(ptl, frame->seq);
@@ -2502,6 +2504,8 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	struct ssh_request *p, *n;
 	u16 rqid = get_unaligned_le16(&command->rqid);
 
+	trace_ssam_response_received(command, command_data->len);
+
 	/*
 	 * Get request from pending based on request ID and mark it as response
 	 * received and locked.
@@ -2872,6 +2876,8 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 			     const struct sshp_span *data)
 {
+	trace_ssam_event_received(cmd, data->len);
+
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
 		get_unaligned_le16(&cmd->rqid));
 
