@@ -9,6 +9,11 @@
 #include "surface_sam_ssh.h"
 
 
+TRACE_DEFINE_ENUM(SSH_FRAME_TYPE_DATA_SEQ);
+TRACE_DEFINE_ENUM(SSH_FRAME_TYPE_DATA_NSQ);
+TRACE_DEFINE_ENUM(SSH_FRAME_TYPE_ACK);
+TRACE_DEFINE_ENUM(SSH_FRAME_TYPE_NAK);
+
 TRACE_DEFINE_ENUM(SSH_PACKET_TY_FLUSH_BIT);
 TRACE_DEFINE_ENUM(SSH_PACKET_TY_SEQUENCED_BIT);
 TRACE_DEFINE_ENUM(SSH_PACKET_TY_BLOCKING_BIT);
@@ -130,6 +135,14 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 	)
 
 
+#define ssam_show_frame_type(ty)					\
+	__print_symbolic(ty,						\
+		{ SSH_FRAME_TYPE_DATA_SEQ, 		"DSEQ" },	\
+		{ SSH_FRAME_TYPE_DATA_NSQ, 		"DNSQ" },	\
+		{ SSH_FRAME_TYPE_ACK, 			"ACK"  },	\
+		{ SSH_FRAME_TYPE_NAK, 			"NAK"  }	\
+	)
+
 #define ssam_show_packet_type(type)					\
 	__print_flags(type, "",						\
 		{ SSH_PACKET_TY_FLUSH,			"F" },		\
@@ -214,6 +227,37 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 		{ SSAM_SSH_TC_SMC, 			"SMC" },	\
 		{ SSAM_SSH_TC_KPD, 			"KPD" },	\
 		{ SSAM_SSH_TC_REG, 			"REG" }		\
+	)
+
+
+DECLARE_EVENT_CLASS(ssam_frame_class,
+	TP_PROTO(const struct ssh_frame *frame),
+
+	TP_ARGS(frame),
+
+	TP_STRUCT__entry(
+		__field(u8, type)
+		__field(u8, seq)
+		__field(u16, len)
+	),
+
+	TP_fast_assign(
+		__entry->type = frame->type;
+		__entry->seq = frame->seq;
+		__entry->len = get_unaligned_le16(&frame->len);
+	),
+
+	TP_printk("ty=%s, seq=0x%02x, len=%u",
+		ssam_show_frame_type(__entry->type),
+		__entry->seq,
+		__entry->len
+	)
+);
+
+#define DEFINE_SSAM_FRAME_EVENT(name)				\
+	DEFINE_EVENT(ssam_frame_class, ssam_##name,		\
+		TP_PROTO(const struct ssh_frame *frame),	\
+		TP_ARGS(frame)					\
 	)
 
 
