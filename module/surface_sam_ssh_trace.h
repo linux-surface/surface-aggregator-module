@@ -191,7 +191,7 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 		{ SSAM_RQID_NOT_APPLICABLE, 		"N/A" }		\
 	)
 
-#define ssam_show_request_tc(rqid)					\
+#define ssam_show_ssh_tc(rqid)						\
 	__print_symbolic(rqid,						\
 		{ SSAM_SSH_TC_NOT_APPLICABLE, 		"N/A" },	\
 		{ SSAM_SSH_TC_SAM, 			"SAM" },	\
@@ -258,6 +258,43 @@ DECLARE_EVENT_CLASS(ssam_frame_class,
 	DEFINE_EVENT(ssam_frame_class, ssam_##name,		\
 		TP_PROTO(const struct ssh_frame *frame),	\
 		TP_ARGS(frame)					\
+	)
+
+
+DECLARE_EVENT_CLASS(ssam_command_class,
+	TP_PROTO(const struct ssh_command *cmd, u16 len),
+
+	TP_ARGS(cmd, len),
+
+	TP_STRUCT__entry(
+		__field(u16, rqid)
+		__field(u16, len)
+		__field(u8, tc)
+		__field(u8, cid)
+		__field(u8, iid)
+	),
+
+	TP_fast_assign(
+		__entry->rqid = get_unaligned_le16(&cmd->rqid);
+		__entry->tc = cmd->tc;
+		__entry->cid = cmd->cid;
+		__entry->iid = cmd->iid;
+		__entry->len = len;
+	),
+
+	TP_printk("rqid=0x%04x, tc=%s, cid=0x%02x, iid=0x%02x, len=%u",
+		__entry->rqid,
+		ssam_show_ssh_tc(__entry->tc),
+		__entry->cid,
+		__entry->iid,
+		__entry->len
+	)
+);
+
+#define DEFINE_SSAM_COMMAND_EVENT(name)					\
+	DEFINE_EVENT(ssam_command_class, ssam_##name,			\
+		TP_PROTO(const struct ssh_command *cmd, u16 len),	\
+		TP_ARGS(cmd, len)					\
 	)
 
 
@@ -375,7 +412,7 @@ DECLARE_EVENT_CLASS(ssam_request_class,
 		ssam_show_request_id(__entry->rqid),
 		ssam_show_request_type(__entry->state),
 		ssam_show_request_state(__entry->state),
-		ssam_show_request_tc(__entry->tc),
+		ssam_show_ssh_tc(__entry->tc),
 		ssam_show_generic_u8_field(__entry->cid),
 		ssam_show_generic_u8_field(__entry->iid)
 	)
@@ -421,7 +458,7 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 		ssam_show_request_id(__entry->rqid),
 		ssam_show_request_type(__entry->state),
 		ssam_show_request_state(__entry->state),
-		ssam_show_request_tc(__entry->tc),
+		ssam_show_ssh_tc(__entry->tc),
 		ssam_show_generic_u8_field(__entry->cid),
 		ssam_show_generic_u8_field(__entry->iid),
 		__entry->status
