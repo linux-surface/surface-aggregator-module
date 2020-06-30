@@ -817,44 +817,41 @@ static noinline bool ssh_ptl_should_corrupt_tx_data(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_tx_data, TRUE);
 
 
-static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_ptl *ptl,
-						    struct ssh_packet *packet)
+static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_ack_packet()))
 		return false;
 
-	ptl_info(ptl, "packet error injection: dropping ACK packet %p\n",
+	ptl_info(packet->ptl, "packet error injection: dropping ACK packet %p\n",
 		 packet);
 
 	return true;
 }
 
-static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_ptl *ptl,
-						    struct ssh_packet *packet)
+static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_nak_packet()))
 		return false;
 
-	ptl_info(ptl, "packet error injection: dropping NAK packet %p\n",
+	ptl_info(packet->ptl, "packet error injection: dropping NAK packet %p\n",
 		 packet);
 
 	return true;
 }
 
-static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_ptl *ptl,
-						    struct ssh_packet *packet)
+static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_dsq_packet()))
 		return false;
 
-	ptl_info(ptl, "packet error injection: dropping sequenced data packet %p\n",
+	ptl_info(packet->ptl,
+		"packet error injection: dropping sequenced data packet %p\n",
 		 packet);
 
 	return true;
 }
 
-static bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
-				       struct ssh_packet *packet)
+static bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
 	// ignore packets that don't carry any data (i.e. flush)
 	if (!packet->data || !packet->data_length)
@@ -862,13 +859,13 @@ static bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
 
 	switch (packet->data[SSH_MSGOFFSET_FRAME(type)]) {
 	case SSH_FRAME_TYPE_ACK:
-		return __ssh_ptl_should_drop_ack_packet(ptl, packet);
+		return __ssh_ptl_should_drop_ack_packet(packet);
 
 	case SSH_FRAME_TYPE_NAK:
-		return __ssh_ptl_should_drop_nak_packet(ptl, packet);
+		return __ssh_ptl_should_drop_nak_packet(packet);
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
-		return __ssh_ptl_should_drop_dsq_packet(ptl, packet);
+		return __ssh_ptl_should_drop_dsq_packet(packet);
 
 	default:
 		return false;
@@ -884,8 +881,8 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 
 	status = ssh_ptl_should_fail_write();
 	if (unlikely(status)) {
-		ptl_info(ptl, "packet error injection:"
-			 " simulating transmit error %d, packet %p\n",
+		ptl_info(packet->ptl,
+			 "packet error injection: simulating transmit error %d, packet %p\n",
 			 status, packet);
 
 		return status;
@@ -894,8 +891,7 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 	return serdev_device_write_buf(ptl->serdev, buf, count);
 }
 
-static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_ptl *ptl,
-						  struct ssh_packet *packet)
+static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 {
 	// ignore packets that don't carry any data (i.e. flush)
 	if (!packet->data || !packet->data_length)
@@ -918,8 +914,7 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_ptl *ptl,
 
 #else /* CONFIG_FUNCTION_ERROR_INJECTION */
 
-static inline bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
-					      struct ssh_packet *packet)
+static inline bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
 	return false;
 }
@@ -932,8 +927,7 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 	return serdev_device_write_buf(ptl->serdev, buf, count);
 }
 
-static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_ptl *ptl,
-						  struct ssh_packet *packet)
+static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 {
 }
 
@@ -1407,11 +1401,11 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 		// error injection: drop packet to simulate transmission problem
 		if (ptl->tx.offset == 0)
-			drop = ssh_ptl_should_drop_packet(ptl, ptl->tx.packet);
+			drop = ssh_ptl_should_drop_packet(ptl->tx.packet);
 
 		// error injection: simulate invalid packet data
 		if (ptl->tx.offset == 0 && !drop)
-			ssh_ptl_tx_inject_invalid_data(ptl, ptl->tx.packet);
+			ssh_ptl_tx_inject_invalid_data(ptl->tx.packet);
 
 		// flush-packets don't have any data
 		if (likely(ptl->tx.packet->data && !drop)) {
