@@ -724,7 +724,7 @@ struct ssh_ptl {
 };
 
 
-#define __sam_prcond(func, p, fmt, ...)			\
+#define __ssam_prcond(func, p, fmt, ...)		\
 	do {						\
 		if ((p))				\
 			func((p), fmt, ##__VA_ARGS__);	\
@@ -733,7 +733,7 @@ struct ssh_ptl {
 #define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ptl_dbg_cond(p, fmt, ...)  __sam_prcond(ptl_dbg, p, fmt, ##__VA_ARGS__)
+#define ptl_dbg_cond(p, fmt, ...) __ssam_prcond(ptl_dbg, p, fmt, ##__VA_ARGS__)
 
 #define to_ssh_packet(ptr, member) \
 	container_of(ptr, struct ssh_packet, member)
@@ -2152,7 +2152,7 @@ struct ssh_rtl {
 #define rtl_dbg(r, fmt, ...)  ptl_dbg(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_warn(r, fmt, ...) ptl_warn(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_err(r, fmt, ...)  ptl_err(&(r)->ptl, fmt, ##__VA_ARGS__)
-#define rtl_dbg_cond(r, fmt, ...)  __sam_prcond(rtl_dbg, r, fmt, ##__VA_ARGS__)
+#define rtl_dbg_cond(r, fmt, ...) __ssam_prcond(rtl_dbg, r, fmt, ##__VA_ARGS__)
 
 #define to_ssh_rtl(ptr, member) \
 	container_of(ptr, struct ssh_rtl, member)
