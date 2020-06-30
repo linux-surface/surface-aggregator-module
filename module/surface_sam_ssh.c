@@ -731,6 +731,7 @@ struct ssh_ptl {
 	} while (0);
 
 #define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
+#define ptl_info(p, fmt, ...) dev_info(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_warn(p, fmt, ...) dev_warn(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_err(p, fmt, ...)  dev_err(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
 #define ptl_dbg_cond(p, fmt, ...) __ssam_prcond(ptl_dbg, p, fmt, ##__VA_ARGS__)
@@ -740,6 +741,121 @@ struct ssh_ptl {
 
 #define to_ssh_ptl(ptr, member) \
 	container_of(ptr, struct ssh_ptl, member)
+
+
+#ifdef CONFIG_FUNCTION_ERROR_INJECTION
+
+/**
+ * ssh_ptl_should_drop_ack_packet - Error injection point to drop ACK packets.
+ *
+ * Useful to test detection and handling of automated re-transmits by the EC.
+ * Specifically of packets that the EC consideres not-ACKed but the driver
+ * already consideres ACKed (due to dropped ACK). In this case, the EC
+ * re-transmits the packet-to-be-ACKed and the driver should detect it as
+ * duplicate/already handled. Note that the driver should still send an ACK
+ * for the re-transmitted packet.
+ */
+static noinline bool ssh_ptl_should_drop_ack_packet(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_ack_packet, TRUE);
+
+/**
+ * ssh_ptl_should_drop_nak_packet - Error injection point to drop NAK packets.
+ *
+ * Useful to test/force automated (timeout-based) re-transmit by the EC.
+ * Specifically, packets that have not reached the driver completely/with valid
+ * checksums. Only useful in combination with receival of (injected) bad data.
+ */
+static noinline bool ssh_ptl_should_drop_nak_packet(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_nak_packet, TRUE);
+
+/**
+ * ssh_ptl_should_drop_dsq_packet - Error injection point to drop sequenced data
+ * packet.
+ *
+ * Useful to test re-transmit timeout of the driver. If the data packet has not
+ * been ACKed after a certain time, the driver should re-transmit the packet up
+ * to limited number of times defined in SSH_PTL_MAX_PACKET_TRIES.
+ */
+static noinline bool ssh_ptl_should_drop_dsq_packet(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_dsq_packet, TRUE);
+
+
+static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_ptl *ptl,
+						    struct ssh_packet *packet)
+{
+	if (likely(!ssh_ptl_should_drop_ack_packet()))
+		return false;
+
+	ptl_info(ptl, "packet error injection: dropping ACK packet %p\n",
+		 packet);
+
+	return true;
+}
+
+static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_ptl *ptl,
+						    struct ssh_packet *packet)
+{
+	if (likely(!ssh_ptl_should_drop_nak_packet()))
+		return false;
+
+	ptl_info(ptl, "packet error injection: dropping NAK packet %p\n",
+		 packet);
+
+	return true;
+}
+
+static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_ptl *ptl,
+						    struct ssh_packet *packet)
+{
+	if (likely(!ssh_ptl_should_drop_dsq_packet()))
+		return false;
+
+	ptl_info(ptl, "packet error injection: dropping sequenced data packet %p\n",
+		 packet);
+
+	return true;
+}
+
+static bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
+				       struct ssh_packet *packet)
+{
+	// ignore packets that don't carry any data (i.e. flush)
+	if (!packet->data || !packet->data_length)
+		return false;
+
+	switch (packet->data[SSH_MSGOFFSET_FRAME(type)]) {
+	case SSH_FRAME_TYPE_ACK:
+		return __ssh_ptl_should_drop_ack_packet(ptl, packet);
+
+	case SSH_FRAME_TYPE_NAK:
+		return __ssh_ptl_should_drop_nak_packet(ptl, packet);
+
+	case SSH_FRAME_TYPE_DATA_SEQ:
+		return __ssh_ptl_should_drop_dsq_packet(ptl, packet);
+
+	default:
+		return false;
+	}
+}
+
+#else /* CONFIG_FUNCTION_ERROR_INJECTION */
+
+static inline bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
+					      struct ssh_packet *packet)
+{
+	return false;
+}
+
+#endif /* CONFIG_FUNCTION_ERROR_INJECTION */
 
 
 static void __ssh_ptl_packet_release(struct kref *kref)
@@ -1191,6 +1307,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 	while (!kthread_should_stop()) {
 		unsigned char *buf;
+		bool drop = false;
 		size_t len = 0;
 		int status = 0;
 
@@ -1206,8 +1323,12 @@ static int ssh_ptl_tx_threadfn(void *data)
 			}
 		}
 
+		// apply error injection to new packets
+		if (ptl->tx.offset == 0)
+			drop = ssh_ptl_should_drop_packet(ptl, ptl->tx.packet);
+
 		// flush-packets don't have any data
-		if (likely(ptl->tx.packet->data)) {
+		if (likely(ptl->tx.packet->data && !drop)) {
 			buf = ptl->tx.packet->data + ptl->tx.offset;
 			len = ptl->tx.packet->data_length - ptl->tx.offset;
 
