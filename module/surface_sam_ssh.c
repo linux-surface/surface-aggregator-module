@@ -746,7 +746,7 @@ struct ssh_ptl {
 #ifdef CONFIG_FUNCTION_ERROR_INJECTION
 
 /**
- * ssh_ptl_should_drop_ack_packet - Error injection point to drop ACK packets.
+ * ssh_ptl_should_drop_ack_packet - error injection hook to drop ACK packets
  *
  * Useful to test detection and handling of automated re-transmits by the EC.
  * Specifically of packets that the EC consideres not-ACKed but the driver
@@ -762,7 +762,7 @@ static noinline bool ssh_ptl_should_drop_ack_packet(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_ack_packet, TRUE);
 
 /**
- * ssh_ptl_should_drop_nak_packet - Error injection point to drop NAK packets.
+ * ssh_ptl_should_drop_nak_packet - error injection hook to drop NAK packets
  *
  * Useful to test/force automated (timeout-based) re-transmit by the EC.
  * Specifically, packets that have not reached the driver completely/with valid
@@ -775,8 +775,8 @@ static noinline bool ssh_ptl_should_drop_nak_packet(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_nak_packet, TRUE);
 
 /**
- * ssh_ptl_should_drop_dsq_packet - Error injection point to drop sequenced data
- * packet.
+ * ssh_ptl_should_drop_dsq_packet - error injection hook to drop sequenced data
+ * packet
  *
  * Useful to test re-transmit timeout of the driver. If the data packet has not
  * been ACKed after a certain time, the driver should re-transmit the packet up
