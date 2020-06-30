@@ -788,6 +788,18 @@ static noinline bool ssh_ptl_should_drop_dsq_packet(void)
 }
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_dsq_packet, TRUE);
 
+/**
+ * ssh_ptl_should_fail_write - error injection hook to make serdev_device_write
+ * fail
+ *
+ * Wrapper to simulate errors in serdev_device_write when transmitting packets.
+ */
+static noinline int ssh_ptl_should_fail_write(void)
+{
+	return 0;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_fail_write, ERRNO);
+
 
 static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_ptl *ptl,
 						    struct ssh_packet *packet)
@@ -847,12 +859,39 @@ static bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
 	}
 }
 
+static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
+				    struct ssh_packet *packet,
+				    const unsigned char *buf,
+				    size_t count)
+{
+	int status;
+
+	status = ssh_ptl_should_fail_write();
+	if (unlikely(status)) {
+		ptl_info(ptl, "packet error injection:"
+			 " simulating transmit error %d, packet %p\n",
+			 status, packet);
+
+		return status;
+	}
+
+	return serdev_device_write_buf(ptl->serdev, buf, count);
+}
+
 #else /* CONFIG_FUNCTION_ERROR_INJECTION */
 
 static inline bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
 					      struct ssh_packet *packet)
 {
 	return false;
+}
+
+static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
+				    struct ssh_packet *packet,
+				    const unsigned char *buf,
+				    size_t count)
+{
+	return serdev_device_write_buf(ptl->serdev, buf, count);
 }
 
 #endif /* CONFIG_FUNCTION_ERROR_INJECTION */
@@ -1336,7 +1375,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 			print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1,
 					     buf, len, false);
 
-			status = serdev_device_write_buf(ptl->serdev, buf, len);
+			status = ssh_ptl_write_buf(ptl, ptl->tx.packet, buf, len);
 		}
 
 		if (status < 0) {
