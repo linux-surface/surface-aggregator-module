@@ -800,6 +800,22 @@ static noinline int ssh_ptl_should_fail_write(void)
 }
 ALLOW_ERROR_INJECTION(ssh_ptl_should_fail_write, ERRNO);
 
+/**
+ * ssh_ptl_should_corrupt_tx_data - error injection hook to simualte invalid
+ * data being sent to the EC
+ *
+ * Hook to simulate corrupt/invalid data being sent from host (driver) to EC.
+ * Causes the package data to be actively corrupted by overwriting it with
+ * pre-defined values, such that it becomes invalid, causing the EC to respond
+ * with a NAK packet. Useful to test handling of NAK packets received by the
+ * driver.
+ */
+static noinline bool ssh_ptl_should_corrupt_tx_data(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_tx_data, TRUE);
+
 
 static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_ptl *ptl,
 						    struct ssh_packet *packet)
@@ -878,6 +894,28 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 	return serdev_device_write_buf(ptl->serdev, buf, count);
 }
 
+static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_ptl *ptl,
+						  struct ssh_packet *packet)
+{
+	// ignore packets that don't carry any data (i.e. flush)
+	if (!packet->data || !packet->data_length)
+		return;
+
+	// only allow sequenced data packets to be modified
+	if (packet->data[SSH_MSGOFFSET_FRAME(type)] == SSH_FRAME_TYPE_DATA_SEQ)
+		return;
+
+	if (likely(!ssh_ptl_should_corrupt_tx_data()))
+		return;
+
+	/*
+	 * NB: The value 0xb3 has been chosen more or less randomly so that it
+	 * doesn't have any (major) overlap with the SYN bytes (aa 55) and is
+	 * non-trivial (i.e. non-zero, non-0xff).
+	 */
+	memset(packet->data, 0xb3, packet->data_length);
+}
+
 #else /* CONFIG_FUNCTION_ERROR_INJECTION */
 
 static inline bool ssh_ptl_should_drop_packet(struct ssh_ptl *ptl,
@@ -892,6 +930,11 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 				    size_t count)
 {
 	return serdev_device_write_buf(ptl->serdev, buf, count);
+}
+
+static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_ptl *ptl,
+						  struct ssh_packet *packet)
+{
 }
 
 #endif /* CONFIG_FUNCTION_ERROR_INJECTION */
@@ -1362,9 +1405,13 @@ static int ssh_ptl_tx_threadfn(void *data)
 			}
 		}
 
-		// apply error injection to new packets
+		// error injection: drop packet to simulate transmission problem
 		if (ptl->tx.offset == 0)
 			drop = ssh_ptl_should_drop_packet(ptl, ptl->tx.packet);
+
+		// error injection: simulate invalid packet data
+		if (ptl->tx.offset == 0 && !drop)
+			ssh_ptl_tx_inject_invalid_data(ptl, ptl->tx.packet);
 
 		// flush-packets don't have any data
 		if (likely(ptl->tx.packet->data && !drop)) {
