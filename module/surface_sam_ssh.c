@@ -38,6 +38,15 @@
 #define SSH_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
 
+/* -- Error injection helpers. ---------------------------------------------- */
+
+#ifdef CONFIG_FUNCTION_ERROR_INJECTION
+#define noinline_if_inject noinline
+#else /* CONFIG_FUNCTION_ERROR_INJECTION */
+#define noinline_if_inject inline
+#endif /* CONFIG_FUNCTION_ERROR_INJECTION */
+
+
 /* -- Public interface. ----------------------------------------------------- */
 
 enum ssam_request_flags {
