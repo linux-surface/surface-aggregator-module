@@ -792,7 +792,7 @@ ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_dsq_packet, TRUE);
  * ssh_ptl_should_fail_write - error injection hook to make serdev_device_write
  * fail
  *
- * Wrapper to simulate errors in serdev_device_write when transmitting packets.
+ * Hook to simulate errors in serdev_device_write when transmitting packets.
  */
 static noinline int ssh_ptl_should_fail_write(void)
 {
