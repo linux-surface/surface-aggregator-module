@@ -904,6 +904,10 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 	if (likely(!ssh_ptl_should_corrupt_tx_data()))
 		return;
 
+	ptl_info(packet->ptl,
+		 "packet error injection: simulating invalid transmit data on packet %p\n",
+		 packet);
+
 	/*
 	 * NB: The value 0xb3 has been chosen more or less randomly so that it
 	 * doesn't have any (major) overlap with the SYN bytes (aa 55) and is
