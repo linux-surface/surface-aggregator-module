@@ -2364,6 +2364,7 @@ struct ssh_rtl {
 
 
 #define rtl_dbg(r, fmt, ...)  ptl_dbg(&(r)->ptl, fmt, ##__VA_ARGS__)
+#define rtl_info(p, fmt, ...) ptl_info(&(p)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_warn(r, fmt, ...) ptl_warn(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_err(r, fmt, ...)  ptl_err(&(r)->ptl, fmt, ##__VA_ARGS__)
 #define rtl_dbg_cond(r, fmt, ...) __ssam_prcond(rtl_dbg, r, fmt, ##__VA_ARGS__)
@@ -2373,6 +2374,19 @@ struct ssh_rtl {
 
 #define to_ssh_request(ptr, member) \
 	container_of(ptr, struct ssh_request, member)
+
+
+/**
+ * ssh_rtl_should_drop_response - error injection hook to drop request responses
+ *
+ * Useful to cause request transmission timeouts in the driver by dropping the
+ * response to a request.
+ */
+static noinline_if_inject bool ssh_rtl_should_drop_response(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_rtl_should_drop_response, TRUE);
 
 
 static inline void ssh_request_get(struct ssh_request *rqst)
@@ -2731,6 +2745,16 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		// we generally expect requests to be processed in order
 		if (unlikely(ssh_request_get_rqid(p) != rqid))
 			continue;
+
+		// simulate response timeout
+		if (ssh_rtl_should_drop_response()) {
+			spin_unlock(&rtl->pending.lock);
+
+			rtl_info(rtl, "request error injection: "
+				 "dropping response for request %p\n",
+				 &r->packet);
+			return;
+		}
 
 		/*
 		 * Mark as "response received" and "locked" as we're going to
