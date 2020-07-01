@@ -2831,7 +2831,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 
 			rtl_info(rtl, "request error injection: "
 				 "dropping response for request %p\n",
-				 &r->packet);
+				 &p->packet);
 			return;
 		}
 
