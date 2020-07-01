@@ -472,26 +472,28 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 	)
 
 
-DECLARE_EVENT_CLASS(ssam_timeout_class,
-	TP_PROTO(unsigned int n_pending),
+DECLARE_EVENT_CLASS(ssam_generic_uint_class,
+	TP_PROTO(const char* property, unsigned int value),
 
-	TP_ARGS(n_pending),
+	TP_ARGS(property, value),
 
 	TP_STRUCT__entry(
-		__field(unsigned int, n_pending)
+		__string(property, property)
+		__field(unsigned int, value)
 	),
 
 	TP_fast_assign(
-		__entry->n_pending = n_pending;
+		__assign_str(property, property);
+		__entry->value = value;
 	),
 
-	TP_printk("n_pending=%u", __entry->n_pending)
+	TP_printk("%s=%u", __get_str(property), __entry->value)
 );
 
-#define DEFINE_SSAM_TIMEOUT_EVENT(name)				\
-	DEFINE_EVENT(ssam_timeout_class, ssam_##name,		\
-		TP_PROTO(unsigned int n_pending),		\
-		TP_ARGS(n_pending)				\
+#define DEFINE_SSAM_GENERIC_UINT_EVENT(name)				\
+	DEFINE_EVENT(ssam_generic_uint_class, ssam_##name,		\
+		TP_PROTO(const char* property, unsigned int value),	\
+		TP_ARGS(property, value)				\
 	)
 
 
@@ -505,13 +507,13 @@ DEFINE_SSAM_PACKET_EVENT(resubmit);
 DEFINE_SSAM_PACKET_EVENT(timeout);
 DEFINE_SSAM_PACKET_EVENT(cancel);
 DEFINE_SSAM_PACKET_STATUS_EVENT(complete);
-DEFINE_SSAM_TIMEOUT_EVENT(ptl_timeout_reap);
+DEFINE_SSAM_GENERIC_UINT_EVENT(ptl_timeout_reap);
 
 DEFINE_SSAM_REQUEST_EVENT(submit);
 DEFINE_SSAM_REQUEST_EVENT(timeout);
 DEFINE_SSAM_REQUEST_EVENT(cancel);
 DEFINE_SSAM_REQUEST_STATUS_EVENT(complete);
-DEFINE_SSAM_TIMEOUT_EVENT(rtl_timeout_reap);
+DEFINE_SSAM_GENERIC_UINT_EVENT(rtl_timeout_reap);
 
 #endif /* _SURFACE_SAM_SSH_TRACE_H */
 

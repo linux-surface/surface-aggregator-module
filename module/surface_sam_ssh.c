@@ -1832,7 +1832,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	ktime_t timeout = ptl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
 
-	trace_ssam_ptl_timeout_reap(atomic_read(&ptl->pending.count));
+	trace_ssam_ptl_timeout_reap("pending", atomic_read(&ptl->pending.count));
 
 	/*
 	 * Mark reaper as "not pending". This is done before checking any
@@ -3124,7 +3124,7 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	ktime_t timeout = rtl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
 
-	trace_ssam_rtl_timeout_reap(atomic_read(&rtl->pending.count));
+	trace_ssam_rtl_timeout_reap("pending", atomic_read(&rtl->pending.count));
 
 	/*
 	 * Mark reaper as "not pending". This is done before checking any
