@@ -825,6 +825,32 @@ static noinline bool ssh_ptl_should_corrupt_tx_data(void)
 }
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_tx_data, TRUE);
 
+/**
+ * ssh_ptl_should_corrupt_rx_syn - error injection hook to simulate invalid
+ * data being sent by the EC
+ *
+ * Hook to simulate invalid SYN bytes, i.e. an invalid start of messages and
+ * test handling thereof in the driver.
+ */
+static noinline bool ssh_ptl_should_corrupt_rx_syn(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_rx_syn, TRUE);
+
+/**
+ * ssh_ptl_should_corrupt_rx_data - error injection hook to simulate invalid
+ * data being sent by the EC
+ *
+ * Hook to simulate invalid data/checksum of the message frame and test handling
+ * thereof in the driver.
+ */
+static noinline bool ssh_ptl_should_corrupt_rx_data(void)
+{
+	return false;
+}
+ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_rx_data, TRUE);
+
 
 static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 {
@@ -925,6 +951,45 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 	memset(packet->data, 0xb3, packet->data_length);
 }
 
+static inline void ssh_ptl_rx_inject_invalid_syn(struct sshp_span *data)
+{
+	struct sshp_span frame;
+
+	// check if there actually is something to corrupt
+	if (!sshp_find_syn(data, &frame))
+		return;
+
+	if (likely(!ssh_ptl_should_corrupt_rx_syn()))
+		return;
+
+	data->ptr[1] = 0xb3;	// set second byte of SYN to "random" value
+}
+
+static inline void ssh_ptl_rx_inject_invalid_data(struct sshp_span *frame)
+{
+	u16 payload_len;
+
+	// ignore incomplete messages, will get handled once it's complete
+	if (frame->len < SSH_MESSAGE_LENGTH(0))
+		return;
+
+	// ignore incomplete messages, part 2
+	payload_len = get_unaligned_le16(&frame->ptr[SSH_MSGOFFSET_FRAME(len)]);
+	if (frame->len < SSH_MESSAGE_LENGTH(payload_len))
+		return;
+
+	if (likely(!ssh_ptl_should_corrupt_rx_data()))
+		return;
+
+	/*
+	 * Flip bits in first byte of payload checksum. This is basically
+	 * equivalent to a payload/frame data error without us having to worry
+	 * about (the, arguably pretty small, probability of) accidental
+	 * checksum collisions.
+	 */
+	frame->ptr[frame->len - 2] = ~frame->ptr[frame->len - 2];
+}
+
 #else /* CONFIG_FUNCTION_ERROR_INJECTION */
 
 static inline bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
@@ -941,6 +1006,14 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 }
 
 static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
+{
+}
+
+static inline void ssh_ptl_rx_inject_invalid_syn(struct sshp_span *data)
+{
+}
+
+static inline void ssh_ptl_rx_inject_invalid_data(struct sshp_span *frame)
 {
 }
 
@@ -1927,6 +2000,9 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 	bool syn_found;
 	int status;
 
+	// error injection: modify data to simulate corrupt SYN bytes
+	ssh_ptl_rx_inject_invalid_syn(source);
+
 	// find SYN
 	syn_found = sshp_find_syn(source, &aligned);
 
@@ -1951,6 +2027,9 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 
 	if (unlikely(!syn_found))
 		return aligned.ptr - source->ptr;
+
+	// error injection: modify data to simulate corruption
+	ssh_ptl_rx_inject_invalid_data(&aligned);
 
 	// parse and validate frame
 	status = sshp_parse_frame(&ptl->serdev->dev, &aligned, &frame, &payload,
