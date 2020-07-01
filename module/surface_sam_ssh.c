@@ -40,11 +40,11 @@
 
 /* -- Error injection helpers. ---------------------------------------------- */
 
-#ifdef CONFIG_FUNCTION_ERROR_INJECTION
+#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 #define noinline_if_inject noinline
-#else /* CONFIG_FUNCTION_ERROR_INJECTION */
+#else /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
 #define noinline_if_inject inline
-#endif /* CONFIG_FUNCTION_ERROR_INJECTION */
+#endif /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
 
 
 /* -- Public interface. ----------------------------------------------------- */
@@ -752,7 +752,7 @@ struct ssh_ptl {
 	container_of(ptr, struct ssh_ptl, member)
 
 
-#ifdef CONFIG_FUNCTION_ERROR_INJECTION
+#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 
 /**
  * ssh_ptl_should_drop_ack_packet - error injection hook to drop ACK packets
@@ -1004,7 +1004,7 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 	frame->ptr[frame->len - 2] = ~frame->ptr[frame->len - 2];
 }
 
-#else /* CONFIG_FUNCTION_ERROR_INJECTION */
+#else /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
 
 static inline bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
@@ -1033,7 +1033,7 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 {
 }
 
-#endif /* CONFIG_FUNCTION_ERROR_INJECTION */
+#endif /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
 
 
 static void __ssh_ptl_packet_release(struct kref *kref)
