@@ -1760,6 +1760,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *p;
+	bool resub = false;
 	u8 try;
 
 	/*
@@ -1786,12 +1787,13 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 		if (try >= SSH_PTL_MAX_PACKET_TRIES)
 			continue;
 
+		resub = true;
 		__ssh_ptl_resubmit(p);
 	}
 
 	spin_unlock(&ptl->pending.lock);
 
-	ssh_ptl_tx_wakeup(ptl, true);
+	ssh_ptl_tx_wakeup(ptl, resub);
 }
 
 static void ssh_ptl_cancel(struct ssh_packet *p)
