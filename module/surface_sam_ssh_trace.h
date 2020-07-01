@@ -515,6 +515,15 @@ DEFINE_SSAM_REQUEST_EVENT(cancel);
 DEFINE_SSAM_REQUEST_STATUS_EVENT(complete);
 DEFINE_SSAM_GENERIC_UINT_EVENT(rtl_timeout_reap);
 
+DEFINE_SSAM_PACKET_EVENT(ei_drop_ack);
+DEFINE_SSAM_PACKET_EVENT(ei_drop_nak);
+DEFINE_SSAM_PACKET_EVENT(ei_drop_dsq);
+DEFINE_SSAM_PACKET_STATUS_EVENT(ei_fail_write);
+DEFINE_SSAM_PACKET_EVENT(ei_corrupt_tx_data);
+DEFINE_SSAM_FRAME_EVENT(ei_corrupt_rx_data);
+DEFINE_SSAM_GENERIC_UINT_EVENT(ei_corrupt_rx_syn);
+DEFINE_SSAM_REQUEST_EVENT(ei_drop_response);
+
 #endif /* _SURFACE_SAM_SSH_TRACE_H */
 
 /* This part must be outside protection */
