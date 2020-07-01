@@ -1849,6 +1849,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	ktime_t now = ktime_get_coarse_boottime();
 	ktime_t timeout = ptl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
+	bool resub = false;
 
 	trace_ssam_ptl_timeout_reap("pending", atomic_read(&ptl->pending.count));
 
@@ -1883,6 +1884,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		// check if we still have some tries left
 		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
 		if (likely(try < SSH_PTL_MAX_PACKET_TRIES)) {
+			resub = true;
 			__ssh_ptl_resubmit(p);
 			continue;
 		}
@@ -1927,7 +1929,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	if (next != KTIME_MAX)
 		ssh_ptl_timeout_reaper_mod(ptl, now, next);
 
-	ssh_ptl_tx_wakeup(ptl, false);
+	// force-wakeup to properly handle re-transmits if we've re-submitted
+	ssh_ptl_tx_wakeup(ptl, resub);
 }
 
 
