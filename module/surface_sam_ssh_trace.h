@@ -473,31 +473,25 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 
 
 DECLARE_EVENT_CLASS(ssam_timeout_class,
-	TP_PROTO(ktime_t timeout),
+	TP_PROTO(unsigned int n_pending),
 
-	TP_ARGS(timeout),
+	TP_ARGS(n_pending),
 
 	TP_STRUCT__entry(
-		__field(time64_t, timeout_sec)
-		__field(long, timeout_nsec)
+		__field(unsigned int, n_pending)
 	),
 
 	TP_fast_assign(
-		struct timespec64 ts = ktime_to_timespec64(timeout);
-		__entry->timeout_sec = ts.tv_sec;
-		__entry->timeout_nsec = ts.tv_nsec;
+		__entry->n_pending = n_pending;
 	),
 
-	TP_printk("timeout=%lld.%02ld",
-		__entry->timeout_sec,
-		__entry->timeout_nsec / 10000000
-	)
+	TP_printk("n_pending=%u", __entry->n_pending)
 );
 
 #define DEFINE_SSAM_TIMEOUT_EVENT(name)				\
 	DEFINE_EVENT(ssam_timeout_class, ssam_##name,		\
-		TP_PROTO(ktime_t timeout),			\
-		TP_ARGS(timeout)				\
+		TP_PROTO(unsigned int n_pending),		\
+		TP_ARGS(n_pending)				\
 	)
 
 
