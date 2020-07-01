@@ -857,7 +857,7 @@ static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 	if (likely(!ssh_ptl_should_drop_ack_packet()))
 		return false;
 
-	trace_ssam_packet_ei_drop_ack(packet);
+	trace_ssam_ei_tx_drop_ack_packet(packet);
 	ptl_info(packet->ptl, "packet error injection: dropping ACK packet %p\n",
 		 packet);
 
@@ -869,7 +869,7 @@ static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_packet *packet)
 	if (likely(!ssh_ptl_should_drop_nak_packet()))
 		return false;
 
-	trace_ssam_packet_ei_drop_nak(packet);
+	trace_ssam_ei_tx_drop_nak_packet(packet);
 	ptl_info(packet->ptl, "packet error injection: dropping NAK packet %p\n",
 		 packet);
 
@@ -881,7 +881,7 @@ static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 	if (likely(!ssh_ptl_should_drop_dsq_packet()))
 		return false;
 
-	trace_ssam_packet_ei_drop_dsq(packet);
+	trace_ssam_ei_tx_drop_dsq_packet(packet);
 	ptl_info(packet->ptl,
 		"packet error injection: dropping sequenced data packet %p\n",
 		 packet);
@@ -919,7 +919,7 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 
 	status = ssh_ptl_should_fail_write();
 	if (unlikely(status)) {
-		trace_ssam_packet_ei_fail_write(packet, status);
+		trace_ssam_ei_tx_fail_write(packet, status);
 		ptl_info(packet->ptl,
 			 "packet error injection: simulating transmit error %d, packet %p\n",
 			 status, packet);
@@ -943,7 +943,7 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 	if (likely(!ssh_ptl_should_corrupt_tx_data()))
 		return;
 
-	trace_ssam_packet_ei_corrupt_tx_data(packet);
+	trace_ssam_ei_tx_corrupt_data(packet);
 	ptl_info(packet->ptl,
 		 "packet error injection: simulating invalid transmit data on packet %p\n",
 		 packet);
@@ -968,7 +968,7 @@ static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 	if (likely(!ssh_ptl_should_corrupt_rx_syn()))
 		return;
 
-	trace_ssam_ei_corrupt_rx_syn("data_length", data->len);
+	trace_ssam_ei_rx_corrupt_syn("data_length", data->len);
 
 	data->ptr[1] = 0xb3;	// set second byte of SYN to "random" value
 }
@@ -993,7 +993,7 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 		return;
 
 	sshf = (struct ssh_frame *)&frame->ptr[SSH_MSGOFFSET_FRAME(type)];
-	trace_ssam_ei_corrupt_rx_data(sshf);
+	trace_ssam_ei_rx_corrupt_data(sshf);
 
 	/*
 	 * Flip bits in first byte of payload checksum. This is basically
@@ -2055,7 +2055,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
 	if (!frame)	// not enough data
 		return aligned.ptr - source->ptr;
 
-	trace_ssam_frame_received(frame);
+	trace_ssam_rx_frame_received(frame);
 
 	switch (frame->type) {
 	case SSH_FRAME_TYPE_ACK:
@@ -2829,7 +2829,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	struct ssh_request *p, *n;
 	u16 rqid = get_unaligned_le16(&command->rqid);
 
-	trace_ssam_response_received(command, command_data->len);
+	trace_ssam_rx_response_received(command, command_data->len);
 
 	/*
 	 * Get request from pending based on request ID and mark it as response
@@ -2845,7 +2845,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		if (ssh_rtl_should_drop_response()) {
 			spin_unlock(&rtl->pending.lock);
 
-			trace_ssam_request_ei_drop_response(p);
+			trace_ssam_ei_rx_drop_response(p);
 			rtl_info(rtl, "request error injection: "
 				 "dropping response for request %p\n",
 				 &p->packet);
@@ -3212,7 +3212,7 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 			     const struct sshp_span *data)
 {
-	trace_ssam_event_received(cmd, data->len);
+	trace_ssam_rx_event_received(cmd, data->len);
 
 	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
 		get_unaligned_le16(&cmd->rqid));

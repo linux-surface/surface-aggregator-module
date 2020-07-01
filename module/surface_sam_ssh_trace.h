@@ -332,7 +332,7 @@ DECLARE_EVENT_CLASS(ssam_packet_class,
 );
 
 #define DEFINE_SSAM_PACKET_EVENT(name)				\
-	DEFINE_EVENT(ssam_packet_class, ssam_packet_##name,	\
+	DEFINE_EVENT(ssam_packet_class, ssam_##name,		\
 		TP_PROTO(const struct ssh_packet *packet),	\
 		TP_ARGS(packet)					\
 	)
@@ -375,7 +375,7 @@ DECLARE_EVENT_CLASS(ssam_packet_status_class,
 );
 
 #define DEFINE_SSAM_PACKET_STATUS_EVENT(name)				\
-	DEFINE_EVENT(ssam_packet_status_class, ssam_packet_##name,	\
+	DEFINE_EVENT(ssam_packet_status_class, ssam_##name,		\
 		TP_PROTO(const struct ssh_packet *packet, int status),	\
 		TP_ARGS(packet, status)					\
 	)
@@ -419,7 +419,7 @@ DECLARE_EVENT_CLASS(ssam_request_class,
 );
 
 #define DEFINE_SSAM_REQUEST_EVENT(name)				\
-	DEFINE_EVENT(ssam_request_class, ssam_request_##name,	\
+	DEFINE_EVENT(ssam_request_class, ssam_##name,		\
 		TP_PROTO(const struct ssh_request *request),	\
 		TP_ARGS(request)				\
 	)
@@ -466,7 +466,7 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 );
 
 #define DEFINE_SSAM_REQUEST_STATUS_EVENT(name)				\
-	DEFINE_EVENT(ssam_request_status_class, ssam_request_##name,	\
+	DEFINE_EVENT(ssam_request_status_class, ssam_##name,		\
 		TP_PROTO(const struct ssh_request *request, int status),\
 		TP_ARGS(request, status)				\
 	)
@@ -497,32 +497,32 @@ DECLARE_EVENT_CLASS(ssam_generic_uint_class,
 	)
 
 
-DEFINE_SSAM_FRAME_EVENT(frame_received);
-DEFINE_SSAM_COMMAND_EVENT(response_received);
-DEFINE_SSAM_COMMAND_EVENT(event_received);
+DEFINE_SSAM_FRAME_EVENT(rx_frame_received);
+DEFINE_SSAM_COMMAND_EVENT(rx_response_received);
+DEFINE_SSAM_COMMAND_EVENT(rx_event_received);
 
-DEFINE_SSAM_PACKET_EVENT(release);
-DEFINE_SSAM_PACKET_EVENT(submit);
-DEFINE_SSAM_PACKET_EVENT(resubmit);
-DEFINE_SSAM_PACKET_EVENT(timeout);
-DEFINE_SSAM_PACKET_EVENT(cancel);
-DEFINE_SSAM_PACKET_STATUS_EVENT(complete);
+DEFINE_SSAM_PACKET_EVENT(packet_release);
+DEFINE_SSAM_PACKET_EVENT(packet_submit);
+DEFINE_SSAM_PACKET_EVENT(packet_resubmit);
+DEFINE_SSAM_PACKET_EVENT(packet_timeout);
+DEFINE_SSAM_PACKET_EVENT(packet_cancel);
+DEFINE_SSAM_PACKET_STATUS_EVENT(packet_complete);
 DEFINE_SSAM_GENERIC_UINT_EVENT(ptl_timeout_reap);
 
-DEFINE_SSAM_REQUEST_EVENT(submit);
-DEFINE_SSAM_REQUEST_EVENT(timeout);
-DEFINE_SSAM_REQUEST_EVENT(cancel);
-DEFINE_SSAM_REQUEST_STATUS_EVENT(complete);
+DEFINE_SSAM_REQUEST_EVENT(request_submit);
+DEFINE_SSAM_REQUEST_EVENT(request_timeout);
+DEFINE_SSAM_REQUEST_EVENT(request_cancel);
+DEFINE_SSAM_REQUEST_STATUS_EVENT(request_complete);
 DEFINE_SSAM_GENERIC_UINT_EVENT(rtl_timeout_reap);
 
-DEFINE_SSAM_PACKET_EVENT(ei_drop_ack);
-DEFINE_SSAM_PACKET_EVENT(ei_drop_nak);
-DEFINE_SSAM_PACKET_EVENT(ei_drop_dsq);
-DEFINE_SSAM_PACKET_STATUS_EVENT(ei_fail_write);
-DEFINE_SSAM_PACKET_EVENT(ei_corrupt_tx_data);
-DEFINE_SSAM_FRAME_EVENT(ei_corrupt_rx_data);
-DEFINE_SSAM_GENERIC_UINT_EVENT(ei_corrupt_rx_syn);
-DEFINE_SSAM_REQUEST_EVENT(ei_drop_response);
+DEFINE_SSAM_PACKET_EVENT(ei_tx_drop_ack_packet);
+DEFINE_SSAM_PACKET_EVENT(ei_tx_drop_nak_packet);
+DEFINE_SSAM_PACKET_EVENT(ei_tx_drop_dsq_packet);
+DEFINE_SSAM_PACKET_STATUS_EVENT(ei_tx_fail_write);
+DEFINE_SSAM_PACKET_EVENT(ei_tx_corrupt_data);
+DEFINE_SSAM_GENERIC_UINT_EVENT(ei_rx_corrupt_syn);
+DEFINE_SSAM_FRAME_EVENT(ei_rx_corrupt_data);
+DEFINE_SSAM_REQUEST_EVENT(ei_rx_drop_response);
 
 #endif /* _SURFACE_SAM_SSH_TRACE_H */
 
