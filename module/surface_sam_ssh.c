@@ -939,7 +939,7 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 		return;
 
 	// only allow sequenced data packets to be modified
-	if (packet->data[SSH_MSGOFFSET_FRAME(type)] == SSH_FRAME_TYPE_DATA_SEQ)
+	if (packet->data[SSH_MSGOFFSET_FRAME(type)] != SSH_FRAME_TYPE_DATA_SEQ)
 		return;
 
 	if (likely(!ssh_ptl_should_corrupt_tx_data()))
