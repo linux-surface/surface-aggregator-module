@@ -24,6 +24,7 @@
 #include <linux/refcount.h>
 #include <linux/serdev.h>
 #include <linux/spinlock.h>
+#include <linux/sysfs.h>
 #include <linux/workqueue.h>
 
 #include "surface_sam_ssh.h"
@@ -4809,6 +4810,104 @@ struct serdev_device_ops ssam_serdev_ops = {
 };
 
 
+#ifdef CONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE
+
+static char sam_ssh_debug_rqst_buf_sysfs[256] = { 0 };
+static char sam_ssh_debug_rqst_buf_pld[255] = { 0 };
+static char sam_ssh_debug_rqst_buf_res[255] = { 0 };
+
+struct sysfs_rqst {
+	u8 tc;
+	u8 cid;
+	u8 iid;
+	u8 chn;
+	u8 snc;
+	u8 cdl;
+	u8 pld[0];
+} __packed;
+
+static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
+			 char *buf, loff_t offs, size_t count)
+{
+	if (offs < 0 || count + offs > ARRAY_SIZE(sam_ssh_debug_rqst_buf_sysfs))
+		return -EINVAL;
+
+	memcpy(buf, sam_ssh_debug_rqst_buf_sysfs + offs, count);
+	return count;
+}
+
+static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
+			  char *buf, loff_t offs, size_t count)
+{
+	struct sysfs_rqst *input;
+	struct surface_sam_ssh_rqst rqst = {};
+	struct surface_sam_ssh_buf result = {};
+	int status;
+
+	// check basic write constriants
+	if (offs != 0 || count - sizeof(struct sysfs_rqst) > ARRAY_SIZE(sam_ssh_debug_rqst_buf_pld))
+		return -EINVAL;
+
+	if (count < sizeof(struct sysfs_rqst))
+		return -EINVAL;
+
+	input = (struct sysfs_rqst *)buf;
+
+	// payload length should be consistent with data provided
+	if (input->cdl + sizeof(struct sysfs_rqst) != count)
+		return -EINVAL;
+
+	rqst.tc  = input->tc;
+	rqst.cid = input->cid;
+	rqst.iid = input->iid;
+	rqst.chn = input->chn;
+	rqst.snc = input->snc;
+	rqst.cdl = input->cdl;
+	rqst.pld = sam_ssh_debug_rqst_buf_pld;
+	memcpy(sam_ssh_debug_rqst_buf_pld, &input->pld[0], input->cdl);
+
+	result.cap = ARRAY_SIZE(sam_ssh_debug_rqst_buf_res);
+	result.len = 0;
+	result.data = sam_ssh_debug_rqst_buf_res;
+
+	status = surface_sam_ssh_rqst(&rqst, &result);
+	if (status)
+		return status;
+
+	sam_ssh_debug_rqst_buf_sysfs[0] = result.len;
+	memcpy(sam_ssh_debug_rqst_buf_sysfs + 1, result.data, result.len);
+	memset(sam_ssh_debug_rqst_buf_sysfs + result.len + 1, 0,
+	       ARRAY_SIZE(sam_ssh_debug_rqst_buf_sysfs) + 1 - result.len);
+
+	return count;
+}
+
+static const BIN_ATTR_RW(rqst, ARRAY_SIZE(sam_ssh_debug_rqst_buf_sysfs));
+
+static int surface_sam_ssh_sysfs_register(struct device *dev)
+{
+	return sysfs_create_bin_file(&dev->kobj, &bin_attr_rqst);
+}
+
+static void surface_sam_ssh_sysfs_unregister(struct device *dev)
+{
+	sysfs_remove_bin_file(&dev->kobj, &bin_attr_rqst);
+}
+
+#else /* CONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE */
+
+static int surface_sam_ssh_sysfs_register(struct device *dev)
+{
+	return 0;
+}
+
+static void surface_sam_ssh_sysfs_unregister(struct device *dev)
+{
+}
+
+#endif /* CONFIG_SURFACE_SAM_SSH_DEBUG_DEVICE */
+
+
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
 	struct sam_ssh_ec *ec;
@@ -4881,6 +4980,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_finalize;
 
+	status = surface_sam_ssh_sysfs_register(&serdev->dev);
+	if (status)
+		goto err_finalize;
+
 	// TODO: The EC can wake up the system via the associated GPIO interrupt in
 	// multiple situations. One of which is the remaining battery capacity
 	// falling below a certain threshold. Normally, we should use the
@@ -4921,6 +5024,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 		return;
 
 	free_irq(ec->irq, serdev);
+	surface_sam_ssh_sysfs_unregister(&serdev->dev);
 
 	// suspend EC and disable events
 	status = surface_sam_ssh_ec_suspend(ec);
