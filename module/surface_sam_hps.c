@@ -111,13 +111,13 @@ struct shps_hardware_probe {
 	struct shps_hardware_traits *hardware_traits;
 };
 
-static struct shps_hardware_traits shps_gen1_hwtraits = { 
-	.notification_method = SHPS_NOTIFICATION_METHOD_SAN  
+static struct shps_hardware_traits shps_gen1_hwtraits = {
+	.notification_method = SHPS_NOTIFICATION_METHOD_SAN
 };
 
-static struct shps_hardware_traits shps_gen2_hwtraits = { 
+static struct shps_hardware_traits shps_gen2_hwtraits = {
 	.notification_method = SHPS_NOTIFICATION_METHOD_SGCP,
-	.dgpu_rp_pci_address = SHPS_PCI_GPU_ADDR_RP  
+	.dgpu_rp_pci_address = SHPS_PCI_GPU_ADDR_RP
 };
 
 static const struct shps_hardware_probe shps_hardware_probe_match[] = {
@@ -215,7 +215,7 @@ static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, con
 	input.count = 0;
 	input.pointer = input_args;
 
-	
+
 	status = acpi_evaluate_integer(handle, (acpi_string)entry, &input, &device_addr);
 	if (status) {
 		return -ENODEV;
@@ -242,7 +242,7 @@ static int shps_dgpu_dsm_get_pci_addr_from_dsm(struct platform_device *pdev, con
 	u8 bus, dev, fun;
 	int i;
 
-	
+
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
 					 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
 
@@ -278,7 +278,7 @@ static int shps_dgpu_dsm_get_pci_addr_from_dsm(struct platform_device *pdev, con
 	if (device_addr == 0)
 		return -ENODEV;
 
-	
+
 	// convert address
 	bus = (device_addr & 0x0FF00000) >> 20;
 	dev = (device_addr & 0x000F8000) >> 15;
@@ -302,7 +302,7 @@ static struct pci_dev *shps_dgpu_dsm_get_pci_dev(struct platform_device *pdev)
 
 	if (addr < 0)
 		return ERR_PTR(addr);
-	
+
 	dev = pci_get_domain_bus_and_slot(0, (addr & 0xFF00) >> 8, addr & 0xFF);
 	return dev ? dev : ERR_PTR(-ENODEV);
 }
@@ -1060,7 +1060,7 @@ static int shps_start_sgcp_notification(struct platform_device *pdev, acpi_handl
 		return status;
 	}
 
-	*sgpc_handle = handle; 
+	*sgpc_handle = handle;
 	return 0;
 }
 
@@ -1085,8 +1085,8 @@ static struct shps_hardware_traits shps_detect_hardware_traits(struct platform_d
 		}
 	}
 
-	dev_info(&pdev->dev, 
-		"shps_detect_hardware_traits found device %s, generation %d\n", 
+	dev_info(&pdev->dev,
+		"shps_detect_hardware_traits found device %s, generation %d\n",
 		p->hardware_id ? p->hardware_id : "SAN (default)",
 		p->generation);
 
@@ -1099,7 +1099,7 @@ static int shps_probe(struct platform_device *pdev)
 	struct shps_driver_data *drvdata;
 	struct device_link *link;
 	int power, status;
-	struct shps_hardware_traits detected_traits; 
+	struct shps_hardware_traits detected_traits;
 
 	if (gpiod_count(&pdev->dev, NULL) < 0) {
 		dev_err(&pdev->dev, "gpiod_count returned < 0\n");
