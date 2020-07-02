@@ -1,7 +1,7 @@
-From c3d4830282fcd57820737fa80f0f74de4b8ba7d2 Mon Sep 17 00:00:00 2001
+From f12bebbf2e9a1233397b27c51aa143a827aa7b85 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Tue, 24 Sep 2019 17:38:12 +0200
-Subject: [PATCH 2/3] serdev: Add ACPI devices by ResourceSource field
+Subject: [PATCH 2/2] serdev: Add ACPI devices by ResourceSource field
 
 When registering a serdev controller, ACPI needs to be checked for
 devices attached to it. Currently, all immediate children of the ACPI
@@ -24,11 +24,11 @@ slaves in the namespace").
 
 Signed-off-by: Maximilian Luz <luzmaximilian@gmail.com>
 ---
- drivers/tty/serdev/core.c | 110 +++++++++++++++++++++++++++++++++-----
- 1 file changed, 98 insertions(+), 12 deletions(-)
+ drivers/tty/serdev/core.c | 111 +++++++++++++++++++++++++++++++++-----
+ 1 file changed, 99 insertions(+), 12 deletions(-)
 
 diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
-index c66a04d24f1d..6b48fdfb2005 100644
+index c66a04d24f1d3..1b18d12d217f8 100644
 --- a/drivers/tty/serdev/core.c
 +++ b/drivers/tty/serdev/core.c
 @@ -496,16 +496,97 @@ static int of_serdev_register_devices(struct serdev_controller *ctrl)
@@ -77,7 +77,7 @@ index c66a04d24f1d..6b48fdfb2005 100644
 +}
 +
 +static int acpi_serdev_do_lookup(struct acpi_device *adev,
-+				 struct acpi_serdev_lookup *lookup)
++                                 struct acpi_serdev_lookup *lookup)
 +{
 +	struct list_head resource_list;
 +	int ret;
@@ -144,7 +144,7 @@ index c66a04d24f1d..6b48fdfb2005 100644
  {
  	struct serdev_controller *ctrl = data;
  	struct acpi_device *adev;
-@@ -541,26 +622,31 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
+@@ -541,26 +622,32 @@ static acpi_status acpi_serdev_add_device(acpi_handle handle, u32 level,
  	if (acpi_bus_get_device(handle, &adev))
  		return AE_OK;
  
@@ -161,6 +161,7 @@ index c66a04d24f1d..6b48fdfb2005 100644
  	return acpi_serdev_register_device(ctrl, adev);
  }
  
++
  static int acpi_serdev_register_devices(struct serdev_controller *ctrl)
  {
  	acpi_status status;
@@ -182,5 +183,5 @@ index c66a04d24f1d..6b48fdfb2005 100644
  	if (!ctrl->serdev)
  		return -ENODEV;
 -- 
-2.25.1
+2.27.0
 
