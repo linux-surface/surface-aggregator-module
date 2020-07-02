@@ -2600,7 +2600,6 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 			continue;
 
 		if (!ssh_rtl_tx_can_process(p)) {
-			spin_unlock(&rtl->queue.lock);
 			rqst = ERR_PTR(-EBUSY);
 			break;
 		}
