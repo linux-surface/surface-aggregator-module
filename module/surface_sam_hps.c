@@ -225,7 +225,8 @@ static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, con
 	dev = (device_addr & 0xFF0000) >> 16;
 	fun = device_addr & 0xFF;
 
-	dev_info(&pdev->dev, "found pci device at bus = %d, dev = %x, fun = %x", (u32)bus, (u32)dev, (u32)fun);
+	dev_info(&pdev->dev, "found pci device at bus = %d, dev = %x, fun = %x\n",
+		 (u32)bus, (u32)dev, (u32)fun);
 
 	return bus << 8 | PCI_DEVFN(dev, fun);
 }
@@ -658,10 +659,10 @@ static void dbg_dump_pciesta(struct platform_device *pdev, const char *prefix)
 	pcie_capability_read_word(rp, PCI_EXP_SLTSTA, &sltsta);
 	pcie_capability_read_word(rp, PCI_EXP_SLTSTA2, &sltsta2);
 
-	dev_dbg(&pdev->dev, "%s: LNKSTA: 0x%04x", prefix, lnksta);
-	dev_dbg(&pdev->dev, "%s: LNKSTA2: 0x%04x", prefix, lnksta2);
-	dev_dbg(&pdev->dev, "%s: SLTSTA: 0x%04x", prefix, sltsta);
-	dev_dbg(&pdev->dev, "%s: SLTSTA2: 0x%04x", prefix, sltsta2);
+	dev_dbg(&pdev->dev, "%s: LNKSTA: 0x%04x\n", prefix, lnksta);
+	dev_dbg(&pdev->dev, "%s: LNKSTA2: 0x%04x\n", prefix, lnksta2);
+	dev_dbg(&pdev->dev, "%s: SLTSTA: 0x%04x\n", prefix, sltsta);
+	dev_dbg(&pdev->dev, "%s: SLTSTA2: 0x%04x\n", prefix, sltsta2);
 }
 
 static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix)
@@ -669,11 +670,11 @@ static void dbg_dump_drvsta(struct platform_device *pdev, const char *prefix)
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	struct pci_dev *rp = drvdata->dgpu_root_port;
 
-	dev_dbg(&pdev->dev, "%s: RP power: %d", prefix, rp->current_state);
-	dev_dbg(&pdev->dev, "%s: RP state saved: %d", prefix, rp->state_saved);
-	dev_dbg(&pdev->dev, "%s: RP state stored: %d", prefix, !!drvdata->dgpu_root_port_state);
-	dev_dbg(&pdev->dev, "%s: RP enabled: %d", prefix, atomic_read(&rp->enable_cnt));
-	dev_dbg(&pdev->dev, "%s: RP mastered: %d", prefix, rp->is_busmaster);
+	dev_dbg(&pdev->dev, "%s: RP power: %d\n", prefix, rp->current_state);
+	dev_dbg(&pdev->dev, "%s: RP state saved: %d\n", prefix, rp->state_saved);
+	dev_dbg(&pdev->dev, "%s: RP state stored: %d\n", prefix, !!drvdata->dgpu_root_port_state);
+	dev_dbg(&pdev->dev, "%s: RP enabled: %d\n", prefix, atomic_read(&rp->enable_cnt));
+	dev_dbg(&pdev->dev, "%s: RP mastered: %d\n", prefix, rp->is_busmaster);
 }
 
 static int shps_pm_prepare(struct device *dev)
@@ -855,7 +856,7 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	mutex_unlock(&drvdata->lock);
 
 	if (!test_bit(SHPS_STATE_BIT_PWRTGT, &drvdata->state)) {
-		dev_warn(&pdev->dev, "unexpected dGPU power-on detected");
+		dev_warn(&pdev->dev, "unexpected dGPU power-on detected\n");
 		// TODO: schedule state re-check and update
 	}
 
@@ -869,7 +870,7 @@ static int shps_dgpu_handle_rqsg(struct surface_sam_san_rqsg *rqsg, void *data)
 	if (rqsg->tc == SAM_DGPU_TC && rqsg->cid == SAM_DGPU_CID_POWERON)
 		return shps_dgpu_powered_on(pdev);
 
-	dev_warn(&pdev->dev, "unimplemented dGPU request: RQSG(0x%02x, 0x%02x, 0x%02x)",
+	dev_warn(&pdev->dev, "unimplemented dGPU request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
 		 rqsg->tc, rqsg->cid, rqsg->iid);
 	return 0;
 }
@@ -1011,7 +1012,7 @@ static int shps_gpios_setup_irq(struct platform_device *pdev)
 			     shps_base_presence_irq, irqf_base,
 			     "shps_base_presence_irq", pdev);
 	if (status) {
-		dev_err(&pdev->dev, "base irq failed: %d", status);
+		dev_err(&pdev->dev, "base irq failed: %d\n", status);
 		return status;
 	}
 
@@ -1048,13 +1049,13 @@ static int shps_start_sgcp_notification(struct platform_device *pdev, acpi_handl
 
 	status = acpi_get_handle(NULL, "\\_SB.SGPC", &handle);
 	if (status) {
-		dev_err(&pdev->dev, "error in get_handle %d", status);
+		dev_err(&pdev->dev, "error in get_handle %d\n", status);
 		return status;
 	}
 
 	status = acpi_install_notify_handler(handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify, pdev);
 	if (status) {
-		dev_err(&pdev->dev, "error in install notify %d", status);
+		dev_err(&pdev->dev, "error in install notify %d\n", status);
 		*sgpc_handle = NULL;
 		return status;
 	}
@@ -1070,7 +1071,7 @@ static void shps_remove_sgcp_notification(struct platform_device *pdev) {
 	if (drvdata->sgpc_handle) {
 		status = acpi_remove_notify_handler(drvdata->sgpc_handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify);
 		if (status) {
-			dev_err(&pdev->dev, "failed to remove notify handler: %d", status);
+			dev_err(&pdev->dev, "failed to remove notify handler: %d\n", status);
 		}
 	}
 }
@@ -1085,7 +1086,7 @@ static struct shps_hardware_traits shps_detect_hardware_traits(struct platform_d
 	}
 
 	dev_info(&pdev->dev, 
-		"shps_detect_hardware_traits found device %s, generation %d", 
+		"shps_detect_hardware_traits found device %s, generation %d\n", 
 		p->hardware_id ? p->hardware_id : "SAN (default)",
 		p->generation);
 
@@ -1101,7 +1102,7 @@ static int shps_probe(struct platform_device *pdev)
 	struct shps_hardware_traits detected_traits; 
 
 	if (gpiod_count(&pdev->dev, NULL) < 0) {
-		dev_err(&pdev->dev, "gpiod_count returned < 0");
+		dev_err(&pdev->dev, "gpiod_count returned < 0\n");
 		return -ENODEV;
 	}
 
@@ -1148,13 +1149,13 @@ static int shps_probe(struct platform_device *pdev)
 
 	status = shps_gpios_setup(pdev);
 	if (status) {
-		dev_err(&pdev->dev, "unable to set up gpios, %d", status);
+		dev_err(&pdev->dev, "unable to set up gpios, %d\n", status);
 		goto err_gpio;
 	}
 
 	status = shps_gpios_setup_irq(pdev);
 	if (status) {
-		dev_err(&pdev->dev, "unable to set up irqs %d", status);
+		dev_err(&pdev->dev, "unable to set up irqs %d\n", status);
 		goto err_gpio_irqs;
 	}
 
@@ -1170,13 +1171,13 @@ static int shps_probe(struct platform_device *pdev)
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
 		status = surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
 		if (status) {
-			dev_err(&pdev->dev, "unable to set SAN notification handler (%d)", status);
+			dev_err(&pdev->dev, "unable to set SAN notification handler (%d)\n", status);
 			goto err_devlink;
 		}
 	} else if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
 		status = shps_start_sgcp_notification(pdev, &drvdata->sgpc_handle);
 		if (status) {
-			dev_err(&pdev->dev, "unable to install SGCP notification handler (%d)", status);
+			dev_err(&pdev->dev, "unable to install SGCP notification handler (%d)\n", status);
 			goto err_devlink;
 		}
 	}
