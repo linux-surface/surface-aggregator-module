@@ -8,6 +8,7 @@ sources := Makefile
 sources += Kbuild
 sources += dkms.conf
 sources += surface_sam_ssh.h
+sources += surface_sam_ssh_trace.h
 sources += surface_sam_ssh.c
 sources += surface_sam_san.c
 sources += surface_sam_san.h
