@@ -23,6 +23,7 @@ struct sid_vhf {
 	struct hid_device *hid;
 	struct ssam_event_notifier notif;
 	unsigned long state;
+	u8 instance;
 };
 
 
@@ -197,10 +198,11 @@ static int vhf_get_hid_descriptor(struct hid_device *hid, u8 iid, u8 **desc, int
 
 static int sid_vhf_hid_parse(struct hid_device *hid)
 {
+	struct sid_vhf *vhf = dev_get_drvdata(hid->dev.parent);
 	int ret = 0, size;
 	u8 *buf;
 
-	ret = vhf_get_hid_descriptor(hid, 0x00, &buf, &size);
+	ret = vhf_get_hid_descriptor(hid, vhf->instance, &buf, &size);
 	if (ret != 0) {
 		hid_err(hid, "Failed to read HID descriptor from device: %d\n", ret);
 		return -EIO;
@@ -218,6 +220,7 @@ static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
 		reportnum, u8 *buf, size_t len, unsigned char rtype, int
 		reqtype)
 {
+	struct sid_vhf *vhf = dev_get_drvdata(hid->dev.parent);
 	int status;
 	u8 cid;
 	struct surface_sam_ssh_rqst rqst = {};
@@ -260,7 +263,7 @@ static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
 
 	rqst.tc  = SAM_EVENT_SID_VHF_TC;
 	rqst.chn = 0x02;
-	rqst.iid = 0x00; // windows tends to distinguish iids, but EC will take it
+	rqst.iid = vhf->instance;
 	rqst.cid = cid;
 	rqst.snc = reqtype == HID_REQ_GET_REPORT ? 0x01 : 0x00;
 	rqst.cdl = reqtype == HID_REQ_GET_REPORT ? 0x01 : len;
@@ -323,6 +326,12 @@ static u32 sid_vhf_event_handler(struct ssam_notifier_block *nb, const struct ss
 	if (event->target_category != SSAM_SSH_TC_HID)
 		return 0;
 
+	if (event->channel != vhf->notif.event.reg.channel)
+		return 0;
+
+	if (event->instance_id != vhf->instance)
+		return 0;
+
 	if (event->command_id != 0x00 && event->command_id != 0x03 && event->command_id != 0x04)
 		return 0;
 
@@ -339,6 +348,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 	struct sid_vhf *vhf;
 	struct vhf_device_metadata meta = {};
 	struct hid_device *hid;
+	u8 iid = pdev->id == PLATFORM_DEVID_NONE ? 0 : pdev->id;
 	int status;
 
 	// add device link to EC
@@ -350,7 +360,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 	if (!vhf)
 		return -ENOMEM;
 
-	status = vhf_get_metadata(0x00, &meta);
+	status = vhf_get_metadata(iid, &meta);
 	if (status)
 		goto err_create_hid;
 
@@ -362,6 +372,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 
 	vhf->dev = pdev;
 	vhf->hid = hid;
+	vhf->instance = iid;
 
 	vhf->notif.base.priority = 1;
 	vhf->notif.base.fn = sid_vhf_event_handler;
