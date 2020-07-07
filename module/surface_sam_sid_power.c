@@ -102,15 +102,15 @@ struct spwr_event_dptf {
 
 
 /* Get battery status (_STA) */
-static int sam_psy_get_sta(u8 iid, u32 *sta)
+static int sam_psy_get_sta(u8 channel, u8 instance, u32 *sta)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_STA;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -123,15 +123,15 @@ static int sam_psy_get_sta(u8 iid, u32 *sta)
 }
 
 /* Get battery static information (_BIX) */
-static int sam_psy_get_bix(u8 iid, struct spwr_bix *bix)
+static int sam_psy_get_bix(u8 channel, u8 instance, struct spwr_bix *bix)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BIX;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -144,15 +144,15 @@ static int sam_psy_get_bix(u8 iid, struct spwr_bix *bix)
 }
 
 /* Get battery dynamic information (_BST) */
-static int sam_psy_get_bst(u8 iid, struct spwr_bst *bst)
+static int sam_psy_get_bst(u8 channel, u8 instance, struct spwr_bst *bst)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BST;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -165,14 +165,14 @@ static int sam_psy_get_bst(u8 iid, struct spwr_bst *bst)
 }
 
 /* Set battery trip point (_BTP) */
-static int sam_psy_set_btp(u8 iid, u32 btp)
+static int sam_psy_set_btp(u8 channel, u8 instance, u32 btp)
 {
 	struct surface_sam_ssh_rqst rqst;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_BTP;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x00;
 	rqst.cdl = sizeof(u32);
 	rqst.pld = (u8 *)&btp;
@@ -181,15 +181,15 @@ static int sam_psy_set_btp(u8 iid, u32 btp)
 }
 
 /* Get platform power soruce for battery (DPTF PSRC) */
-static int sam_psy_get_psrc(u8 iid, u32 *psrc)
+static int sam_psy_get_psrc(u8 channel, u8 instance, u32 *psrc)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PSRC;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -203,15 +203,15 @@ static int sam_psy_get_psrc(u8 iid, u32 *psrc)
 
 /* Get maximum platform power for battery (DPTF PMAX) */
 __always_unused
-static int sam_psy_get_pmax(u8 iid, u32 *pmax)
+static int sam_psy_get_pmax(u8 channel, u8 instance, u32 *pmax)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PMAX;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -225,15 +225,15 @@ static int sam_psy_get_pmax(u8 iid, u32 *pmax)
 
 /* Get adapter rating (DPTF ARTG) */
 __always_unused
-static int sam_psy_get_artg(u8 iid, u32 *artg)
+static int sam_psy_get_artg(u8 channel, u8 instance, u32 *artg)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_ARTG;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -247,15 +247,15 @@ static int sam_psy_get_artg(u8 iid, u32 *artg)
 
 /* Unknown (DPTF PSOC) */
 __always_unused
-static int sam_psy_get_psoc(u8 iid, u32 *psoc)
+static int sam_psy_get_psoc(u8 channel, u8 instance, u32 *psoc)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_PSOC;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x01;
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
@@ -269,14 +269,14 @@ static int sam_psy_get_psoc(u8 iid, u32 *psoc)
 
 /* Unknown (DPTF CHGI/ INT3403 SPPC) */
 __always_unused
-static int sam_psy_set_chgi(u8 iid, u32 chgi)
+static int sam_psy_set_chgi(u8 channel, u8 instance, u32 chgi)
 {
 	struct surface_sam_ssh_rqst rqst;
 
 	rqst.tc  = SAM_PWR_TC;
 	rqst.cid = SAM_RQST_PWR_CID_CHGI;
-	rqst.iid = iid;
-	rqst.chn = 0x01;
+	rqst.iid = instance;
+	rqst.chn = channel;
 	rqst.snc = 0x00;
 	rqst.cdl = sizeof(u32);
 	rqst.pld = (u8 *)&chgi;
@@ -289,11 +289,16 @@ static int sam_psy_set_chgi(u8 iid, u32 chgi)
  * Common Power-Subsystem Interface.
  */
 
-#define SPWR_BAT_SINGLE		PLATFORM_DEVID_NONE
+struct spwr_battery_props {
+	struct ssam_event_registry registry;
+	u8 num;
+	u8 channel;
+	u8 instance;
+};
 
 struct spwr_battery_device {
 	struct platform_device *pdev;
-	u8 iid;
+	struct spwr_battery_props p;
 
 	char name[32];
 	struct power_supply *psy;
@@ -367,7 +372,9 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 };
 
 
-static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, int iid);
+static int spwr_battery_register(struct spwr_battery_device *bat,
+				 struct platform_device *pdev,
+				 struct spwr_battery_props p);
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
@@ -380,7 +387,7 @@ static inline bool spwr_battery_present(struct spwr_battery_device *bat)
 
 static inline int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
-	return sam_psy_get_sta(bat->iid, &bat->sta);
+	return sam_psy_get_sta(bat->p.channel, bat->p.instance, &bat->sta);
 }
 
 static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
@@ -388,7 +395,7 @@ static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return sam_psy_get_bix(bat->iid, &bat->bix);
+	return sam_psy_get_bix(bat->p.channel, bat->p.instance, &bat->bix);
 }
 
 static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
@@ -396,14 +403,14 @@ static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return sam_psy_get_bst(bat->iid, &bat->bst);
+	return sam_psy_get_bst(bat->p.channel, bat->p.instance, &bat->bst);
 }
 
 
 static inline int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
 {
 	bat->alarm = value;
-	return sam_psy_set_btp(bat->iid, bat->alarm);
+	return sam_psy_set_btp(bat->p.channel, bat->p.instance, bat->alarm);
 }
 
 static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
@@ -481,7 +488,7 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 
 static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	return sam_psy_get_psrc(0x00, &ac->state);
+	return sam_psy_get_psrc(0x01, 0x01, &ac->state);
 }
 
 static int spwr_ac_update(struct spwr_ac_device *ac)
@@ -516,7 +523,7 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 	// if the unit has changed, re-add the battery
 	if (unit != bat->bix.power_unit) {
 		spwr_battery_unregister(bat);
-		status = spwr_battery_register(bat, bat->pdev, bat->iid);
+		status = spwr_battery_register(bat, bat->pdev, bat->p);
 	}
 
 	return status;
@@ -579,14 +586,17 @@ static u32 spwr_notify_bat(struct ssam_notifier_block *nb, const struct ssam_eve
 
 	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x)\n", event->command_id);
 
-	// handled here because adapter has IID = 0
+	// handled here, needs to be handled for all channels/instances
 	if (event->command_id == SAM_EVENT_PWR_CID_ADAPTER) {
 		status = spwr_notify_adapter_bat(bat);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
-	// check for the correct battery IID
-	if (event->instance_id != bat->iid)
+	// check for the correct channel and instance ID
+	if (event->channel != bat->p.channel)
+		return 0;
+
+	if (event->instance_id != bat->p.instance)
 		return 0;
 
 	switch (event->command_id) {
@@ -870,7 +880,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *p
 	int status;
 
 	// make sure the device is there and functioning properly
-	status = sam_psy_get_sta(0x00, &sta);
+	status = sam_psy_get_sta(0x01, 0x01, &sta);
 	if (status)
 		return status;
 
@@ -924,17 +934,19 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 	return 0;
 }
 
-static int spwr_battery_register(struct spwr_battery_device *bat, struct platform_device *pdev, int iid)
+static int spwr_battery_register(struct spwr_battery_device *bat,
+				 struct platform_device *pdev,
+				 struct spwr_battery_props p)
 {
 	struct power_supply_config psy_cfg = {};
 	u32 sta;
 	int status;
 
 	bat->pdev = pdev;
-	bat->iid = iid != SPWR_BAT_SINGLE ? iid : 1;
+	bat->p = p;
 
 	// make sure the device is there and functioning properly
-	status = sam_psy_get_sta(bat->iid, &sta);
+	status = sam_psy_get_sta(bat->p.channel, bat->p.instance, &sta);
 	if (status)
 		return status;
 
@@ -951,7 +963,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat, struct platfor
 			return status;
 	}
 
-	snprintf(bat->name, ARRAY_SIZE(bat->name), "BAT%d", bat->iid - 1);
+	snprintf(bat->name, ARRAY_SIZE(bat->name), "BAT%d", bat->p.num - 1);
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
@@ -1032,8 +1044,9 @@ SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm, NULL, surface_sam_sid_battery_resu
 
 static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 {
-	int status;
 	struct spwr_battery_device *bat;
+	struct spwr_battery_props p;
+	int status;
 
 	// link to ec
 	status = surface_sam_ssh_consumer_register(&pdev->dev);
@@ -1044,8 +1057,14 @@ static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 	if (!bat)
 		return -ENOMEM;
 
+	// note: this is likely the wrong registry for the SB3 channel 2 battery
+	p.registry = SSAM_EVENT_REGISTRY_SAM;
+	p.num = pdev->id == PLATFORM_DEVID_NONE ? 1 : pdev->id;
+	p.channel = p.num;
+	p.instance = 0x01;
+
 	platform_set_drvdata(pdev, bat);
-	return spwr_battery_register(bat, pdev, pdev->id);
+	return spwr_battery_register(bat, pdev, p);
 }
 
 static int surface_sam_sid_battery_remove(struct platform_device *pdev)
