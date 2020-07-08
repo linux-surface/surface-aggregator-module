@@ -378,7 +378,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 	vhf->notif.base.fn = sid_vhf_event_handler;
 	vhf->notif.event.reg = SSAM_EVENT_REGISTRY_REG;
 	vhf->notif.event.id.target_category = SSAM_SSH_TC_HID;
-	vhf->notif.event.id.instance = 0;
+	vhf->notif.event.id.instance = iid;
 	vhf->notif.event.flags = 0;
 
 	platform_set_drvdata(pdev, vhf);
