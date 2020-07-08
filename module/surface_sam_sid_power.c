@@ -578,7 +578,8 @@ static u32 spwr_notify_bat(struct ssam_notifier_block *nb, const struct ssam_eve
 	struct spwr_battery_device *bat = container_of(nb, struct spwr_battery_device, notif.base);
 	int status;
 
-	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x)\n", event->command_id);
+	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
+		event->command_id, event->instance_id, event->channel);
 
 	// handled here, needs to be handled for all channels/instances
 	if (event->command_id == SAM_EVENT_PWR_CID_ADAPTER) {
@@ -614,7 +615,8 @@ static u32 spwr_notify_ac(struct ssam_notifier_block *nb, const struct ssam_even
 	struct spwr_ac_device *ac = container_of(nb, struct spwr_ac_device, notif.base);
 	int status;
 
-	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x)\n", event->command_id);
+	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
+		event->command_id, event->instance_id, event->channel);
 
 	// AC has IID = 0
 	if (event->instance_id != 0)
