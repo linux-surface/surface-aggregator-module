@@ -10,6 +10,34 @@
 #include <linux/platform_device.h>
 #include <linux/mfd/core.h>
 
+#include "surface_sam_sid_vhf.h"
+
+
+static const struct ssam_hid_properties ssam_hid_props_sl3 = {
+	.registry = SSAM_EVENT_REGISTRY_REG,	// TODO: needs confirmation
+	.instance = 0,
+};
+
+static const struct ssam_hid_properties ssam_hid_props_sb3_keyboard = {
+	.registry = SSAM_EVENT_REGISTRY_REG,
+	.instance = 1,
+};
+
+static const struct ssam_hid_properties ssam_hid_props_sb3_touchpad = {
+	.registry = SSAM_EVENT_REGISTRY_REG,
+	.instance = 3,
+};
+
+static const struct ssam_hid_properties ssam_hid_props_sb3_iid5 = {
+	.registry = SSAM_EVENT_REGISTRY_REG,
+	.instance = 5,
+};
+
+static const struct ssam_hid_properties ssam_hid_props_sb3_iid6 = {
+	.registry = SSAM_EVENT_REGISTRY_REG,
+	.instance = 6,
+};
+
 
 static const struct mfd_cell sid_devs_sp4[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
@@ -45,10 +73,30 @@ static const struct mfd_cell sid_devs_sb2[] = {
 static const struct mfd_cell sid_devs_sb3[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
-	{ .name = "surface_sam_sid_vhf",      .id = 1 },
-	{ .name = "surface_sam_sid_vhf",      .id = 3 },
-	{ .name = "surface_sam_sid_vhf",      .id = 5 },
-	{ .name = "surface_sam_sid_vhf",      .id = 6 },
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = 1,
+		.platform_data = (void *)&ssam_hid_props_sb3_keyboard,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = 3,
+		.platform_data = (void *)&ssam_hid_props_sb3_touchpad,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = 5,
+		.platform_data = (void *)&ssam_hid_props_sb3_iid5,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = 6,
+		.platform_data = (void *)&ssam_hid_props_sb3_iid6,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
 	{ },
 };
 
@@ -64,7 +112,12 @@ static const struct mfd_cell sid_devs_sl2[] = {
 
 static const struct mfd_cell sid_devs_sl3_13[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
-	{ .name = "surface_sam_sid_vhf",      .id = -1 },
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = -1,
+		.platform_data = (void *)&ssam_hid_props_sl3,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
 	{ .name = "surface_sam_sid_battery",  .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
@@ -72,10 +125,15 @@ static const struct mfd_cell sid_devs_sl3_13[] = {
 };
 
 static const struct mfd_cell sid_devs_sl3_15[] = {
-	{ .name = "surface_sam_sid_vhf",      .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
 	{ .name = "surface_sam_sid_battery",  .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
+	{
+		.name = "surface_sam_sid_vhf",
+		.id = -1,
+		.platform_data = (void *)&ssam_hid_props_sl3,
+		.pdata_size = sizeof(struct ssam_hid_properties),
+	},
 	{ },
 };
 
