@@ -14,14 +14,14 @@
 #include "surface_sam_sid_vhf.h"
 
 
-struct spwr_battery_props battery_props_bat1 = {
+struct ssam_battery_properties ssam_battery_props_bat1 = {
 	.registry = SSAM_EVENT_REGISTRY_SAM,
 	.num      = 0,
 	.channel  = 1,
 	.instance = 1,
 };
 
-struct spwr_battery_props battery_props_bat2_sb3 = {
+struct ssam_battery_properties ssam_battery_props_bat2_sb3 = {
 	.registry = SSAM_EVENT_REGISTRY_KIP,
 	.num      = 1,
 	.channel  = 2,
@@ -74,8 +74,8 @@ static const struct mfd_cell sid_devs_sp7[] = {
 	{
 		.name = "surface_sam_sid_battery",
 		.id = -1,
-		.platform_data = &battery_props_bat1,
-		.pdata_size = sizeof(struct spwr_battery_props),
+		.platform_data = &ssam_battery_props_bat1,
+		.pdata_size = sizeof(struct ssam_battery_properties),
 	},
 	{ },
 };
@@ -98,14 +98,14 @@ static const struct mfd_cell sid_devs_sb3[] = {
 	{
 		.name = "surface_sam_sid_battery",
 		.id = 1,
-		.platform_data = &battery_props_bat1,
-		.pdata_size = sizeof(struct spwr_battery_props),
+		.platform_data = &ssam_battery_props_bat1,
+		.pdata_size = sizeof(struct ssam_battery_properties),
 	},
 	{
 		.name = "surface_sam_sid_battery",
 		.id = 2,
-		.platform_data = &battery_props_bat2_sb3,
-		.pdata_size = sizeof(struct spwr_battery_props),
+		.platform_data = &ssam_battery_props_bat2_sb3,
+		.pdata_size = sizeof(struct ssam_battery_properties),
 	},
 	{
 		.name = "surface_sam_sid_vhf",
@@ -151,8 +151,8 @@ static const struct mfd_cell sid_devs_sl3_13[] = {
 	{
 		.name = "surface_sam_sid_battery",
 		.id = -1,
-		.platform_data = &battery_props_bat1,
-		.pdata_size = sizeof(struct spwr_battery_props),
+		.platform_data = &ssam_battery_props_bat1,
+		.pdata_size = sizeof(struct ssam_battery_properties),
 	},
 	{
 		.name = "surface_sam_sid_vhf",
@@ -169,8 +169,8 @@ static const struct mfd_cell sid_devs_sl3_15[] = {
 	{
 		.name = "surface_sam_sid_battery",
 		.id = -1,
-		.platform_data = &battery_props_bat1,
-		.pdata_size = sizeof(struct spwr_battery_props),
+		.platform_data = &ssam_battery_props_bat1,
+		.pdata_size = sizeof(struct ssam_battery_properties),
 	},
 	{
 		.name = "surface_sam_sid_vhf",

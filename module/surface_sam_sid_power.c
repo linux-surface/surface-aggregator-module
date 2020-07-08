@@ -292,7 +292,7 @@ static int sam_psy_set_chgi(u8 channel, u8 instance, u32 chgi)
 
 struct spwr_battery_device {
 	struct platform_device *pdev;
-	const struct spwr_battery_props *p;
+	const struct ssam_battery_properties *p;
 
 	char name[32];
 	struct power_supply *psy;
@@ -368,7 +368,7 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 
 static int spwr_battery_register(struct spwr_battery_device *bat,
 				 struct platform_device *pdev,
-				 const struct spwr_battery_props *p);
+				 const struct ssam_battery_properties *p);
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
@@ -932,7 +932,7 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 
 static int spwr_battery_register(struct spwr_battery_device *bat,
 				 struct platform_device *pdev,
-				 const struct spwr_battery_props *p)
+				 const struct ssam_battery_properties *p)
 {
 	struct power_supply_config psy_cfg = {};
 	u32 sta;
