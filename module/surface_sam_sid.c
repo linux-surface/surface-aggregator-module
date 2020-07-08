@@ -10,7 +10,23 @@
 #include <linux/platform_device.h>
 #include <linux/mfd/core.h>
 
+#include "surface_sam_sid_power.h"
 #include "surface_sam_sid_vhf.h"
+
+
+struct spwr_battery_props battery_props_bat1 = {
+	.registry = SSAM_EVENT_REGISTRY_SAM,
+	.num      = 0,
+	.channel  = 1,
+	.instance = 1,
+};
+
+struct spwr_battery_props battery_props_bat2_sb3 = {
+	.registry = SSAM_EVENT_REGISTRY_KIP,
+	.num      = 1,
+	.channel  = 2,
+	.instance = 1,
+};
 
 
 static const struct ssam_hid_properties ssam_hid_props_sl3 = {
@@ -53,9 +69,14 @@ static const struct mfd_cell sid_devs_sp6[] = {
 
 static const struct mfd_cell sid_devs_sp7[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
-	{ .name = "surface_sam_sid_ac",       .id = -1 },
-	{ .name = "surface_sam_sid_battery",  .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
+	{ .name = "surface_sam_sid_ac",       .id = -1 },
+	{
+		.name = "surface_sam_sid_battery",
+		.id = -1,
+		.platform_data = &battery_props_bat1,
+		.pdata_size = sizeof(struct spwr_battery_props),
+	},
 	{ },
 };
 
@@ -74,8 +95,18 @@ static const struct mfd_cell sid_devs_sb3[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
-	{ .name = "surface_sam_sid_battery",  .id =  1 },
-	{ .name = "surface_sam_sid_battery",  .id =  2 },
+	{
+		.name = "surface_sam_sid_battery",
+		.id = 1,
+		.platform_data = &battery_props_bat1,
+		.pdata_size = sizeof(struct spwr_battery_props),
+	},
+	{
+		.name = "surface_sam_sid_battery",
+		.id = 2,
+		.platform_data = &battery_props_bat2_sb3,
+		.pdata_size = sizeof(struct spwr_battery_props),
+	},
 	{
 		.name = "surface_sam_sid_vhf",
 		.id = 1,
@@ -117,7 +148,12 @@ static const struct mfd_cell sid_devs_sl3_13[] = {
 	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
-	{ .name = "surface_sam_sid_battery",  .id = -1 },
+	{
+		.name = "surface_sam_sid_battery",
+		.id = -1,
+		.platform_data = &battery_props_bat1,
+		.pdata_size = sizeof(struct spwr_battery_props),
+	},
 	{
 		.name = "surface_sam_sid_vhf",
 		.id = -1,
@@ -128,9 +164,14 @@ static const struct mfd_cell sid_devs_sl3_13[] = {
 };
 
 static const struct mfd_cell sid_devs_sl3_15[] = {
-	{ .name = "surface_sam_sid_ac",       .id = -1 },
-	{ .name = "surface_sam_sid_battery",  .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
+	{ .name = "surface_sam_sid_ac",       .id = -1 },
+	{
+		.name = "surface_sam_sid_battery",
+		.id = -1,
+		.platform_data = &battery_props_bat1,
+		.pdata_size = sizeof(struct spwr_battery_props),
+	},
 	{
 		.name = "surface_sam_sid_vhf",
 		.id = -1,

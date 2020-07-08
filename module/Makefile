@@ -21,6 +21,7 @@ sources += surface_sam_sid_perfmode.c
 sources += surface_sam_sid_vhf.c
 sources += surface_sam_sid_vhf.h
 sources += surface_sam_sid_power.c
+sources += surface_sam_sid_power.h
 
 all:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) modules
