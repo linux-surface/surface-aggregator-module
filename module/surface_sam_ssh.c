@@ -224,8 +224,7 @@ static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 
 static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
 {
-	WARN_ON(msgb->ptr + sizeof(u16) > msgb->end);
-	if (msgb->ptr + sizeof(u16) > msgb->end)
+	if (WARN_ON(msgb->ptr + sizeof(u16) > msgb->end))
 		return;
 
 	put_unaligned_le16(value, msgb->ptr);
@@ -252,8 +251,7 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 	struct ssh_frame *frame = (struct ssh_frame *)msgb->ptr;
 	const u8 *const begin = msgb->ptr;
 
-	WARN_ON(msgb->ptr + sizeof(*frame) > msgb->end);
-	if (msgb->ptr + sizeof(*frame) > msgb->end)
+	if (WARN_ON(msgb->ptr + sizeof(*frame) > msgb->end))
 		return;
 
 	frame->type = ty;
@@ -303,8 +301,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 	msgb_push_frame(msgb, type, sizeof(*cmd) + rqst->cdl, seq);
 
 	// frame payload: command struct + payload
-	WARN_ON(msgb->ptr + sizeof(*cmd) > msgb->end);
-	if (msgb->ptr + sizeof(*cmd) > msgb->end)
+	if (WARN_ON(msgb->ptr + sizeof(*cmd) > msgb->end))
 		return;
 
 	cmd_begin = msgb->ptr;
@@ -3500,9 +3497,7 @@ static void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 	 */
 
 	pending = atomic_read(&rtl->pending.count);
-	WARN_ON(pending);
-
-	if (pending) {
+	if (WARN_ON(pending)) {
 		spin_lock(&rtl->pending.lock);
 		list_for_each_entry_safe(r, n, &rtl->pending.head, node) {
 			set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);

@@ -363,9 +363,7 @@ struct ssam_notifier_block {
 
 static inline u32 ssam_notifier_from_errno(int err)
 {
-	WARN_ON(err > 0);
-
-	if (err >= 0)
+	if (WARN_ON(err > 0) || err == 0)
 		return 0;
 	else
 		return ((-err) << SSAM_NOTIF_STATE_SHIFT) | SSAM_NOTIF_STOP;
