@@ -4082,9 +4082,10 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 	.complete = ssam_request_sync_complete,
 };
 
-static void ssam_request_sync_wait_complete(struct ssam_request_sync *rqst)
+static int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 {
 	wait_for_completion(&rqst->comp);
+	return rqst->status;
 }
 
 
@@ -4416,13 +4417,13 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	}
 
 	ssh_request_put(&actual.base);
-	ssam_request_sync_wait_complete(&actual);
+	status = ssam_request_sync_wait(&actual);
 	msgb_free(&msgb);
 
 	if (result)
 		result->len = resp.length;
 
-	return actual.status;
+	return status;
 }
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
