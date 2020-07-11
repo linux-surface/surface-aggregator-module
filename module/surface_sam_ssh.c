@@ -4023,7 +4023,6 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 /* -- Top-Level Request Interface ------------------------------------------- */
 
 struct ssam_response {
-	int status;
 	size_t capacity;
 	size_t length;
 	u8 *pointer;
@@ -4033,6 +4032,7 @@ struct ssam_request_sync {
 	struct ssh_request base;
 	struct completion comp;
 	struct ssam_response *resp;
+	int status;
 };
 
 
@@ -4044,7 +4044,7 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
 	r = container_of(rqst, struct ssam_request_sync, base);
-	r->resp->status = status;
+	r->status = status;
 	r->resp->length = 0;
 
 	if (status) {
@@ -4064,7 +4064,7 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 		rtl_err(rtl, "rsp: response buffer too small,"
 			" capacity: %zu bytes, got: %zu bytes\n",
 			r->resp->capacity, data->len);
-		r->resp->status = -ENOSPC;
+		r->status = -ENOSPC;
 		return;
 	}
 
@@ -4388,7 +4388,6 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	resp.pointer = NULL;
 	resp.capacity = 0;
 	resp.length = 0;
-	resp.status = 0;
 
 	if (result) {
 		resp.pointer = result->data;
@@ -4396,6 +4395,7 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	}
 
 	actual.resp = &resp;
+	actual.status = 0;
 
 	// alloc and create message
 	status = msgb_alloc(&msgb, msglen, GFP_KERNEL);
@@ -4422,7 +4422,7 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	if (result)
 		result->len = resp.length;
 
-	return resp.status;
+	return actual.status;
 }
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
