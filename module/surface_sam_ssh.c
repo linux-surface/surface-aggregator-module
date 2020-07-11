@@ -4032,7 +4032,7 @@ struct ssam_response {
 struct ssam_request_sync {
 	struct ssh_request base;
 	struct completion comp;
-	struct ssam_response resp;
+	struct ssam_response *resp;
 };
 
 
@@ -4044,8 +4044,8 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
 	r = container_of(rqst, struct ssam_request_sync, base);
-	r->resp.status = status;
-	r->resp.length = 0;
+	r->resp->status = status;
+	r->resp->length = 0;
 
 	if (status) {
 		rtl_dbg_cond(rtl, "rsp: request failed: %d\n", status);
@@ -4055,21 +4055,21 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 	if (!data)	// handle requests without a response
 		return;
 
-	if (!r->resp.pointer && data->len) {
+	if (!r->resp->pointer && data->len) {
 		rtl_warn(rtl, "rsp: no response buffer provided, dropping data\n");
 		return;
 	}
 
-	if (data->len > r->resp.capacity) {
+	if (data->len > r->resp->capacity) {
 		rtl_err(rtl, "rsp: response buffer too small,"
 			" capacity: %u bytes, got: %zu bytes\n",
-			r->resp.capacity, data->len);
-		r->resp.status = -ENOSPC;
+			r->resp->capacity, data->len);
+		r->resp->status = -ENOSPC;
 		return;
 	}
 
-	r->resp.length = data->len;
-	memcpy(r->resp.pointer, data->ptr, data->len);
+	r->resp->length = data->len;
+	memcpy(r->resp->pointer, data->ptr, data->len);
 }
 
 static void ssam_request_sync_release(struct ssh_request *rqst)
@@ -4365,6 +4365,7 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 				  struct surface_sam_ssh_buf *result)
 {
 	struct ssam_request_sync actual;
+	struct ssam_response resp;
 	struct msgbuf msgb;
 	size_t msglen = SSH_COMMAND_MESSAGE_LENGTH(rqst->cdl);
 	unsigned flags = 0;
@@ -4384,15 +4385,17 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	ssh_request_init(&actual.base, flags, &ssam_request_sync_ops);
 	init_completion(&actual.comp);
 
-	actual.resp.pointer = NULL;
-	actual.resp.capacity = 0;
-	actual.resp.length = 0;
-	actual.resp.status = 0;
+	resp.pointer = NULL;
+	resp.capacity = 0;
+	resp.length = 0;
+	resp.status = 0;
 
 	if (result) {
-		actual.resp.pointer = result->data;
-		actual.resp.capacity = result->cap;
+		resp.pointer = result->data;
+		resp.capacity = result->cap;
 	}
+
+	actual.resp = &resp;
 
 	// alloc and create message
 	status = msgb_alloc(&msgb, msglen, GFP_KERNEL);
@@ -4417,9 +4420,9 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 	msgb_free(&msgb);
 
 	if (result)
-		result->len = actual.resp.length;
+		result->len = resp.length;
 
-	return actual.resp.status;
+	return resp.status;
 }
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
