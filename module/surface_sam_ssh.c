@@ -4024,8 +4024,8 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 
 struct ssam_response {
 	int status;
-	u16 capacity;
-	u16 length;
+	size_t capacity;
+	size_t length;
 	u8 *pointer;
 };
 
@@ -4062,7 +4062,7 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 
 	if (data->len > r->resp->capacity) {
 		rtl_err(rtl, "rsp: response buffer too small,"
-			" capacity: %u bytes, got: %zu bytes\n",
+			" capacity: %zu bytes, got: %zu bytes\n",
 			r->resp->capacity, data->len);
 		r->resp->status = -ENOSPC;
 		return;
