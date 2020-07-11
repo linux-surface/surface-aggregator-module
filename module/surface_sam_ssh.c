@@ -4022,6 +4022,34 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 
 /* -- Top-Level Request Interface ------------------------------------------- */
 
+enum ssam_controller_state {
+	SSAM_CONTROLLER_UNINITIALIZED,
+	SSAM_CONTROLLER_INITIALIZED,
+	SSAM_CONTROLLER_SUSPENDED,
+};
+
+struct ssam_controller {
+	enum ssam_controller_state state;
+
+	struct ssh_rtl rtl;
+	struct ssam_cplt cplt;
+
+	struct {
+		struct ssh_seq_counter seq;
+		struct ssh_rqid_counter rqid;
+	} counter;
+
+	struct {
+		int num;
+		bool wakeup_enabled;
+	} irq;
+
+	struct {
+		u32 cmd_display:1;
+		u32 cmd_d3:1;
+	} properties;
+};
+
 struct ssam_response {
 	size_t capacity;
 	size_t length;
@@ -4034,6 +4062,22 @@ struct ssam_request_sync {
 	struct ssam_response *resp;
 	int status;
 };
+
+
+#define ssam_dbg(ctrl, fmt, ...)  rtl_dbg(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
+#define ssam_info(ctrl, fmt, ...) rtl_info(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
+#define ssam_warn(ctrl, fmt, ...) rtl_warn(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
+#define ssam_err(ctrl, fmt, ...)  rtl_err(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
+
+#define to_ssam_controller(ptr, member) \
+	container_of(ptr, struct ssam_controller, member)
+
+
+static inline
+struct serdev_device *ssam_controller_serdev_device(struct ssam_controller *c)
+{
+	return c->rtl.ptl.serdev;
+}
 
 
 static void ssam_request_sync_complete(struct ssh_request *rqst,
@@ -4091,52 +4135,23 @@ static int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 
 /* -- TODO ------------------------------------------------------------------ */
 
-enum ssh_ec_state {
-	SSH_EC_UNINITIALIZED,
-	SSH_EC_INITIALIZED,
-	SSH_EC_SUSPENDED,
-};
-
-struct sam_ssh_ec {
-	struct serdev_device *serdev;
-
-	struct ssh_rtl rtl;
-	struct ssam_cplt cplt;
-
-	struct {
-		struct ssh_seq_counter seq;
-		struct ssh_rqid_counter rqid;
-	} counter;
-
-	enum ssh_ec_state state;
-
-	int irq;
-	bool irq_wakeup_enabled;
-};
-
-static struct sam_ssh_ec ssh_ec = {
-	.state  = SSH_EC_UNINITIALIZED,
-	.serdev = NULL,
+static struct ssam_controller ssh_ec = {
+	.state  = SSAM_CONTROLLER_UNINITIALIZED,
 };
 
 
 /* -- TODO ------------------------------------------------------------------ */
 
-#define ssh_dbg(ec, fmt, ...)  dev_dbg(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ssh_warn(ec, fmt, ...) dev_warn(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-#define ssh_err(ec, fmt, ...)  dev_err(&(ec)->serdev->dev, fmt, ##__VA_ARGS__)
-
-
-static inline struct sam_ssh_ec *surface_sam_ssh_acquire(void)
+static inline struct ssam_controller *surface_sam_ssh_acquire(void)
 {
 	return &ssh_ec;
 }
 
-static inline struct sam_ssh_ec *surface_sam_ssh_acquire_init(void)
+static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
 {
-	struct sam_ssh_ec *ec = surface_sam_ssh_acquire();
+	struct ssam_controller *ec = surface_sam_ssh_acquire();
 
-	if (smp_load_acquire(&ec->state) == SSH_EC_UNINITIALIZED)
+	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_UNINITIALIZED)
 		return NULL;
 
 	return ec;
@@ -4145,14 +4160,16 @@ static inline struct sam_ssh_ec *surface_sam_ssh_acquire_init(void)
 int surface_sam_ssh_consumer_register(struct device *consumer)
 {
 	u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	struct device_link *link;
+	struct serdev_device *serdev;
 
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec)
 		return -ENXIO;
 
-	link = device_link_add(consumer, &ec->serdev->dev, flags);
+	serdev = ssam_controller_serdev_device(ec);
+	link = device_link_add(consumer, &serdev->dev, flags);
 	if (!link)
 		return -EFAULT;
 
@@ -4161,11 +4178,11 @@ int surface_sam_ssh_consumer_register(struct device *consumer)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
 
-static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
+static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  const struct surface_sam_ssh_rqst *rqst,
 				  struct surface_sam_ssh_buf *result);
 
-static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec,
+static int surface_sam_ssh_event_enable(struct ssam_controller *ec,
 					struct ssam_event_registry reg,
 					struct ssam_event_id id,
 					u8 flags)
@@ -4202,22 +4219,20 @@ static int surface_sam_ssh_event_enable(struct sam_ssh_ec *ec,
 	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 
 	if (status) {
-		dev_err(&ec->serdev->dev, "failed to enable event source"
-			" (tc: 0x%02x, rqid: 0x%04x)\n",
-			id.target_category, rqid);
+		ssam_err(ec, "failed to enable event source (tc: 0x%02x, rqid: 0x%04x)\n",
+			 id.target_category, rqid);
 	}
 
 	if (buf[0] != 0x00) {
-		pr_warn(SSH_RQST_TAG_FULL
-			"unexpected result while enabling event source: "
-			"0x%02x\n", buf[0]);
+		ssam_warn(ec, "unexpected result while enabling event source: "
+			  "0x%02x\n", buf[0]);
 	}
 
 	return status;
 
 }
 
-static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec,
+static int surface_sam_ssh_event_disable(struct ssam_controller *ec,
 					 struct ssam_event_registry reg,
 					 struct ssam_event_id id,
 					 u8 flags)
@@ -4254,15 +4269,13 @@ static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec,
 	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 
 	if (status) {
-		dev_err(&ec->serdev->dev, "failed to disable event source"
-			" (tc: 0x%02x, rqid: 0x%04x)\n",
-			id.target_category, rqid);
+		ssam_err(ec, "failed to disable event source (tc: 0x%02x, rqid: 0x%04x)\n",
+			 id.target_category, rqid);
 	}
 
 	if (buf[0] != 0x00) {
-		dev_warn(&ec->serdev->dev,
-			"unexpected result while disabling event source: "
-			"0x%02x\n", buf[0]);
+		ssam_warn(ec, "unexpected result while disabling event source: "
+			  "0x%02x\n", buf[0]);
 	}
 
 	return status;
@@ -4272,7 +4285,7 @@ static int surface_sam_ssh_event_disable(struct sam_ssh_ec *ec,
 int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 {
 	struct ssam_nf_head *nf_head;
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	struct ssam_nf *nf;
 	u16 event = ssh_tc_to_event(n->event.id.target_category);
 	u16 rqid = ssh_event_to_rqid(event);
@@ -4296,7 +4309,7 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 		return rc;
 	}
 
-	ssh_dbg(ec, "enabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
+	ssam_dbg(ec, "enabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
 
 	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
@@ -4323,7 +4336,7 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_register);
 int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 {
 	struct ssam_nf_head *nf_head;
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	struct ssam_nf *nf;
 	u16 event = ssh_tc_to_event(n->event.id.target_category);
 	u16 rqid = ssh_event_to_rqid(event);
@@ -4347,7 +4360,7 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 		return rc;
 	}
 
-	ssh_dbg(ec, "disabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
+	ssam_dbg(ec, "disabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
 
 	if (rc == 0)
 		status = surface_sam_ssh_event_disable(ec, n->event.reg, n->event.id, n->event.flags);
@@ -4361,7 +4374,7 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
 
 
-static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
+static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  const struct surface_sam_ssh_rqst *rqst,
 				  struct surface_sam_ssh_buf *result)
 {
@@ -4376,7 +4389,7 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 
 	// prevent overflow
 	if (rqst->cdl > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
-		ssh_err(ec, SSH_RQST_TAG "request payload too large\n");
+		ssam_err(ec, SSH_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
@@ -4428,7 +4441,7 @@ static int __surface_sam_ssh_rqst(struct sam_ssh_ec *ec,
 
 int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
 {
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec) {
@@ -4436,8 +4449,8 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 		return -ENXIO;
 	}
 
-	if (smp_load_acquire(&ec->state) == SSH_EC_SUSPENDED) {
-		ssh_warn(ec, SSH_RQST_TAG "embedded controller is suspended\n");
+	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_SUSPENDED) {
+		ssam_warn(ec, SSH_RQST_TAG "embedded controller is suspended\n");
 		return -EPERM;
 	}
 
@@ -4447,18 +4460,18 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
 
 /**
- * surface_sam_ssh_ec_resume - Resume the EC if it is in a suspended mode.
+ * surface_sam_controller_resume - Resume the EC if it is in a suspended mode.
  * @ec: the EC to resume
  *
  * Moves the EC from a suspended state to a normal state. See the
- * `surface_sam_ssh_ec_suspend` function what the specific differences of
+ * `surface_sam_controller_suspend` function what the specific differences of
  * these states are. Multiple repeated calls to this function seem to be
  * handled fine by the EC, after the first call, the state will remain
  * "normal".
  *
  * Must be called with the EC initialized and its lock held.
  */
-static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
+static int surface_sam_controller_resume(struct ssam_controller *ec)
 {
 	u8 buf[1] = { 0x00 };
 	int status;
@@ -4479,7 +4492,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 		result.data = buf,
 	};
 
-	ssh_dbg(ec, "pm: resuming system aggregator module\n");
+	ssam_dbg(ec, "pm: resuming system aggregator module\n");
 	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 	if (status)
 		return status;
@@ -4490,7 +4503,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 	 * been observed so far.
 	 */
 	if (buf[0] != 0x00) {
-		ssh_warn(ec, "unexpected result while trying to resume EC: "
+		ssam_warn(ec, "unexpected result while trying to resume EC: "
 			 "0x%02x\n", buf[0]);
 	}
 
@@ -4498,7 +4511,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
 }
 
 /**
- * surface_sam_ssh_ec_suspend - Put the EC in a suspended mode:
+ * surface_sam_controller_suspend - Put the EC in a suspended mode:
  * @ec: the EC to suspend
  *
  * Tells the EC to enter a suspended mode. In this mode, events are quiesced
@@ -4512,7 +4525,7 @@ static int surface_sam_ssh_ec_resume(struct sam_ssh_ec *ec)
  *
  * Must be called with the EC initialized and its lock held.
  */
-static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
+static int surface_sam_controller_suspend(struct ssam_controller *ec)
 {
 	u8 buf[1] = { 0x00 };
 	int status;
@@ -4533,7 +4546,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 		result.data = buf,
 	};
 
-	ssh_dbg(ec, "pm: suspending system aggregator module\n");
+	ssam_dbg(ec, "pm: suspending system aggregator module\n");
 	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
 	if (status)
 		return status;
@@ -4544,7 +4557,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 	 * been observed so far.
 	 */
 	if (buf[0] != 0x00) {
-		ssh_warn(ec, "unexpected result while trying to suspend EC: "
+		ssam_warn(ec, "unexpected result while trying to suspend EC: "
 			 "0x%02x\n", buf[0]);
 	}
 
@@ -4552,7 +4565,7 @@ static int surface_sam_ssh_ec_suspend(struct sam_ssh_ec *ec)
 }
 
 
-static int surface_sam_ssh_get_controller_version(struct sam_ssh_ec *ec, u32 *version)
+static int surface_sam_ssh_get_controller_version(struct ssam_controller *ec, u32 *version)
 {
 	struct surface_sam_ssh_rqst rqst = {
 		.tc  = 0x01,
@@ -4574,7 +4587,7 @@ static int surface_sam_ssh_get_controller_version(struct sam_ssh_ec *ec, u32 *ve
 	return __surface_sam_ssh_rqst(ec, &rqst, &result);
 }
 
-static int surface_sam_ssh_log_controller_version(struct sam_ssh_ec *ec)
+static int surface_sam_ssh_log_controller_version(struct ssam_controller *ec)
 {
 	u32 version, a, b, c;
 	int status;
@@ -4587,8 +4600,7 @@ static int surface_sam_ssh_log_controller_version(struct sam_ssh_ec *ec)
 	b = le16_to_cpu((version >> 8) & 0xffff);
 	c = version & 0xff;
 
-	dev_info(&ec->serdev->dev, "SAM controller version: %u.%u.%u\n",
-		 a, b, c);
+	ssam_info(ec, "SAM controller version: %u.%u.%u\n", a, b, c);
 	return 0;
 }
 
@@ -4702,28 +4714,28 @@ static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 
 static int surface_sam_ssh_suspend(struct device *dev)
 {
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	int status;
 
 	dev_dbg(dev, "pm: suspending\n");
 
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
-		status = surface_sam_ssh_ec_suspend(ec);
+		status = surface_sam_controller_suspend(ec);
 		if (status)
 			return status;
 
 		if (device_may_wakeup(dev)) {
-			status = enable_irq_wake(ec->irq);
+			status = enable_irq_wake(ec->irq.num);
 			if (status)
 				return status;
 
-			ec->irq_wakeup_enabled = true;
+			ec->irq.wakeup_enabled = true;
 		} else {
-			ec->irq_wakeup_enabled = false;
+			ec->irq.wakeup_enabled = false;
 		}
 
-		smp_store_release(&ec->state, SSH_EC_SUSPENDED);
+		smp_store_release(&ec->state, SSAM_CONTROLLER_SUSPENDED);
 	}
 
 	return 0;
@@ -4731,24 +4743,24 @@ static int surface_sam_ssh_suspend(struct device *dev)
 
 static int surface_sam_ssh_resume(struct device *dev)
 {
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	int status;
 
 	dev_dbg(dev, "pm: resuming\n");
 
 	ec = surface_sam_ssh_acquire_init();
 	if (ec) {
-		smp_store_release(&ec->state, SSH_EC_INITIALIZED);
+		smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
-		if (ec->irq_wakeup_enabled) {
-			status = disable_irq_wake(ec->irq);
+		if (ec->irq.wakeup_enabled) {
+			status = disable_irq_wake(ec->irq.num);
 			if (status)
 				return status;
 
-			ec->irq_wakeup_enabled = false;
+			ec->irq.wakeup_enabled = false;
 		}
 
-		status = surface_sam_ssh_ec_resume(ec);
+		status = surface_sam_controller_resume(ec);
 		if (status)
 			return status;
 	}
@@ -4764,7 +4776,7 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 			      const struct ssh_command *cmd,
 			      const struct sshp_span *data)
 {
-	struct sam_ssh_ec *ec = container_of(rtl, struct sam_ssh_ec, rtl);
+	struct ssam_controller *ec = to_ssam_controller(rtl, rtl);
 	struct ssam_event_item *item;
 
 	item = kzalloc(sizeof(struct ssam_event_item) + data->len, GFP_KERNEL);
@@ -4789,13 +4801,13 @@ static struct ssh_rtl_ops ssam_rtl_ops = {
 
 static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf, size_t n)
 {
-	struct sam_ssh_ec *ec = serdev_device_get_drvdata(dev);
+	struct ssam_controller *ec = serdev_device_get_drvdata(dev);
 	return ssh_ptl_rx_rcvbuf(&ec->rtl.ptl, buf, n);
 }
 
 static void ssam_write_wakeup(struct serdev_device *dev)
 {
-	struct sam_ssh_ec *ec = serdev_device_get_drvdata(dev);
+	struct ssam_controller *ec = serdev_device_get_drvdata(dev);
 	ssh_ptl_tx_wakeup(&ec->rtl.ptl, true);
 }
 
@@ -4905,7 +4917,7 @@ static void surface_sam_ssh_sysfs_unregister(struct device *dev)
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	int status, irq;
 
@@ -4923,15 +4935,14 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	// set up EC
 	ec = surface_sam_ssh_acquire();
-	if (smp_load_acquire(&ec->state) != SSH_EC_UNINITIALIZED) {
+	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
 
 		status = -EBUSY;
 		goto err_ecinit;
 	}
 
-	ec->serdev = serdev;
-	ec->irq    = irq;
+	ec->irq.num = irq;
 	ssh_seq_reset(&ec->counter.seq);
 	ssh_rqid_reset(&ec->counter.rqid);
 
@@ -4965,13 +4976,13 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_devinit;
 
-	smp_store_release(&ec->state, SSH_EC_INITIALIZED);
+	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
 	status = surface_sam_ssh_log_controller_version(ec);
 	if (status)
 		goto err_finalize;
 
-	status = surface_sam_ssh_ec_resume(ec);
+	status = surface_sam_controller_resume(ec);
 	if (status)
 		goto err_finalize;
 
@@ -4993,7 +5004,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	return 0;
 
 err_finalize:
-	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
+	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
 	ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
 err_devinit:
 	serdev_device_close(serdev);
@@ -5011,18 +5022,18 @@ err_ecinit:
 
 static void surface_sam_ssh_remove(struct serdev_device *serdev)
 {
-	struct sam_ssh_ec *ec;
+	struct ssam_controller *ec;
 	int status;
 
 	ec = surface_sam_ssh_acquire_init();
 	if (!ec)
 		return;
 
-	free_irq(ec->irq, serdev);
+	free_irq(ec->irq.num, serdev);
 	surface_sam_ssh_sysfs_unregister(&serdev->dev);
 
 	// suspend EC and disable events
-	status = surface_sam_ssh_ec_suspend(ec);
+	status = surface_sam_controller_suspend(ec);
 	if (status)
 		dev_err(&serdev->dev, "failed to suspend EC: %d\n", status);
 
@@ -5034,15 +5045,15 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	ssam_cplt_flush(&ec->cplt);
 
 	// mark device as uninitialized
-	smp_store_release(&ec->state, SSH_EC_UNINITIALIZED);
+	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
 
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
 	ssh_rtl_tx_flush(&ec->rtl);
 	ssh_rtl_shutdown(&ec->rtl);
 
 	// shut down actual transport
-	serdev_device_wait_until_sent(ec->serdev, 0);
-	serdev_device_close(ec->serdev);
+	serdev_device_wait_until_sent(serdev, 0);
+	serdev_device_close(serdev);
 
 	/*
 	 * Ensure _all_ events are completed. New ones could still have been
@@ -5056,8 +5067,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	ssam_cplt_destroy(&ec->cplt);
 	ssh_rtl_destroy(&ec->rtl);
 
-	ec->serdev = NULL;
-	ec->irq = -1;
+	ec->irq.num = -1;
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
