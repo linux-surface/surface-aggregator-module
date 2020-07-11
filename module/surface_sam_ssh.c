@@ -4126,6 +4126,17 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 	.complete = ssam_request_sync_complete,
 };
 
+
+static int ssam_request_sync_submit(struct ssam_controller *ctrl, struct ssam_request_sync *rqst)
+{
+	int status;
+
+	status = ssh_rtl_submit(&ctrl->rtl, &rqst->base);
+	ssh_request_put(&rqst->base);
+
+	return status;
+}
+
 static int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 {
 	wait_for_completion(&rqst->comp);
@@ -4423,14 +4434,10 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	actual.base.packet.data = msgb.buffer;
 	actual.base.packet.data_length = msgb.ptr - msgb.buffer;
 
-	status = ssh_rtl_submit(&ec->rtl, &actual.base);
-	if (status) {
-		msgb_free(&msgb);
-		return status;
-	}
+	status = ssam_request_sync_submit(ec, &actual);
+	if (!status)
+		status = ssam_request_sync_wait(&actual);
 
-	ssh_request_put(&actual.base);
-	status = ssam_request_sync_wait(&actual);
 	msgb_free(&msgb);
 
 	if (result)
