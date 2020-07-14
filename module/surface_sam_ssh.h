@@ -273,7 +273,6 @@ struct ssh_request_ops {
 };
 
 struct ssh_request {
-	struct ssh_rtl *rtl;
 	struct ssh_packet packet;
 	struct list_head node;
 

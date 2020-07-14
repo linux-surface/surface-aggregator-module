@@ -1689,6 +1689,7 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 
 static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 {
+	struct ssh_ptl *ptl_old;
 	int status;
 
 	trace_ssam_packet_submit(packet);
@@ -1702,19 +1703,13 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 	}
 
 	/*
-	 * This function is currently not intended for re-submission. The ptl
-	 * reference only gets set on the first submission. After the first
-	 * submission, it has to be read-only.
-	 *
-	 * Use cmpxchg to ensure safety with regards to ssh_ptl_cancel and
-	 * re-entry, where we can't guarantee that the packet has been submitted
-	 * yet.
-	 *
-	 * The implicit barrier of cmpxchg is paired with barrier in
-	 * ssh_ptl_cancel to guarantee cancelation in case the packet has never
-	 * been submitted or is currently being submitted.
+	 * The ptl reference only gets set on or before the first submission.
+	 * After the first submission, it has to be read-only.
 	 */
-	if (cmpxchg(&packet->ptl, NULL, ptl) != NULL)
+	ptl_old = READ_ONCE(packet->ptl);
+	if (ptl_old == NULL)
+		WRITE_ONCE(packet->ptl, ptl);
+	else if (ptl_old != ptl)
 		return -EALREADY;
 
 	status = ssh_ptl_queue_push(packet);
@@ -2472,6 +2467,12 @@ struct ssh_rtl {
 #define to_ssh_request(ptr, member) \
 	container_of(ptr, struct ssh_request, member)
 
+static inline struct ssh_rtl *ssh_request_rtl(struct ssh_request *rqst)
+{
+	struct ssh_ptl *ptl = READ_ONCE(rqst->packet.ptl);
+	return likely(ptl) ? to_ssh_rtl(ptl, ptl) : NULL;
+}
+
 
 /**
  * ssh_rtl_should_drop_response - error injection hook to drop request responses
@@ -2514,15 +2515,16 @@ static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 
 static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 	bool remove;
 
-	spin_lock(&rqst->rtl->queue.lock);
+	spin_lock(&rtl->queue.lock);
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
 	if (remove)
 		list_del(&rqst->node);
 
-	spin_unlock(&rqst->rtl->queue.lock);
+	spin_unlock(&rtl->queue.lock);
 
 	if (remove)
 		ssh_request_put(rqst);
@@ -2530,17 +2532,18 @@ static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 
 static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 	bool remove;
 
-	spin_lock(&rqst->rtl->pending.lock);
+	spin_lock(&rtl->pending.lock);
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
 	if (remove) {
-		atomic_dec(&rqst->rtl->pending.count);
+		atomic_dec(&rtl->pending.count);
 		list_del(&rqst->node);
 	}
 
-	spin_unlock(&rqst->rtl->pending.lock);
+	spin_unlock(&rtl->pending.lock);
 
 	if (remove)
 		ssh_request_put(rqst);
@@ -2549,11 +2552,11 @@ static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 
 static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 {
-	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 
 	trace_ssam_request_complete(rqst, status);
 
-	// rqst->rtl may not be set if we're cancelling before submitting
+	// rtl/ptl may not be set if we're cancelling before submitting
 	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x,"
 		     " status: %d)\n", ssh_request_get_rqid_safe(rqst), status);
 
@@ -2564,9 +2567,11 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 				      const struct ssh_command *cmd,
 				      const struct sshp_span *data)
 {
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
+
 	trace_ssam_request_complete(rqst, 0);
 
-	rtl_dbg(rqst->rtl, "rtl: completing request with response"
+	rtl_dbg(rtl, "rtl: completing request with response"
 		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
 
 	rqst->ops->complete(rqst, cmd, data, 0);
@@ -2575,10 +2580,12 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 
 static bool ssh_rtl_tx_can_process(struct ssh_request *rqst)
 {
-	if (test_bit(SSH_REQUEST_TY_FLUSH_BIT, &rqst->state))
-		return !atomic_read(&rqst->rtl->pending.count);
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 
-	return atomic_read(&rqst->rtl->pending.count) < SSH_RTL_MAX_PENDING;
+	if (test_bit(SSH_REQUEST_TY_FLUSH_BIT, &rqst->state))
+		return !atomic_read(&rtl->pending.count);
+
+	return atomic_read(&rtl->pending.count) < SSH_RTL_MAX_PENDING;
 }
 
 static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
@@ -2618,7 +2625,7 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 
 static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 {
-	struct ssh_rtl *rtl = rqst->rtl;
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 
 	spin_lock(&rtl->pending.lock);
 
@@ -2762,8 +2769,8 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
 			return -EINVAL;
 
-	// try to set rtl and check if this request has already been submitted
-	if (cmpxchg(&rqst->rtl, NULL, rtl) != NULL)
+	// try to set ptl and check if this request has already been submitted
+	if (cmpxchg(&rqst->packet.ptl, NULL, &rtl->ptl) != NULL)
 		return -EALREADY;
 
 	spin_lock(&rtl->queue.lock);
@@ -2808,7 +2815,7 @@ static void ssh_rtl_timeout_reaper_mod(struct ssh_rtl *rtl, ktime_t now,
 
 static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 {
-	struct ssh_rtl *rtl = rqst->rtl;
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 	ktime_t timestamp = ktime_get_coarse_boottime();
 	ktime_t timeout = rtl->rtx_timeout.timeout;
 
@@ -2818,7 +2825,7 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	WRITE_ONCE(rqst->timestamp, timestamp);
 	smp_mb__after_atomic();
 
-	ssh_rtl_timeout_reaper_mod(rqst->rtl, timestamp, timestamp + timeout);
+	ssh_rtl_timeout_reaper_mod(rtl, timestamp, timestamp + timeout);
 }
 
 
@@ -2940,6 +2947,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 
 static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
+	struct ssh_rtl *rtl;
 	unsigned long state, fixed;
 	bool remove;
 
@@ -2948,19 +2956,19 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 * expecting the state to be zero (i.e. unsubmitted). Note that, if
 	 * setting the state worked, we might still be adding the packet to the
 	 * queue in a currently executing submit call. In that case, however,
-	 * rqst->rtl must have been set previously, as locked is checked after
-	 * setting rqst->rtl. Thus only if we successfully lock this request and
-	 * rqst->rtl is NULL, we have successfully removed the request.
+	 * ptl reference must have been set previously, as locked is checked
+	 * after setting ptl. Thus only if we successfully lock this request and
+	 * ptl is NULL, we have successfully removed the request.
 	 * Otherwise we need to try and grab it from the queue.
 	 *
-	 * Note that if the CMPXCHG fails, we are guaranteed that rqst->rtl has
+	 * Note that if the CMPXCHG fails, we are guaranteed that ptl has
 	 * been set and is non-NULL, as states can only be nonzero after this
 	 * has been set. Also note that we need to fetch the static (type) flags
          * to ensure that they don't cause the cmpxchg to fail.
 	 */
         fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_TY_MASK;
 	state = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
-	if (!state && !READ_ONCE(r->rtl)) {
+	if (!state && !READ_ONCE(r->packet.ptl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
@@ -2968,7 +2976,8 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 		return true;
 	}
 
-	spin_lock(&r->rtl->queue.lock);
+	rtl = ssh_request_rtl(r);
+	spin_lock(&rtl->queue.lock);
 
 	/*
 	 * Note: 1) Requests cannot be re-submitted. 2) If a request is queued,
@@ -2979,14 +2988,14 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 
 	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
 	if (!remove) {
-		spin_unlock(&r->rtl->queue.lock);
+		spin_unlock(&rtl->queue.lock);
 		return false;
 	}
 
 	set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
 	list_del(&r->node);
 
-	spin_unlock(&r->rtl->queue.lock);
+	spin_unlock(&rtl->queue.lock);
 
 	ssh_request_put(r);	// drop reference obtained from queue
 
@@ -3005,12 +3014,12 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 
 	/*
 	 * Now that we have locked the packet, we have guaranteed that it can't
-	 * be added to the system any more. If rqst->rtl is zero, the locked
+	 * be added to the system any more. If rtl is zero, the locked
 	 * check in ssh_rtl_submit has not been run and any submission,
 	 * currently in progress or called later, won't add the packet. Thus we
 	 * can directly complete it.
 	 */
-	if (!READ_ONCE(r->rtl)) {
+	if (!ssh_request_rtl(r)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
@@ -3056,8 +3065,8 @@ static bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 	else
 		canceled = ssh_rtl_cancel_nonpending(rqst);
 
-	// note: rqst->rtl may be NULL if request has not been submitted yet
-	rtl = READ_ONCE(rqst->rtl);
+	// note: rtl may be NULL if request has not been submitted yet
+	rtl = ssh_request_rtl(rqst);
 	if (canceled && rtl)
 		ssh_rtl_tx_schedule(rtl);
 
@@ -3086,7 +3095,7 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 		ssh_rtl_pending_remove(r);
 		ssh_rtl_complete_with_status(r, status);
 
-		ssh_rtl_tx_schedule(r->rtl);
+		ssh_rtl_tx_schedule(ssh_request_rtl(r));
 		return;
 	}
 
@@ -3119,7 +3128,7 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 	ssh_rtl_pending_remove(r);
 	ssh_rtl_complete_with_status(r, 0);
 
-	ssh_rtl_tx_schedule(r->rtl);
+	ssh_rtl_tx_schedule(ssh_request_rtl(r));
 }
 
 
@@ -3352,8 +3361,6 @@ static void ssh_request_init(struct ssh_request *rqst,
 	packet_args.ops = &ssh_rtl_packet_ops;
 
 	ssh_packet_init(&rqst->packet, &packet_args);
-
-	rqst->rtl = NULL;
 	INIT_LIST_HEAD(&rqst->node);
 
 	rqst->state = 0;
@@ -4084,8 +4091,8 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 				       const struct ssh_command *cmd,
 				       const struct sshp_span *data, int status)
 {
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 	struct ssam_request_sync *r;
-	struct ssh_rtl *rtl = READ_ONCE(rqst->rtl);
 
 	r = container_of(rqst, struct ssam_request_sync, base);
 	r->status = status;
