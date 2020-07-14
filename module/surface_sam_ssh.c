@@ -1064,7 +1064,7 @@ static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 
 
 struct ssh_packet_args {
-	u8 type;
+	unsigned long type;
 	u8 priority;
 	const struct ssh_packet_ops *ops;
 };
@@ -1078,9 +1078,8 @@ static void ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->queue_node);
 	INIT_LIST_HEAD(&packet->pending_node);
 
-	packet->type = args->type;
+	packet->state = args->type & SSH_PACKET_FLAGS_TY_MASK;
 	packet->priority = args->priority;
-	packet->state = 0;
 	packet->timestamp = KTIME_MAX;
 
 	packet->data_length = 0;
@@ -1328,11 +1327,11 @@ static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 
-	if (packet->type & SSH_PACKET_TY_FLUSH)
+	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &packet->state))
 		return !atomic_read(&ptl->pending.count);
 
 	// we can alwas process non-blocking packets
-	if (!(packet->type & SSH_PACKET_TY_BLOCKING))
+	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &packet->state))
 		return true;
 
 	// if we are already waiting for this packet, send it again
@@ -1401,7 +1400,7 @@ static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	if (IS_ERR(p))
 		return p;
 
-	if (p->type & SSH_PACKET_TY_SEQUENCED) {
+	if (test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state)) {
 		ptl_dbg(ptl, "ptl: transmitting sequenced packet %p\n", p);
 		ssh_ptl_pending_push(p);
 		ssh_ptl_timeout_start(p);
@@ -1435,7 +1434,7 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
 	// if the packet is unsequenced, we're done: lock and complete
-	if (!(packet->type & SSH_PACKET_TY_SEQUENCED)) {
+	if (!test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &packet->state)) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state);
 		ssh_ptl_remove_and_complete(packet, 0);
 	}
@@ -1687,18 +1686,18 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 }
 
 
-static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
+static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 {
 	struct ssh_ptl *ptl_old;
 	int status;
 
-	trace_ssam_packet_submit(packet);
+	trace_ssam_packet_submit(p);
 
 	// validate packet fields
-	if (packet->type & SSH_PACKET_TY_FLUSH) {
-		if (packet->data || (packet->type & SSH_PACKET_TY_SEQUENCED))
+	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &p->state)) {
+		if (p->data || test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state))
 			return -EINVAL;
-	} else if (!packet->data) {
+	} else if (!p->data) {
 		return -EINVAL;
 	}
 
@@ -1706,17 +1705,17 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *packet)
 	 * The ptl reference only gets set on or before the first submission.
 	 * After the first submission, it has to be read-only.
 	 */
-	ptl_old = READ_ONCE(packet->ptl);
+	ptl_old = READ_ONCE(p->ptl);
 	if (ptl_old == NULL)
-		WRITE_ONCE(packet->ptl, ptl);
+		WRITE_ONCE(p->ptl, ptl);
 	else if (ptl_old != ptl)
 		return -EALREADY;
 
-	status = ssh_ptl_queue_push(packet);
+	status = ssh_ptl_queue_push(p);
 	if (status)
 		return status;
 
-	ssh_ptl_tx_wakeup(ptl, !(packet->type & SSH_PACKET_TY_BLOCKING));
+	ssh_ptl_tx_wakeup(ptl, !test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state));
 	return 0;
 }
 
@@ -2225,7 +2224,7 @@ static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
 	struct ssh_packet_args args;
 	int status;
 
-	args.type = SSH_PACKET_TY_FLUSH | SSH_PACKET_TY_BLOCKING;
+	args.type = BIT(SSH_PACKET_TY_FLUSH_BIT) | BIT(SSH_PACKET_TY_BLOCKING_BIT);
 	args.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
 	args.ops = &ssh_flush_packet_ops;
 
@@ -2766,7 +2765,7 @@ static int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 	 * is required to be changed in the code.
 	 */
 	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &rqst->state))
-		if (!(rqst->packet.type & SSH_PACKET_TY_SEQUENCED))
+		if (!test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &rqst->packet.state))
 			return -EINVAL;
 
 	// try to set ptl and check if this request has already been submitted
@@ -3353,9 +3352,9 @@ static void ssh_request_init(struct ssh_request *rqst,
 {
 	struct ssh_packet_args packet_args;
 
-	packet_args.type = SSH_PACKET_TY_BLOCKING;
+	packet_args.type = BIT(SSH_PACKET_TY_BLOCKING_BIT);
 	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
-		packet_args.type |= SSH_PACKET_TY_SEQUENCED;
+		packet_args.type |= BIT(SSH_PACKET_TY_SEQUENCED_BIT);
 
 	packet_args.priority = SSH_PACKET_PRIORITY(DATA, 0);
 	packet_args.ops = &ssh_rtl_packet_ops;
@@ -3437,7 +3436,7 @@ static int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 	int status;
 
 	ssh_request_init(&rqst.base, init_flags, &ssh_rtl_flush_request_ops);
-	rqst.base.packet.type |= SSH_PACKET_TY_FLUSH;
+	rqst.base.packet.state |= BIT(SSH_PACKET_TY_FLUSH_BIT);
 	rqst.base.packet.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
 	rqst.base.state |= BIT(SSH_REQUEST_TY_FLUSH_BIT);
 
