@@ -892,10 +892,10 @@ static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 static bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
 	// ignore packets that don't carry any data (i.e. flush)
-	if (!packet->data || !packet->data_length)
+	if (!packet->data.ptr || !packet->data.len)
 		return false;
 
-	switch (packet->data[SSH_MSGOFFSET_FRAME(type)]) {
+	switch (packet->data.ptr[SSH_MSGOFFSET_FRAME(type)]) {
 	case SSH_FRAME_TYPE_ACK:
 		return __ssh_ptl_should_drop_ack_packet(packet);
 
@@ -933,11 +933,11 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 {
 	// ignore packets that don't carry any data (i.e. flush)
-	if (!packet->data || !packet->data_length)
+	if (!packet->data.ptr || !packet->data.len)
 		return;
 
 	// only allow sequenced data packets to be modified
-	if (packet->data[SSH_MSGOFFSET_FRAME(type)] != SSH_FRAME_TYPE_DATA_SEQ)
+	if (packet->data.ptr[SSH_MSGOFFSET_FRAME(type)] != SSH_FRAME_TYPE_DATA_SEQ)
 		return;
 
 	if (likely(!ssh_ptl_should_corrupt_tx_data()))
@@ -953,7 +953,7 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 	 * doesn't have any (major) overlap with the SYN bytes (aa 55) and is
 	 * non-trivial (i.e. non-zero, non-0xff).
 	 */
-	memset(packet->data, 0xb3, packet->data_length);
+	memset(packet->data.ptr, 0xb3, packet->data.len);
 }
 
 static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
@@ -1059,7 +1059,7 @@ static inline void ssh_packet_put(struct ssh_packet *packet)
 
 static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
-	return packet->data[SSH_MSGOFFSET_FRAME(seq)];
+	return packet->data.ptr[SSH_MSGOFFSET_FRAME(seq)];
 }
 
 
@@ -1082,10 +1082,16 @@ static void ssh_packet_init(struct ssh_packet *packet,
 	packet->priority = args->priority;
 	packet->timestamp = KTIME_MAX;
 
-	packet->data_length = 0;
-	packet->data = NULL;
+	packet->data.ptr = NULL;
+	packet->data.len = 0;
 
 	packet->ops = args->ops;
+}
+
+static inline void ssh_packet_set_data(struct ssh_packet *packet, u8 *ptr, size_t len)
+{
+	packet->data.ptr = ptr;
+	packet->data.len = len;
 }
 
 
@@ -1102,8 +1108,7 @@ static struct ssh_packet *ptl_alloc_ctrl_packet(
 		return NULL;
 
 	ssh_packet_init(packet, args);
-	packet->data_length = SSH_MSG_LEN_CTRL;
-	packet->data = ((u8 *) packet) + sizeof(struct ssh_packet);
+	ssh_packet_set_data(packet, (u8 *)(packet + 1), SSH_MSG_LEN_CTRL);
 
 	return packet;
 }
@@ -1506,9 +1511,9 @@ static int ssh_ptl_tx_threadfn(void *data)
 			ssh_ptl_tx_inject_invalid_data(ptl->tx.packet);
 
 		// flush-packets don't have any data
-		if (likely(ptl->tx.packet->data && !drop)) {
-			buf = ptl->tx.packet->data + ptl->tx.offset;
-			len = ptl->tx.packet->data_length - ptl->tx.offset;
+		if (likely(ptl->tx.packet->data.ptr && !drop)) {
+			buf = ptl->tx.packet->data.ptr + ptl->tx.offset;
+			len = ptl->tx.packet->data.len - ptl->tx.offset;
 
 			ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
 			print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1,
@@ -1695,9 +1700,9 @@ static int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 
 	// validate packet fields
 	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &p->state)) {
-		if (p->data || test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state))
+		if (p->data.ptr || test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state))
 			return -EINVAL;
-	} else if (!p->data) {
+	} else if (!p->data.ptr) {
 		return -EINVAL;
 	}
 
@@ -1972,9 +1977,9 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 		return;
 	}
 
-	msgb_init(&msgb, packet->data, packet->data_length);
+	msgb_init(&msgb, packet->data.ptr, packet->data.len);
 	msgb_push_ack(&msgb, seq);
-	packet->data_length = msgb_bytes_used(&msgb);
+	packet->data.len = msgb_bytes_used(&msgb);
 
 	ssh_ptl_submit(ptl, packet);
 	ssh_packet_put(packet);
@@ -1996,9 +2001,9 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 		return;
 	}
 
-	msgb_init(&msgb, packet->data, packet->data_length);
+	msgb_init(&msgb, packet->data.ptr, packet->data.len);
 	msgb_push_nak(&msgb);
-	packet->data_length = msgb_bytes_used(&msgb);
+	packet->data.len = msgb_bytes_used(&msgb);
 
 	ssh_ptl_submit(ptl, packet);
 	ssh_packet_put(packet);
@@ -2499,13 +2504,13 @@ static inline void ssh_request_put(struct ssh_request *rqst)
 
 static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
-	return get_unaligned_le16(rqst->packet.data
+	return get_unaligned_le16(rqst->packet.data.ptr
 				  + SSH_MSGOFFSET_COMMAND(rqid));
 }
 
 static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 {
-	if (!rqst->packet.data)
+	if (!rqst->packet.data.ptr)
 		return -1;
 
 	return ssh_request_get_rqid(rqst);
@@ -3368,6 +3373,11 @@ static void ssh_request_init(struct ssh_request *rqst,
 
 	rqst->timestamp = KTIME_MAX;
 	rqst->ops = ops;
+}
+
+static inline void ssh_request_set_data(struct ssh_request *rqst, u8 *ptr, size_t len)
+{
+	ssh_packet_set_data(&rqst->packet, ptr, len);
 }
 
 
@@ -4437,8 +4447,7 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	rqid = ssh_rqid_next(&ec->counter.rqid);
 	msgb_push_cmd(&msgb, seq, rqst, rqid);
 
-	actual.base.packet.data = msgb.buffer;
-	actual.base.packet.data_length = msgb.ptr - msgb.buffer;
+	ssh_request_set_data(&actual.base, msgb.buffer, msgb_bytes_used(&msgb));
 
 	status = ssam_request_sync_submit(ec, &actual);
 	if (!status)

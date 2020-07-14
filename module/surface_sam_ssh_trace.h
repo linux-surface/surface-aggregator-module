@@ -101,33 +101,33 @@ static inline void ssam_trace_ptr_uid(const void *ptr, char* uid_str)
 
 static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *p)
 {
-	if (!p->data || p->data_length < SSH_MESSAGE_LENGTH(0))
+	if (!p->data.ptr || p->data.len < SSH_MESSAGE_LENGTH(0))
 		return SSAM_SEQ_NOT_APPLICABLE;
 
-	return p->data[SSH_MSGOFFSET_FRAME(seq)];
+	return p->data.ptr[SSH_MSGOFFSET_FRAME(seq)];
 }
 
 static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
 {
-	if (!p->data || p->data_length < SSH_COMMAND_MESSAGE_LENGTH(0))
+	if (!p->data.ptr || p->data.len < SSH_COMMAND_MESSAGE_LENGTH(0))
 		return SSAM_RQID_NOT_APPLICABLE;
 
-	return get_unaligned_le16(&p->data[SSH_MSGOFFSET_COMMAND(rqid)]);
+	return get_unaligned_le16(&p->data.ptr[SSH_MSGOFFSET_COMMAND(rqid)]);
 }
 
 static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 {
-	if (!p->data || p->data_length < SSH_COMMAND_MESSAGE_LENGTH(0))
+	if (!p->data.ptr || p->data.len < SSH_COMMAND_MESSAGE_LENGTH(0))
 		return SSAM_SSH_TC_NOT_APPLICABLE;
 
-	return get_unaligned_le16(&p->data[SSH_MSGOFFSET_COMMAND(tc)]);
+	return get_unaligned_le16(&p->data.ptr[SSH_MSGOFFSET_COMMAND(tc)]);
 }
 
 #endif /* _SURFACE_SAM_SSH_TRACE_HELPERS */
 
 #define ssam_trace_get_command_field_u8(packet, field) \
-	((!packet || packet->data_length < SSH_COMMAND_MESSAGE_LENGTH(0)) \
-	 ? 0 : p->data[SSH_MSGOFFSET_COMMAND(field)])
+	((!packet || packet->data.len < SSH_COMMAND_MESSAGE_LENGTH(0)) \
+	 ? 0 : p->data.ptr[SSH_MSGOFFSET_COMMAND(field)])
 
 #define ssam_show_generic_u8_field(value)				\
 	__print_symbolic(value,						\
@@ -314,7 +314,7 @@ DECLARE_EVENT_CLASS(ssam_packet_class,
 	TP_fast_assign(
 		ssam_trace_ptr_uid(packet, __entry->uid);
 		__entry->priority = READ_ONCE(packet->priority);
-		__entry->length = packet->data_length;
+		__entry->length = packet->data.len;
 		__entry->state = READ_ONCE(packet->state);
 		__entry->seq = ssam_trace_get_packet_seq(packet);
 	),
@@ -353,7 +353,7 @@ DECLARE_EVENT_CLASS(ssam_packet_status_class,
 	TP_fast_assign(
 		ssam_trace_ptr_uid(packet, __entry->uid);
 		__entry->priority = READ_ONCE(packet->priority);
-		__entry->length = packet->data_length;
+		__entry->length = packet->data.len;
 		__entry->state = READ_ONCE(packet->state);
 		__entry->seq = ssam_trace_get_packet_seq(packet);
 		__entry->status = status;

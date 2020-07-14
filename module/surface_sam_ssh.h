@@ -226,8 +226,11 @@ struct ssh_packet {
 	struct kref refcnt;
 
 	u8 priority;
-	u16 data_length;
-	u8 *data;
+
+	struct {
+		size_t len;
+		u8 *ptr;
+	} data;
 
 	unsigned long state;
 	ktime_t timestamp;
