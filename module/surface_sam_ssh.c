@@ -3352,7 +3352,7 @@ static void ssh_request_init(struct ssh_request *rqst,
 
 	packet_args.type = SSH_PACKET_TY_BLOCKING;
 	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
-		packet_args.type = SSH_PACKET_TY_SEQUENCED;
+		packet_args.type |= SSH_PACKET_TY_SEQUENCED;
 
 	packet_args.priority = SSH_PACKET_PRIORITY(DATA, 0);
 	packet_args.ops = &ssh_rtl_packet_ops;
