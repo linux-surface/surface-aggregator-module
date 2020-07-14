@@ -334,7 +334,7 @@ struct sshp_buf {
 };
 
 
-static inline bool sshp_validate_crc(const struct sshp_span *src, const u8 *crc)
+static inline bool sshp_validate_crc(const struct ssam_span *src, const u8 *crc)
 {
 	u16 actual = ssh_crc(src->ptr, src->len);
 	u16 expected = get_unaligned_le16(crc);
@@ -342,7 +342,7 @@ static inline bool sshp_validate_crc(const struct sshp_span *src, const u8 *crc)
 	return actual == expected;
 }
 
-static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
+static bool sshp_find_syn(const struct ssam_span *src, struct ssam_span *rem)
 {
 	size_t i;
 
@@ -365,19 +365,19 @@ static bool sshp_find_syn(const struct sshp_span *src, struct sshp_span *rem)
 	}
 }
 
-static bool sshp_starts_with_syn(const struct sshp_span *src)
+static bool sshp_starts_with_syn(const struct ssam_span *src)
 {
 	return src->len >= 2 && get_unaligned_le16(src->ptr) == SSH_MSG_SYN;
 }
 
 static int sshp_parse_frame(const struct device *dev,
-			    const struct sshp_span *source,
+			    const struct ssam_span *source,
 			    struct ssh_frame **frame,
-			    struct sshp_span *payload,
+			    struct ssam_span *payload,
 			    size_t maxlen)
 {
-	struct sshp_span sf;
-	struct sshp_span sp;
+	struct ssam_span sf;
+	struct ssam_span sp;
 
 	// initialize output
 	*frame = NULL;
@@ -438,9 +438,9 @@ static int sshp_parse_frame(const struct device *dev,
 }
 
 static int sshp_parse_command(const struct device *dev,
-			      const struct sshp_span *source,
+			      const struct ssam_span *source,
 			      struct ssh_command **command,
-			      struct sshp_span *command_data)
+			      struct ssam_span *command_data)
 {
 	// check for minimum length
 	if (unlikely(source->len < sizeof(struct ssh_command))) {
@@ -514,7 +514,7 @@ static inline size_t sshp_buf_read_from_fifo(struct sshp_buf *buf,
 }
 
 static inline void sshp_buf_span_from(struct sshp_buf *buf, size_t offset,
-				      struct sshp_span *span)
+				      struct ssam_span *span)
 {
 	span->ptr = buf->ptr + offset;
 	span->len = buf->len - offset;
@@ -684,7 +684,7 @@ enum ssh_ptl_state_flags {
 };
 
 struct ssh_ptl_ops {
-	void (*data_received)(struct ssh_ptl *p, const struct sshp_span *data);
+	void (*data_received)(struct ssh_ptl *p, const struct ssam_span *data);
 };
 
 struct ssh_ptl {
@@ -957,9 +957,9 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 }
 
 static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
-						 struct sshp_span *data)
+						 struct ssam_span *data)
 {
-	struct sshp_span frame;
+	struct ssam_span frame;
 
 	// check if there actually is something to corrupt
 	if (!sshp_find_syn(data, &frame))
@@ -974,7 +974,7 @@ static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 }
 
 static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
-						  struct sshp_span *frame)
+						  struct ssam_span *frame)
 {
 	size_t payload_len, message_len;
 	struct ssh_frame *sshf;
@@ -1024,12 +1024,12 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 }
 
 static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
-						 struct sshp_span *data)
+						 struct ssam_span *data)
 {
 }
 
 static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
-						  struct sshp_span *frame)
+						  struct ssam_span *frame)
 {
 }
 
@@ -1953,7 +1953,7 @@ static bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
 
 static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
 				 const struct ssh_frame *frame,
-				 const struct sshp_span *payload)
+				 const struct ssam_span *payload)
 {
 	if (ssh_ptl_rx_blacklist_check(ptl, frame->seq))
 		return;
@@ -2009,11 +2009,11 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 	ssh_packet_put(packet);
 }
 
-static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct sshp_span *source)
+static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 {
 	struct ssh_frame *frame;
-	struct sshp_span payload;
-	struct sshp_span aligned;
+	struct ssam_span payload;
+	struct ssam_span aligned;
 	bool syn_found;
 	int status;
 
@@ -2089,7 +2089,7 @@ static int ssh_ptl_rx_threadfn(void *data)
 	struct ssh_ptl *ptl = data;
 
 	while (true) {
-		struct sshp_span span;
+		struct ssam_span span;
 		size_t offs = 0;
 		size_t n;
 
@@ -2427,7 +2427,7 @@ enum ssh_rtl_state_flags {
 
 struct ssh_rtl_ops {
 	void (*handle_event)(struct ssh_rtl *rtl, const struct ssh_command *cmd,
-			     const struct sshp_span *data);
+			     const struct ssam_span *data);
 };
 
 struct ssh_rtl {
@@ -2569,7 +2569,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 
 static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 				      const struct ssh_command *cmd,
-				      const struct sshp_span *data)
+				      const struct ssam_span *data)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 
@@ -2835,7 +2835,7 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 
 static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			     const struct ssh_command *command,
-			     const struct sshp_span *command_data)
+			     const struct ssam_span *command_data)
 {
 	struct ssh_request *r = NULL;
 	struct ssh_request *p, *n;
@@ -3224,7 +3224,7 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 
 
 static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
-			     const struct sshp_span *data)
+			     const struct ssam_span *data)
 {
 	trace_ssam_rx_event_received(cmd, data->len);
 
@@ -3234,12 +3234,12 @@ static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 	rtl->ops.handle_event(rtl, cmd, data);
 }
 
-static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct sshp_span *data)
+static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct ssam_span *data)
 {
 	struct ssh_rtl *rtl = to_ssh_rtl(p, ptl);
 	struct device *dev = &p->serdev->dev;
 	struct ssh_command *command;
-	struct sshp_span command_data;
+	struct ssam_span command_data;
 
 	if (sshp_parse_command(dev, data, &command, &command_data))
 		return;
@@ -3250,7 +3250,7 @@ static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct sshp_span *data)
 		ssh_rtl_complete(rtl, command, &command_data);
 }
 
-static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct sshp_span *data)
+static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 {
 	switch (data->ptr[0]) {
 	case SSH_PLD_TYPE_CMD:
@@ -3389,7 +3389,7 @@ struct ssh_flush_request {
 
 static void ssh_rtl_flush_request_complete(struct ssh_request *r,
 					   const struct ssh_command *cmd,
-					   const struct sshp_span *data,
+					   const struct ssam_span *data,
 					   int status)
 {
 	struct ssh_flush_request *rqst;
@@ -4098,7 +4098,7 @@ struct serdev_device *ssam_controller_serdev_device(struct ssam_controller *c)
 
 static void ssam_request_sync_complete(struct ssh_request *rqst,
 				       const struct ssh_command *cmd,
-				       const struct sshp_span *data, int status)
+				       const struct ssam_span *data, int status)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
 	struct ssam_request_sync *r;
@@ -4796,7 +4796,7 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 
 static void ssam_handle_event(struct ssh_rtl *rtl,
 			      const struct ssh_command *cmd,
-			      const struct sshp_span *data)
+			      const struct ssam_span *data)
 {
 	struct ssam_controller *ec = to_ssam_controller(rtl, rtl);
 	struct ssam_event_item *item;

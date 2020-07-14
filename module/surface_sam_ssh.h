@@ -161,7 +161,16 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
 		+ offsetof(struct ssh_command, field))
 
-struct sshp_span {
+/**
+ * struct ssam_span - reference to a buffer region
+ * @ptr: pointer to the buffer region
+ * @len: length of the buffer region
+ * 
+ * A reference to a (non-owned) buffer segment, consisting of pointer and
+ * length. Use of this struct indicates non-owned data, i.e. data of which the
+ * life-time is managed (i.e. it is allocated/freed) via another pointer.
+ */
+struct ssam_span {
 	u8    *ptr;
 	size_t len;
 };
@@ -280,7 +289,7 @@ struct ssh_request_ops {
 	void (*release)(struct ssh_request *rqst);
 	void (*complete)(struct ssh_request *rqst,
 			 const struct ssh_command *cmd,
-			 const struct sshp_span *data, int status);
+			 const struct ssam_span *data, int status);
 };
 
 struct ssh_request {
