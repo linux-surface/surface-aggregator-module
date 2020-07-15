@@ -6,7 +6,10 @@
 unload() {
     cmd=${1}
 
-    systemctl stop surface-dtx-daemon.service
+    if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
+    then
+        systemctl stop surface-dtx-daemon.service
+    fi
 
     modprobe -r battery
     modprobe -r ac
@@ -41,7 +44,11 @@ load() {
     ${cmd} surface_sam_sid_vhf"${ext}"
     ${cmd} surface_sam_sid"${ext}"
 
-    systemctl start surface-dtx-daemon.service
+    if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
+    then
+        systemctl start surface-dtx-daemon.service
+    fi
+
     systemctl restart upower.service
 }
 
