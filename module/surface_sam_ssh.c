@@ -4237,6 +4237,7 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 {
 	struct ssam_request_sync *rqst;
 	struct ssam_span buf;
+	size_t len;
 	int status;
 
 	// prevent overflow, allows us to skip checks later on
@@ -4250,10 +4251,10 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 		return status;
 
 	ssam_request_sync_init(rqst, spec->flags);
-	ssam_request_sync_set_data(rqst, buf.ptr, buf.len);
 	ssam_request_sync_set_resp(rqst, rsp);
 
-	ssam_request_write_data(&buf, ctrl, spec);
+	len = ssam_request_write_data(&buf, ctrl, spec);
+	ssam_request_sync_set_data(rqst, buf.ptr, len);
 
 	status = ssam_request_sync_submit(ctrl, rqst);
 	if (!status)
