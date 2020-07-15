@@ -4300,6 +4300,50 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	})
 
 
+struct ssam_request_spec {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 channel;
+	u8 flags;
+};
+
+#define SSAM_DEFINE_SYNC_REQUEST_R(name, rtype, spec...)			\
+	int name(struct ssam_controller *ctrl, rtype *out)			\
+	{									\
+		struct ssam_request_spec s = (struct ssam_request_spec)spec;	\
+		struct ssam_request rqst;					\
+		struct ssam_response rsp;					\
+		int status;							\
+										\
+		rqst.target_category = s.target_category;			\
+		rqst.command_id = s.command_id;					\
+		rqst.instance_id = s.instance_id;				\
+		rqst.channel = s.channel;					\
+		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
+		rqst.length = 0;						\
+		rqst.payload = NULL;						\
+										\
+		rsp.capacity = sizeof(rtype);					\
+		rsp.length = 0;							\
+		rsp.pointer = (u8 *)out;					\
+										\
+		status = ssam_request_sync_onstack(ctrl, &rqst, &rsp, 0);	\
+		if (status)							\
+			return status;						\
+										\
+		if (rsp.length != sizeof(rtype)) {				\
+			ssam_err(ctrl, "rqst: invalid response length, expected %zu, got %zu" \
+				 " (tc: 0x%02x, cid: 0x%02x)", sizeof(rtype),	\
+				 rsp.length, rqst.target_category,		\
+				 rqst.command_id);				\
+			return -EIO;						\
+		}								\
+										\
+		return 0;							\
+	}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static struct ssam_controller ssh_ec = {
@@ -4708,39 +4752,26 @@ static int surface_sam_controller_suspend(struct ssam_controller *ec)
 }
 
 
-static int surface_sam_ssh_get_controller_version(struct ssam_controller *ec, u32 *version)
-{
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = 0x01,
-		.cid = 0x13,
-		.iid = 0x00,
-		.chn = 0x01,
-		.snc = 0x01,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	struct surface_sam_ssh_buf result = {
-		result.cap = sizeof(*version),
-		result.len = 0,
-		result.data = (u8 *)version,
-	};
-
-	*version = 0;
-	return __surface_sam_ssh_rqst(ec, &rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_controller_version, __le32, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x13,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
 
 static int surface_sam_ssh_log_controller_version(struct ssam_controller *ec)
 {
+	__le32 v;
 	u32 version, a, b, c;
 	int status;
 
-	status = surface_sam_ssh_get_controller_version(ec, &version);
+	status = ssam_ssh_get_controller_version(ec, &v);
 	if (status)
 		return status;
 
+	version = le32_to_cpu(v);
 	a = (version >> 24) & 0xff;
-	b = le16_to_cpu((version >> 8) & 0xffff);
+	b = ((version >> 8) & 0xffff);
 	c = version & 0xff;
 
 	ssam_info(ec, "SAM controller version: %u.%u.%u\n", a, b, c);
