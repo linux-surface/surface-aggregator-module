@@ -4381,13 +4381,16 @@ static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
 
 	if (status) {
-		ssam_err(ctrl, "failed to enable event source (tc: 0x%02x, rqid: 0x%04x)\n",
-			 id.target_category, rqid);
+		ssam_err(ctrl, "failed to enable event source "
+			 "(tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 id.target_category, id.instance, reg.target_category);
 	}
 
 	if (buf[0] != 0x00) {
 		ssam_warn(ctrl, "unexpected result while enabling event source: "
-			  "0x%02x\n", buf[0]);
+			  "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			  buf[0], id.target_category, id.instance,
+			  reg.target_category);
 	}
 
 	return status;
@@ -4431,13 +4434,16 @@ static int surface_sam_ssh_event_disable(struct ssam_controller *ctrl,
 	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
 
 	if (status) {
-		ssam_err(ctrl, "failed to disable event source (tc: 0x%02x, rqid: 0x%04x)\n",
-			 id.target_category, rqid);
+		ssam_err(ctrl, "failed to disable event source "
+			 "(tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 id.target_category, id.instance, reg.target_category);
 	}
 
 	if (buf[0] != 0x00) {
 		ssam_warn(ctrl, "unexpected result while disabling event source: "
-			  "0x%02x\n", buf[0]);
+			  "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			  buf[0], id.target_category, id.instance,
+			  reg.target_category);
 	}
 
 	return status;
