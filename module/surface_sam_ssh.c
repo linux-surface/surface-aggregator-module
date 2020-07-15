@@ -4147,7 +4147,8 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 };
 
 
-static int ssam_request_sync_submit(struct ssam_controller *ctrl, struct ssam_request_sync *rqst)
+static int ssam_request_sync_submit(struct ssam_controller *ctrl,
+				    struct ssam_request_sync *rqst)
 {
 	int status;
 
