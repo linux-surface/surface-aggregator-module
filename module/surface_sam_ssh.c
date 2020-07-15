@@ -4389,10 +4389,6 @@ int surface_sam_ssh_consumer_register(struct device *consumer)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
 
-static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
-				  const struct surface_sam_ssh_rqst *rqst,
-				  struct surface_sam_ssh_buf *result);
-
 static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 					struct ssam_event_registry reg,
 					struct ssam_event_id id,
