@@ -4187,6 +4187,12 @@ static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
 	ssh_request_set_data(&rqst->base, ptr, len);
 }
 
+static inline void ssam_request_sync_set_resp(struct ssam_request_sync *rqst,
+					      struct ssam_response *resp)
+{
+	rqst->resp = resp;
+}
+
 static int ssam_request_sync_submit(struct ssam_controller *ctrl,
 				    struct ssam_request_sync *rqst)
 {
@@ -4485,11 +4491,11 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 
 	ssh_request_init(&actual->base, spec.flags, &ssam_request_sync_ops);
 	init_completion(&actual->comp);
-
-	actual->resp = &resp;
 	actual->status = 0;
 
 	ssam_request_sync_set_data(actual, buf.ptr, buf.len);
+	ssam_request_sync_set_resp(actual, &resp);
+
 	ssam_request_write_data(&buf, ec, &spec);
 
 	status = ssam_request_sync_submit(ec, actual);
