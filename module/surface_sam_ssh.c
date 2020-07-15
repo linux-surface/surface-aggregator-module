@@ -4464,6 +4464,15 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	spec.length = rqst->cdl;
 	spec.payload = rqst->pld;
 
+	resp.pointer = NULL;
+	resp.capacity = 0;
+	resp.length = 0;
+
+	if (result) {
+		resp.pointer = result->data;
+		resp.capacity = result->cap;
+	}
+
 	// prevent overflow
 	if (spec.length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
 		ssam_err(ec, SSH_RQST_TAG "request payload too large\n");
@@ -4476,15 +4485,6 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 
 	ssh_request_init(&actual->base, spec.flags, &ssam_request_sync_ops);
 	init_completion(&actual->comp);
-
-	resp.pointer = NULL;
-	resp.capacity = 0;
-	resp.length = 0;
-
-	if (result) {
-		resp.pointer = result->data;
-		resp.capacity = result->cap;
-	}
 
 	actual->resp = &resp;
 	actual->status = 0;
