@@ -4220,6 +4220,38 @@ static int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 }
 
 
+int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
+		      struct ssam_response *rsp)
+{
+	struct ssam_request_sync *rqst;
+	struct ssam_span buf;
+	int status;
+
+	// prevent overflow, allows us to skip checks later on
+	if (spec->length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
+		ssam_err(ctrl, "rqst: request payload too large\n");
+		return -EINVAL;
+	}
+
+	status = ssam_request_sync_alloc(spec->length, GFP_KERNEL, &rqst, &buf);
+	if (status)
+		return status;
+
+	ssam_request_sync_init(rqst, spec->flags);
+	ssam_request_sync_set_data(rqst, buf.ptr, buf.len);
+	ssam_request_sync_set_resp(rqst, rsp);
+
+	ssam_request_write_data(&buf, ctrl, spec);
+
+	status = ssam_request_sync_submit(ctrl, rqst);
+	if (!status)
+		status = ssam_request_sync_wait(rqst);
+
+	kfree(rqst);
+	return status;
+}
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static struct ssam_controller ssh_ec = {
@@ -4465,12 +4497,11 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  const struct surface_sam_ssh_rqst *rqst,
 				  struct surface_sam_ssh_buf *result)
 {
-	struct ssam_request_sync *actual;
 	struct ssam_request spec;
 	struct ssam_response resp;
-	struct ssam_span buf;
 	int status;
 
+	// translate old -> new
 	spec.target_category = rqst->tc;
 	spec.command_id = rqst->cid;
 	spec.instance_id = rqst->iid;
@@ -4488,30 +4519,12 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 		resp.capacity = result->cap;
 	}
 
-	// prevent overflow
-	if (spec.length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
-		ssam_err(ec, SSH_RQST_TAG "request payload too large\n");
-		return -EINVAL;
-	}
+	status = ssam_request_sync(ec, &spec, &resp);
 
-	status = ssam_request_sync_alloc(spec.length, GFP_KERNEL, &actual, &buf);
-	if (status)
-		return status;
-
-	ssam_request_sync_init(actual, spec.flags);
-	ssam_request_sync_set_data(actual, buf.ptr, buf.len);
-	ssam_request_sync_set_resp(actual, &resp);
-
-	ssam_request_write_data(&buf, ec, &spec);
-
-	status = ssam_request_sync_submit(ec, actual);
-	if (!status)
-		status = ssam_request_sync_wait(actual);
-
+	// translate new -> old
 	if (result)
 		result->len = resp.length;
 
-	kfree(actual);
 	return status;
 }
 
