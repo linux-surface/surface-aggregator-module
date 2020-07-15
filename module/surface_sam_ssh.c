@@ -4344,18 +4344,18 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  const struct surface_sam_ssh_rqst *rqst,
 				  struct surface_sam_ssh_buf *result);
 
-static int surface_sam_ssh_event_enable(struct ssam_controller *ec,
+static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 					struct ssam_event_registry reg,
 					struct ssam_event_id id,
 					u8 flags)
 {
 	struct ssh_notification_params params;
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
+	struct ssam_request rqst;
+	struct ssam_response result;
+	int status;
 
 	u16 rqid = ssh_tc_to_rqid(id.target_category);
 	u8 buf[1] = { 0x00 };
-	int status;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
@@ -4366,27 +4366,27 @@ static int surface_sam_ssh_event_enable(struct ssam_controller *ec,
 	params.flags = flags;
 	put_unaligned_le16(rqid, &params.request_id);
 
-	rqst.tc = reg.target_category;
-	rqst.cid = reg.cid_enable;
-	rqst.iid = 0x00;
-	rqst.chn = reg.channel;
-	rqst.snc = 0x01;
-	rqst.cdl = sizeof(params);
-	rqst.pld = (u8 *)&params;
+	rqst.target_category = reg.target_category;
+	rqst.command_id = reg.cid_enable;
+	rqst.instance_id = 0x00;
+	rqst.channel = reg.channel;
+	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
+	rqst.length = sizeof(params);
+	rqst.payload = (u8 *)&params;
 
-	result.cap = ARRAY_SIZE(buf);
-	result.len = 0;
-	result.data = buf;
+	result.capacity = ARRAY_SIZE(buf);
+	result.length = 0;
+	result.pointer = buf;
 
-	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
+	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
 
 	if (status) {
-		ssam_err(ec, "failed to enable event source (tc: 0x%02x, rqid: 0x%04x)\n",
+		ssam_err(ctrl, "failed to enable event source (tc: 0x%02x, rqid: 0x%04x)\n",
 			 id.target_category, rqid);
 	}
 
 	if (buf[0] != 0x00) {
-		ssam_warn(ec, "unexpected result while enabling event source: "
+		ssam_warn(ctrl, "unexpected result while enabling event source: "
 			  "0x%02x\n", buf[0]);
 	}
 
@@ -4394,18 +4394,18 @@ static int surface_sam_ssh_event_enable(struct ssam_controller *ec,
 
 }
 
-static int surface_sam_ssh_event_disable(struct ssam_controller *ec,
+static int surface_sam_ssh_event_disable(struct ssam_controller *ctrl,
 					 struct ssam_event_registry reg,
 					 struct ssam_event_id id,
 					 u8 flags)
 {
 	struct ssh_notification_params params;
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
+	struct ssam_request rqst;
+	struct ssam_response result;
+	int status;
 
 	u16 rqid = ssh_tc_to_rqid(id.target_category);
 	u8 buf[1] = { 0x00 };
-	int status;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
@@ -4416,27 +4416,27 @@ static int surface_sam_ssh_event_disable(struct ssam_controller *ec,
 	params.flags = flags;
 	put_unaligned_le16(rqid, &params.request_id);
 
-	rqst.tc = reg.target_category;
-	rqst.cid = reg.cid_disable;
-	rqst.iid = 0x00;
-	rqst.chn = reg.channel;
-	rqst.snc = 0x01;
-	rqst.cdl = sizeof(params);
-	rqst.pld = (u8 *)&params;
+	rqst.target_category = reg.target_category;
+	rqst.command_id = reg.cid_disable;
+	rqst.instance_id = 0x00;
+	rqst.channel = reg.channel;
+	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
+	rqst.length = sizeof(params);
+	rqst.payload = (u8 *)&params;
 
-	result.cap = ARRAY_SIZE(buf);
-	result.len = 0;
-	result.data = buf;
+	result.capacity = ARRAY_SIZE(buf);
+	result.length = 0;
+	result.pointer = buf;
 
-	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
+	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
 
 	if (status) {
-		ssam_err(ec, "failed to disable event source (tc: 0x%02x, rqid: 0x%04x)\n",
+		ssam_err(ctrl, "failed to disable event source (tc: 0x%02x, rqid: 0x%04x)\n",
 			 id.target_category, rqid);
 	}
 
 	if (buf[0] != 0x00) {
-		ssam_warn(ec, "unexpected result while disabling event source: "
+		ssam_warn(ctrl, "unexpected result while disabling event source: "
 			  "0x%02x\n", buf[0]);
 	}
 
