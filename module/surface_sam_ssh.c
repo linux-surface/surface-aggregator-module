@@ -4127,7 +4127,9 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 
 	r = container_of(rqst, struct ssam_request_sync, base);
 	r->status = status;
-	r->resp->length = 0;
+
+        if (r->resp)
+	        r->resp->length = 0;
 
 	if (status) {
 		rtl_dbg_cond(rtl, "rsp: request failed: %d\n", status);
@@ -4137,10 +4139,13 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 	if (!data)	// handle requests without a response
 		return;
 
-	if (!r->resp->pointer && data->len) {
-		rtl_warn(rtl, "rsp: no response buffer provided, dropping data\n");
-		return;
-	}
+	if (!r->resp || !r->resp->pointer) {
+                if (data->len) {
+		        rtl_warn(rtl, "rsp: no response buffer provided,"
+                                 " dropping data\n");
+                }
+                return;
+        }
 
 	if (data->len > r->resp->capacity) {
 		rtl_err(rtl, "rsp: response buffer too small,"
