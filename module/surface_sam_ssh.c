@@ -4264,6 +4264,36 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 	return status;
 }
 
+#define ssam_request_sync_onstack(ctrl, spec, resp, payload_len)		\
+	({									\
+		u8 __data[SSH_COMMAND_MESSAGE_LENGTH(payload_len)];		\
+		struct ssam_request_sync __r;					\
+		struct ssam_span __b = { &__data[0], ARRAY_SIZE(__data) };	\
+		size_t __len;							\
+		int __s = 0;							\
+										\
+		/* prevent overflow, allows us to skip checks later on */	\
+		if ((spec)->length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {		\
+			ssam_err(ctrl, "rqst: request payload too large\n");	\
+			__s = -EINVAL;						\
+		}								\
+										\
+		if (!__s) {							\
+			ssam_request_sync_init(&__r, (spec)->flags);		\
+			ssam_request_sync_set_resp(&__r, resp);			\
+										\
+			__len = ssam_request_write_data(&__b, ctrl, spec);	\
+			ssam_request_sync_set_data(&__r, __b.ptr, __len);	\
+										\
+			__s = ssam_request_sync_submit(ctrl, &__r);		\
+		}								\
+										\
+		if (!__s)							\
+			__s = ssam_request_sync_wait(&__r);			\
+										\
+		__s;								\
+	})
+
 
 /* -- TODO ------------------------------------------------------------------ */
 
