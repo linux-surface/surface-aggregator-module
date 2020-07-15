@@ -4147,6 +4147,28 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 };
 
 
+static int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
+				   struct ssam_request_sync **rqst,
+				   struct ssam_span *buffer)
+{
+	size_t msglen = SSH_COMMAND_MESSAGE_LENGTH(payload_len);
+
+	*rqst = kzalloc(sizeof(struct ssam_request_sync) + msglen, flags);
+	if (!*rqst)
+		return -ENOMEM;
+
+	buffer->ptr = (u8 *)(*rqst + 1);
+	buffer->len = msglen;
+
+	return 0;
+}
+
+static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
+					      u8 *ptr, size_t len)
+{
+	ssh_request_set_data(&rqst->base, ptr, len);
+}
+
 static int ssam_request_sync_submit(struct ssam_controller *ctrl,
 				    struct ssam_request_sync *rqst)
 {
@@ -4410,10 +4432,10 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  const struct surface_sam_ssh_rqst *rqst,
 				  struct surface_sam_ssh_buf *result)
 {
-	struct ssam_request_sync actual;
+	struct ssam_request_sync *actual;
 	struct ssam_response resp;
+	struct ssam_span buf;
 	struct msgbuf msgb;
-	size_t msglen = SSH_COMMAND_MESSAGE_LENGTH(rqst->cdl);
 	unsigned flags = 0;
 	u16 rqid;
 	u8 seq;
@@ -4428,8 +4450,12 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	if (result && result->data && rqst->snc)
 		flags |= SSAM_REQUEST_HAS_RESPONSE;
 
-	ssh_request_init(&actual.base, flags, &ssam_request_sync_ops);
-	init_completion(&actual.comp);
+	status = ssam_request_sync_alloc(rqst->cdl, GFP_KERNEL, &actual, &buf);
+	if (status)
+		return status;
+
+	ssh_request_init(&actual->base, flags, &ssam_request_sync_ops);
+	init_completion(&actual->comp);
 
 	resp.pointer = NULL;
 	resp.capacity = 0;
@@ -4440,29 +4466,24 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 		resp.capacity = result->cap;
 	}
 
-	actual.resp = &resp;
-	actual.status = 0;
+	actual->resp = &resp;
+	actual->status = 0;
 
-	// alloc and create message
-	status = msgb_alloc(&msgb, msglen, GFP_KERNEL);
-	if (status)
-		return status;
-
+	// write message
 	seq = ssh_seq_next(&ec->counter.seq);
 	rqid = ssh_rqid_next(&ec->counter.rqid);
+	msgb_init(&msgb, buf.ptr, buf.len);
 	msgb_push_cmd(&msgb, seq, rqst, rqid);
+	ssam_request_sync_set_data(actual, msgb.begin, msgb_bytes_used(&msgb));
 
-	ssh_request_set_data(&actual.base, msgb.begin, msgb_bytes_used(&msgb));
-
-	status = ssam_request_sync_submit(ec, &actual);
+	status = ssam_request_sync_submit(ec, actual);
 	if (!status)
-		status = ssam_request_sync_wait(&actual);
-
-	msgb_free(&msgb);
+		status = ssam_request_sync_wait(actual);
 
 	if (result)
 		result->len = resp.length;
 
+	kfree(actual);
 	return status;
 }
 
