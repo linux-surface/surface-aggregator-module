@@ -4646,6 +4646,28 @@ int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface
 EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
 
 
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x13,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_suspend, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x15,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_resume, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x16,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+
 /**
  * surface_sam_controller_resume - Resume the EC if it is in a suspended mode.
  * @ec: the EC to resume
@@ -4660,27 +4682,11 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
  */
 static int surface_sam_controller_resume(struct ssam_controller *ec)
 {
-	u8 buf[1] = { 0x00 };
 	int status;
-
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = 0x01,
-		.cid = 0x16,
-		.iid = 0x00,
-		.chn = 0x01,
-		.snc = 0x01,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	struct surface_sam_ssh_buf result = {
-		result.cap = ARRAY_SIZE(buf),
-		result.len = 0,
-		result.data = buf,
-	};
+	u8 out;
 
 	ssam_dbg(ec, "pm: resuming system aggregator module\n");
-	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
+	status = ssam_ssh_controller_resume(ec, &out);
 	if (status)
 		return status;
 
@@ -4689,9 +4695,9 @@ static int surface_sam_controller_resume(struct ssam_controller *ec)
 	 * logging and experience, we expect it to be zero. No other value has
 	 * been observed so far.
 	 */
-	if (buf[0] != 0x00) {
+	if (out != 0x00) {
 		ssam_warn(ec, "unexpected result while trying to resume EC: "
-			 "0x%02x\n", buf[0]);
+			 "0x%02x\n", out);
 	}
 
 	return 0;
@@ -4714,27 +4720,11 @@ static int surface_sam_controller_resume(struct ssam_controller *ec)
  */
 static int surface_sam_controller_suspend(struct ssam_controller *ec)
 {
-	u8 buf[1] = { 0x00 };
 	int status;
-
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = 0x01,
-		.cid = 0x15,
-		.iid = 0x00,
-		.chn = 0x01,
-		.snc = 0x01,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	struct surface_sam_ssh_buf result = {
-		result.cap = ARRAY_SIZE(buf),
-		result.len = 0,
-		result.data = buf,
-	};
+	u8 out;
 
 	ssam_dbg(ec, "pm: suspending system aggregator module\n");
-	status = __surface_sam_ssh_rqst(ec, &rqst, &result);
+	status = ssam_ssh_controller_suspend(ec, &out);
 	if (status)
 		return status;
 
@@ -4743,21 +4733,14 @@ static int surface_sam_controller_suspend(struct ssam_controller *ec)
 	 * logging and experience, we expect it to be zero. No other value has
 	 * been observed so far.
 	 */
-	if (buf[0] != 0x00) {
+	if (out != 0x00) {
 		ssam_warn(ec, "unexpected result while trying to suspend EC: "
-			 "0x%02x\n", buf[0]);
+			 "0x%02x\n", out);
 	}
 
 	return 0;
 }
 
-
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
-	.target_category = SSAM_SSH_TC_SAM,
-	.command_id      = 0x13,
-	.instance_id     = 0x00,
-	.channel         = 0x01,
-});
 
 static int surface_sam_ssh_log_firmware_version(struct ssam_controller *ec)
 {
