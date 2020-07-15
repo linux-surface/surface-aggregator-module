@@ -180,16 +180,16 @@ static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 /* -- Builder functions for SAM-over-SSH messages. -------------------------- */
 
 struct msgbuf {
-	u8 *buffer;
+	u8 *begin;
 	u8 *end;
 	u8 *ptr;
 };
 
-static inline void msgb_init(struct msgbuf *msgb, u8 *buffer, size_t cap)
+static inline void msgb_init(struct msgbuf *msgb, u8 *ptr, size_t cap)
 {
-	msgb->buffer = buffer;
-	msgb->end = buffer + cap;
-	msgb->ptr = buffer;
+	msgb->begin = ptr;
+	msgb->end = ptr + cap;
+	msgb->ptr = ptr;
 }
 
 static inline int msgb_alloc(struct msgbuf *msgb, size_t cap, gfp_t flags)
@@ -206,20 +206,20 @@ static inline int msgb_alloc(struct msgbuf *msgb, size_t cap, gfp_t flags)
 
 static inline void msgb_free(struct msgbuf *msgb)
 {
-	kfree(msgb->buffer);
-	msgb->buffer = NULL;
+	kfree(msgb->begin);
+	msgb->begin = NULL;
 	msgb->end = NULL;
 	msgb->ptr = NULL;
 }
 
 static inline void msgb_reset(struct msgbuf *msgb)
 {
-	msgb->ptr = msgb->buffer;
+	msgb->ptr = msgb->begin;
 }
 
 static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 {
-	return msgb->ptr - msgb->buffer;
+	return msgb->ptr - msgb->begin;
 }
 
 static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
@@ -1980,7 +1980,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 
 	msgb_init(&msgb, buf.ptr, buf.len);
 	msgb_push_ack(&msgb, seq);
-	ssh_packet_set_data(packet, msgb.buffer, msgb_bytes_used(&msgb));
+	ssh_packet_set_data(packet, msgb.begin, msgb_bytes_used(&msgb));
 
 	ssh_ptl_submit(ptl, packet);
 	ssh_packet_put(packet);
@@ -2007,7 +2007,7 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 
 	msgb_init(&msgb, buf.ptr, buf.len);
 	msgb_push_nak(&msgb);
-	ssh_packet_set_data(packet, msgb.buffer, msgb_bytes_used(&msgb));
+	ssh_packet_set_data(packet, msgb.begin, msgb_bytes_used(&msgb));
 
 	ssh_ptl_submit(ptl, packet);
 	ssh_packet_put(packet);
@@ -4451,7 +4451,7 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	rqid = ssh_rqid_next(&ec->counter.rqid);
 	msgb_push_cmd(&msgb, seq, rqst, rqid);
 
-	ssh_request_set_data(&actual.base, msgb.buffer, msgb_bytes_used(&msgb));
+	ssh_request_set_data(&actual.base, msgb.begin, msgb_bytes_used(&msgb));
 
 	status = ssam_request_sync_submit(ec, &actual);
 	if (!status)
