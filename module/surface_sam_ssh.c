@@ -1357,10 +1357,8 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 		 * If we are cancelling or completing this packet, ignore it.
 		 * It's going to be removed from this queue shortly.
 		 */
-		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
-			spin_unlock(&ptl->queue.lock);
+		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
-		}
 
 		/*
 		 * Packets should be ordered non-blocking/to-be-resent first.
@@ -1368,7 +1366,6 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 		 * process any following packet either and abort.
 		 */
 		if (!ssh_ptl_tx_can_process(p)) {
-			spin_unlock(&ptl->queue.lock);
 			packet = ERR_PTR(-EBUSY);
 			break;
 		}
