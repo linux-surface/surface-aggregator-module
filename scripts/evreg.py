@@ -80,7 +80,7 @@ def main():
         print(f'  <ev_iid>:      event instance ID')
         print(f'  [payload...]:  optional payload bytes, separated by whitespace')
 
-    elif cmd_name == 'simple':
+    elif cmd_name == 'command':
         tc = int(sys.argv[2], 0)
         cid = int(sys.argv[3], 0)
         iid = int(sys.argv[4], 0)
