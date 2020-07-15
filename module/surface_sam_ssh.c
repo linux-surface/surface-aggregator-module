@@ -286,9 +286,8 @@ static inline void msgb_push_nak(struct msgbuf *msgb)
 	msgb_push_crc(msgb, msgb->ptr, 0);
 }
 
-static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
-				 const struct surface_sam_ssh_rqst *rqst,
-				 u16 rqid)
+static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq, u16 rqid,
+				 const struct ssam_request *rqst)
 {
 	struct ssh_command *cmd;
 	const u8 *cmd_begin;
@@ -298,7 +297,7 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 	msgb_push_syn(msgb);
 
 	// command frame + crc
-	msgb_push_frame(msgb, type, sizeof(*cmd) + rqst->cdl, seq);
+	msgb_push_frame(msgb, type, sizeof(*cmd) + rqst->length, seq);
 
 	// frame payload: command struct + payload
 	if (WARN_ON(msgb->ptr + sizeof(*cmd) > msgb->end))
@@ -308,17 +307,17 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq,
 	cmd = (struct ssh_command *)msgb->ptr;
 
 	cmd->type    = SSH_PLD_TYPE_CMD;
-	cmd->tc      = rqst->tc;
-	cmd->chn_out = rqst->chn;
+	cmd->tc      = rqst->target_category;
+	cmd->chn_out = rqst->channel;
 	cmd->chn_in  = 0x00;
-	cmd->iid     = rqst->iid;
+	cmd->iid     = rqst->instance_id;
 	put_unaligned_le16(rqid, &cmd->rqid);
-	cmd->cid     = rqst->cid;
+	cmd->cid     = rqst->command_id;
 
 	msgb->ptr += sizeof(*cmd);
 
 	// command payload
-	msgb_push_buf(msgb, rqst->pld, rqst->cdl);
+	msgb_push_buf(msgb, rqst->payload, rqst->length);
 
 	// crc for command struct + payload
 	msgb_push_crc(msgb, cmd_begin, msgb->ptr - cmd_begin);
@@ -4099,6 +4098,25 @@ struct serdev_device *ssam_controller_serdev_device(struct ssam_controller *c)
 	return c->rtl.ptl.serdev;
 }
 
+static ssize_t ssam_request_write_data(struct ssam_span *buf,
+				       struct ssam_controller *ctrl,
+				       struct ssam_request *spec)
+{
+	struct msgbuf msgb;
+	u16 rqid;
+	u8 seq;
+
+	if (spec->length > SSH_COMMAND_MAX_PAYLOAD_SIZE)
+		return -EINVAL;
+
+	msgb_init(&msgb, buf->ptr, buf->len);
+	seq = ssh_seq_next(&ctrl->counter.seq);
+	rqid = ssh_rqid_next(&ctrl->counter.rqid);
+	msgb_push_cmd(&msgb, seq, rqid, spec);
+
+	return msgb_bytes_used(&msgb);
+}
+
 
 static void ssam_request_sync_complete(struct ssh_request *rqst,
 				       const struct ssh_command *cmd,
@@ -4433,28 +4451,30 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 				  struct surface_sam_ssh_buf *result)
 {
 	struct ssam_request_sync *actual;
+	struct ssam_request spec;
 	struct ssam_response resp;
 	struct ssam_span buf;
-	struct msgbuf msgb;
-	unsigned flags = 0;
-	u16 rqid;
-	u8 seq;
 	int status;
 
+	spec.target_category = rqst->tc;
+	spec.command_id = rqst->cid;
+	spec.instance_id = rqst->iid;
+	spec.channel = rqst->chn;
+	spec.flags = rqst->snc ? SSAM_REQUEST_HAS_RESPONSE : 0;
+	spec.length = rqst->cdl;
+	spec.payload = rqst->pld;
+
 	// prevent overflow
-	if (rqst->cdl > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
+	if (spec.length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
 		ssam_err(ec, SSH_RQST_TAG "request payload too large\n");
 		return -EINVAL;
 	}
 
-	if (result && result->data && rqst->snc)
-		flags |= SSAM_REQUEST_HAS_RESPONSE;
-
-	status = ssam_request_sync_alloc(rqst->cdl, GFP_KERNEL, &actual, &buf);
+	status = ssam_request_sync_alloc(spec.length, GFP_KERNEL, &actual, &buf);
 	if (status)
 		return status;
 
-	ssh_request_init(&actual->base, flags, &ssam_request_sync_ops);
+	ssh_request_init(&actual->base, spec.flags, &ssam_request_sync_ops);
 	init_completion(&actual->comp);
 
 	resp.pointer = NULL;
@@ -4469,12 +4489,8 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	actual->resp = &resp;
 	actual->status = 0;
 
-	// write message
-	seq = ssh_seq_next(&ec->counter.seq);
-	rqid = ssh_rqid_next(&ec->counter.rqid);
-	msgb_init(&msgb, buf.ptr, buf.len);
-	msgb_push_cmd(&msgb, seq, rqst, rqid);
-	ssam_request_sync_set_data(actual, msgb.begin, msgb_bytes_used(&msgb));
+	ssam_request_sync_set_data(actual, buf.ptr, buf.len);
+	ssam_request_write_data(&buf, ec, &spec);
 
 	status = ssam_request_sync_submit(ec, actual);
 	if (!status)
