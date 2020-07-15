@@ -4207,6 +4207,18 @@ static int ssam_request_sync_submit(struct ssam_controller *ctrl,
 {
 	int status;
 
+	if (ctrl->state == SSAM_CONTROLLER_UNINITIALIZED) {
+		ssam_warn(ctrl, "rqst: embedded controller is uninitialized\n");
+		ssh_request_put(&rqst->base);
+		return -ENXIO;
+	}
+
+	if (ctrl->state == SSAM_CONTROLLER_SUSPENDED) {
+		ssam_warn(ctrl, "rqst: embedded controller is suspended\n");
+		ssh_request_put(&rqst->base);
+		return -EPERM;
+	}
+
 	status = ssh_rtl_submit(&ctrl->rtl, &rqst->base);
 	ssh_request_put(&rqst->base);
 
