@@ -4181,6 +4181,15 @@ static int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 	return 0;
 }
 
+static void ssam_request_sync_init(struct ssam_request_sync *rqst,
+				   enum ssam_request_flags flags)
+{
+	ssh_request_init(&rqst->base, flags, &ssam_request_sync_ops);
+	init_completion(&rqst->comp);
+	rqst->resp = NULL;
+	rqst->status = 0;
+}
+
 static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
 					      u8 *ptr, size_t len)
 {
@@ -4489,10 +4498,7 @@ static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
 	if (status)
 		return status;
 
-	ssh_request_init(&actual->base, spec.flags, &ssam_request_sync_ops);
-	init_completion(&actual->comp);
-	actual->status = 0;
-
+	ssam_request_sync_init(actual, spec.flags);
 	ssam_request_sync_set_data(actual, buf.ptr, buf.len);
 	ssam_request_sync_set_resp(actual, &resp);
 
