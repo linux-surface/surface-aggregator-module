@@ -4752,20 +4752,20 @@ static int surface_sam_controller_suspend(struct ssam_controller *ec)
 }
 
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_controller_version, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
 	.target_category = SSAM_SSH_TC_SAM,
 	.command_id      = 0x13,
 	.instance_id     = 0x00,
 	.channel         = 0x01,
 });
 
-static int surface_sam_ssh_log_controller_version(struct ssam_controller *ec)
+static int surface_sam_ssh_log_firmware_version(struct ssam_controller *ec)
 {
 	__le32 v;
 	u32 version, a, b, c;
 	int status;
 
-	status = ssam_ssh_get_controller_version(ec, &v);
+	status = ssam_ssh_get_firmware_version(ec, &v);
 	if (status)
 		return status;
 
@@ -5152,7 +5152,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
-	status = surface_sam_ssh_log_controller_version(ec);
+	status = surface_sam_ssh_log_firmware_version(ec);
 	if (status)
 		goto err_finalize;
 
