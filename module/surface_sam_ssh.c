@@ -1099,7 +1099,7 @@ static int ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 				 struct ssh_packet **packet,
 				 struct ssam_span *buffer, gfp_t flags)
 {
-	// TODO: chache packets
+	// TODO: cache packets
 
 	*packet = kzalloc(sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL, flags);
 	if (!*packet)
