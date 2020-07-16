@@ -4527,7 +4527,9 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 		return rc;
 	}
 
-	ssam_dbg(ec, "enabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
+	ssam_dbg(ec, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, "
+		 "rc: %d)\n", n->event.reg.target_category,
+		 n->event.id.target_category, n->event.id.instance, rc);
 
 	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
@@ -4578,7 +4580,9 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 		return rc;
 	}
 
-	ssam_dbg(ec, "disabling event (tc: 0x%02x, rc: %d)\n", rqid, rc);
+	ssam_dbg(ec, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, "
+		 "rc: %d)\n", n->event.reg.target_category,
+		 n->event.id.target_category, n->event.id.instance, rc);
 
 	if (rc == 0)
 		status = surface_sam_ssh_event_disable(ec, n->event.reg, n->event.id, n->event.flags);
