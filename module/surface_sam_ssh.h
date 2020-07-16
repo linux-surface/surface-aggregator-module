@@ -165,7 +165,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
  * struct ssam_span - reference to a buffer region
  * @ptr: pointer to the buffer region
  * @len: length of the buffer region
- * 
+ *
  * A reference to a (non-owned) buffer segment, consisting of pointer and
  * length. Use of this struct indicates non-owned data, i.e. data of which the
  * life-time is managed (i.e. it is allocated/freed) via another pointer.
@@ -251,6 +251,16 @@ struct ssh_packet {
 };
 
 
+void ssh_packet_get(struct ssh_packet *packet);
+void ssh_packet_put(struct ssh_packet *packet);
+
+static inline void ssh_packet_set_data(struct ssh_packet *packet, u8 *ptr, size_t len)
+{
+	packet->data.ptr = ptr;
+	packet->data.len = len;
+}
+
+
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
 enum ssh_request_flags {
@@ -303,6 +313,22 @@ struct ssh_request {
 };
 
 
+static inline void ssh_request_get(struct ssh_request *rqst)
+{
+	ssh_packet_get(&rqst->packet);
+}
+
+static inline void ssh_request_put(struct ssh_request *rqst)
+{
+	ssh_packet_put(&rqst->packet);
+}
+
+static inline void ssh_request_set_data(struct ssh_request *rqst, u8 *ptr, size_t len)
+{
+	ssh_packet_set_data(&rqst->packet, ptr, len);
+}
+
+
 /* -- Main data types and definitions --------------------------------------- */
 
 enum ssam_ssh_tc {
@@ -341,6 +367,8 @@ enum ssam_ssh_tc {
 	SSAM_SSH_TC_REG = 0x21,
 };
 
+struct ssam_controller;
+
 /**
  * struct ssam_event_flags - Flags for enabling/disabling SAM-over-SSH events
  * @SSAM_EVENT_SEQUENCED: The event will be sent via a sequenced data frame.
@@ -357,6 +385,132 @@ struct ssam_event {
 	u16 length;
 	u8 data[0];
 };
+
+enum ssam_request_flags {
+	SSAM_REQUEST_HAS_RESPONSE = BIT(0),
+	SSAM_REQUEST_UNSEQUENCED  = BIT(1),
+};
+
+struct ssam_request_spec {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 channel;
+	u8 flags;
+};
+
+struct ssam_request {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 channel;
+	u16 flags;
+	u16 length;
+	u8 *payload;
+};
+
+struct ssam_response {
+	size_t capacity;
+	size_t length;
+	u8 *pointer;
+};
+
+
+struct device *ssam_controller_device(struct ssam_controller *c);
+
+ssize_t ssam_request_write_data(struct ssam_span *buf,
+				struct ssam_controller *ctrl,
+				struct ssam_request *spec);
+
+
+/* -- Synchronous request interface. ---------------------------------------- */
+
+struct ssam_request_sync {
+	struct ssh_request base;
+	struct completion comp;
+	struct ssam_response *resp;
+	int status;
+};
+
+int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
+			    struct ssam_request_sync **rqst,
+			    struct ssam_span *buffer);
+
+void ssam_request_sync_init(struct ssam_request_sync *rqst,
+			    enum ssam_request_flags flags);
+
+static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
+					      u8 *ptr, size_t len)
+{
+	ssh_request_set_data(&rqst->base, ptr, len);
+}
+
+static inline void ssam_request_sync_set_resp(struct ssam_request_sync *rqst,
+					      struct ssam_response *resp)
+{
+	rqst->resp = resp;
+}
+
+int ssam_request_sync_submit(struct ssam_controller *ctrl,
+			     struct ssam_request_sync *rqst);
+
+static inline int ssam_request_sync_wait(struct ssam_request_sync *rqst)
+{
+	wait_for_completion(&rqst->comp);
+	return rqst->status;
+}
+
+int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
+		      struct ssam_response *rsp);
+
+int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
+				  struct ssam_request *spec,
+				  struct ssam_response *rsp,
+				  struct ssam_span *buf);
+
+
+#define ssam_request_sync_onstack(ctrl, rqst, rsp, payload_len)			\
+	({									\
+		u8 __data[SSH_COMMAND_MESSAGE_LENGTH(payload_len)];		\
+		struct ssam_span __b = { &__data[0], ARRAY_SIZE(__data) };	\
+		ssam_request_sync_with_buffer(ctrl, rqst, rsp, &__b);		\
+	})
+
+#define SSAM_DEFINE_SYNC_REQUEST_R(name, rtype, spec...)			\
+	int name(struct ssam_controller *ctrl, rtype *out)			\
+	{									\
+		struct ssam_request_spec s = (struct ssam_request_spec)spec;	\
+		struct ssam_request rqst;					\
+		struct ssam_response rsp;					\
+		int status;							\
+										\
+		rqst.target_category = s.target_category;			\
+		rqst.command_id = s.command_id;					\
+		rqst.instance_id = s.instance_id;				\
+		rqst.channel = s.channel;					\
+		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
+		rqst.length = 0;						\
+		rqst.payload = NULL;						\
+										\
+		rsp.capacity = sizeof(rtype);					\
+		rsp.length = 0;							\
+		rsp.pointer = (u8 *)out;					\
+										\
+		status = ssam_request_sync_onstack(ctrl, &rqst, &rsp, 0);	\
+		if (status)							\
+			return status;						\
+										\
+		if (rsp.length != sizeof(rtype)) {				\
+			struct device *dev = ssam_controller_device(ctrl);	\
+			dev_err(dev, "rqst: invalid response length, expected %zu, got %zu" \
+				" (tc: 0x%02x, cid: 0x%02x)", sizeof(rtype),	\
+				rsp.length, rqst.target_category,		\
+				rqst.command_id);				\
+			return -EIO;						\
+		}								\
+										\
+		return 0;							\
+	}
 
 
 /* -- Event notifier/callbacks. --------------------------------------------- */
