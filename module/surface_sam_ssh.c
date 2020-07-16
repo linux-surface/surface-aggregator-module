@@ -79,18 +79,6 @@ static inline bool ssh_rqid_is_event(u16 rqid)
 
 static inline int ssh_tc_to_rqid(u8 tc)
 {
-#if 0	// TODO: check if it works without this
-	/*
-	 * TC=0x08 represents the input subsystem on Surface Laptop 1 and 2.
-	 * This is mapped on Windows to RQID=0x0001. As input events seem to be
-	 * somewhat special with regards to enabling/disabling (they seem to be
-	 * enabled by default with a fixed RQID), let's do the same here.
-	 */
-	if (tc == 0x08)
-		return 0x0001;
-
-	/* Default path: Set RQID = TC. */
-#endif
 	return tc;
 }
 
