@@ -3997,6 +3997,7 @@ enum ssam_controller_state {
 };
 
 struct ssam_controller {
+	struct mutex lock;
 	enum ssam_controller_state state;
 
 	struct ssh_rtl rtl;
@@ -4018,6 +4019,11 @@ struct ssam_controller {
 	} properties;
 };
 
+static struct ssam_controller ssam_controller = {
+	.lock  = __MUTEX_INITIALIZER(ssam_controller.lock),
+	.state = SSAM_CONTROLLER_UNINITIALIZED,
+};
+
 
 #define ssam_dbg(ctrl, fmt, ...)  rtl_dbg(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
 #define ssam_info(ctrl, fmt, ...) rtl_info(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
@@ -4027,6 +4033,47 @@ struct ssam_controller {
 #define to_ssam_controller(ptr, member) \
 	container_of(ptr, struct ssam_controller, member)
 
+
+static int __ssam_client_link(struct ssam_controller *c, struct device *client)
+{
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
+	struct device_link *link;
+	struct device *ctrldev;
+
+	if (READ_ONCE(c->state) == SSAM_CONTROLLER_UNINITIALIZED)
+		return -ENXIO;
+
+	if ((ctrldev = ssam_controller_device(c)) == NULL)
+		return -ENXIO;
+
+	if ((link = device_link_add(client, ctrldev, flags)) == NULL)
+		return -ENOMEM;
+
+	/*
+	 * Return -ENXIO if supplier driver is on its way to be removed. In this
+	 * case, the controller won't be around for much longer and the device
+	 * link is not going to save us any more, as unbinding is already in
+	 * progress.
+	 */
+	if (link->status == DL_STATE_SUPPLIER_UNBIND)
+		return -ENXIO;
+
+	return 0;
+}
+
+int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
+{
+	struct ssam_controller *c = &ssam_controller;
+	int status;
+
+	mutex_lock(&c->lock);
+	status = __ssam_client_link(c, client);
+	mutex_unlock(&c->lock);
+
+	*ctrl = status == 0 ? c : NULL;
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 struct device *ssam_controller_device(struct ssam_controller *c)
 {
@@ -4223,16 +4270,9 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_with_buffer);
 
 /* -- TODO ------------------------------------------------------------------ */
 
-static struct ssam_controller ssh_ec = {
-	.state  = SSAM_CONTROLLER_UNINITIALIZED,
-};
-
-
-/* -- TODO ------------------------------------------------------------------ */
-
 static inline struct ssam_controller *surface_sam_ssh_acquire(void)
 {
-	return &ssh_ec;
+	return &ssam_controller;
 }
 
 static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
@@ -4969,6 +5009,8 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	// set up EC
 	ec = surface_sam_ssh_acquire();
+	mutex_lock(&ec->lock);
+
 	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
 
@@ -5024,6 +5066,8 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_finalize;
 
+	mutex_unlock(&ec->lock);
+
 	// TODO: The EC can wake up the system via the associated GPIO interrupt in
 	// multiple situations. One of which is the remaining battery capacity
 	// falling below a certain threshold. Normally, we should use the
@@ -5051,6 +5095,7 @@ err_rtl:
 err_ecinit:
 	free_irq(irq, serdev);
 	serdev_device_set_drvdata(serdev, NULL);
+	mutex_unlock(&ec->lock);
 	return status;
 }
 
@@ -5063,6 +5108,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	if (!ec)
 		return;
 
+	mutex_lock(&ec->lock);
 	free_irq(ec->irq.num, serdev);
 	surface_sam_ssh_sysfs_unregister(&serdev->dev);
 
@@ -5105,6 +5151,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
+	mutex_unlock(&ec->lock);
 }
 
 

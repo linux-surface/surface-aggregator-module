@@ -416,6 +416,8 @@ struct ssam_response {
 };
 
 
+int ssam_client_bind(struct device *client, struct ssam_controller **ctrl);
+
 struct device *ssam_controller_device(struct ssam_controller *c);
 
 ssize_t ssam_request_write_data(struct ssam_span *buf,
