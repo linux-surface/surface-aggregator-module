@@ -528,12 +528,13 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 
 static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
+	struct gsb_data_rqsx *gsb_rqst;
 	struct ssam_request rqst;
 	struct ssam_response rsp;
 	int status = 0;
 	int try;
 
+ 	gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
 	if (!gsb_rqst)
 		return AE_OK;
 
