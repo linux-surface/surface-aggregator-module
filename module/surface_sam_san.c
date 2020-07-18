@@ -64,14 +64,14 @@ struct san_drvdata {
 	struct san_opreg_context opreg_ctx;
 	struct san_consumers consumers;
 
-	struct platform_device *dev;
+	struct device *dev;
 	struct ssam_event_notifier nf_bat;
 	struct ssam_event_notifier nf_tmp;
 };
 
 struct san_event_work {
 	struct delayed_work work;
-	struct platform_device *dev;
+	struct device *dev;
 	struct ssam_event event;		// must be last
 };
 
@@ -400,7 +400,7 @@ static void san_evt_power_workfn(struct work_struct *work)
 {
 	struct san_event_work *ev = container_of(work, struct san_event_work, work.work);
 
-	san_evt_power(&ev->event, &ev->dev->dev);
+	san_evt_power(&ev->event, ev->dev);
 	kfree(ev);
 }
 
@@ -412,7 +412,7 @@ static u32 san_evt_power_nb(struct ssam_notifier_block *nb, const struct ssam_ev
 	unsigned long delay = san_evt_power_delay(event->command_id);
 
 	if (delay == 0) {
-		if (san_evt_power(event, &drvdata->dev->dev))
+		if (san_evt_power(event, drvdata->dev))
 			return SSAM_NOTIF_HANDLED;
 		else
 			return 0;
@@ -461,9 +461,8 @@ static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
 static u32 san_evt_thermal_nb(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
 	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nf_tmp.base);
-	struct platform_device *pdev = drvdata->dev;
 
-	if (san_evt_thermal(event, &pdev->dev))
+	if (san_evt_thermal(event, drvdata->dev))
 		return SSAM_NOTIF_HANDLED;
 	else
 		return 0;
@@ -807,7 +806,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (!drvdata)
 		return -ENOMEM;
 
-	drvdata->dev = pdev;
+	drvdata->dev = &pdev->dev;
 	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
