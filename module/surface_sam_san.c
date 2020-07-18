@@ -528,6 +528,7 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 
 static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 {
+	u8 rspbuf[SAN_GSB_MAX_RESPONSE];
 	struct gsb_data_rqsx *gsb_rqst;
 	struct ssam_request rqst;
 	struct ssam_response rsp;
@@ -546,18 +547,16 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rqst.length = get_unaligned(&gsb_rqst->cdl);
 	rqst.payload = &gsb_rqst->pld[0];
 
-	rsp.capacity = SAN_GSB_MAX_RESPONSE;
+	rsp.capacity = ARRAY_SIZE(rspbuf);
 	rsp.length  = 0;
-	rsp.pointer = kzalloc(rsp.capacity, GFP_KERNEL);
-
-	if (!rsp.pointer)
-		return AE_NO_MEMORY;
+	rsp.pointer = &rspbuf[0];
 
 	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try)
 			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
 
-		status = ssam_request_sync(d->ctrl, &rqst, &rsp);
+		status = ssam_request_sync_onstack(d->ctrl, &rqst, &rsp,
+						   SAN_GSB_MAX_RQSX_PAYLOAD);
 		if (status != -ETIMEDOUT && status != -EREMOTEIO)
 			break;
 	}
@@ -598,8 +597,6 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 		buffer->data.out.status = 0x01;		// indicate _SSH error
 		buffer->data.out.len    = 0x00;
 	}
-
-	kfree(rsp.pointer);
 
 	return AE_OK;
 }
