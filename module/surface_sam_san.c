@@ -529,39 +529,39 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
-	struct surface_sam_ssh_rqst rqst = {};
-	struct surface_sam_ssh_buf result = {};
+	struct ssam_request rqst;
+	struct ssam_response rsp;
 	int status = 0;
 	int try;
 
 	if (!gsb_rqst)
 		return AE_OK;
 
-	rqst.tc  = gsb_rqst->tc;
-	rqst.cid = gsb_rqst->cid;
-	rqst.iid = gsb_rqst->iid;
-	rqst.chn = gsb_rqst->tid;
-	rqst.snc = gsb_rqst->snc;
-	rqst.cdl = get_unaligned(&gsb_rqst->cdl);
-	rqst.pld = &gsb_rqst->pld[0];
+	rqst.target_category  = gsb_rqst->tc;
+	rqst.command_id = gsb_rqst->cid;
+	rqst.instance_id = gsb_rqst->iid;
+	rqst.channel = gsb_rqst->tid;
+	rqst.flags = gsb_rqst->snc ? SSAM_REQUEST_HAS_RESPONSE : 0;
+	rqst.length = get_unaligned(&gsb_rqst->cdl);
+	rqst.payload = &gsb_rqst->pld[0];
 
-	result.cap  = SAN_GSB_MAX_RESPONSE;
-	result.len  = 0;
-	result.data = kzalloc(result.cap, GFP_KERNEL);
+	rsp.capacity = SAN_GSB_MAX_RESPONSE;
+	rsp.length  = 0;
+	rsp.pointer = kzalloc(rsp.capacity, GFP_KERNEL);
 
-	if (!result.data)
+	if (!rsp.pointer)
 		return AE_NO_MEMORY;
 
 	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try)
 			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
 
-		status = surface_sam_ssh_rqst(&rqst, &result);
-		if (status != -EIO)
+		status = ssam_request_sync(d->ctrl, &rqst, &rsp);
+		if (status != -ETIMEDOUT && status != -EREMOTEIO)
 			break;
 	}
 
-	if (rqst.tc == 0x11 && rqst.cid == 0x0D && status == -EPERM) {
+	if (rqst.target_category == 0x11 && rqst.command_id == 0x0D && status == -EPERM) {
 		/* Base state quirk:
 		 * The base state may be queried from ACPI when the EC is still
 		 * suspended. In this case it will return '-EPERM'. This query
@@ -585,10 +585,10 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 
 	} else if (!status) {		// success
 		buffer->status          = 0x00;
-		buffer->len             = result.len + 2;
+		buffer->len             = rsp.length + 2;
 		buffer->data.out.status = 0x00;
-		buffer->data.out.len    = result.len;
-		memcpy(&buffer->data.out.pld[0], result.data, result.len);
+		buffer->data.out.len    = rsp.length;
+		memcpy(&buffer->data.out.pld[0], rsp.pointer, rsp.length);
 
 	} else {			// failure
 		dev_err(d->dev, SAN_RQST_TAG "failed with error %d\n", status);
@@ -598,7 +598,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 		buffer->data.out.len    = 0x00;
 	}
 
-	kfree(result.data);
+	kfree(rsp.pointer);
 
 	return AE_OK;
 }
