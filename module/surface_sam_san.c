@@ -624,10 +624,11 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 
 static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *gsb_rqsg = san_validate_rqsx(d->dev, "RQSG", buffer);
-	struct surface_sam_san_rqsg rqsg = {};
+	struct gsb_data_rqsx *gsb_rqsg;
+	struct surface_sam_san_rqsg rqsg;
 	int status;
 
+	gsb_rqsg = san_validate_rqsx(d->dev, "RQSG", buffer);
 	if (!gsb_rqsg)
 		return AE_OK;
 
