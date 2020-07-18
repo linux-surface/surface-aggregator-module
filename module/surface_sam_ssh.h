@@ -633,17 +633,6 @@ struct surface_sam_ssh_rqst {
 	u8 *pld;			// pointer to payload of length cdl
 };
 
-// TODO: remove rqid on external api
-struct surface_sam_ssh_event {
-	u16 rqid;			// event type/source ID
-	u8  tc;				// target category
-	u8  cid;			// command ID
-	u8  iid;			// instance ID
-	u8  chn;			// channel
-	u8  len;			// length of payload
-	u8 *pld;			// payload of length len
-};
-
 
 int surface_sam_ssh_consumer_register(struct device *consumer);
 
