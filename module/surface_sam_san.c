@@ -124,6 +124,9 @@ struct gsb_buffer {
 #define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
 #define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
 
+#define san_request_sync_onstack(ctrl, rqst, rsp) \
+	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
+
 
 enum san_pwr_event {
 	SAN_PWR_EVENT_BAT1_STAT	= 0x03,
@@ -555,8 +558,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 		if (try)
 			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
 
-		status = ssam_request_sync_onstack(d->ctrl, &rqst, &rsp,
-						   SAN_GSB_MAX_RQSX_PAYLOAD);
+		status = san_request_sync_onstack(d->ctrl, &rqst, &rsp);
 		if (status != -ETIMEDOUT && status != -EREMOTEIO)
 			break;
 	}
