@@ -4287,21 +4287,8 @@ static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
 
 int surface_sam_ssh_consumer_register(struct device *consumer)
 {
-	u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
 	struct ssam_controller *ec;
-	struct device_link *link;
-	struct device *dev;
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec)
-		return -ENXIO;
-
-	dev = ssam_controller_device(ec);
-	link = device_link_add(consumer, dev, flags);
-	if (!link)
-		return -EFAULT;
-
-	return 0;
+	return ssam_client_bind(consumer, &ec);
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
 
