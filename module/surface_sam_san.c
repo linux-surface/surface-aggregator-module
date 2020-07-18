@@ -642,16 +642,10 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 
 	status = san_call_rqsg_handler(&rqsg);
 	if (!status) {
-		buffer->status          = 0x00;
-		buffer->len             = 0x02;
-		buffer->data.out.status = 0x00;
-		buffer->data.out.len    = 0x00;
+		gsb_response_success(buffer, NULL, 0);
 	} else {
 		dev_err(d->dev, SAN_RQSG_TAG "failed with error %d\n", status);
-		buffer->status          = 0x00;
-		buffer->len             = 0x02;
-		buffer->data.out.status = 0x01;		// indicate _SSH error
-		buffer->data.out.len    = 0x00;
+		gsb_response_error(buffer, status);
 	}
 
 	return AE_OK;
