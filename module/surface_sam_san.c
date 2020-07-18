@@ -527,6 +527,51 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
+static void gsb_response_error(struct gsb_buffer *gsb, int status)
+{
+	gsb->status          = 0x00;
+	gsb->len             = 0x02;
+	gsb->data.out.status = (u8)(-status);
+	gsb->data.out.len    = 0x00;
+}
+
+static void gsb_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t len)
+{
+	gsb->status          = 0x00;
+	gsb->len             = len + 2;
+	gsb->data.out.status = 0x00;
+	gsb->data.out.len    = len;
+	memcpy(&gsb->data.out.pld[0], ptr, len);
+}
+
+static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
+					    struct gsb_buffer *gsb)
+{
+	if (rqst->target_category == 0x11 && rqst->command_id == 0x0D) {
+		/* Base state quirk:
+		 * The base state may be queried from ACPI when the EC is still
+		 * suspended. In this case it will return '-EPERM'. This query
+		 * will only be triggered from the ACPI lid GPE interrupt, thus
+		 * we are either in laptop or studio mode (base status 0x01 or
+		 * 0x02). Furthermore, we will only get here if the device (and
+		 * EC) have been suspended.
+		 *
+		 * We now assume that the device is in laptop mode (0x01). This
+		 * has the drawback that it will wake the device when unfolding
+		 * it in studio mode, but it also allows us to avoid actively
+		 * waiting for the EC to wake up, which may incur a notable
+		 * delay.
+		 */
+
+		u8 base_state = 1;
+		gsb_response_success(gsb, &base_state, 1);
+		return AE_OK;
+	}
+
+	gsb_response_error(gsb, -ENXIO);
+	return AE_OK;
+}
+
 static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 {
 	u8 rspbuf[SAN_GSB_MAX_RESPONSE];
@@ -552,6 +597,12 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rsp.length  = 0;
 	rsp.pointer = &rspbuf[0];
 
+	// handle suspended device
+	if (d->dev->power.is_suspended) {
+		dev_warn(d->dev, "device is suspended, not executing request\n");
+		return san_rqst_fixup_suspended(&rqst, buffer);
+	}
+
 	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try)
 			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
@@ -561,41 +612,11 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 			break;
 	}
 
-	if (rqst.target_category == 0x11 && rqst.command_id == 0x0D && status == -EPERM) {
-		/* Base state quirk:
-		 * The base state may be queried from ACPI when the EC is still
-		 * suspended. In this case it will return '-EPERM'. This query
-		 * will only be triggered from the ACPI lid GPE interrupt, thus
-		 * we are either in laptop or studio mode (base status 0x01 or
-		 * 0x02). Furthermore, we will only get here if the device (and
-		 * EC) have been suspended.
-		 *
-		 * We now assume that the device is in laptop mode (0x01). This
-		 * has the drawback that it will wake the device when unfolding
-		 * it in studio mode, but it also allows us to avoid actively
-		 * waiting for the EC to wake up, which may incur a notable
-		 * delay.
-		 */
-
-		buffer->status          = 0x00;
-		buffer->len             = 0x03;
-		buffer->data.out.status = 0x00;
-		buffer->data.out.len    = 0x01;
-		buffer->data.out.pld[0] = 0x01;
-
-	} else if (!status) {		// success
-		buffer->status          = 0x00;
-		buffer->len             = rsp.length + 2;
-		buffer->data.out.status = 0x00;
-		buffer->data.out.len    = rsp.length;
-		memcpy(&buffer->data.out.pld[0], rsp.pointer, rsp.length);
-
-	} else {			// failure
+	if (!status) {
+		gsb_response_success(buffer, rsp.pointer, rsp.length);
+	} else {
 		dev_err(d->dev, SAN_RQST_TAG "failed with error %d\n", status);
-		buffer->status          = 0x00;
-		buffer->len             = 0x02;
-		buffer->data.out.status = 0x01;		// indicate _SSH error
-		buffer->data.out.len    = 0x00;
+		gsb_response_error(buffer, status);
 	}
 
 	return AE_OK;
