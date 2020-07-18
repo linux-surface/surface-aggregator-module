@@ -482,7 +482,7 @@ static struct gsb_data_rqsx
 		return NULL;
 	}
 
-	if (get_unaligned(&rqsx->cdl) != buffer->len - 8) {
+	if (get_unaligned(&rqsx->cdl) != buffer->len - sizeof(struct gsb_data_rqsx)) {
 		dev_err(dev, "bogus %s package (len = %d, cdl = %d)\n",
 			type, buffer->len, get_unaligned(&rqsx->cdl));
 		return NULL;
