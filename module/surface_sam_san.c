@@ -34,9 +34,6 @@ static const guid_t SAN_DSM_UUID =
 
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
 
-#define SAN_RQST_TAG			"surface_sam_san: rqst: "
-#define SAN_RQSG_TAG			"surface_sam_san: rqsg: "
-
 
 struct san_acpi_consumer {
 	char *path;
@@ -203,8 +200,10 @@ int san_call_rqsg_handler(struct surface_sam_san_rqsg *rqsg)
 
 static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data)
 {
-	pr_warn(SAN_RQSG_TAG "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
-		rqsg->tc, rqsg->cid, rqsg->iid);
+	struct device *dev = rqsg_if.san_dev;
+
+	dev_warn(dev, "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
+		 rqsg->tc, rqsg->cid, rqsg->iid);
 
 	return 0;
 }
@@ -601,13 +600,13 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 
 	// handle suspended device
 	if (d->dev->power.is_suspended) {
-		dev_warn(d->dev, "device is suspended, not executing request\n");
+		dev_warn(d->dev, "rqst: device is suspended, not executing\n");
 		return san_rqst_fixup_suspended(&rqst, buffer);
 	}
 
 	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try)
-			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
+			dev_warn(d->dev, "rqst: IO error, trying again\n");
 
 		status = san_request_sync_onstack(d->ctrl, &rqst, &rsp);
 		if (status != -ETIMEDOUT && status != -EREMOTEIO)
@@ -617,7 +616,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	if (!status) {
 		gsb_response_success(buffer, rsp.pointer, rsp.length);
 	} else {
-		dev_err(d->dev, SAN_RQST_TAG "failed with error %d\n", status);
+		dev_err(d->dev, "rqst: failed with error %d\n", status);
 		gsb_response_error(buffer, status);
 	}
 
@@ -644,7 +643,7 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	if (!status) {
 		gsb_response_success(buffer, NULL, 0);
 	} else {
-		dev_err(d->dev, SAN_RQSG_TAG "failed with error %d\n", status);
+		dev_err(d->dev, "rqsg: failed with error %d\n", status);
 		gsb_response_error(buffer, status);
 	}
 
