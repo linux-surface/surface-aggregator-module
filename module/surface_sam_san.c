@@ -541,7 +541,9 @@ static void gsb_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t len)
 	gsb->len             = len + 2;
 	gsb->data.out.status = 0x00;
 	gsb->data.out.len    = len;
-	memcpy(&gsb->data.out.pld[0], ptr, len);
+
+	if (len)
+		memcpy(&gsb->data.out.pld[0], ptr, len);
 }
 
 static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
