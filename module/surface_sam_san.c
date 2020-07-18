@@ -181,7 +181,7 @@ int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *d
 
 	if (rqsg_if.handler == sam_san_default_rqsg_handler || !fn) {
 		rqsg_if.handler = fn ? fn : sam_san_default_rqsg_handler;
-		rqsg_if.handler_data = data;
+		rqsg_if.handler_data = fn ? data : NULL;
 		status = 0;
 	}
 
