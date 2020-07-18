@@ -45,8 +45,8 @@ struct san_acpi_consumer {
 	u32   flags;
 };
 
-struct san_opreg_context {
-	struct acpi_connection_info connection;		// must be first
+struct san_handler_data {
+	struct acpi_connection_info info;		// must be first
 };
 
 struct san_consumer_link {
@@ -59,18 +59,18 @@ struct san_consumers {
 	struct san_consumer_link *links;
 };
 
-struct san_drvdata {
+struct san_data {
 	struct device *dev;
 
-	struct san_opreg_context opreg_ctx;
+	struct san_handler_data context;
 	struct san_consumers consumers;
 
 	struct ssam_event_notifier nf_bat;
 	struct ssam_event_notifier nf_tmp;
 };
 
-#define to_san_drvdata(ptr, member) \
-	container_of(ptr, struct san_drvdata, member)
+#define to_san_data(ptr, member) \
+	container_of(ptr, struct san_data, member)
 
 struct san_event_work {
 	struct delayed_work work;
@@ -410,12 +410,12 @@ static void san_evt_power_workfn(struct work_struct *work)
 
 static u32 san_evt_power_nb(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nf_bat.base);
+	struct san_data *d = to_san_data(nb, nf_bat.base);
 	struct san_event_work *work;
 	unsigned long delay = san_evt_power_delay(event->command_id);
 
 	if (delay == 0) {
-		if (san_evt_power(event, drvdata->dev))
+		if (san_evt_power(event, d->dev))
 			return SSAM_NOTIF_HANDLED;
 		else
 			return 0;
@@ -426,7 +426,7 @@ static u32 san_evt_power_nb(struct ssam_notifier_block *nb, const struct ssam_ev
 		return ssam_notifier_from_errno(-ENOMEM);
 
 	INIT_DELAYED_WORK(&work->work, san_evt_power_workfn);
-	work->dev = drvdata->dev;
+	work->dev = d->dev;
 
 	memcpy(&work->event, event, sizeof(struct ssam_event) + event->length);
 
@@ -463,9 +463,7 @@ static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
 
 static u32 san_evt_thermal_nb(struct ssam_notifier_block *nb, const struct ssam_event *event)
 {
-	struct san_drvdata *drvdata = container_of(nb, struct san_drvdata, nf_tmp.base);
-
-	if (san_evt_thermal(event, drvdata->dev))
+	if (san_evt_thermal(event, to_san_data(nb, nf_tmp.base)->dev))
 		return SSAM_NOTIF_HANDLED;
 	else
 		return 0;
@@ -498,7 +496,7 @@ static struct gsb_data_rqsx
 	return rqsx;
 }
 
-static acpi_status san_etwl(struct san_drvdata *d, struct gsb_buffer *buffer)
+static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_etwl *etwl = &buffer->data.etwl;
 
@@ -518,7 +516,7 @@ static acpi_status san_etwl(struct san_drvdata *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static acpi_status san_rqst(struct san_drvdata *d, struct gsb_buffer *buffer)
+static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
 	struct surface_sam_ssh_rqst rqst = {};
@@ -595,7 +593,7 @@ static acpi_status san_rqst(struct san_drvdata *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static acpi_status san_rqsg(struct san_drvdata *d, struct gsb_buffer *buffer)
+static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *gsb_rqsg = san_validate_rqsx(d->dev, "RQSG", buffer);
 	struct surface_sam_san_rqsg rqsg = {};
@@ -633,8 +631,7 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 		  u32 bits, u64 *value64,
 		  void *opreg_context, void *region_context)
 {
-	struct san_opreg_context *context = opreg_context;
-	struct san_drvdata *d = to_san_drvdata(context, opreg_ctx);
+	struct san_data *d = to_san_data(opreg_context, context);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
 	int accessor_type = (0xFFFF0000 & function) >> 16;
 
@@ -666,40 +663,40 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 
 static int san_events_register(struct platform_device *pdev)
 {
-	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct san_data *d = platform_get_drvdata(pdev);
 	int status;
 
-	drvdata->nf_bat.base.priority = 1;
-	drvdata->nf_bat.base.fn = san_evt_power_nb;
-	drvdata->nf_bat.event.reg = SSAM_EVENT_REGISTRY_SAM;
-	drvdata->nf_bat.event.id.target_category = SSAM_SSH_TC_BAT;
-	drvdata->nf_bat.event.id.instance = 0;
-	drvdata->nf_bat.event.flags = SSAM_EVENT_SEQUENCED;
+	d->nf_bat.base.priority = 1;
+	d->nf_bat.base.fn = san_evt_power_nb;
+	d->nf_bat.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	d->nf_bat.event.id.target_category = SSAM_SSH_TC_BAT;
+	d->nf_bat.event.id.instance = 0;
+	d->nf_bat.event.flags = SSAM_EVENT_SEQUENCED;
 
-	drvdata->nf_tmp.base.priority = 1;
-	drvdata->nf_tmp.base.fn = san_evt_thermal_nb;
-	drvdata->nf_tmp.event.reg = SSAM_EVENT_REGISTRY_SAM;
-	drvdata->nf_tmp.event.id.target_category = SSAM_SSH_TC_TMP;
-	drvdata->nf_tmp.event.id.instance = 0;
-	drvdata->nf_tmp.event.flags = SSAM_EVENT_SEQUENCED;
+	d->nf_tmp.base.priority = 1;
+	d->nf_tmp.base.fn = san_evt_thermal_nb;
+	d->nf_tmp.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	d->nf_tmp.event.id.target_category = SSAM_SSH_TC_TMP;
+	d->nf_tmp.event.id.instance = 0;
+	d->nf_tmp.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(&drvdata->nf_bat);
+	status = surface_sam_ssh_notifier_register(&d->nf_bat);
 	if (status)
 		return status;
 
-	status = surface_sam_ssh_notifier_register(&drvdata->nf_tmp);
+	status = surface_sam_ssh_notifier_register(&d->nf_tmp);
 	if (status)
-		surface_sam_ssh_notifier_unregister(&drvdata->nf_bat);
+		surface_sam_ssh_notifier_unregister(&d->nf_bat);
 
 	return status;
 }
 
 static void san_events_unregister(struct platform_device *pdev)
 {
-	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct san_data *d = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(&drvdata->nf_bat);
-	surface_sam_ssh_notifier_unregister(&drvdata->nf_tmp);
+	surface_sam_ssh_notifier_unregister(&d->nf_bat);
+	surface_sam_ssh_notifier_unregister(&d->nf_tmp);
 }
 
 
@@ -789,8 +786,8 @@ static void san_consumers_unlink(struct san_consumers *consumers)
 static int surface_sam_san_probe(struct platform_device *pdev)
 {
 	const struct san_acpi_consumer *cons;
-	struct san_drvdata *drvdata;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
+	struct san_data *data;
 	int status;
 
 	/*
@@ -803,23 +800,23 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	drvdata = kzalloc(sizeof(struct san_drvdata), GFP_KERNEL);
-	if (!drvdata)
+	data = kzalloc(sizeof(struct san_data), GFP_KERNEL);
+	if (!data)
 		return -ENOMEM;
 
-	drvdata->dev = &pdev->dev;
+	data->dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
-	status = san_consumers_link(pdev, cons, &drvdata->consumers);
+	status = san_consumers_link(pdev, cons, &data->consumers);
 	if (status)
 		goto err_consumers;
 
-	platform_set_drvdata(pdev, drvdata);
+	platform_set_drvdata(pdev, data);
 
 	status = acpi_install_address_space_handler(san,
 			ACPI_ADR_SPACE_GSBUS,
 			&san_opreg_handler,
-			NULL, &drvdata->opreg_ctx);
+			NULL, &data->context);
 
 	if (ACPI_FAILURE(status)) {
 		status = -ENODEV;
@@ -849,15 +846,15 @@ err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 err_install_handler:
 	platform_set_drvdata(san, NULL);
-	san_consumers_unlink(&drvdata->consumers);
+	san_consumers_unlink(&data->consumers);
 err_consumers:
-	kfree(drvdata);
+	kfree(data);
 	return status;
 }
 
 static int surface_sam_san_remove(struct platform_device *pdev)
 {
-	struct san_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct san_data *data = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
@@ -874,8 +871,8 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	 */
 	flush_scheduled_work();
 
-	san_consumers_unlink(&drvdata->consumers);
-	kfree(drvdata);
+	san_consumers_unlink(&data->consumers);
+	kfree(data);
 
 	platform_set_drvdata(pdev, NULL);
 	return status;
