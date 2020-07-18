@@ -604,12 +604,6 @@ struct ssam_event_notifier {
 /* -- TODO -------------------------------------------------------------------*/
 
 /*
- * Maximum response payload size in bytes.
- * Value based on ACPI (255 bytes minus header/status bytes).
- */
-#define SURFACE_SAM_SSH_MAX_RQST_RESPONSE	(255 - 4)
-
-/*
  * The number of reserved event IDs, used for registering an SSH event
  * handler. Valid event IDs are numbers below or equal to this value, with
  * exception of zero, which is not an event ID. Thus, this is also the
