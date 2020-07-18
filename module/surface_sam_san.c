@@ -37,8 +37,6 @@ static const guid_t SAN_DSM_UUID =
 #define SAN_RQST_TAG			"surface_sam_san: rqst: "
 #define SAN_RQSG_TAG			"surface_sam_san: rqsg: "
 
-#define SAN_QUIRK_BASE_STATE_DELAY	1000
-
 
 struct san_acpi_consumer {
 	char *path;
