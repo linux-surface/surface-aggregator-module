@@ -46,8 +46,7 @@ struct san_acpi_consumer {
 };
 
 struct san_opreg_context {
-	struct acpi_connection_info connection;
-	struct device *dev;
+	struct acpi_connection_info connection;		// must be first
 };
 
 struct san_consumer_link {
@@ -61,13 +60,17 @@ struct san_consumers {
 };
 
 struct san_drvdata {
+	struct device *dev;
+
 	struct san_opreg_context opreg_ctx;
 	struct san_consumers consumers;
 
-	struct device *dev;
 	struct ssam_event_notifier nf_bat;
 	struct ssam_event_notifier nf_tmp;
 };
+
+#define to_san_drvdata(ptr, member) \
+	container_of(ptr, struct san_drvdata, member)
 
 struct san_event_work {
 	struct delayed_work work;
@@ -495,17 +498,16 @@ static struct gsb_data_rqsx
 	return rqsx;
 }
 
-static acpi_status
-san_etwl(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
+static acpi_status san_etwl(struct san_drvdata *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_etwl *etwl = &buffer->data.etwl;
 
 	if (buffer->len < 3) {
-		dev_err(ctx->dev, "invalid ETWL package (len = %d)\n", buffer->len);
+		dev_err(d->dev, "invalid ETWL package (len = %d)\n", buffer->len);
 		return AE_OK;
 	}
 
-	dev_err(ctx->dev, "ETWL(0x%02x, 0x%02x): %.*s\n",
+	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n",
 		etwl->etw3, etwl->etw4,
 		buffer->len - 3, (char *)etwl->msg);
 
@@ -516,10 +518,9 @@ san_etwl(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static acpi_status
-san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
+static acpi_status san_rqst(struct san_drvdata *d, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(ctx->dev, "RQST", buffer);
+	struct gsb_data_rqsx *gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
 	struct surface_sam_ssh_rqst rqst = {};
 	struct surface_sam_ssh_buf result = {};
 	int status = 0;
@@ -545,7 +546,7 @@ san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 
 	for (try = 0; try < SAN_RQST_RETRY; try++) {
 		if (try)
-			dev_warn(ctx->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
+			dev_warn(d->dev, SAN_RQST_TAG "IO error occurred, trying again\n");
 
 		status = surface_sam_ssh_rqst(&rqst, &result);
 		if (status != -EIO)
@@ -582,7 +583,7 @@ san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 		memcpy(&buffer->data.out.pld[0], result.data, result.len);
 
 	} else {			// failure
-		dev_err(ctx->dev, SAN_RQST_TAG "failed with error %d\n", status);
+		dev_err(d->dev, SAN_RQST_TAG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
 		buffer->data.out.status = 0x01;		// indicate _SSH error
@@ -594,10 +595,9 @@ san_rqst(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static acpi_status
-san_rqsg(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
+static acpi_status san_rqsg(struct san_drvdata *d, struct gsb_buffer *buffer)
 {
-	struct gsb_data_rqsx *gsb_rqsg = san_validate_rqsx(ctx->dev, "RQSG", buffer);
+	struct gsb_data_rqsx *gsb_rqsg = san_validate_rqsx(d->dev, "RQSG", buffer);
 	struct surface_sam_san_rqsg rqsg = {};
 	int status;
 
@@ -617,7 +617,7 @@ san_rqsg(struct san_opreg_context *ctx, struct gsb_buffer *buffer)
 		buffer->data.out.status = 0x00;
 		buffer->data.out.len    = 0x00;
 	} else {
-		dev_err(ctx->dev, SAN_RQSG_TAG "failed with error %d\n", status);
+		dev_err(d->dev, SAN_RQSG_TAG "failed with error %d\n", status);
 		buffer->status          = 0x00;
 		buffer->len             = 0x02;
 		buffer->data.out.status = 0x01;		// indicate _SSH error
@@ -634,32 +634,33 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 		  void *opreg_context, void *region_context)
 {
 	struct san_opreg_context *context = opreg_context;
+	struct san_drvdata *d = to_san_drvdata(context, opreg_ctx);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
 	int accessor_type = (0xFFFF0000 & function) >> 16;
 
 	if (command != 0) {
-		dev_warn(context->dev, "unsupported command: 0x%02llx\n", command);
+		dev_warn(d->dev, "unsupported command: 0x%02llx\n", command);
 		return AE_OK;
 	}
 
 	if (accessor_type != ACPI_GSB_ACCESS_ATTRIB_RAW_PROCESS) {
-		dev_err(context->dev, "invalid access type: 0x%02x\n", accessor_type);
+		dev_err(d->dev, "invalid access type: 0x%02x\n", accessor_type);
 		return AE_OK;
 	}
 
 	// buffer must have at least contain the command-value
 	if (buffer->len == 0) {
-		dev_err(context->dev, "request-package too small\n");
+		dev_err(d->dev, "request-package too small\n");
 		return AE_OK;
 	}
 
 	switch (buffer->data.in.cv) {
-	case 0x01:  return san_rqst(context, buffer);
-	case 0x02:  return san_etwl(context, buffer);
-	case 0x03:  return san_rqsg(context, buffer);
+	case 0x01:  return san_rqst(d, buffer);
+	case 0x02:  return san_etwl(d, buffer);
+	case 0x03:  return san_rqsg(d, buffer);
 	}
 
-	dev_warn(context->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
+	dev_warn(d->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
 	return AE_OK;
 }
 
@@ -807,7 +808,6 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	drvdata->dev = &pdev->dev;
-	drvdata->opreg_ctx.dev = &pdev->dev;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
 	status = san_consumers_link(pdev, cons, &drvdata->consumers);
