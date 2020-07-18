@@ -4,6 +4,7 @@
  * Translates communication from ACPI to SSH and back.
  */
 
+#include <asm/unaligned.h>
 #include <linux/acpi.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
@@ -481,9 +482,9 @@ static struct gsb_data_rqsx
 		return NULL;
 	}
 
-	if (rqsx->cdl != buffer->len - 8) {
+	if (get_unaligned(&rqsx->cdl) != buffer->len - 8) {
 		dev_err(dev, "bogus %s package (len = %d, cdl = %d)\n",
-			type, buffer->len, rqsx->cdl);
+			type, buffer->len, get_unaligned(&rqsx->cdl));
 		return NULL;
 	}
 
@@ -532,7 +533,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rqst.iid = gsb_rqst->iid;
 	rqst.chn = gsb_rqst->tid;
 	rqst.snc = gsb_rqst->snc;
-	rqst.cdl = gsb_rqst->cdl;
+	rqst.cdl = get_unaligned(&gsb_rqst->cdl);
 	rqst.pld = &gsb_rqst->pld[0];
 
 	result.cap  = SURFACE_SAM_SSH_MAX_RQST_RESPONSE;
@@ -605,7 +606,7 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	rqsg.tc  = gsb_rqsg->tc;
 	rqsg.cid = gsb_rqsg->cid;
 	rqsg.iid = gsb_rqsg->iid;
-	rqsg.cdl = gsb_rqsg->cdl;
+	rqsg.cdl = get_unaligned(&gsb_rqsg->cdl);
 	rqsg.pld = &gsb_rqsg->pld[0];
 
 	status = san_call_rqsg_handler(&rqsg);
