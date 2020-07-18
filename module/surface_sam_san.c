@@ -61,6 +61,7 @@ struct san_consumers {
 
 struct san_data {
 	struct device *dev;
+	struct ssam_controller *ctrl;
 
 	struct san_handler_data context;
 	struct san_consumers consumers;
@@ -787,16 +788,11 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 {
 	const struct san_acpi_consumer *cons;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
+	struct ssam_controller *ctrl;
 	struct san_data *data;
 	int status;
 
-	/*
-	 * Defer probe if the _SSH driver has not set up the controller yet. This
-	 * makes sure we do not fail any initial requests (e.g. _STA request without
-	 * which the battery does not get set up correctly). Otherwise register as
-	 * consumer to set up a device_link.
-	 */
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
@@ -805,6 +801,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	data->dev = &pdev->dev;
+	data->ctrl = ctrl;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
 	status = san_consumers_link(pdev, cons, &data->consumers);
