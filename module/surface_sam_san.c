@@ -121,6 +121,9 @@ struct gsb_buffer {
 	union gsb_buffer_data data;
 } __packed;
 
+#define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
+#define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
+
 
 enum san_pwr_event {
 	SAN_PWR_EVENT_BAT1_STAT	= 0x03,
@@ -488,6 +491,12 @@ static struct gsb_data_rqsx
 		return NULL;
 	}
 
+	if (get_unaligned(&rqsx->cdl) > SAN_GSB_MAX_RQSX_PAYLOAD) {
+		dev_err(dev, "payload for %s package too large (cdl = %d)\n",
+			type, get_unaligned(&rqsx->cdl));
+		return NULL;
+	}
+
 	if (rqsx->tid != 0x01) {
 		dev_warn(dev, "unsupported %s package (tid = 0x%02x)\n",
 			 type, rqsx->tid);
@@ -536,7 +545,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rqst.cdl = get_unaligned(&gsb_rqst->cdl);
 	rqst.pld = &gsb_rqst->pld[0];
 
-	result.cap  = SURFACE_SAM_SSH_MAX_RQST_RESPONSE;
+	result.cap  = SAN_GSB_MAX_RESPONSE;
 	result.len  = 0;
 	result.data = kzalloc(result.cap, GFP_KERNEL);
 
