@@ -86,12 +86,11 @@ struct gsb_data_in {
 struct gsb_data_rqsx {
 	u8 cv;				// command value (should be 0x01 or 0x03)
 	u8 tc;				// target controller
-	u8 tid;				// transport channnel ID?
+	u8 tid;				// transport channnel ID
 	u8 iid;				// target sub-controller (e.g. primary vs. secondary battery)
 	u8 snc;				// expect-response-flag
 	u8 cid;				// command ID
-	u8 cdl;				// payload length
-	u8 _pad;			// padding
+	u16 cdl;			// payload length
 	u8 pld[0];			// payload
 } __packed;
 
