@@ -406,7 +406,7 @@ struct ssam_request {
 	u8 channel;
 	u16 flags;
 	u16 length;
-	u8 *payload;
+	const u8 *payload;
 };
 
 struct ssam_response {
