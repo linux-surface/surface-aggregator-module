@@ -4,6 +4,7 @@
  * Provides support for the battery and AC on 7th generation Surface devices.
  */
 
+#include <asm/unaligned.h>
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
@@ -65,21 +66,21 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
 /* Equivalent to data returned in ACPI _BIX method */
 struct spwr_bix {
 	u8  revision;
-	u32 power_unit;
-	u32 design_cap;
-	u32 last_full_charge_cap;
-	u32 technology;
-	u32 design_voltage;
-	u32 design_cap_warn;
-	u32 design_cap_low;
-	u32 cycle_count;
-	u32 measurement_accuracy;
-	u32 max_sampling_time;
-	u32 min_sampling_time;
-	u32 max_avg_interval;
-	u32 min_avg_interval;
-	u32 bat_cap_granularity_1;
-	u32 bat_cap_granularity_2;
+	__le32 power_unit;
+	__le32 design_cap;
+	__le32 last_full_charge_cap;
+	__le32 technology;
+	__le32 design_voltage;
+	__le32 design_cap_warn;
+	__le32 design_cap_low;
+	__le32 cycle_count;
+	__le32 measurement_accuracy;
+	__le32 max_sampling_time;
+	__le32 min_sampling_time;
+	__le32 max_avg_interval;
+	__le32 min_avg_interval;
+	__le32 bat_cap_granularity_1;
+	__le32 bat_cap_granularity_2;
 	u8  model[21];
 	u8  serial[11];
 	u8  type[5];
@@ -88,22 +89,22 @@ struct spwr_bix {
 
 /* Equivalent to data returned in ACPI _BST method */
 struct spwr_bst {
-	u32 state;
-	u32 present_rate;
-	u32 remaining_cap;
-	u32 present_voltage;
+	__le32 state;
+	__le32 present_rate;
+	__le32 remaining_cap;
+	__le32 present_voltage;
 } __packed;
 
 /* DPTF event payload */
 struct spwr_event_dptf {
-	u32 pmax;
-	u32 _1;		/* currently unknown */
-	u32 _2;		/* currently unknown */
+	__le32 pmax;
+	__le32 _1;		/* currently unknown */
+	__le32 _2;		/* currently unknown */
 } __packed;
 
 
 /* Get battery status (_STA) */
-static int sam_psy_get_sta(u8 channel, u8 instance, u32 *sta)
+static int sam_psy_get_sta(u8 channel, u8 instance, __le32 *sta)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
@@ -116,7 +117,7 @@ static int sam_psy_get_sta(u8 channel, u8 instance, u32 *sta)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(u32);
+	result.cap = sizeof(__le32);
 	result.len = 0;
 	result.data = (u8 *)sta;
 
@@ -166,7 +167,7 @@ static int sam_psy_get_bst(u8 channel, u8 instance, struct spwr_bst *bst)
 }
 
 /* Set battery trip point (_BTP) */
-static int sam_psy_set_btp(u8 channel, u8 instance, u32 btp)
+static int sam_psy_set_btp(u8 channel, u8 instance, __le32 btp)
 {
 	struct surface_sam_ssh_rqst rqst;
 
@@ -175,14 +176,14 @@ static int sam_psy_set_btp(u8 channel, u8 instance, u32 btp)
 	rqst.iid = instance;
 	rqst.chn = channel;
 	rqst.snc = 0x00;
-	rqst.cdl = sizeof(u32);
+	rqst.cdl = sizeof(__le32);
 	rqst.pld = (u8 *)&btp;
 
 	return surface_sam_ssh_rqst(&rqst, NULL);
 }
 
 /* Get platform power soruce for battery (DPTF PSRC) */
-static int sam_psy_get_psrc(u8 channel, u8 instance, u32 *psrc)
+static int sam_psy_get_psrc(u8 channel, u8 instance, __le32 *psrc)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
@@ -195,7 +196,7 @@ static int sam_psy_get_psrc(u8 channel, u8 instance, u32 *psrc)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(u32);
+	result.cap = sizeof(__le32);
 	result.len = 0;
 	result.data = (u8 *)psrc;
 
@@ -204,7 +205,7 @@ static int sam_psy_get_psrc(u8 channel, u8 instance, u32 *psrc)
 
 /* Get maximum platform power for battery (DPTF PMAX) */
 __always_unused
-static int sam_psy_get_pmax(u8 channel, u8 instance, u32 *pmax)
+static int sam_psy_get_pmax(u8 channel, u8 instance, __le32 *pmax)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
@@ -217,7 +218,7 @@ static int sam_psy_get_pmax(u8 channel, u8 instance, u32 *pmax)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(u32);
+	result.cap = sizeof(__le32);
 	result.len = 0;
 	result.data = (u8 *)pmax;
 
@@ -226,7 +227,7 @@ static int sam_psy_get_pmax(u8 channel, u8 instance, u32 *pmax)
 
 /* Get adapter rating (DPTF ARTG) */
 __always_unused
-static int sam_psy_get_artg(u8 channel, u8 instance, u32 *artg)
+static int sam_psy_get_artg(u8 channel, u8 instance, __le32 *artg)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
@@ -239,7 +240,7 @@ static int sam_psy_get_artg(u8 channel, u8 instance, u32 *artg)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(u32);
+	result.cap = sizeof(__le32);
 	result.len = 0;
 	result.data = (u8 *)artg;
 
@@ -248,7 +249,7 @@ static int sam_psy_get_artg(u8 channel, u8 instance, u32 *artg)
 
 /* Unknown (DPTF PSOC) */
 __always_unused
-static int sam_psy_get_psoc(u8 channel, u8 instance, u32 *psoc)
+static int sam_psy_get_psoc(u8 channel, u8 instance, __le32 *psoc)
 {
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
@@ -261,7 +262,7 @@ static int sam_psy_get_psoc(u8 channel, u8 instance, u32 *psoc)
 	rqst.cdl = 0x00;
 	rqst.pld = NULL;
 
-	result.cap = sizeof(u32);
+	result.cap = sizeof(__le32);
 	result.len = 0;
 	result.data = (u8 *)psoc;
 
@@ -270,7 +271,7 @@ static int sam_psy_get_psoc(u8 channel, u8 instance, u32 *psoc)
 
 /* Unknown (DPTF CHGI/ INT3403 SPPC) */
 __always_unused
-static int sam_psy_set_chgi(u8 channel, u8 instance, u32 chgi)
+static int sam_psy_set_chgi(u8 channel, u8 instance, __le32 chgi)
 {
 	struct surface_sam_ssh_rqst rqst;
 
@@ -279,7 +280,7 @@ static int sam_psy_set_chgi(u8 channel, u8 instance, u32 chgi)
 	rqst.iid = instance;
 	rqst.chn = channel;
 	rqst.snc = 0x00;
-	rqst.cdl = sizeof(u32);
+	rqst.cdl = sizeof(__le32);
 	rqst.pld = (u8 *)&chgi;
 
 	return surface_sam_ssh_rqst(&rqst, NULL);
@@ -306,7 +307,7 @@ struct spwr_battery_device {
 	struct mutex lock;
 	unsigned long timestamp;
 
-	u32 sta;
+	__le32 sta;
 	struct spwr_bix bix;
 	struct spwr_bst bst;
 	u32 alarm;
@@ -324,7 +325,7 @@ struct spwr_ac_device {
 
 	struct mutex lock;
 
-	u32 state;
+	__le32 state;
 };
 
 static enum power_supply_property spwr_ac_props[] = {
@@ -378,7 +379,7 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
 static inline bool spwr_battery_present(struct spwr_battery_device *bat)
 {
-	return bat->sta & SAM_BATTERY_STA_PRESENT;
+	return le32_to_cpu(bat->sta) & SAM_BATTERY_STA_PRESENT;
 }
 
 
@@ -407,7 +408,7 @@ static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 static inline int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
 {
 	bat->alarm = value;
-	return sam_psy_set_btp(bat->p->channel, bat->p->instance, bat->alarm);
+	return sam_psy_set_btp(bat->p->channel, bat->p->instance, cpu_to_le32(bat->alarm));
 }
 
 static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
@@ -503,7 +504,7 @@ static int spwr_ac_update(struct spwr_ac_device *ac)
 static int spwr_battery_recheck(struct spwr_battery_device *bat)
 {
 	bool present = spwr_battery_present(bat);
-	u32 unit = bat->bix.power_unit;
+	u32 unit = get_unaligned_le32(&bat->bix.power_unit);
 	int status;
 
 	status = spwr_battery_update_bix(bat);
@@ -512,13 +513,14 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 
 	// if battery has been attached, (re-)initialize alarm
 	if (!present && spwr_battery_present(bat)) {
-		status = spwr_battery_set_alarm(bat, bat->bix.design_cap_warn);
+		u32 cap_warn = get_unaligned_le32(&bat->bix.design_cap_warn);
+		status = spwr_battery_set_alarm(bat, cap_warn);
 		if (status)
 			return status;
 	}
 
 	// if the unit has changed, re-add the battery
-	if (unit != bat->bix.power_unit) {
+	if (unit != get_unaligned_le32(&bat->bix.power_unit)) {
 		spwr_battery_unregister(bat);
 		status = spwr_battery_register(bat, bat->pdev, bat->ctrl, bat->p);
 	}
@@ -551,6 +553,9 @@ static inline int spwr_notify_bst(struct spwr_battery_device *bat)
 
 static inline int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 {
+	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
 	/*
 	 * Handle battery update quirk:
 	 * When the battery is fully charged and the adapter is plugged in or
@@ -559,7 +564,7 @@ static inline int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 	 * the state is updated on the battery. Schedule an update to solve this.
 	 */
 
-	if (bat->bst.remaining_cap >= bat->bix.last_full_charge_cap)
+	if (remaining_cap >= last_full_cap)
 		schedule_delayed_work(&bat->update_work, SPWR_AC_BAT_UPDATE_DELAY);
 
 	return 0;
@@ -652,16 +657,21 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 
 static inline int spwr_battery_prop_status(struct spwr_battery_device *bat)
 {
-	if (bat->bst.state & SAM_BATTERY_STATE_DISCHARGING)
+	u32 state = get_unaligned_le32(&bat->bst.state);
+	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+	u32 present_rate = get_unaligned_le32(&bat->bst.present_rate);
+
+	if (state & SAM_BATTERY_STATE_DISCHARGING)
 		return POWER_SUPPLY_STATUS_DISCHARGING;
 
-	if (bat->bst.state & SAM_BATTERY_STATE_CHARGING)
+	if (state & SAM_BATTERY_STATE_CHARGING)
 		return POWER_SUPPLY_STATUS_CHARGING;
 
-	if (bat->bix.last_full_charge_cap == bat->bst.remaining_cap)
+	if (last_full_cap == remaining_cap)
 		return POWER_SUPPLY_STATUS_FULL;
 
-	if (bat->bst.present_rate == 0)
+	if (present_rate == 0)
 		return POWER_SUPPLY_STATUS_NOT_CHARGING;
 
 	return POWER_SUPPLY_STATUS_UNKNOWN;
@@ -689,21 +699,28 @@ static inline int spwr_battery_prop_technology(struct spwr_battery_device *bat)
 
 static inline int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
 {
-	if (bat->bst.remaining_cap && bat->bix.last_full_charge_cap)
-		return bat->bst.remaining_cap * 100 / bat->bix.last_full_charge_cap;
+	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	if (remaining_cap && last_full_cap)
+		return remaining_cap * 100 / last_full_cap;
 	else
 		return 0;
 }
 
 static inline int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
 {
-	if (bat->bst.state & SAM_BATTERY_STATE_CRITICAL)
+	u32 state = get_unaligned_le32(&bat->bst.state);
+	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	if (state & SAM_BATTERY_STATE_CRITICAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 
-	if (bat->bst.remaining_cap >= bat->bix.last_full_charge_cap)
+	if (remaining_cap >= last_full_cap)
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 
-	if (bat->bst.remaining_cap <= bat->alarm)
+	if (remaining_cap <= bat->alarm)
 		return POWER_SUPPLY_CAPACITY_LEVEL_LOW;
 
 	return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
@@ -724,7 +741,7 @@ static int spwr_ac_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
-		val->intval = ac->state == 1;
+		val->intval = le32_to_cpu(ac->state) == 1;
 		break;
 
 	default:
@@ -770,35 +787,39 @@ static int spwr_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = bat->bix.cycle_count;
+		val->intval = get_unaligned_le32(&bat->bix.cycle_count);
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = bat->bix.design_voltage * 1000;
+		val->intval = get_unaligned_le32(&bat->bix.design_voltage)
+			      * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = bat->bst.present_voltage * 1000;
+		val->intval = get_unaligned_le32(&bat->bst.present_voltage)
+			      * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 	case POWER_SUPPLY_PROP_POWER_NOW:
-		val->intval = bat->bst.present_rate * 1000;
+		val->intval = get_unaligned_le32(&bat->bst.present_rate) * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 	case POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN:
-		val->intval = bat->bix.design_cap * 1000;
+		val->intval = get_unaligned_le32(&bat->bix.design_cap) * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 	case POWER_SUPPLY_PROP_ENERGY_FULL:
-		val->intval = bat->bix.last_full_charge_cap * 1000;
+		val->intval = get_unaligned_le32(&bat->bix.last_full_charge_cap)
+			      * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
-		val->intval = bat->bst.remaining_cap * 1000;
+		val->intval = get_unaligned_le32(&bat->bst.remaining_cap)
+			      * 1000;
 		break;
 
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -877,7 +898,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 			    struct ssam_controller *ctrl)
 {
 	struct power_supply_config psy_cfg = {};
-	u32 sta;
+	__le32 sta;
 	int status;
 
 	// make sure the device is there and functioning properly
@@ -885,7 +906,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	if (status)
 		return status;
 
-	if ((sta & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
+	if ((le32_to_cpu(sta) & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
 		return -ENODEV;
 
 	psy_cfg.drv_data = ac;
@@ -942,7 +963,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 				 const struct ssam_battery_properties *p)
 {
 	struct power_supply_config psy_cfg = {};
-	u32 sta;
+	__le32 sta;
 	int status;
 
 	bat->pdev = pdev;
@@ -954,7 +975,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	if (status)
 		return status;
 
-	if ((sta & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
+	if ((le32_to_cpu(sta) & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
 		return -ENODEV;
 
 	status = spwr_battery_update_bix_unlocked(bat);
@@ -962,7 +983,8 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 		return status;
 
 	if (spwr_battery_present(bat)) {
-		status = spwr_battery_set_alarm_unlocked(bat, bat->bix.design_cap_warn);
+		u32 cap_warn = get_unaligned_le32(&bat->bix.design_cap_warn);
+		status = spwr_battery_set_alarm_unlocked(bat, cap_warn);
 		if (status)
 			return status;
 	}
@@ -971,7 +993,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
-	if (bat->bix.power_unit == SAM_BATTERY_POWER_UNIT_MA) {
+	if (get_unaligned_le32(&bat->bix.power_unit) == SAM_BATTERY_POWER_UNIT_MA) {
 		bat->psy_desc.properties = spwr_battery_props_chg;
 		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
 	} else {
