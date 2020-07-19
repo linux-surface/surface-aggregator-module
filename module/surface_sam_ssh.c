@@ -35,9 +35,6 @@
 
 /* -- TODO. ----------------------------------------------------------------- */
 
-#define SSH_RQST_TAG_FULL			"surface_sam_ssh_rqst: "
-#define SSH_RQST_TAG				"rqst: "
-
 #define SSH_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
 
 
