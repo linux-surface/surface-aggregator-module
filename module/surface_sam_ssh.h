@@ -516,7 +516,8 @@ struct ssam_request_spec_md {
 		rqst.length = sizeof(wtype);					\
 		rqst.payload = (u8 *)in;					\
 										\
-		return ssam_request_sync_onstack(ctrl, &rqst, NULL, sizeof(wtype)); \
+		return ssam_request_sync_onstack(ctrl, &rqst, NULL,		\
+						 sizeof(wtype));		\
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_R(name, rtype, spec...)			\
@@ -570,7 +571,8 @@ struct ssam_request_spec_md {
 		rqst.length = sizeof(wtype);					\
 		rqst.payload = (u8 *)in;					\
 										\
-		return ssam_request_sync_onstack(ctrl, &rqst, NULL, sizeof(wtype)); \
+		return ssam_request_sync_onstack(ctrl, &rqst, NULL,		\
+						 sizeof(wtype));		\
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_MD_R(name, rtype, spec...)			\
