@@ -33,13 +33,6 @@
 #define DTX_CMD_LATCH_OPEN				_IO(0x11, 0x04)
 #define DTX_CMD_GET_OPMODE				_IOR(0x11, 0x05, int)
 
-#define SAM_RQST_DTX_TC					0x11
-#define SAM_RQST_DTX_CID_LATCH_LOCK			0x06
-#define SAM_RQST_DTX_CID_LATCH_UNLOCK			0x07
-#define SAM_RQST_DTX_CID_LATCH_REQUEST			0x08
-#define SAM_RQST_DTX_CID_LATCH_OPEN			0x09
-#define SAM_RQST_DTX_CID_GET_OPMODE			0x0D
-
 #define SAM_EVENT_DTX_CID_CONNECTION			0x0c
 #define SAM_EVENT_DTX_CID_BUTTON			0x0e
 #define SAM_EVENT_DTX_CID_ERROR				0x0f
@@ -98,60 +91,50 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-static int surface_sam_query_opmpde(void)
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_lock, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x06,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_unlock, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x07,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_request, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x08,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_open, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x09,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x0d,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+
+static int dtx_bas_get_opmode(struct ssam_controller *ctrl, int __user *buf)
 {
-	u8 result_buf[1];
+	u8 opmode;
 	int status;
 
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = SAM_RQST_DTX_TC,
-		.cid = SAM_RQST_DTX_CID_GET_OPMODE,
-		.iid = 0x00,
-		.chn = 0x01,
-		.snc = 0x01,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	struct surface_sam_ssh_buf result = {
-		.cap = 1,
-		.len = 0,
-		.data = result_buf,
-	};
-
-	status = surface_sam_ssh_rqst(&rqst, &result);
-	if (status)
+	status = ssam_bas_query_opmode(ctrl, &opmode);
+	if (status < 0)
 		return status;
-
-	if (result.len != 1)
-		return -EFAULT;
-
-	return result.data[0];
-}
-
-
-static int dtx_cmd_simple(u8 cid)
-{
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = SAM_RQST_DTX_TC,
-		.cid = cid,
-		.iid = 0x00,
-		.chn = 0x01,
-		.snc = 0x00,
-		.cdl = 0x00,
-		.pld = NULL,
-	};
-
-	return surface_sam_ssh_rqst(&rqst, NULL);
-}
-
-static int dtx_cmd_get_opmode(int __user *buf)
-{
-	int opmode;
-
-	opmode = surface_sam_query_opmpde();
-	if (opmode < 0)
-		return opmode;
 
 	if (put_user(opmode, buf))
 		return -EACCES;
@@ -297,23 +280,23 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	switch (cmd) {
 	case DTX_CMD_LATCH_LOCK:
-		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_LOCK);
+		status = ssam_bas_latch_lock(ddev->ctrl);
 		break;
 
 	case DTX_CMD_LATCH_UNLOCK:
-		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_UNLOCK);
+		status = ssam_bas_latch_unlock(ddev->ctrl);
 		break;
 
 	case DTX_CMD_LATCH_REQUEST:
-		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_REQUEST);
+		status = ssam_bas_latch_request(ddev->ctrl);
 		break;
 
 	case DTX_CMD_LATCH_OPEN:
-		status = dtx_cmd_simple(SAM_RQST_DTX_CID_LATCH_OPEN);
+		status = ssam_bas_latch_open(ddev->ctrl);
 		break;
 
 	case DTX_CMD_GET_OPMODE:
-		status = dtx_cmd_get_opmode((int __user *)arg);
+		status = dtx_bas_get_opmode(ddev->ctrl, (int __user *)arg);
 		break;
 
 	default:
@@ -378,12 +361,13 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 {
 	struct surface_dtx_event event;
-	int opmode;
+	u8 opmode;
+	int status;
 
 	// get operation mode
-	opmode = surface_sam_query_opmpde();
-	if (opmode < 0)
-		printk(DTX_ERR "EC request failed with error %d\n", opmode);
+	status = ssam_bas_query_opmode(ddev->ctrl, &opmode);
+	if (status < 0)
+		printk(DTX_ERR "EC request failed with error %d\n", status);
 
 	// send DTX event
 	event.type = 0x11;
@@ -445,9 +429,11 @@ static u32 surface_dtx_notification(struct ssam_notifier_block *nb, const struct
 }
 
 
-static struct input_dev *surface_dtx_register_inputdev(struct platform_device *pdev)
+static struct input_dev *surface_dtx_register_inputdev(
+		struct platform_device *pdev, struct ssam_controller *ctrl)
 {
 	struct input_dev *input_dev;
+	u8 opmode;
 	int status;
 
 	input_dev = input_allocate_device();
@@ -462,13 +448,13 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 
 	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
 
-	status = surface_sam_query_opmpde();
+	status = ssam_bas_query_opmode(ctrl, &opmode);
 	if (status < 0) {
 		input_free_device(input_dev);
 		return ERR_PTR(status);
 	}
 
-	input_report_switch(input_dev, SW_TABLET_MODE, status != DTX_OPMODE_LAPTOP);
+	input_report_switch(input_dev, SW_TABLET_MODE, opmode != DTX_OPMODE_LAPTOP);
 
 	status = input_register_device(input_dev);
 	if (status) {
@@ -492,7 +478,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	input_dev = surface_dtx_register_inputdev(pdev);
+	input_dev = surface_dtx_register_inputdev(pdev, ctrl);
 	if (IS_ERR(input_dev))
 		return PTR_ERR(input_dev);
 
