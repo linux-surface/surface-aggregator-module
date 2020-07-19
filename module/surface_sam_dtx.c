@@ -70,6 +70,8 @@ struct surface_dtx_event {
 } __packed;
 
 struct surface_dtx_dev {
+	struct ssam_controller *ctrl;
+
 	struct ssam_event_notifier notif;
 	struct delayed_work opmode_work;
 	wait_queue_head_t waitq;
@@ -481,11 +483,12 @@ static struct input_dev *surface_dtx_register_inputdev(struct platform_device *p
 static int surface_sam_dtx_probe(struct platform_device *pdev)
 {
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
+	struct ssam_controller *ctrl;
 	struct input_dev *input_dev;
 	int status;
 
 	// link to ec
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
@@ -501,6 +504,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 		goto err_register;
 	}
 
+	ddev->ctrl = ctrl;
 	INIT_DELAYED_WORK(&ddev->opmode_work, surface_dtx_opmode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
