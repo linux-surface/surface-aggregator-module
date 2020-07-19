@@ -98,32 +98,27 @@ struct surface_sam_sid_vhf_meta_resp {
 
 static int vhf_get_metadata(u8 iid, struct vhf_device_metadata *meta)
 {
+	struct surface_sam_sid_vhf_meta_resp resp = {};
+	struct surface_sam_ssh_rqst rqst;
+	struct surface_sam_ssh_buf result;
 	int status;
 
-	struct surface_sam_sid_vhf_meta_resp resp = {
-		.rqst = {
-			.id = 2,
-			.offset = 0,
-			.length = 0x76,
-			.end = 0
-		}
-	};
+	resp.rqst.id = 2;
+	resp.rqst.offset = 0;
+	resp.rqst.length = 0x76;
+	resp.rqst.end = 0;
 
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = 0x15,
-		.cid = 0x04,
-		.iid = iid,
-		.chn = 0x02,
-		.snc = 0x01,
-		.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst),
-		.pld = (u8 *)&resp.rqst,
-	};
+	rqst.tc  = 0x15;
+	rqst.cid = 0x04;
+	rqst.iid = iid;
+	rqst.chn = 0x02;
+	rqst.snc = 0x01;
+	rqst.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst);
+	rqst.pld = (u8 *)&resp.rqst;
 
-	struct surface_sam_ssh_buf result = {
-		.cap  = sizeof(struct surface_sam_sid_vhf_meta_resp),
-		.len  = 0,
-		.data = (u8 *)&resp,
-	};
+	result.cap  = sizeof(struct surface_sam_sid_vhf_meta_resp);
+	result.len  = 0;
+	result.data = (u8 *)&resp;
 
 	status = surface_sam_ssh_rqst(&rqst, &result);
 	if (status)
@@ -136,33 +131,28 @@ static int vhf_get_metadata(u8 iid, struct vhf_device_metadata *meta)
 
 static int vhf_get_hid_descriptor(struct hid_device *hid, u8 iid, u8 **desc, int *size)
 {
+	struct surface_sam_sid_vhf_meta_resp resp = {};
+	struct surface_sam_ssh_rqst rqst;
+	struct surface_sam_ssh_buf result;
 	int status, len;
 	u8 *buf;
 
-	struct surface_sam_sid_vhf_meta_resp resp = {
-		.rqst = {
-			.id = 0,
-			.offset = 0,
-			.length = 0x76,
-			.end = 0,
-		}
-	};
+	resp.rqst.id = 0;
+	resp.rqst.offset = 0;
+	resp.rqst.length = 0x76;
+	resp.rqst.end = 0;
 
-	struct surface_sam_ssh_rqst rqst = {
-		.tc  = 0x15,
-		.cid = 0x04,
-		.iid = iid,
-		.chn = 0x02,
-		.snc = 0x01,
-		.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst),
-		.pld = (u8 *)&resp.rqst,
-	};
+	rqst.tc  = 0x15;
+	rqst.cid = 0x04;
+	rqst.iid = iid;
+	rqst.chn = 0x02;
+	rqst.snc = 0x01;
+	rqst.cdl = sizeof(struct surface_sam_sid_vhf_meta_rqst);
+	rqst.pld = (u8 *)&resp.rqst;
 
-	struct surface_sam_ssh_buf result = {
-		.cap  = sizeof(struct surface_sam_sid_vhf_meta_resp),
-		.len  = 0,
-		.data = (u8 *)&resp,
-	};
+	result.cap  = sizeof(struct surface_sam_sid_vhf_meta_resp);
+	result.len  = 0;
+	result.data = (u8 *)&resp;
 
 	// first fetch 00 to get the total length
 	status = surface_sam_ssh_rqst(&rqst, &result);
