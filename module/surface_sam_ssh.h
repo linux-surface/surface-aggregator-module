@@ -735,6 +735,4 @@ struct surface_sam_ssh_rqst {
 int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n);
 int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n);
 
-int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result);
-
 #endif /* _SURFACE_SAM_SSH_H */

@@ -4488,61 +4488,6 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
 
 
-static int __surface_sam_ssh_rqst(struct ssam_controller *ec,
-				  const struct surface_sam_ssh_rqst *rqst,
-				  struct surface_sam_ssh_buf *result)
-{
-	struct ssam_request spec;
-	struct ssam_response resp;
-	int status;
-
-	// translate old -> new
-	spec.target_category = rqst->tc;
-	spec.command_id = rqst->cid;
-	spec.instance_id = rqst->iid;
-	spec.channel = rqst->chn;
-	spec.flags = rqst->snc ? SSAM_REQUEST_HAS_RESPONSE : 0;
-	spec.length = rqst->cdl;
-	spec.payload = rqst->pld;
-
-	resp.pointer = NULL;
-	resp.capacity = 0;
-	resp.length = 0;
-
-	if (result) {
-		resp.pointer = result->data;
-		resp.capacity = result->cap;
-	}
-
-	status = ssam_request_sync(ec, &spec, &resp);
-
-	// translate new -> old
-	if (result)
-		result->len = resp.length;
-
-	return status;
-}
-
-int surface_sam_ssh_rqst(const struct surface_sam_ssh_rqst *rqst, struct surface_sam_ssh_buf *result)
-{
-	struct ssam_controller *ec;
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec) {
-		pr_warn(SSH_RQST_TAG_FULL "embedded controller is uninitialized\n");
-		return -ENXIO;
-	}
-
-	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_SUSPENDED) {
-		ssam_warn(ec, SSH_RQST_TAG "embedded controller is suspended\n");
-		return -EPERM;
-	}
-
-	return __surface_sam_ssh_rqst(ec, rqst, result);
-}
-EXPORT_SYMBOL_GPL(surface_sam_ssh_rqst);
-
-
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
 	.target_category = SSAM_SSH_TC_SAM,
 	.command_id      = 0x13,
