@@ -92,6 +92,8 @@ struct shps_hardware_traits {
 };
 
 struct shps_driver_data {
+	struct ssam_controller *ctrl;
+
 	struct mutex lock;
 	struct pci_dev *dgpu_root_port;
 	struct pci_saved_state *dgpu_root_port_state;
@@ -1097,6 +1099,7 @@ static int shps_probe(struct platform_device *pdev)
 {
 	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata;
+	struct ssam_controller *ctrl;
 	struct device_link *link;
 	int power, status;
 	struct shps_hardware_traits detected_traits;
@@ -1107,7 +1110,7 @@ static int shps_probe(struct platform_device *pdev)
 	}
 
 	// link to SSH
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status) {
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 	}
@@ -1138,6 +1141,7 @@ static int shps_probe(struct platform_device *pdev)
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
 
+	drvdata->ctrl = ctrl;
 	drvdata->hardware_traits = detected_traits;
 
 	drvdata->dgpu_root_port = shps_dgpu_dsm_get_pci_dev(pdev);
