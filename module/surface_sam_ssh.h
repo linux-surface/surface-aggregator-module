@@ -495,6 +495,23 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 		return ssam_request_sync_onstack(ctrl, &rqst, NULL, 0);		\
 	}
 
+#define SSAM_DEFINE_SYNC_REQUEST_W(name, wtype, spec...)			\
+	int name(struct ssam_controller *ctrl, const wtype *in)			\
+	{									\
+		struct ssam_request_spec s = (struct ssam_request_spec)spec;	\
+		struct ssam_request rqst;					\
+										\
+		rqst.target_category = s.target_category;			\
+		rqst.command_id = s.command_id;					\
+		rqst.instance_id = s.instance_id;				\
+		rqst.channel = s.channel;					\
+		rqst.flags = s.flags;						\
+		rqst.length = sizeof(wtype);					\
+		rqst.payload = (u8 *)in;					\
+										\
+		return ssam_request_sync_onstack(ctrl, &rqst, NULL, sizeof(wtype)); \
+	}
+
 #define SSAM_DEFINE_SYNC_REQUEST_R(name, rtype, spec...)			\
 	int name(struct ssam_controller *ctrl, rtype *out)			\
 	{									\
