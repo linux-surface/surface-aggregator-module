@@ -226,8 +226,8 @@ struct ssh_ptl;
 struct ssh_packet;
 
 struct ssh_packet_ops {
-	void (*release)(struct ssh_packet *packet);
-	void (*complete)(struct ssh_packet *packet, int status);
+	void (*release)(struct ssh_packet *p);
+	void (*complete)(struct ssh_packet *p, int status);
 };
 
 struct ssh_packet {
@@ -251,13 +251,13 @@ struct ssh_packet {
 };
 
 
-void ssh_packet_get(struct ssh_packet *packet);
-void ssh_packet_put(struct ssh_packet *packet);
+void ssh_packet_get(struct ssh_packet *p);
+void ssh_packet_put(struct ssh_packet *p);
 
-static inline void ssh_packet_set_data(struct ssh_packet *packet, u8 *ptr, size_t len)
+static inline void ssh_packet_set_data(struct ssh_packet *p, u8 *ptr, size_t len)
 {
-	packet->data.ptr = ptr;
-	packet->data.len = len;
+	p->data.ptr = ptr;
+	p->data.len = len;
 }
 
 
@@ -313,19 +313,19 @@ struct ssh_request {
 };
 
 
-static inline void ssh_request_get(struct ssh_request *rqst)
+static inline void ssh_request_get(struct ssh_request *r)
 {
-	ssh_packet_get(&rqst->packet);
+	ssh_packet_get(&r->packet);
 }
 
-static inline void ssh_request_put(struct ssh_request *rqst)
+static inline void ssh_request_put(struct ssh_request *r)
 {
-	ssh_packet_put(&rqst->packet);
+	ssh_packet_put(&r->packet);
 }
 
-static inline void ssh_request_set_data(struct ssh_request *rqst, u8 *ptr, size_t len)
+static inline void ssh_request_set_data(struct ssh_request *r, u8 *ptr, size_t len)
 {
-	ssh_packet_set_data(&rqst->packet, ptr, len);
+	ssh_packet_set_data(&r->packet, ptr, len);
 }
 
 
