@@ -54,7 +54,7 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 	return crc_ccitt_false(0xffff, buf, len);
 }
 
-static inline u16 __ssh_rqid_next(u16 rqid)
+static inline u16 ssh_rqid_next_valid(u16 rqid)
 {
 	return rqid > 0 ? rqid + 1u : rqid + SURFACE_SAM_SSH_NUM_EVENTS + 1u;
 }
@@ -132,12 +132,12 @@ static inline void ssh_rqid_reset(struct ssh_rqid_counter *c)
 static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 {
 	u16 old = READ_ONCE(c->value);
-	u16 new = __ssh_rqid_next(old);
+	u16 new = ssh_rqid_next_valid(old);
 	u16 ret;
 
 	while (unlikely((ret = cmpxchg(&c->value, old, new)) != old)) {
 		old = ret;
-		new = __ssh_rqid_next(old);
+		new = ssh_rqid_next_valid(old);
 	}
 
 	return old;
