@@ -35,6 +35,10 @@ enum sid_param_perf_mode {
 	__SID_PARAM_PERF_MODE__END   = 4,
 };
 
+struct spm_data {
+	struct ssam_controller *ctrl;
+};
+
 
 static int surface_sam_perf_mode_get(void)
 {
@@ -167,12 +171,21 @@ static const DEVICE_ATTR_RW(perf_mode);
 
 static int surface_sam_sid_perfmode_probe(struct platform_device *pdev)
 {
+	struct ssam_controller *ctrl;
+	struct spm_data *data;
 	int status;
 
 	// link to ec
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
+
+	data = devm_kzalloc(&pdev->dev, sizeof(struct spm_data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	data->ctrl = ctrl;
+	platform_set_drvdata(pdev, data);
 
 	// set initial perf_mode
 	if (param_perf_mode_init != SID_PARAM_PERF_MODE_AS_IS) {
@@ -195,8 +208,12 @@ err_sysfs:
 
 static int surface_sam_sid_perfmode_remove(struct platform_device *pdev)
 {
+	struct spm_data *data = platform_get_drvdata(pdev);
+
 	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
 	surface_sam_perf_mode_set(param_perf_mode_exit);
+
+	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 
