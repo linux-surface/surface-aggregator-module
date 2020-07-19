@@ -36,13 +36,10 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
  * SAM Interface.
  */
 
-#define SAM_PWR_TC			0x02
-
 #define SAM_RQST_PWR_CID_STA		0x01
 #define SAM_RQST_PWR_CID_BIX		0x02
 #define SAM_RQST_PWR_CID_BST		0x03
 #define SAM_RQST_PWR_CID_BTP		0x04
-
 #define SAM_RQST_PWR_CID_PMAX		0x0b
 #define SAM_RQST_PWR_CID_PSOC		0x0c
 #define SAM_RQST_PWR_CID_PSRC		0x0d
@@ -109,7 +106,7 @@ static int sam_psy_get_sta(u8 channel, u8 instance, __le32 *sta)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_STA;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -130,7 +127,7 @@ static int sam_psy_get_bix(u8 channel, u8 instance, struct spwr_bix *bix)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_BIX;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -151,7 +148,7 @@ static int sam_psy_get_bst(u8 channel, u8 instance, struct spwr_bst *bst)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_BST;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -171,7 +168,7 @@ static int sam_psy_set_btp(u8 channel, u8 instance, __le32 btp)
 {
 	struct surface_sam_ssh_rqst rqst;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_BTP;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -188,7 +185,7 @@ static int sam_psy_get_psrc(u8 channel, u8 instance, __le32 *psrc)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_PSRC;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -210,7 +207,7 @@ static int sam_psy_get_pmax(u8 channel, u8 instance, __le32 *pmax)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_PMAX;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -232,7 +229,7 @@ static int sam_psy_get_artg(u8 channel, u8 instance, __le32 *artg)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_ARTG;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -254,7 +251,7 @@ static int sam_psy_get_psoc(u8 channel, u8 instance, __le32 *psoc)
 	struct surface_sam_ssh_rqst rqst;
 	struct surface_sam_ssh_buf result;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_PSOC;
 	rqst.iid = instance;
 	rqst.chn = channel;
@@ -275,7 +272,7 @@ static int sam_psy_set_chgi(u8 channel, u8 instance, __le32 chgi)
 {
 	struct surface_sam_ssh_rqst rqst;
 
-	rqst.tc  = SAM_PWR_TC;
+	rqst.tc  = SSAM_SSH_TC_BAT;
 	rqst.cid = SAM_RQST_PWR_CID_CHGI;
 	rqst.iid = instance;
 	rqst.chn = channel;
