@@ -732,8 +732,6 @@ struct surface_sam_ssh_rqst {
 };
 
 
-int surface_sam_ssh_consumer_register(struct device *consumer);
-
 int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n);
 int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n);
 

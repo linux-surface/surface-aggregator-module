@@ -4285,13 +4285,6 @@ static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
 	return ec;
 }
 
-int surface_sam_ssh_consumer_register(struct device *consumer)
-{
-	struct ssam_controller *ec;
-	return ssam_client_bind(consumer, &ec);
-}
-EXPORT_SYMBOL_GPL(surface_sam_ssh_consumer_register);
-
 
 static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 					struct ssam_event_registry reg,
