@@ -292,6 +292,7 @@ static int sam_psy_set_chgi(u8 channel, u8 instance, u32 chgi)
 
 struct spwr_battery_device {
 	struct platform_device *pdev;
+	struct ssam_controller *ctrl;
 	const struct ssam_battery_properties *p;
 
 	char name[32];
@@ -313,6 +314,7 @@ struct spwr_battery_device {
 
 struct spwr_ac_device {
 	struct platform_device *pdev;
+	struct ssam_controller *ctrl;
 
 	char name[32];
 	struct power_supply *psy;
@@ -368,6 +370,7 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 
 static int spwr_battery_register(struct spwr_battery_device *bat,
 				 struct platform_device *pdev,
+				 struct ssam_controller *ctrl,
 				 const struct ssam_battery_properties *p);
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
@@ -517,7 +520,7 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 	// if the unit has changed, re-add the battery
 	if (unit != bat->bix.power_unit) {
 		spwr_battery_unregister(bat);
-		status = spwr_battery_register(bat, bat->pdev, bat->p);
+		status = spwr_battery_register(bat, bat->pdev, bat->ctrl, bat->p);
 	}
 
 	return status;
@@ -869,7 +872,9 @@ static const struct device_attribute alarm_attr = {
 };
 
 
-static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *pdev)
+static int spwr_ac_register(struct spwr_ac_device *ac,
+			    struct platform_device *pdev,
+			    struct ssam_controller *ctrl)
 {
 	struct power_supply_config psy_cfg = {};
 	u32 sta;
@@ -886,6 +891,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac, struct platform_device *p
 	psy_cfg.drv_data = ac;
 
 	ac->pdev = pdev;
+	ac->ctrl = ctrl;
 	mutex_init(&ac->lock);
 
 	snprintf(ac->name, ARRAY_SIZE(ac->name), "ADP0");
@@ -932,6 +938,7 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 
 static int spwr_battery_register(struct spwr_battery_device *bat,
 				 struct platform_device *pdev,
+				 struct ssam_controller *ctrl,
 				 const struct ssam_battery_properties *p)
 {
 	struct power_supply_config psy_cfg = {};
@@ -939,6 +946,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	int status;
 
 	bat->pdev = pdev;
+	bat->ctrl = ctrl;
 	bat->p = p;
 
 	// make sure the device is there and functioning properly
@@ -1041,10 +1049,11 @@ SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm, NULL, surface_sam_sid_battery_resu
 static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 {
 	struct spwr_battery_device *bat;
+	struct ssam_controller *ctrl;
 	int status;
 
 	// link to ec
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
@@ -1053,7 +1062,7 @@ static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	platform_set_drvdata(pdev, bat);
-	return spwr_battery_register(bat, pdev, pdev->dev.platform_data);
+	return spwr_battery_register(bat, pdev, ctrl, pdev->dev.platform_data);
 }
 
 static int surface_sam_sid_battery_remove(struct platform_device *pdev)
@@ -1083,11 +1092,12 @@ static struct platform_driver surface_sam_sid_battery = {
 
 static int surface_sam_sid_ac_probe(struct platform_device *pdev)
 {
-	int status;
 	struct spwr_ac_device *ac;
+	struct ssam_controller *ctrl;
+	int status;
 
 	// link to ec
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
@@ -1095,7 +1105,7 @@ static int surface_sam_sid_ac_probe(struct platform_device *pdev)
 	if (!ac)
 		return -ENOMEM;
 
-	status = spwr_ac_register(ac, pdev);
+	status = spwr_ac_register(ac, pdev, ctrl);
 	if (status)
 		return status;
 
