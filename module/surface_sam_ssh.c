@@ -4907,9 +4907,11 @@ static ssize_t rqst_read(struct file *f, struct kobject *kobj, struct bin_attrib
 static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attribute *attr,
 			  char *buf, loff_t offs, size_t count)
 {
+	struct device *dev = container_of(kobj, struct device, kobj);
+	struct ssam_controller *ctrl = dev_get_drvdata(dev);
+	struct ssam_request rqst;
+	struct ssam_response rsp;
 	struct sysfs_rqst *input;
-	struct surface_sam_ssh_rqst rqst = {};
-	struct surface_sam_ssh_buf result = {};
 	int status;
 
 	// check basic write constriants
@@ -4925,27 +4927,27 @@ static ssize_t rqst_write(struct file *f, struct kobject *kobj, struct bin_attri
 	if (input->cdl + sizeof(struct sysfs_rqst) != count)
 		return -EINVAL;
 
-	rqst.tc  = input->tc;
-	rqst.cid = input->cid;
-	rqst.iid = input->iid;
-	rqst.chn = input->chn;
-	rqst.snc = input->snc;
-	rqst.cdl = input->cdl;
-	rqst.pld = sam_ssh_debug_rqst_buf_pld;
+	rqst.target_category = input->tc;
+	rqst.command_id = input->cid;
+	rqst.instance_id = input->iid;
+	rqst.channel = input->chn;
+	rqst.flags = input->snc;
+	rqst.length = input->cdl;
+	rqst.payload = sam_ssh_debug_rqst_buf_pld;
 	memcpy(sam_ssh_debug_rqst_buf_pld, &input->pld[0], input->cdl);
 
-	result.cap = ARRAY_SIZE(sam_ssh_debug_rqst_buf_res);
-	result.len = 0;
-	result.data = sam_ssh_debug_rqst_buf_res;
+	rsp.capacity = ARRAY_SIZE(sam_ssh_debug_rqst_buf_res);
+	rsp.length = 0;
+	rsp.pointer = sam_ssh_debug_rqst_buf_res;
 
-	status = surface_sam_ssh_rqst(&rqst, &result);
+	status = ssam_request_sync(ctrl, &rqst, &rsp);
 	if (status)
 		return status;
 
-	sam_ssh_debug_rqst_buf_sysfs[0] = result.len;
-	memcpy(sam_ssh_debug_rqst_buf_sysfs + 1, result.data, result.len);
-	memset(sam_ssh_debug_rqst_buf_sysfs + result.len + 1, 0,
-	       ARRAY_SIZE(sam_ssh_debug_rqst_buf_sysfs) + 1 - result.len);
+	sam_ssh_debug_rqst_buf_sysfs[0] = rsp.length;
+	memcpy(sam_ssh_debug_rqst_buf_sysfs + 1, rsp.pointer, rsp.length);
+	memset(sam_ssh_debug_rqst_buf_sysfs + rsp.length + 1, 0,
+	       ARRAY_SIZE(sam_ssh_debug_rqst_buf_sysfs) + 1 - rsp.length);
 
 	return count;
 }
