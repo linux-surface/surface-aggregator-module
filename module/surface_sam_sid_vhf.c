@@ -20,10 +20,13 @@
 #define VHF_HID_STARTED		0
 
 struct sid_vhf {
-	const struct ssam_hid_properties *p;
 	struct platform_device *dev;
-	struct hid_device *hid;
+	struct ssam_controller *ctrl;
+	const struct ssam_hid_properties *p;
+
 	struct ssam_event_notifier notif;
+
+	struct hid_device *hid;
 	unsigned long state;
 };
 
@@ -337,13 +340,14 @@ static u32 sid_vhf_event_handler(struct ssam_notifier_block *nb, const struct ss
 static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 {
 	const struct ssam_hid_properties *p = pdev->dev.platform_data;
+	struct ssam_controller *ctrl;
 	struct sid_vhf *vhf;
 	struct vhf_device_metadata meta = {};
 	struct hid_device *hid;
 	int status;
 
 	// add device link to EC
-	status = surface_sam_ssh_consumer_register(&pdev->dev);
+	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
@@ -361,8 +365,9 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 		goto err_create_hid;
 	}
 
-	vhf->p = pdev->dev.platform_data;
 	vhf->dev = pdev;
+	vhf->ctrl = ctrl;
+	vhf->p = pdev->dev.platform_data;
 	vhf->hid = hid;
 
 	vhf->notif.base.priority = 1;
