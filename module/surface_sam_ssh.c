@@ -4136,15 +4136,15 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 
 	if (!r->resp || !r->resp->pointer) {
                 if (data->len) {
-		        rtl_warn(rtl, "rsp: no response buffer provided,"
-                                 " dropping data\n");
+		        rtl_warn(rtl, "rsp: no response buffer provided, "
+                                 "dropping data\n");
                 }
                 return;
         }
 
 	if (data->len > r->resp->capacity) {
-		rtl_err(rtl, "rsp: response buffer too small,"
-			" capacity: %zu bytes, got: %zu bytes\n",
+		rtl_err(rtl, "rsp: response buffer too small, "
+			"capacity: %zu bytes, got: %zu bytes\n",
 			r->resp->capacity, data->len);
 		r->status = -ENOSPC;
 		return;
