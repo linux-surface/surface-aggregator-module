@@ -4279,28 +4279,32 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 EXPORT_SYMBOL_GPL(ssam_request_sync_with_buffer);
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Internal SAM requests. ------------------------------------------------ */
 
-static inline struct ssam_controller *surface_sam_ssh_acquire(void)
-{
-	return &ssam_controller;
-}
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x13,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
 
-static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
-{
-	struct ssam_controller *ec = surface_sam_ssh_acquire();
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_suspend, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x15,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
 
-	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_UNINITIALIZED)
-		return NULL;
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_resume, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x16,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
 
-	return ec;
-}
-
-
-static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
-					struct ssam_event_registry reg,
-					struct ssam_event_id id,
-					u8 flags)
+static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
+				 struct ssam_event_registry reg,
+				 struct ssam_event_id id, u8 flags)
 {
 	struct ssh_notification_params params;
 	struct ssam_request rqst;
@@ -4332,7 +4336,6 @@ static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 	result.pointer = buf;
 
 	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
-
 	if (status) {
 		ssam_err(ctrl, "failed to enable event source "
 			 "(tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
@@ -4350,10 +4353,9 @@ static int surface_sam_ssh_event_enable(struct ssam_controller *ctrl,
 
 }
 
-static int surface_sam_ssh_event_disable(struct ssam_controller *ctrl,
-					 struct ssam_event_registry reg,
-					 struct ssam_event_id id,
-					 u8 flags)
+static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
+				  struct ssam_event_registry reg,
+				  struct ssam_event_id id, u8 flags)
 {
 	struct ssh_notification_params params;
 	struct ssam_request rqst;
@@ -4385,7 +4387,6 @@ static int surface_sam_ssh_event_disable(struct ssam_controller *ctrl,
 	result.pointer = buf;
 
 	status = ssam_request_sync_onstack(ctrl, &rqst, &result, sizeof(params));
-
 	if (status) {
 		ssam_err(ctrl, "failed to disable event source "
 			 "(tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
@@ -4400,6 +4401,24 @@ static int surface_sam_ssh_event_disable(struct ssam_controller *ctrl,
 	}
 
 	return status;
+}
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
+static inline struct ssam_controller *surface_sam_ssh_acquire(void)
+{
+	return &ssam_controller;
+}
+
+static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
+{
+	struct ssam_controller *ec = surface_sam_ssh_acquire();
+
+	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_UNINITIALIZED)
+		return NULL;
+
+	return ec;
 }
 
 
@@ -4442,7 +4461,7 @@ int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n)
 	}
 
 	if (rc == 1) {
-		status = surface_sam_ssh_event_enable(ec, n->event.reg, n->event.id, n->event.flags);
+		status = ssam_ssh_event_enable(ec, n->event.reg, n->event.id, n->event.flags);
 		if (status) {
 			__ssam_nfblk_remove(nf_head, &n->base);
 			ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
@@ -4488,7 +4507,7 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 		 n->event.id.target_category, n->event.id.instance, rc);
 
 	if (rc == 0)
-		status = surface_sam_ssh_event_disable(ec, n->event.reg, n->event.id, n->event.flags);
+		status = ssam_ssh_event_disable(ec, n->event.reg, n->event.id, n->event.flags);
 
 	__ssam_nfblk_remove(nf_head, &n->base);
 	mutex_unlock(&nf->lock);
@@ -4497,28 +4516,6 @@ int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n)
 	return status;
 }
 EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
-
-
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
-	.target_category = SSAM_SSH_TC_SAM,
-	.command_id      = 0x13,
-	.instance_id     = 0x00,
-	.channel         = 0x01,
-});
-
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_suspend, u8, {
-	.target_category = SSAM_SSH_TC_SAM,
-	.command_id      = 0x15,
-	.instance_id     = 0x00,
-	.channel         = 0x01,
-});
-
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_resume, u8, {
-	.target_category = SSAM_SSH_TC_SAM,
-	.command_id      = 0x16,
-	.instance_id     = 0x00,
-	.channel         = 0x01,
-});
 
 
 /**
