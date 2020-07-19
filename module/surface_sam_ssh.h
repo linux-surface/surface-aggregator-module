@@ -715,23 +715,6 @@ struct ssam_event_notifier {
 #define SURFACE_SAM_SSH_NUM_CHANNELS		2
 
 
-struct surface_sam_ssh_buf {
-	u8 cap;
-	u8 len;
-	u8 *data;
-};
-
-struct surface_sam_ssh_rqst {
-	u8 tc;				// target category
-	u8 cid;				// command ID
-	u8 iid;				// instance ID
-	u8 chn;				// channel
-	u8 snc;				// expect response flag (bool: 0/1)
-	u16 cdl;			// command data length (length of payload)
-	u8 *pld;			// pointer to payload of length cdl
-};
-
-
 int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n);
 int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n);
 
