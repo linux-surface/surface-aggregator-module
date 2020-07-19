@@ -36,16 +36,6 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
  * SAM Interface.
  */
 
-#define SAM_RQST_PWR_CID_STA		0x01
-#define SAM_RQST_PWR_CID_BIX		0x02
-#define SAM_RQST_PWR_CID_BST		0x03
-#define SAM_RQST_PWR_CID_BTP		0x04
-#define SAM_RQST_PWR_CID_PMAX		0x0b
-#define SAM_RQST_PWR_CID_PSOC		0x0c
-#define SAM_RQST_PWR_CID_PSRC		0x0d
-#define SAM_RQST_PWR_CID_CHGI		0x0e
-#define SAM_RQST_PWR_CID_ARTG		0x0f
-
 #define SAM_EVENT_PWR_CID_BIX		0x15
 #define SAM_EVENT_PWR_CID_BST		0x16
 #define SAM_EVENT_PWR_CID_ADAPTER	0x17
@@ -101,187 +91,62 @@ struct spwr_event_dptf {
 
 
 /* Get battery status (_STA) */
-static int sam_psy_get_sta(u8 channel, u8 instance, __le32 *sta)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_STA;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(__le32);
-	result.len = 0;
-	result.data = (u8 *)sta;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_sta, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x01,
+});
 
 /* Get battery static information (_BIX) */
-static int sam_psy_get_bix(u8 channel, u8 instance, struct spwr_bix *bix)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_BIX;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(struct spwr_bix);
-	result.len = 0;
-	result.data = (u8 *)bix;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_bix, struct spwr_bix, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x02,
+});
 
 /* Get battery dynamic information (_BST) */
-static int sam_psy_get_bst(u8 channel, u8 instance, struct spwr_bst *bst)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_BST;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(struct spwr_bst);
-	result.len = 0;
-	result.data = (u8 *)bst;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_bst, struct spwr_bst, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x03,
+});
 
 /* Set battery trip point (_BTP) */
-static int sam_psy_set_btp(u8 channel, u8 instance, __le32 btp)
-{
-	struct surface_sam_ssh_rqst rqst;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_BTP;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x00;
-	rqst.cdl = sizeof(__le32);
-	rqst.pld = (u8 *)&btp;
-
-	return surface_sam_ssh_rqst(&rqst, NULL);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_W(ssam_bat_set_btp, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x04,
+});
 
 /* Get platform power soruce for battery (DPTF PSRC) */
-static int sam_psy_get_psrc(u8 channel, u8 instance, __le32 *psrc)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_PSRC;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(__le32);
-	result.len = 0;
-	result.data = (u8 *)psrc;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_psrc, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x0d,
+});
 
 /* Get maximum platform power for battery (DPTF PMAX) */
 __always_unused
-static int sam_psy_get_pmax(u8 channel, u8 instance, __le32 *pmax)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_PMAX;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(__le32);
-	result.len = 0;
-	result.data = (u8 *)pmax;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_pmax, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x0b,
+});
 
 /* Get adapter rating (DPTF ARTG) */
 __always_unused
-static int sam_psy_get_artg(u8 channel, u8 instance, __le32 *artg)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_ARTG;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(__le32);
-	result.len = 0;
-	result.data = (u8 *)artg;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_artg, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x0f,
+});
 
 /* Unknown (DPTF PSOC) */
 __always_unused
-static int sam_psy_get_psoc(u8 channel, u8 instance, __le32 *psoc)
-{
-	struct surface_sam_ssh_rqst rqst;
-	struct surface_sam_ssh_buf result;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_PSOC;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x01;
-	rqst.cdl = 0x00;
-	rqst.pld = NULL;
-
-	result.cap = sizeof(__le32);
-	result.len = 0;
-	result.data = (u8 *)psoc;
-
-	return surface_sam_ssh_rqst(&rqst, &result);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_psoc, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x0c,
+});
 
 /* Unknown (DPTF CHGI/ INT3403 SPPC) */
 __always_unused
-static int sam_psy_set_chgi(u8 channel, u8 instance, __le32 chgi)
-{
-	struct surface_sam_ssh_rqst rqst;
-
-	rqst.tc  = SSAM_SSH_TC_BAT;
-	rqst.cid = SAM_RQST_PWR_CID_CHGI;
-	rqst.iid = instance;
-	rqst.chn = channel;
-	rqst.snc = 0x00;
-	rqst.cdl = sizeof(__le32);
-	rqst.pld = (u8 *)&chgi;
-
-	return surface_sam_ssh_rqst(&rqst, NULL);
-}
+static SSAM_DEFINE_SYNC_REQUEST_MD_W(ssam_bat_set_chgi, __le32, {
+	.target_category = SSAM_SSH_TC_BAT,
+	.command_id      = 0x0e,
+});
 
 
 /*
@@ -382,7 +247,8 @@ static inline bool spwr_battery_present(struct spwr_battery_device *bat)
 
 static inline int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
-	return sam_psy_get_sta(bat->p->channel, bat->p->instance, &bat->sta);
+	return ssam_bat_get_sta(bat->ctrl, bat->p->channel, bat->p->instance,
+				&bat->sta);
 }
 
 static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
@@ -390,7 +256,8 @@ static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return sam_psy_get_bix(bat->p->channel, bat->p->instance, &bat->bix);
+	return ssam_bat_get_bix(bat->ctrl, bat->p->channel, bat->p->instance,
+				&bat->bix);
 }
 
 static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
@@ -398,14 +265,18 @@ static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return sam_psy_get_bst(bat->p->channel, bat->p->instance, &bat->bst);
+	return ssam_bat_get_bst(bat->ctrl, bat->p->channel, bat->p->instance,
+				&bat->bst);
 }
 
 
 static inline int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
 {
+	__le32 alarm = cpu_to_le32(value);
+
 	bat->alarm = value;
-	return sam_psy_set_btp(bat->p->channel, bat->p->instance, cpu_to_le32(bat->alarm));
+	return ssam_bat_set_btp(bat->ctrl, bat->p->channel, bat->p->instance,
+				&alarm);
 }
 
 static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
@@ -483,7 +354,7 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 
 static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	return sam_psy_get_psrc(0x01, 0x01, &ac->state);
+	return ssam_bat_get_psrc(ac->ctrl, 0x01, 0x01, &ac->state);
 }
 
 static int spwr_ac_update(struct spwr_ac_device *ac)
@@ -899,7 +770,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	int status;
 
 	// make sure the device is there and functioning properly
-	status = sam_psy_get_sta(0x01, 0x01, &sta);
+	status = ssam_bat_get_sta(ctrl, 0x01, 0x01, &sta);
 	if (status)
 		return status;
 
@@ -968,7 +839,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->p = p;
 
 	// make sure the device is there and functioning properly
-	status = sam_psy_get_sta(bat->p->channel, bat->p->instance, &sta);
+	status = ssam_bat_get_sta(ctrl, bat->p->channel, bat->p->instance, &sta);
 	if (status)
 		return status;
 
