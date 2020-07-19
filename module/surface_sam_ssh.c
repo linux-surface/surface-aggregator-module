@@ -47,7 +47,21 @@
 #endif /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
 
 
-/* -- Common/utility functions. --------------------------------------------- */
+/* -- SSH protocol utility functions and definitions. ----------------------- */
+
+/*
+ * The number of reserved event IDs, used for registering an SSH event
+ * handler. Valid event IDs are numbers below or equal to this value, with
+ * exception of zero, which is not an event ID. Thus, this is also the
+ * absolute maximum number of event handlers that can be registered.
+ */
+#define SSH_NUM_EVENTS		34
+
+/*
+ * The number of communication channels used in the protocol.
+ */
+#define SSH_NUM_CHANNELS	2
+
 
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
@@ -56,7 +70,7 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
 
 static inline u16 ssh_rqid_next_valid(u16 rqid)
 {
-	return rqid > 0 ? rqid + 1u : rqid + SURFACE_SAM_SSH_NUM_EVENTS + 1u;
+	return rqid > 0 ? rqid + 1u : rqid + SSH_NUM_EVENTS + 1u;
 }
 
 static inline u16 ssh_event_to_rqid(u16 event)
@@ -71,7 +85,7 @@ static inline u16 ssh_rqid_to_event(u16 rqid)
 
 static inline bool ssh_rqid_is_event(u16 rqid)
 {
-	return ssh_rqid_to_event(rqid) < SURFACE_SAM_SSH_NUM_EVENTS;
+	return ssh_rqid_to_event(rqid) < SSH_NUM_EVENTS;
 }
 
 static inline int ssh_tc_to_rqid(u8 tc)
@@ -91,7 +105,7 @@ static inline u8 ssh_channel_to_index(u8 channel)
 
 static inline bool ssh_channel_is_valid(u8 channel)
 {
-	return ssh_channel_to_index(channel) < SURFACE_SAM_SSH_NUM_CHANNELS;
+	return ssh_channel_to_index(channel) < SSH_NUM_CHANNELS;
 }
 
 
@@ -3609,7 +3623,7 @@ struct ssam_nf_refcount_entry {
 struct ssam_nf {
 	struct mutex lock;
 	struct rb_root refcount;
-	struct ssam_nf_head head[SURFACE_SAM_SSH_NUM_EVENTS];
+	struct ssam_nf_head head[SSH_NUM_EVENTS];
 };
 
 
@@ -3778,7 +3792,7 @@ static int ssam_nf_init(struct ssam_nf *nf)
 {
 	int i, status;
 
-	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++) {
+	for (i = 0; i < SSH_NUM_EVENTS; i++) {
 		status = ssam_nf_head_init(&nf->head[i]);
 		if (status)
 			break;
@@ -3799,7 +3813,7 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 {
 	int i;
 
-	for (i = 0; i < SURFACE_SAM_SSH_NUM_EVENTS; i++)
+	for (i = 0; i < SSH_NUM_EVENTS; i++)
 		ssam_nf_head_destroy(&nf->head[i]);
 
 	mutex_destroy(&nf->lock);
@@ -3828,7 +3842,7 @@ struct ssam_event_queue {
 };
 
 struct ssam_event_channel {
-	struct ssam_event_queue queue[SURFACE_SAM_SSH_NUM_EVENTS];
+	struct ssam_event_queue queue[SSH_NUM_EVENTS];
 };
 
 struct ssam_cplt {
@@ -3836,7 +3850,7 @@ struct ssam_cplt {
 	struct workqueue_struct *wq;
 
 	struct {
-		struct ssam_event_channel channel[SURFACE_SAM_SSH_NUM_CHANNELS];
+		struct ssam_event_channel channel[SSH_NUM_CHANNELS];
 		struct ssam_nf notif;
 	} event;
 };

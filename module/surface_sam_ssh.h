@@ -701,20 +701,6 @@ struct ssam_event_notifier {
 
 /* -- TODO -------------------------------------------------------------------*/
 
-/*
- * The number of reserved event IDs, used for registering an SSH event
- * handler. Valid event IDs are numbers below or equal to this value, with
- * exception of zero, which is not an event ID. Thus, this is also the
- * absolute maximum number of event handlers that can be registered.
- */
-#define SURFACE_SAM_SSH_NUM_EVENTS		0x22
-
-/*
- * The number of communication channels used in the protocol.
- */
-#define SURFACE_SAM_SSH_NUM_CHANNELS		2
-
-
 int surface_sam_ssh_notifier_register(struct ssam_event_notifier *n);
 int surface_sam_ssh_notifier_unregister(struct ssam_event_notifier *n);
 
