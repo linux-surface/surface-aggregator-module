@@ -391,14 +391,6 @@ enum ssam_request_flags {
 	SSAM_REQUEST_UNSEQUENCED  = BIT(1),
 };
 
-struct ssam_request_spec {
-	u8 target_category;
-	u8 command_id;
-	u8 instance_id;
-	u8 channel;
-	u8 flags;
-};
-
 struct ssam_request {
 	u8 target_category;
 	u8 command_id;
@@ -478,6 +470,21 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 		ssam_request_sync_with_buffer(ctrl, rqst, rsp, &__b);		\
 	})
 
+
+struct ssam_request_spec {
+	u8 target_category;
+	u8 command_id;
+	u8 instance_id;
+	u8 channel;
+	u8 flags;
+};
+
+struct ssam_request_spec_md {
+	u8 target_category;
+	u8 command_id;
+	u8 flags;
+};
+
 #define SSAM_DEFINE_SYNC_REQUEST_N(name, spec...)				\
 	int name(struct ssam_controller *ctrl)					\
 	{									\
@@ -524,6 +531,43 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = s.instance_id;				\
 		rqst.channel = s.channel;					\
+		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
+		rqst.length = 0;						\
+		rqst.payload = NULL;						\
+										\
+		rsp.capacity = sizeof(rtype);					\
+		rsp.length = 0;							\
+		rsp.pointer = (u8 *)out;					\
+										\
+		status = ssam_request_sync_onstack(ctrl, &rqst, &rsp, 0);	\
+		if (status)							\
+			return status;						\
+										\
+		if (rsp.length != sizeof(rtype)) {				\
+			struct device *dev = ssam_controller_device(ctrl);	\
+			dev_err(dev, "rqst: invalid response length, expected %zu, got %zu" \
+				" (tc: 0x%02x, cid: 0x%02x)", sizeof(rtype),	\
+				rsp.length, rqst.target_category,		\
+				rqst.command_id);				\
+			return -EIO;						\
+		}								\
+										\
+		return 0;							\
+	}
+
+#define SSAM_DEFINE_SYNC_REQUEST_MD_R(name, rtype, spec...)			\
+	int name(struct ssam_controller *ctrl, u8 chn, u8 iid, rtype *out)	\
+	{									\
+		struct ssam_request_spec_md s					\
+			= (struct ssam_request_spec_md)spec;			\
+		struct ssam_request rqst;					\
+		struct ssam_response rsp;					\
+		int status;							\
+										\
+		rqst.target_category = s.target_category;			\
+		rqst.command_id = s.command_id;					\
+		rqst.instance_id = iid;						\
+		rqst.channel = chn;						\
 		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
 		rqst.length = 0;						\
 		rqst.payload = NULL;						\
