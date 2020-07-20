@@ -4288,14 +4288,14 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
 	.channel         = 0x01,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_suspend, u8, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_display_off, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
 	.command_id      = 0x15,
 	.instance_id     = 0x00,
 	.channel         = 0x01,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_controller_resume, u8, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_display_on, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
 	.command_id      = 0x16,
 	.instance_id     = 0x00,
@@ -4536,7 +4536,7 @@ static int surface_sam_controller_resume(struct ssam_controller *ctrl)
 	u8 out;
 
 	ssam_dbg(ctrl, "pm: resuming system aggregator module\n");
-	status = ssam_ssh_controller_resume(ctrl, &out);
+	status = ssam_ssh_notif_display_on(ctrl, &out);
 	if (status)
 		return status;
 
@@ -4574,7 +4574,7 @@ static int surface_sam_controller_suspend(struct ssam_controller *ctrl)
 	u8 out;
 
 	ssam_dbg(ctrl, "pm: suspending system aggregator module\n");
-	status = ssam_ssh_controller_suspend(ctrl, &out);
+	status = ssam_ssh_notif_display_off(ctrl, &out);
 	if (status)
 		return status;
 
