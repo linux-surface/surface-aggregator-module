@@ -3734,60 +3734,6 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 	}
 }
 
-static int ssam_nf_register(struct ssam_nf *nf, struct ssam_event_notifier *n)
-{
-	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
-	struct ssam_nf_head *nf_head;
-	int rc, status;
-
-	if (!ssh_rqid_is_event(rqid))
-		return -EINVAL;
-
-	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
-
-	mutex_lock(&nf->lock);
-
-	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
-	if (rc < 0) {
-		mutex_lock(&nf->lock);
-		return rc;
-	}
-
-	status = __ssam_nfblk_insert(nf_head, &n->base);
-	if (status)
-		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
-
-	mutex_unlock(&nf->lock);
-	return status;
-}
-
-static int ssam_nf_unregister(struct ssam_nf *nf, struct ssam_event_notifier *n)
-{
-	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
-	struct ssam_nf_head *nf_head;
-	int status;
-
-	if (!ssh_rqid_is_event(rqid))
-		return -EINVAL;
-
-	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
-
-	mutex_lock(&nf->lock);
-
-	status = __ssam_nfblk_remove(nf_head, &n->base);
-	if (status) {
-		mutex_unlock(&nf->lock);
-		return status;
-	}
-
-	ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
-
-	mutex_unlock(&nf->lock);
-	synchronize_srcu(&nf_head->srcu);
-
-	return 0;
-}
-
 static int ssam_nf_init(struct ssam_nf *nf)
 {
 	int i, status;
