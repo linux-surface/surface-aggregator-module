@@ -4025,8 +4025,8 @@ struct ssam_controller {
 	} irq;
 
 	struct {
-		u32 cmd_display:1;
-		u32 cmd_d3:1;
+		u32 notif_display:1;
+		u32 notif_d0exit:1;
 	} caps;
 };
 
