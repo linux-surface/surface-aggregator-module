@@ -4530,13 +4530,13 @@ EXPORT_SYMBOL_GPL(surface_sam_ssh_notifier_unregister);
  *
  * Must be called with the EC initialized and its lock held.
  */
-static int surface_sam_controller_resume(struct ssam_controller *ec)
+static int surface_sam_controller_resume(struct ssam_controller *ctrl)
 {
 	int status;
 	u8 out;
 
-	ssam_dbg(ec, "pm: resuming system aggregator module\n");
-	status = ssam_ssh_controller_resume(ec, &out);
+	ssam_dbg(ctrl, "pm: resuming system aggregator module\n");
+	status = ssam_ssh_controller_resume(ctrl, &out);
 	if (status)
 		return status;
 
@@ -4546,8 +4546,8 @@ static int surface_sam_controller_resume(struct ssam_controller *ec)
 	 * been observed so far.
 	 */
 	if (out != 0x00) {
-		ssam_warn(ec, "unexpected result while trying to resume EC: "
-			 "0x%02x\n", out);
+		ssam_warn(ctrl, "unexpected result while trying to resume EC: "
+			  "0x%02x\n", out);
 	}
 
 	return 0;
@@ -4568,13 +4568,13 @@ static int surface_sam_controller_resume(struct ssam_controller *ec)
  *
  * Must be called with the EC initialized and its lock held.
  */
-static int surface_sam_controller_suspend(struct ssam_controller *ec)
+static int surface_sam_controller_suspend(struct ssam_controller *ctrl)
 {
 	int status;
 	u8 out;
 
-	ssam_dbg(ec, "pm: suspending system aggregator module\n");
-	status = ssam_ssh_controller_suspend(ec, &out);
+	ssam_dbg(ctrl, "pm: suspending system aggregator module\n");
+	status = ssam_ssh_controller_suspend(ctrl, &out);
 	if (status)
 		return status;
 
@@ -4584,30 +4584,30 @@ static int surface_sam_controller_suspend(struct ssam_controller *ec)
 	 * been observed so far.
 	 */
 	if (out != 0x00) {
-		ssam_warn(ec, "unexpected result while trying to suspend EC: "
-			 "0x%02x\n", out);
+		ssam_warn(ctrl, "unexpected result while trying to suspend EC: "
+			  "0x%02x\n", out);
 	}
 
 	return 0;
 }
 
 
-static int surface_sam_ssh_log_firmware_version(struct ssam_controller *ec)
+static int surface_sam_ssh_log_firmware_version(struct ssam_controller *ctrl)
 {
-	__le32 v;
+	__le32 __version;
 	u32 version, a, b, c;
 	int status;
 
-	status = ssam_ssh_get_firmware_version(ec, &v);
+	status = ssam_ssh_get_firmware_version(ctrl, &__version);
 	if (status)
 		return status;
 
-	version = le32_to_cpu(v);
+	version = le32_to_cpu(__version);
 	a = (version >> 24) & 0xff;
 	b = ((version >> 8) & 0xffff);
 	c = version & 0xff;
 
-	ssam_info(ec, "SAM controller version: %u.%u.%u\n", a, b, c);
+	ssam_info(ctrl, "SAM controller version: %u.%u.%u\n", a, b, c);
 	return 0;
 }
 
