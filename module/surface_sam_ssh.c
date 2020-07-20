@@ -4141,15 +4141,16 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_init);
 int ssam_request_sync_submit(struct ssam_controller *ctrl,
 			     struct ssam_request_sync *rqst)
 {
+	enum ssam_controller_state state = smp_load_acquire(&ctrl->state);
 	int status;
 
-	if (ctrl->state == SSAM_CONTROLLER_UNINITIALIZED) {
+	if (state == SSAM_CONTROLLER_UNINITIALIZED) {
 		ssam_warn(ctrl, "rqst: embedded controller is uninitialized\n");
 		ssh_request_put(&rqst->base);
 		return -ENXIO;
 	}
 
-	if (ctrl->state == SSAM_CONTROLLER_SUSPENDED) {
+	if (state == SSAM_CONTROLLER_SUSPENDED) {
 		ssam_warn(ctrl, "rqst: embedded controller is suspended\n");
 		ssh_request_put(&rqst->base);
 		return -EPERM;
