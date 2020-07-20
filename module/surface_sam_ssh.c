@@ -4027,7 +4027,7 @@ struct ssam_controller {
 	struct {
 		u32 cmd_display:1;
 		u32 cmd_d3:1;
-	} properties;
+	} caps;
 };
 
 static struct ssam_controller ssam_controller = {
