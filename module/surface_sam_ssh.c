@@ -4378,6 +4378,9 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+		return -ENXIO;
+
 	nf = &ctrl->cplt.event.notif;
 	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 
@@ -4428,6 +4431,9 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
+
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+		return -ENXIO;
 
 	nf = &ctrl->cplt.event.notif;
 	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
