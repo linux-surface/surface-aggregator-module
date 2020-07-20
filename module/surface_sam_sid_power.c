@@ -804,7 +804,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	ac->notif.event.id.instance = 0;
 	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(&ac->notif);
+	status = ssam_notifier_register(ctrl, &ac->notif);
 	if (status)
 		goto err_notif;
 
@@ -819,7 +819,7 @@ err_psy:
 
 static int spwr_ac_unregister(struct spwr_ac_device *ac)
 {
-	surface_sam_ssh_notifier_unregister(&ac->notif);
+	ssam_notifier_unregister(ac->ctrl, &ac->notif);
 	power_supply_unregister(ac->psy);
 	mutex_destroy(&ac->lock);
 	return 0;
@@ -889,7 +889,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->notif.event.id.instance = 0;
 	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(&bat->notif);
+	status = ssam_notifier_register(ctrl, &bat->notif);
 	if (status)
 		goto err_notif;
 
@@ -900,7 +900,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	return 0;
 
 err_file:
-	surface_sam_ssh_notifier_unregister(&bat->notif);
+	ssam_notifier_unregister(ctrl, &bat->notif);
 err_notif:
 	power_supply_unregister(bat->psy);
 err_psy:
@@ -910,7 +910,7 @@ err_psy:
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat)
 {
-	surface_sam_ssh_notifier_unregister(&bat->notif);
+	ssam_notifier_unregister(bat->ctrl, &bat->notif);
 	cancel_delayed_work_sync(&bat->update_work);
 	device_remove_file(&bat->psy->dev, &alarm_attr);
 	power_supply_unregister(bat->psy);
