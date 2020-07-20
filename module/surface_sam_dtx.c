@@ -366,8 +366,10 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 
 	// get operation mode
 	status = ssam_bas_query_opmode(ddev->ctrl, &opmode);
-	if (status < 0)
+	if (status < 0) {
 		printk(DTX_ERR "EC request failed with error %d\n", status);
+		return;
+	}
 
 	// send DTX event
 	event.type = 0x11;
