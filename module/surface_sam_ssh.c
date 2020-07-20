@@ -4418,6 +4418,99 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 }
 
 
+/* -- Top-level event registry interface. ----------------------------------- */
+
+int ssam_notifier_register(struct ssam_controller *ctrl,
+			   struct ssam_event_notifier *n)
+{
+	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_head *nf_head;
+	struct ssam_nf *nf;
+	int rc, status;
+
+	if (!ssh_rqid_is_event(rqid))
+		return -EINVAL;
+
+	nf = &ctrl->cplt.event.notif;
+	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
+
+	mutex_lock(&nf->lock);
+
+	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
+	if (rc < 0) {
+		mutex_unlock(&nf->lock);
+		return rc;
+	}
+
+	ssam_dbg(ctrl, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, "
+		 "rc: %d)\n", n->event.reg.target_category,
+		 n->event.id.target_category, n->event.id.instance, rc);
+
+	status = __ssam_nfblk_insert(nf_head, &n->base);
+	if (status) {
+		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+		mutex_unlock(&nf->lock);
+		return status;
+	}
+
+	if (rc == 1) {
+		status = ssam_ssh_event_enable(ctrl, n->event.reg, n->event.id,
+					       n->event.flags);
+		if (status) {
+			__ssam_nfblk_remove(nf_head, &n->base);
+			ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+			mutex_unlock(&nf->lock);
+			synchronize_srcu(&nf_head->srcu);
+			return status;
+		}
+	}
+
+	mutex_unlock(&nf->lock);
+	return 0;
+
+}
+EXPORT_SYMBOL_GPL(ssam_notifier_register);
+
+int ssam_notifier_unregister(struct ssam_controller *ctrl,
+			     struct ssam_event_notifier *n)
+{
+	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_head *nf_head;
+	struct ssam_nf *nf;
+	int rc, status;
+
+	if (!ssh_rqid_is_event(rqid))
+		return -EINVAL;
+
+	nf = &ctrl->cplt.event.notif;
+	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
+
+	mutex_lock(&nf->lock);
+
+	rc = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+	if (rc < 0) {
+		mutex_unlock(&nf->lock);
+		return rc;
+	}
+
+	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, "
+		 "rc: %d)\n", n->event.reg.target_category,
+		 n->event.id.target_category, n->event.id.instance, rc);
+
+	if (rc == 0) {
+		status = ssam_ssh_event_disable(ctrl, n->event.reg, n->event.id,
+						n->event.flags);
+	}
+
+	__ssam_nfblk_remove(nf_head, &n->base);
+	mutex_unlock(&nf->lock);
+	synchronize_srcu(&nf_head->srcu);
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static inline struct ssam_controller *surface_sam_ssh_acquire(void)

@@ -708,6 +708,12 @@ struct ssam_event_notifier {
 	} event;
 };
 
+int ssam_notifier_register(struct ssam_controller *ctrl,
+			   struct ssam_event_notifier *n);
+
+int ssam_notifier_unregister(struct ssam_controller *ctrl,
+			     struct ssam_event_notifier *n);
+
 
 /* -- TODO -------------------------------------------------------------------*/
 
