@@ -705,13 +705,13 @@ static int san_events_register(struct platform_device *pdev)
 	d->nf_tmp.event.id.instance = 0;
 	d->nf_tmp.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = surface_sam_ssh_notifier_register(&d->nf_bat);
+	status = ssam_notifier_register(d->ctrl, &d->nf_bat);
 	if (status)
 		return status;
 
-	status = surface_sam_ssh_notifier_register(&d->nf_tmp);
+	status = ssam_notifier_register(d->ctrl, &d->nf_tmp);
 	if (status)
-		surface_sam_ssh_notifier_unregister(&d->nf_bat);
+		ssam_notifier_unregister(d->ctrl, &d->nf_bat);
 
 	return status;
 }
@@ -720,8 +720,8 @@ static void san_events_unregister(struct platform_device *pdev)
 {
 	struct san_data *d = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(&d->nf_bat);
-	surface_sam_ssh_notifier_unregister(&d->nf_tmp);
+	ssam_notifier_unregister(d->ctrl, &d->nf_bat);
+	ssam_notifier_unregister(d->ctrl, &d->nf_tmp);
 }
 
 
