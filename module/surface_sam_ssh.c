@@ -4302,6 +4302,20 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_display_on, u8, {
 	.channel         = 0x01,
 });
 
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_exit, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x33,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
+	.target_category = SSAM_SSH_TC_SAM,
+	.command_id      = 0x34,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
 static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 				 struct ssam_event_registry reg,
 				 struct ssam_event_id id, u8 flags)
