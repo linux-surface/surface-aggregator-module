@@ -217,7 +217,7 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, drvdata);
 
-	status = surface_sam_ssh_notifier_register(&drvdata->notif);
+	status = ssam_notifier_register(ctrl, &drvdata->notif);
 	if (status)
 		goto err_add_hid;
 
@@ -235,7 +235,7 @@ static int surface_sam_vhf_remove(struct platform_device *pdev)
 {
 	struct vhf_drvdata *drvdata = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(&drvdata->notif);
+	ssam_notifier_unregister(drvdata->ctrl, &drvdata->notif);
 	hid_destroy_device(drvdata->hid);
 	kfree(drvdata);
 
