@@ -381,7 +381,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, vhf);
 
-	status = surface_sam_ssh_notifier_register(&vhf->notif);
+	status = ssam_notifier_register(ctrl, &vhf->notif);
 	if (status)
 		goto err_notif;
 
@@ -392,7 +392,7 @@ static int surface_sam_sid_vhf_probe(struct platform_device *pdev)
 	return 0;
 
 err_add_hid:
-	surface_sam_ssh_notifier_unregister(&vhf->notif);
+	ssam_notifier_unregister(ctrl, &vhf->notif);
 err_notif:
 	hid_destroy_device(hid);
 	platform_set_drvdata(pdev, NULL);
@@ -405,7 +405,7 @@ static int surface_sam_sid_vhf_remove(struct platform_device *pdev)
 {
 	struct sid_vhf *vhf = platform_get_drvdata(pdev);
 
-	surface_sam_ssh_notifier_unregister(&vhf->notif);
+	ssam_notifier_unregister(vhf->ctrl, &vhf->notif);
 	hid_destroy_device(vhf->hid);
 	kfree(vhf);
 
