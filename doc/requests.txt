@@ -82,8 +82,8 @@ List of System Requests (TC = 0x01)
 
     0x13  0x00  0x01  no       yes       SAM Controller version rev
     0x14  0x00  0x01  no       no        Hard Reset (Reboot)    probing
-    0x15  0x00  0x01  no       yes       Suspend EC (disp. off) log
-    0x16  0x00  0x01  no       yes       Resume EC (displ. on)  log
+    0x15  0x00  0x01  no       yes       Notify display off     log
+    0x16  0x00  0x01  no       yes       Notify display on      log
     0x17  0x00  0x01  no       yes       GPIO wake IRQ callback rev
 
     0x1a  0x00  0x01  yes      yes       RTC: ACPI/_STV         dsdt
@@ -94,8 +94,8 @@ List of System Requests (TC = 0x01)
     0x1f  0x00  0x01  no       yes       RTC: ACPI/_GRT         dsdt
     0x20  0x00  0x01  yes      yes       RTC: ACPI/_SRT         dsdt
 
-    0x33  0x00  0x01  no       yes       Device D3 Entry        rev
-    0x34  0x00  0x01  no       yes       Device D0 Entry        rev
+    0x33  0x00  0x01  no       yes       Device D0 exit         rev
+    0x34  0x00  0x01  no       yes       Device D0 entry        rev
 
 
 Abbreviations:
