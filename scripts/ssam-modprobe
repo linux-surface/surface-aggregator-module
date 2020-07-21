@@ -14,6 +14,7 @@ unload() {
     modprobe -r battery
     modprobe -r ac
 
+    ${cmd} surface_sam_debugfs
     ${cmd} surface_sam_sid_vhf
     ${cmd} surface_sam_sid_power
     ${cmd} surface_sam_sid_perfmode
@@ -43,6 +44,7 @@ load() {
     ${cmd} surface_sam_sid_power"${ext}"
     ${cmd} surface_sam_sid_vhf"${ext}"
     ${cmd} surface_sam_sid"${ext}"
+    ${cmd} surface_sam_debugfs"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
     then
