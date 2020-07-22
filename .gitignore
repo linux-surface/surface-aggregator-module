@@ -1,64 +1,23 @@
-# Created by https://www.gitignore.io/api/c,code,archlinuxpackages
+# misc
+logs/
+Notes.md
+scripts/tmp/
 
-### C ###
-# Prerequisites
-*.d
-
-# Object files
+# kernel modules
 *.o
 *.ko
-*.obj
-*.elf
-
-# Linker output
-*.ilk
-*.map
-*.exp
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Libraries
-*.lib
-*.a
-*.la
-*.lo
-
-# Shared objects (inc. Windows DLLs)
-*.dll
-*.so
-*.so.*
-*.dylib
-
-# Executables
-*.out
-*.app
-*.i*86
-*.x86_64
-*.hex
-
-# Debug files
-*.dSYM/
-*.su
-*.idb
-*.pdb
-
-# Kernel Module Compile Results
-*.mod*
-*.cmd
-.tmp_versions/
-modules.order
+*.mod
+*.mod.c
+*.mod.o
+*.o.cmd
+*.ko.cmd
+*.mod.cmd
+*.mod.o.cmd
 Module.symvers
-Mkfile.old
-dkms.conf
+modules.order
 
-### Code ###
-# Visual Studio Code - https://code.visualstudio.com/
-.settings/
+# python
+__pycache__
+
+# vscode
 .vscode/
-tsconfig.json
-jsconfig.json
-
-
-# End of https://www.gitignore.io/api/c,code,archlinuxpackages
