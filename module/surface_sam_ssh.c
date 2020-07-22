@@ -2394,7 +2394,7 @@ static void ssh_ptl_destroy(struct ssh_ptl *ptl)
 
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
-#define SSH_RTL_REQUEST_TIMEOUT			ms_to_ktime(1000)
+#define SSH_RTL_REQUEST_TIMEOUT			ms_to_ktime(3000)
 #define SSH_RTL_REQUEST_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
 #define SSH_RTL_MAX_PENDING		3
