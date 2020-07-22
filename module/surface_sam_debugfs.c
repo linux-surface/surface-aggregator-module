@@ -44,6 +44,12 @@ struct ssam_dbgdev {
 };
 
 
+static int ssam_dbgdev_open(struct inode *inode, struct file *filp)
+{
+	filp->private_data = inode->i_private;
+	return nonseekable_open(inode, filp);
+}
+
 static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 {
 	return 0;	// TODO
@@ -71,7 +77,7 @@ static long ssam_dbgdev_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 const struct file_operations ssam_dbgdev_fops = {
 	.owner          = THIS_MODULE,
-	.open           = nonseekable_open,
+	.open           = ssam_dbgdev_open,
 	.unlocked_ioctl = ssam_dbgdev_ioctl,
 	.compat_ioctl   = ssam_dbgdev_ioctl,
 	.llseek         = noop_llseek,
