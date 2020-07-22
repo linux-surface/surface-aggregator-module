@@ -1088,7 +1088,7 @@ static int ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 
 static void ptl_free_ctrl_packet(struct ssh_packet *p)
 {
-	// TODO: chache packets
+	// TODO: cache packets
 
 	kfree(p);
 }
