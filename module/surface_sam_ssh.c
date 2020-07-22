@@ -4365,6 +4365,29 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 }
 
 
+/* -- Wrappers for internal SAM requests. ----------------------------------- */
+
+static int ssam_log_firmware_version(struct ssam_controller *ctrl)
+{
+	__le32 __version;
+	u32 version, a, b, c;
+	int status;
+
+	status = ssam_ssh_get_firmware_version(ctrl, &__version);
+	if (status)
+		return status;
+
+	version = le32_to_cpu(__version);
+	a = (version >> 24) & 0xff;
+	b = ((version >> 8) & 0xffff);
+	c = version & 0xff;
+
+	ssam_info(ctrl, "SAM controller version: %u.%u.%u\n", a, b, c);
+	return 0;
+}
+
+
+
 /* -- Top-level event registry interface. ----------------------------------- */
 
 int ssam_notifier_register(struct ssam_controller *ctrl,
@@ -4552,26 +4575,6 @@ static int surface_sam_controller_suspend(struct ssam_controller *ctrl)
 			  "0x%02x\n", out);
 	}
 
-	return 0;
-}
-
-
-static int surface_sam_ssh_log_firmware_version(struct ssam_controller *ctrl)
-{
-	__le32 __version;
-	u32 version, a, b, c;
-	int status;
-
-	status = ssam_ssh_get_firmware_version(ctrl, &__version);
-	if (status)
-		return status;
-
-	version = le32_to_cpu(__version);
-	a = (version >> 24) & 0xff;
-	b = ((version >> 8) & 0xffff);
-	c = version & 0xff;
-
-	ssam_info(ctrl, "SAM controller version: %u.%u.%u\n", a, b, c);
 	return 0;
 }
 
@@ -4853,7 +4856,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
-	status = surface_sam_ssh_log_firmware_version(ec);
+	status = ssam_log_firmware_version(ec);
 	if (status)
 		goto err_finalize;
 
