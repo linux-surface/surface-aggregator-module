@@ -4,7 +4,8 @@ import sys
 import os
 import time
 
-PATH_DEV_RQST = '/sys/bus/serial/devices/serial0-0/rqst'
+import libssam
+from libssam import Controller, Request
 
 
 def pack_block_data(id, offset, size, end):
@@ -20,39 +21,37 @@ def unpack_buffer(buf):
 
 
 def build_command(iid, buf_id, offset, size):
-    command = bytes([0x0c, 0x0c, iid, 0x01, 0x01, 0x09])
-    data = pack_block_data(buf_id, offset, size, 0)
-    return command + data
+    return Request(
+        target_category=0x0c,
+        command_id=0x0c,
+        instance_id=iid,
+        channel=1,
+        flags=libssam.REQUEST_HAS_RESPONSE,
+        payload=pack_block_data(buf_id, offset, size, 0))
 
 
 def main():
     buf_id = 2
     iid = 1
 
-    offset = 0
-    readlen = 0x20
-    buffer = bytes()
-    while True:
-        fd = os.open(PATH_DEV_RQST, os.O_RDWR | os.O_SYNC)
-        try:
-            print(f"reading {offset}:{readlen}")
-            os.write(fd, build_command(iid, buf_id, offset, readlen))
-        except IOError:
-            time.sleep(4)
-            continue
+    with Controller() as ctrl:
+        offset = 0
+        readlen = 0x20
+        buffer = bytes()
+        while True:
+            try:
+                print(f"reading {offset}:{readlen}")
+                data = ctrl.request(build_command(iid, buf_id, offset, readlen))
+            except TimeoutError:
+                continue
 
-        os.lseek(fd, 0, os.SEEK_SET)
-        length = os.read(fd, 1)[0]
-        data = os.read(fd, length)
-        os.close(fd)
+            (_, _, nread, end), bufdata = unpack_buffer(data)
+            print(f"read {offset}:{nread}")
+            buffer += bufdata
+            offset += nread
 
-        (_, _, nread, end), bufdata = unpack_buffer(data)
-        print(f"read {offset}:{nread}")
-        buffer += bufdata
-        offset += nread
-
-        if end != 0:
-            break
+            if end != 0:
+                break
 
     out = open(f"tclbuf_iid{iid}_bufid{buf_id}.bin", "wb")
     out.write(buffer)
