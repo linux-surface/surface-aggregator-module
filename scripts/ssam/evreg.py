@@ -2,7 +2,9 @@
 import sys
 import os
 
-PATH_DEV_RQST = '/sys/bus/serial/devices/serial0-0/rqst'
+import libssam
+from libssam import Controller, Request
+
 
 EVCMDS = {
     'sam-enable':  {'chn': 1, 'tc': 0x01, 'cid': 0x0b, 'iid': 0x00, 'snc': 0x01},
@@ -27,7 +29,7 @@ def event_payload(rqid, tc, iid, seq):
 
 
 def command(tc, cid, iid, chn, snc, payload):
-    return bytes([tc, cid, iid, chn, snc, len(payload)]) + payload
+    return Request(tc, cid, iid, chn, snc, payload, 8)
 
 
 def event_command(name, ev_tc, ev_seq, ev_iid):
@@ -35,17 +37,11 @@ def event_command(name, ev_tc, ev_seq, ev_iid):
     return command(**EVCMDS[name], payload=payload)
 
 
-def run_command(data):
-    fd = os.open(PATH_DEV_RQST, os.O_RDWR | os.O_SYNC)
-    os.write(fd, data)
-
-    os.lseek(fd, 0, os.SEEK_SET)
-    length = os.read(fd, 1)[0]
-    data = os.read(fd, length)
-
-    os.close(fd)
-
-    print(' '.join(['{:02x}'.format(x) for x in data]))
+def run_command(rqst):
+    with Controller() as ctrl:
+        data = ctrl.request(rqst)
+        if data:
+            print(' '.join(['{:02x}'.format(x) for x in data]))
 
 
 def main():
