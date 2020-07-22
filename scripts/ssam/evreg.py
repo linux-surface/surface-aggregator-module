@@ -55,9 +55,6 @@ def main():
         print(f'  help')
         print(f'    display this help message')
         print(f'')
-        print(f'  command <tc> <cid> <iid> <channel> <snc> [payload...]')
-        print(f'    basic command with optional payload')
-        print(f'')
 
         for cmd in reversed(sorted(list(EVCMDS.keys()))):
             evsys, ty = cmd.split('-', 1)
@@ -66,25 +63,9 @@ def main():
             print(f'')
 
         print(f'Arguments:')
-        print(f'  <tc>:          command target category')
-        print(f'  <cid>:         command ID')
-        print(f'  <iid>:         command instance ID')
-        print(f'  <channel>:     communication channel')
-        print(f'  <snc>:         command-expects-response flag')
         print(f'  <ev_tc>:       event target category')
         print(f'  <ev_seq>:      event-is-sequenced flag')
         print(f'  <ev_iid>:      event instance ID')
-        print(f'  [payload...]:  optional payload bytes, separated by whitespace')
-
-    elif cmd_name == 'command':
-        tc = int(sys.argv[2], 0)
-        cid = int(sys.argv[3], 0)
-        iid = int(sys.argv[4], 0)
-        chn = int(sys.argv[5], 0)
-        snc = int(sys.argv[6], 0)
-        pld = [int(x, 0) for x in sys.argv[7:]]
-
-        run_command(command(tc, cid, iid, chn, snc, bytes(pld)))
 
     else:
         ev_tc = int(sys.argv[2], 0)
