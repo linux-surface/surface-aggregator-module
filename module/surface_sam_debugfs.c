@@ -5,6 +5,8 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
+#include <linux/uaccess.h>
 
 #include "surface_sam_ssh.h"
 
@@ -52,7 +54,95 @@ static int ssam_dbgdev_open(struct inode *inode, struct file *filp)
 
 static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 {
-	return 0;	// TODO
+	struct ssam_dbgdev *ddev = file->private_data;
+	struct ssam_dbgdev_request __user *r;
+	struct ssam_dbgdev_request rqst;
+	struct ssam_request spec;
+	struct ssam_response rsp;
+	u8 *pldbuf = NULL;
+	u8 *rspbuf = NULL;
+	int status = 0, ret = 0, tmp;
+
+	r = (struct ssam_dbgdev_request __user *)arg;
+	ret = copy_struct_from_user(&rqst, sizeof(rqst), r, sizeof(*r));
+	if (ret)
+		goto out;
+
+	spec.target_category = rqst.target_category;
+	spec.command_id = rqst.command_id;
+	spec.instance_id = rqst.instance_id;
+	spec.channel = rqst.channel;
+	spec.flags = rqst.flags;
+	spec.length = rqst.payload.length;
+
+	rsp.capacity = rqst.response.length;
+	rsp.length = 0;
+
+	if (spec.length) {
+		if (!rqst.payload.data) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		pldbuf = kzalloc(spec.length, GFP_KERNEL);
+		if (!pldbuf) {
+			status = -ENOMEM;
+			ret = -EFAULT;
+			goto out;
+		}
+
+		if (copy_from_user(pldbuf, rqst.payload.data, spec.length)) {
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+
+	if (rsp.capacity) {
+		if (!rqst.response.data) {
+			ret = -EINVAL;
+			goto out;
+		}
+
+		rspbuf = kzalloc(rsp.capacity, GFP_KERNEL);
+		if (!rspbuf) {
+			status = -ENOMEM;
+			ret = -EFAULT;
+			goto out;
+		}
+	}
+
+	spec.payload = pldbuf;
+	rsp.pointer = rspbuf;
+
+	status = ssam_request_sync(ddev->ctrl, &spec, &rsp);
+	if (status)
+		goto out;
+
+	if (rsp.length) {
+		if (copy_to_user(rqst.response.data, rsp.pointer, rsp.length)) {
+			ret = -EFAULT;
+			goto out;
+		}
+
+	}
+
+out:
+	// always try to set response-length and status
+	tmp = put_user(rsp.length, &r->response.length);
+	if (!ret)
+		ret = tmp;
+
+	tmp = put_user(status, &r->status);
+	if (!ret)
+		ret = tmp;
+
+	if (pldbuf)
+		kfree(pldbuf);
+
+	if (rspbuf)
+		kfree(rspbuf);
+
+	return ret;
 }
 
 static long ssam_dbgdev_getversion(struct file *file, unsigned long arg)
