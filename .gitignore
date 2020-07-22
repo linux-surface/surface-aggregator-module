@@ -13,6 +13,7 @@ scripts/tmp/
 *.ko.cmd
 *.mod.cmd
 *.mod.o.cmd
+*.d
 Module.symvers
 modules.order
 
