@@ -31,8 +31,8 @@ def build_command(iid, buf_id, offset, size):
 
 
 def main():
-    buf_id = 2
-    iid = 1
+    iid = int(sys.argv[1], 0)
+    buf_id = int(sys.argv[2], 0)
 
     with Controller() as ctrl:
         offset = 0
