@@ -35,8 +35,8 @@ struct ssam_dbgdev_request {
 	} response;
 };
 
-#define SSAM_DBGDEV_IOCTL_GETVERSION	_IOR(0xA5, 0, __u32)
-#define SSAM_DBGDEV_IOCTL_REQUEST	_IOWR(0xA5, 1, struct ssam_dbgdev_request)
+#define SSAM_DBGDEV_IOCTL_GETVERSION  _IOR(0xA5, 0, __u32)
+#define SSAM_DBGDEV_IOCTL_REQUEST     _IOWR(0xA5, 1, struct ssam_dbgdev_request)
 
 
 struct ssam_dbgdev {
