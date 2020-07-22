@@ -68,6 +68,7 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 	if (ret)
 		goto out;
 
+	// setup basic request fields
 	spec.target_category = rqst.target_category;
 	spec.command_id = rqst.command_id;
 	spec.instance_id = rqst.instance_id;
@@ -78,6 +79,7 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 	rsp.capacity = rqst.response.length;
 	rsp.length = 0;
 
+	// get request payload from user-space
 	if (spec.length) {
 		if (!rqst.payload.data) {
 			ret = -EINVAL;
@@ -96,7 +98,9 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 			goto out;
 		}
 	}
+	spec.payload = pldbuf;
 
+	// allocate response buffer
 	if (rsp.capacity) {
 		if (!rqst.response.data) {
 			ret = -EINVAL;
@@ -110,14 +114,14 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 			goto out;
 		}
 	}
-
-	spec.payload = pldbuf;
 	rsp.pointer = rspbuf;
 
+	// perform request
 	status = ssam_request_sync(ddev->ctrl, &spec, &rsp);
 	if (status)
 		goto out;
 
+	// copy response to user-space
 	if (rsp.length) {
 		if (copy_to_user(rqst.response.data, rsp.pointer, rsp.length)) {
 			ret = -EFAULT;
@@ -136,6 +140,7 @@ out:
 	if (!ret)
 		ret = tmp;
 
+	// cleanup
 	if (pldbuf)
 		kfree(pldbuf);
 
