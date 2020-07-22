@@ -127,7 +127,6 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 			ret = -EFAULT;
 			goto out;
 		}
-
 	}
 
 out:
@@ -156,7 +155,8 @@ static long ssam_dbgdev_getversion(struct file *file, unsigned long arg)
 	return 0;
 }
 
-static long ssam_dbgdev_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long ssam_dbgdev_ioctl(struct file *file, unsigned int cmd,
+			      unsigned long arg)
 {
 	switch (cmd) {
 	case SSAM_DBGDEV_IOCTL_GETVERSION:
