@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 import struct
 import sys
-import os
 import time
 
 import libssam
