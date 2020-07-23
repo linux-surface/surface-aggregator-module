@@ -3279,7 +3279,7 @@ static inline int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 }
 
 static int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
-			struct ssh_rtl_ops *ops)
+			const struct ssh_rtl_ops *ops)
 {
 	struct ssh_ptl_ops ptl_ops;
 	int status;
