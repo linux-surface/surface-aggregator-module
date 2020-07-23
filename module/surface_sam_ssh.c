@@ -4648,20 +4648,14 @@ struct serdev_device_ops ssam_serdev_ops = {
 };
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Wakeup IRQ. ----------------------------------------------------------- */
 
-static inline struct ssam_controller *surface_sam_ssh_acquire(void)
-{
-	return &ssam_controller;
-}
+static const struct acpi_gpio_params gpio_ssam_wakeup_int = { 0, 0, false };
+static const struct acpi_gpio_params gpio_ssam_wakeup     = { 1, 0, false };
 
-
-static const struct acpi_gpio_params gpio_ssh_wakeup_int = { 0, 0, false };
-static const struct acpi_gpio_params gpio_ssh_wakeup     = { 1, 0, false };
-
-static const struct acpi_gpio_mapping ssh_acpi_gpios[] = {
-	{ "ssh_wakeup-int-gpio", &gpio_ssh_wakeup_int, 1 },
-	{ "ssh_wakeup-gpio",     &gpio_ssh_wakeup,     1 },
+static const struct acpi_gpio_mapping ssam_acpi_gpios[] = {
+	{ "ssam_wakeup-int-gpio", &gpio_ssam_wakeup_int, 1 },
+	{ "ssam_wakeup-gpio",     &gpio_ssam_wakeup,     1 },
 	{ },
 };
 
@@ -4700,7 +4694,7 @@ static int ssh_setup_irq(struct serdev_device *serdev)
 	int irq;
 	int status;
 
-	gpiod = gpiod_get(&serdev->dev, "ssh_wakeup-int", GPIOD_ASIS);
+	gpiod = gpiod_get(&serdev->dev, "ssam_wakeup-int", GPIOD_ASIS);
 	if (IS_ERR(gpiod))
 		return PTR_ERR(gpiod);
 
@@ -4711,11 +4705,19 @@ static int ssh_setup_irq(struct serdev_device *serdev)
 		return irq;
 
 	status = request_threaded_irq(irq, NULL, ssh_wake_irq_handler,
-				      irqf, "surface_sam_sh_wakeup", serdev);
+				      irqf, "surface_sam_wakeup", serdev);
 	if (status)
 		return status;
 
 	return irq;
+}
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
+static inline struct ssam_controller *surface_sam_ssh_acquire(void)
+{
+	return &ssam_controller;
 }
 
 
@@ -4872,7 +4874,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
 
-	status = devm_acpi_dev_add_driver_gpios(&serdev->dev, ssh_acpi_gpios);
+	status = devm_acpi_dev_add_driver_gpios(&serdev->dev, ssam_acpi_gpios);
 	if (status)
 		return status;
 
