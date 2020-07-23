@@ -4671,11 +4671,24 @@ static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
 
 	dev_dbg(&serdev->dev, "pm: wake irq triggered\n");
 
+	// Note: Proper wakeup detection is currently unimplemented.
+	//       When the EC is in display-off or any other non-D0 state, it
+	//       does not send events/notifications to the host. Instead it
+	//       signals that there are events available via the wakeup IRQ.
+	//       This driver is responsible for calling back to the EC to
+	//       release these events one-by-one.
+	//
+	//       This IRQ should not cause a full system resume by its own.
+	//       Instead, events should be handled by their respective subsystem
+	//       drivers, which in turn should signal whether a full system
+	//       resume should be performed.
+	//
 	// TODO: Send GPIO callback command repeatedly to EC until callback
 	//       returns 0x00. Return flag of callback is "has more events".
 	//       Each time the command is sent, one event is "released". Once
 	//       all events have been released (return = 0x00), the GPIO is
-	//       re-armed.
+	//       re-armed. Detect wakeup events during this process, go back to
+	//       sleep if no wakeup event has been received.
 
 	return IRQ_HANDLED;
 }
