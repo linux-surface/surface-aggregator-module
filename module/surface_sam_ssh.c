@@ -33,11 +33,6 @@
 #include "surface_sam_ssh_trace.h"
 
 
-/* -- TODO. ----------------------------------------------------------------- */
-
-#define SSH_SUPPORTED_FLOW_CONTROL_MASK		(~((u8) ACPI_UART_FLOW_CONTROL_HW))
-
-
 /* -- Error injection helpers. ---------------------------------------------- */
 
 #ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
@@ -4742,7 +4737,7 @@ static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 	serdev_device_set_baudrate(serdev, uart->default_baud_rate);
 
 	// serdev currently only supports RTSCTS flow control
-	if (uart->flow_control & SSH_SUPPORTED_FLOW_CONTROL_MASK) {
+	if (uart->flow_control & (~((u8) ACPI_UART_FLOW_CONTROL_HW))) {
 		dev_warn(&serdev->dev, "setup: unsupported flow control"
 			 " (value: 0x%02x)\n", uart->flow_control);
 	}
