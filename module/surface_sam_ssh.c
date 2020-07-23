@@ -4777,12 +4777,6 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 
 /* -- TODO ------------------------------------------------------------------ */
 
-static inline struct ssam_controller *surface_sam_ssh_acquire(void)
-{
-	return &ssam_controller;
-}
-
-
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
 	struct ssam_controller *ec = dev_get_drvdata(dev);
@@ -4872,7 +4866,7 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
-	struct ssam_controller *ec;
+	struct ssam_controller *ec = &ssam_controller;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	int status, irq;
 
@@ -4889,7 +4883,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		return irq;
 
 	// set up EC
-	ec = surface_sam_ssh_acquire();
 	mutex_lock(&ec->lock);
 
 	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
