@@ -4695,7 +4695,7 @@ static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
 
 static int ssh_setup_irq(struct serdev_device *serdev)
 {
-	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING;
+	const int irqf = IRQF_SHARED | IRQF_ONESHOT;
 	struct gpio_desc *gpiod;
 	int irq;
 	int status;
