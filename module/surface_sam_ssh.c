@@ -4654,7 +4654,7 @@ static const struct acpi_gpio_mapping ssam_acpi_gpios[] = {
 	{ },
 };
 
-static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
+static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
 {
 	struct serdev_device *serdev = dev_id;
 
@@ -4682,7 +4682,7 @@ static irqreturn_t ssh_wake_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int ssh_setup_irq(struct serdev_device *serdev)
+static int ssam_irq_setup(struct serdev_device *serdev)
 {
 	const int irqf = IRQF_SHARED | IRQF_ONESHOT;
 	struct gpio_desc *gpiod;
@@ -4699,8 +4699,8 @@ static int ssh_setup_irq(struct serdev_device *serdev)
 	if (irq < 0)
 		return irq;
 
-	status = request_threaded_irq(irq, NULL, ssh_wake_irq_handler,
-				      irqf, "surface_sam_wakeup", serdev);
+	status = request_threaded_irq(irq, NULL, ssam_irq_handle, irqf,
+				      "surface_sam_wakeup", serdev);
 	if (status)
 		return status;
 
@@ -4878,7 +4878,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		return status;
 
 	// setup IRQ
-	irq = ssh_setup_irq(serdev);
+	irq = ssam_irq_setup(serdev);
 	if (irq < 0)
 		return irq;
 
