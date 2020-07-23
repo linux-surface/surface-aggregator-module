@@ -4602,80 +4602,6 @@ static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
 }
 
 
-/**
- * surface_sam_controller_resume - Resume the EC if it is in a suspended mode.
- * @ec: the EC to resume
- *
- * Moves the EC from a suspended state to a normal state. See the
- * `surface_sam_controller_suspend` function what the specific differences of
- * these states are. Multiple repeated calls to this function seem to be
- * handled fine by the EC, after the first call, the state will remain
- * "normal".
- *
- * Must be called with the EC initialized and its lock held.
- */
-static int surface_sam_controller_resume(struct ssam_controller *ctrl)
-{
-	int status;
-	u8 out;
-
-	ssam_dbg(ctrl, "pm: resuming system aggregator module\n");
-	status = ssam_ssh_notif_display_on(ctrl, &out);
-	if (status)
-		return status;
-
-	/*
-	 * The purpose of the return value of this request is unknown. Based on
-	 * logging and experience, we expect it to be zero. No other value has
-	 * been observed so far.
-	 */
-	if (out != 0x00) {
-		ssam_warn(ctrl, "unexpected result while trying to resume EC: "
-			  "0x%02x\n", out);
-	}
-
-	return 0;
-}
-
-/**
- * surface_sam_controller_suspend - Put the EC in a suspended mode:
- * @ec: the EC to suspend
- *
- * Tells the EC to enter a suspended mode. In this mode, events are quiesced
- * and the wake IRQ is armed (note that the wake IRQ does not fire if the EC
- * has not been suspended via this request). On some devices, the keyboard
- * backlight is turned off. Apart from this, the EC seems to continue to work
- * as normal, meaning requests sent to it are acknowledged and seem to be
- * correctly handled, including potential responses. Multiple repeated calls
- * to this function seem to be handled fine by the EC, after the first call,
- * the state will remain "suspended".
- *
- * Must be called with the EC initialized and its lock held.
- */
-static int surface_sam_controller_suspend(struct ssam_controller *ctrl)
-{
-	int status;
-	u8 out;
-
-	ssam_dbg(ctrl, "pm: suspending system aggregator module\n");
-	status = ssam_ssh_notif_display_off(ctrl, &out);
-	if (status)
-		return status;
-
-	/*
-	 * The purpose of the return value of this request is unknown. Based on
-	 * logging and experience, we expect it to be zero. No other value has
-	 * been observed so far.
-	 */
-	if (out != 0x00) {
-		ssam_warn(ctrl, "unexpected result while trying to suspend EC: "
-			  "0x%02x\n", out);
-	}
-
-	return 0;
-}
-
-
 static const struct acpi_gpio_params gpio_ssh_wakeup_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_ssh_wakeup     = { 1, 0, false };
 
@@ -4791,25 +4717,41 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	dev_dbg(dev, "pm: suspending\n");
 
 	ec = surface_sam_ssh_acquire_init();
-	if (ec) {
-		status = surface_sam_controller_suspend(ec);
-		if (status)
-			return status;
+	if (!ec)
+		return 0;
 
-		if (device_may_wakeup(dev)) {
-			status = enable_irq_wake(ec->irq.num);
-			if (status)
-				return status;
-
-			ec->irq.wakeup_enabled = true;
-		} else {
-			ec->irq.wakeup_enabled = false;
-		}
-
-		smp_store_release(&ec->state, SSAM_CONTROLLER_SUSPENDED);
+	status = ssam_ctrl_notif_display_off(ec);
+	if (status) {
+		ssam_err(ec, "pm: display-off notification failed: %d\n", status);
+		return status;
 	}
 
+	status = ssam_ctrl_notif_d0_exit(ec);
+	if (status) {
+		ssam_err(ec, "pm: D0-exit notification failed: %d\n", status);
+		goto err_notif;
+	}
+
+	if (device_may_wakeup(dev)) {
+		status = enable_irq_wake(ec->irq.num);
+		if (status) {
+			ssam_err(ec, "failed to disable wake IRQ: %d\n", status);
+			goto err_irq;
+		}
+
+		ec->irq.wakeup_enabled = true;
+	} else {
+		ec->irq.wakeup_enabled = false;
+	}
+
+	smp_store_release(&ec->state, SSAM_CONTROLLER_SUSPENDED);
 	return 0;
+
+err_irq:
+	ssam_ctrl_notif_d0_entry(ec);
+err_notif:
+	ssam_ctrl_notif_display_on(ec);
+	return status;
 }
 
 static int surface_sam_ssh_resume(struct device *dev)
@@ -4820,21 +4762,26 @@ static int surface_sam_ssh_resume(struct device *dev)
 	dev_dbg(dev, "pm: resuming\n");
 
 	ec = surface_sam_ssh_acquire_init();
-	if (ec) {
-		smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
+	if (!ec)
+		return 0;
 
-		if (ec->irq.wakeup_enabled) {
-			status = disable_irq_wake(ec->irq.num);
-			if (status)
-				return status;
+	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
-			ec->irq.wakeup_enabled = false;
-		}
-
-		status = surface_sam_controller_resume(ec);
+	if (ec->irq.wakeup_enabled) {
+		status = disable_irq_wake(ec->irq.num);
 		if (status)
-			return status;
+			ssam_err(ec, "failed to disable wake IRQ: %d\n", status);
+
+		ec->irq.wakeup_enabled = false;
 	}
+
+	status = ssam_ctrl_notif_d0_entry(ec);
+	if (status)
+		ssam_err(ec, "pm: display-on notification failed: %d\n", status);
+
+	status = ssam_ctrl_notif_display_on(ec);
+	if (status)
+		ssam_err(ec, "pm: D0-entry notification failed: %d\n", status);
 
 	return 0;
 }
@@ -4957,7 +4904,11 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_finalize;
 
-	status = surface_sam_controller_resume(ec);
+	status = ssam_ctrl_notif_d0_entry(ec);
+	if (status)
+		goto err_finalize;
+
+	status = ssam_ctrl_notif_display_on(ec);
 	if (status)
 		goto err_finalize;
 
@@ -5007,14 +4958,24 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	free_irq(ec->irq.num, serdev);
 
 	// suspend EC and disable events
-	status = surface_sam_controller_suspend(ec);
-	if (status)
-		dev_err(&serdev->dev, "failed to suspend EC: %d\n", status);
+	status = ssam_ctrl_notif_display_off(ec);
+	if (status) {
+		dev_err(&serdev->dev, "display-off notification failed: %d\n",
+			status);
+	}
+
+	status = ssam_ctrl_notif_d0_exit(ec);
+	if (status) {
+		dev_err(&serdev->dev, "D0-exit notification failed: %d\n",
+			status);
+	}
 
 	// flush pending events and requests while everything still works
 	status = ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
-	if (status)
-		dev_err(&serdev->dev, "failed to flush request transmission layer: %d\n", status);
+	if (status) {
+		dev_err(&serdev->dev, "failed to flush request transmission layer: %d\n",
+			status);
+	}
 
 	ssam_cplt_flush(&ec->cplt);
 
