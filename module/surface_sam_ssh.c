@@ -4656,9 +4656,9 @@ static const struct acpi_gpio_mapping ssam_acpi_gpios[] = {
 
 static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
 {
-	struct serdev_device *serdev = dev_id;
+	struct ssam_controller *ctrl = dev_id;
 
-	dev_dbg(&serdev->dev, "pm: wake irq triggered\n");
+	ssam_dbg(ctrl, "pm: wake irq triggered\n");
 
 	// Note: Proper wakeup detection is currently unimplemented.
 	//       When the EC is in display-off or any other non-D0 state, it
@@ -4682,14 +4682,15 @@ static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-static int ssam_irq_setup(struct serdev_device *serdev)
+static int ssam_irq_setup(struct ssam_controller *ctrl)
 {
 	const int irqf = IRQF_SHARED | IRQF_ONESHOT;
+	struct device *dev = ssam_controller_device(ctrl);
 	struct gpio_desc *gpiod;
 	int irq;
 	int status;
 
-	gpiod = gpiod_get(&serdev->dev, "ssam_wakeup-int", GPIOD_ASIS);
+	gpiod = gpiod_get(dev, "ssam_wakeup-int", GPIOD_ASIS);
 	if (IS_ERR(gpiod))
 		return PTR_ERR(gpiod);
 
@@ -4700,11 +4701,16 @@ static int ssam_irq_setup(struct serdev_device *serdev)
 		return irq;
 
 	status = request_threaded_irq(irq, NULL, ssam_irq_handle, irqf,
-				      "surface_sam_wakeup", serdev);
+				      "surface_sam_wakeup", ctrl);
 	if (status)
 		return status;
 
 	return irq;
+}
+
+static void ssam_irq_free(struct ssam_controller *ctrl)
+{
+	free_irq(ctrl->irq.num, ctrl);
 }
 
 
@@ -4868,7 +4874,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
 	struct ssam_controller *ec = &ssam_controller;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
-	int status, irq;
+	int status;
 
 	if (gpiod_count(&serdev->dev, NULL) < 0)
 		return -ENODEV;
@@ -4876,11 +4882,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	status = devm_acpi_dev_add_driver_gpios(&serdev->dev, ssam_acpi_gpios);
 	if (status)
 		return status;
-
-	// setup IRQ
-	irq = ssam_irq_setup(serdev);
-	if (irq < 0)
-		return irq;
 
 	// set up EC
 	mutex_lock(&ec->lock);
@@ -4895,7 +4896,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	ec->caps.notif_d0exit = false;
 	ec->caps.notif_display = true;
 
-	ec->irq.num = irq;
 	ssh_seq_reset(&ec->counter.seq);
 	ssh_rqid_reset(&ec->counter.rqid);
 
@@ -4942,6 +4942,13 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_finalize;
 
+	// setup IRQ
+	status = ssam_irq_setup(ec);
+	if (status < 0)
+		goto err_finalize;
+
+	ec->irq.num = status;
+
 	mutex_unlock(&ec->lock);
 
 	// TODO: The EC can wake up the system via the associated GPIO interrupt in
@@ -4969,7 +4976,6 @@ err_rtl:
 	ssam_cplt_flush(&ec->cplt);
 	ssam_cplt_destroy(&ec->cplt);
 err_ecinit:
-	free_irq(irq, serdev);
 	serdev_device_set_drvdata(serdev, NULL);
 	mutex_unlock(&ec->lock);
 	return status;
@@ -4981,7 +4987,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	int status;
 
 	mutex_lock(&ec->lock);
-	free_irq(ec->irq.num, serdev);
+	ssam_irq_free(ec);
 
 	// suspend EC and disable events
 	status = ssam_ctrl_notif_display_off(ec);
