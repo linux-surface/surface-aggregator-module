@@ -4709,6 +4709,24 @@ static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 }
 
 
+static void surface_sam_ssh_shutdown(struct device *dev)
+{
+	struct ssam_controller *ec;
+	int status;
+
+	ec = surface_sam_ssh_acquire_init();
+	if (!ec)
+		return;
+
+	status = ssam_ctrl_notif_display_off(ec);
+	if (status)
+		ssam_err(ec, "pm: display-off notification failed: %d\n", status);
+
+	status = ssam_ctrl_notif_d0_exit(ec);
+	if (status)
+		ssam_err(ec, "pm: D0-exit notification failed: %d\n", status);
+}
+
 static int surface_sam_ssh_suspend(struct device *dev)
 {
 	struct ssam_controller *ec;
@@ -5023,6 +5041,7 @@ static struct serdev_device_driver surface_sam_ssh = {
 		.name = "surface_sam_ssh",
 		.acpi_match_table = surface_sam_ssh_match,
 		.pm = &surface_sam_ssh_pm_ops,
+		.shutdown = surface_sam_ssh_shutdown,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
