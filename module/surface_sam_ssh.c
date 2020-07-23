@@ -4655,16 +4655,6 @@ static inline struct ssam_controller *surface_sam_ssh_acquire(void)
 	return &ssam_controller;
 }
 
-static inline struct ssam_controller *surface_sam_ssh_acquire_init(void)
-{
-	struct ssam_controller *ec = surface_sam_ssh_acquire();
-
-	if (smp_load_acquire(&ec->state) == SSAM_CONTROLLER_UNINITIALIZED)
-		return NULL;
-
-	return ec;
-}
-
 
 static const struct acpi_gpio_params gpio_ssh_wakeup_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_ssh_wakeup     = { 1, 0, false };
@@ -4775,12 +4765,8 @@ static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
-	struct ssam_controller *ec;
+	struct ssam_controller *ec = dev_get_drvdata(dev);
 	int status;
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec)
-		return;
 
 	status = ssam_ctrl_notif_display_off(ec);
 	if (status)
@@ -4793,14 +4779,10 @@ static void surface_sam_ssh_shutdown(struct device *dev)
 
 static int surface_sam_ssh_suspend(struct device *dev)
 {
-	struct ssam_controller *ec;
+	struct ssam_controller *ec = dev_get_drvdata(dev);
 	int status;
 
 	dev_dbg(dev, "pm: suspending\n");
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec)
-		return 0;
 
 	status = ssam_ctrl_notif_display_off(ec);
 	if (status) {
@@ -4838,14 +4820,10 @@ err_notif:
 
 static int surface_sam_ssh_resume(struct device *dev)
 {
-	struct ssam_controller *ec;
+	struct ssam_controller *ec = dev_get_drvdata(dev);
 	int status;
 
 	dev_dbg(dev, "pm: resuming\n");
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec)
-		return 0;
 
 	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
@@ -4987,12 +4965,8 @@ err_ecinit:
 
 static void surface_sam_ssh_remove(struct serdev_device *serdev)
 {
-	struct ssam_controller *ec;
+	struct ssam_controller *ec = serdev_device_get_drvdata(serdev);
 	int status;
-
-	ec = surface_sam_ssh_acquire_init();
-	if (!ec)
-		return;
 
 	mutex_lock(&ec->lock);
 	free_irq(ec->irq.num, serdev);
