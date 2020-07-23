@@ -4708,15 +4708,10 @@ static int ssh_setup_irq(struct serdev_device *serdev)
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Serial device setup. -------------------------------------------------- */
 
-static inline struct ssam_controller *surface_sam_ssh_acquire(void)
-{
-	return &ssam_controller;
-}
-
-
-static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
+static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
+						  void *ctx)
 {
 	struct serdev_device *serdev = ctx;
 	struct acpi_resource_common_serialbus *serial;
@@ -4770,6 +4765,21 @@ static acpi_status ssh_setup_from_resource(struct acpi_resource *rsc, void *ctx)
 	}
 
 	return AE_CTRL_TERMINATE;       // we've found the resource and are done
+}
+
+static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
+					      struct serdev_device *serdev)
+{
+	return acpi_walk_resources(handle, METHOD_NAME__CRS,
+				   ssam_serdev_setup_via_acpi_crs, serdev);
+}
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
+static inline struct ssam_controller *surface_sam_ssh_acquire(void)
+{
+	return &ssam_controller;
 }
 
 
@@ -4913,8 +4923,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_open;
 
-	status = acpi_walk_resources(ssh, METHOD_NAME__CRS,
-				     ssh_setup_from_resource, serdev);
+	status = ssam_serdev_setup_via_acpi(ssh, serdev);
 	if (ACPI_FAILURE(status))
 		goto err_devinit;
 
