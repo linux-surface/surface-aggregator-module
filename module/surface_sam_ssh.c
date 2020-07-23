@@ -4392,6 +4392,85 @@ static int ssam_log_firmware_version(struct ssam_controller *ctrl)
 	return 0;
 }
 
+static int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
+{
+	int status;
+	u8 response;
+
+	ssam_dbg(ctrl, "pm: notifying display off\n");
+
+	status = ssam_ssh_notif_display_off(ctrl, &response);
+	if (status)
+		return status;
+
+	if (response != 0) {
+		ssam_err(ctrl, "unexpected response from display-off notification: "
+			 "0x%02x\n", response);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
+{
+	int status;
+	u8 response;
+
+	ssam_dbg(ctrl, "pm: notifying display on\n");
+
+	status = ssam_ssh_notif_display_on(ctrl, &response);
+	if (status)
+		return status;
+
+	if (response != 0) {
+		ssam_err(ctrl, "unexpected response from display-on notification: "
+			 "0x%02x\n", response);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
+{
+	int status;
+	u8 response;
+
+	ssam_dbg(ctrl, "pm: notifying D0 exit\n");
+
+	status = ssam_ssh_notif_d0_exit(ctrl, &response);
+	if (status)
+		return status;
+
+	if (response != 0) {
+		ssam_err(ctrl, "unexpected response from D0-exit notification: "
+			 "0x%02x\n", response);
+		return -EIO;
+	}
+
+	return 0;
+}
+
+static int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
+{
+	int status;
+	u8 response;
+
+	ssam_dbg(ctrl, "pm: notifying D0 entry\n");
+
+	status = ssam_ssh_notif_d0_entry(ctrl, &response);
+	if (status)
+		return status;
+
+	if (response != 0) {
+		ssam_err(ctrl, "unexpected response from D0-entry notification: "
+			 "0x%02x\n", response);
+		return -EIO;
+	}
+
+	return 0;
+}
 
 
 /* -- Top-level event registry interface. ----------------------------------- */
