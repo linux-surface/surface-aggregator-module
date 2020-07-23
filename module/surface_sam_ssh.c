@@ -3951,7 +3951,7 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 }
 
 
-/* -- Top-Level Request Interface ------------------------------------------- */
+/* -- Main SSAM device structures. ------------------------------------------ */
 
 enum ssam_controller_state {
 	SSAM_CONTROLLER_UNINITIALIZED,
@@ -3996,6 +3996,52 @@ static struct ssam_controller ssam_controller = {
 #define to_ssam_controller(ptr, member) \
 	container_of(ptr, struct ssam_controller, member)
 
+struct device *ssam_controller_device(struct ssam_controller *c)
+{
+	return (c && c->rtl.ptl.serdev) ? &c->rtl.ptl.serdev->dev : NULL;
+}
+EXPORT_SYMBOL_GPL(ssam_controller_device);
+
+
+static void ssam_handle_event(struct ssh_rtl *rtl,
+			      const struct ssh_command *cmd,
+			      const struct ssam_span *data)
+{
+	struct ssam_controller *ctrl = to_ssam_controller(rtl, rtl);
+	struct ssam_event_item *item;
+
+	item = kzalloc(sizeof(struct ssam_event_item) + data->len, GFP_KERNEL);
+	if (!item)
+		return;
+
+	item->rqid = get_unaligned_le16(&cmd->rqid);
+	item->event.target_category = cmd->tc;
+	item->event.command_id = cmd->cid;
+	item->event.instance_id = cmd->iid;
+	item->event.channel = cmd->chn_in;
+	item->event.length  = data->len;
+	memcpy(&item->event.data[0], data->ptr, data->len);
+
+	ssam_cplt_submit_event(&ctrl->cplt, item);
+}
+
+static const struct ssh_rtl_ops ssam_rtl_ops = {
+	.handle_event = ssam_handle_event,
+};
+
+
+static inline
+int ssam_controller_receive_buf(struct ssam_controller *ctrl,
+				const unsigned char *buf, size_t n)
+{
+	return ssh_ptl_rx_rcvbuf(&ctrl->rtl.ptl, buf, n);
+}
+
+static inline void ssam_controller_write_wakeup(struct ssam_controller *ctrl)
+{
+	ssh_ptl_tx_wakeup(&ctrl->rtl.ptl, true);
+}
+
 
 static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 {
@@ -4038,11 +4084,8 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 }
 EXPORT_SYMBOL_GPL(ssam_client_bind);
 
-struct device *ssam_controller_device(struct ssam_controller *c)
-{
-	return (c && c->rtl.ptl.serdev) ? &c->rtl.ptl.serdev->dev : NULL;
-}
-EXPORT_SYMBOL_GPL(ssam_controller_device);
+
+/* -- Top-level request interface ------------------------------------------- */
 
 ssize_t ssam_request_write_data(struct ssam_span *buf,
 				struct ssam_controller *ctrl,
@@ -4584,6 +4627,27 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
 
 
+/* -- Glue layer (serdev_device -> ssam_controller). ------------------------ */
+
+static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf,
+			    size_t n)
+{
+	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
+	return ssam_controller_receive_buf(ctrl, buf, n);
+}
+
+static void ssam_write_wakeup(struct serdev_device *dev)
+{
+	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
+	ssam_controller_write_wakeup(ctrl);
+}
+
+struct serdev_device_ops ssam_serdev_ops = {
+	.receive_buf = ssam_receive_buf,
+	.write_wakeup = ssam_write_wakeup,
+};
+
+
 /* -- TODO ------------------------------------------------------------------ */
 
 static inline struct ssam_controller *surface_sam_ssh_acquire(void)
@@ -4806,51 +4870,6 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
-
-
-static void ssam_handle_event(struct ssh_rtl *rtl,
-			      const struct ssh_command *cmd,
-			      const struct ssam_span *data)
-{
-	struct ssam_controller *ec = to_ssam_controller(rtl, rtl);
-	struct ssam_event_item *item;
-
-	item = kzalloc(sizeof(struct ssam_event_item) + data->len, GFP_KERNEL);
-	if (!item)
-		return;
-
-	item->rqid = get_unaligned_le16(&cmd->rqid);
-	item->event.target_category = cmd->tc;
-	item->event.command_id = cmd->cid;
-	item->event.instance_id = cmd->iid;
-	item->event.channel = cmd->chn_in;
-	item->event.length  = data->len;
-	memcpy(&item->event.data[0], data->ptr, data->len);
-
-	ssam_cplt_submit_event(&ec->cplt, item);
-}
-
-static struct ssh_rtl_ops ssam_rtl_ops = {
-	.handle_event = ssam_handle_event,
-};
-
-
-static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf, size_t n)
-{
-	struct ssam_controller *ec = serdev_device_get_drvdata(dev);
-	return ssh_ptl_rx_rcvbuf(&ec->rtl.ptl, buf, n);
-}
-
-static void ssam_write_wakeup(struct serdev_device *dev)
-{
-	struct ssam_controller *ec = serdev_device_get_drvdata(dev);
-	ssh_ptl_tx_wakeup(&ec->rtl.ptl, true);
-}
-
-struct serdev_device_ops ssam_serdev_ops = {
-	.receive_buf = ssam_receive_buf,
-	.write_wakeup = ssam_write_wakeup,
-};
 
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
