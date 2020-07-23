@@ -4397,6 +4397,9 @@ static int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 	int status;
 	u8 response;
 
+	if (!ctrl->caps.notif_display)
+		return 0;
+
 	ssam_dbg(ctrl, "pm: notifying display off\n");
 
 	status = ssam_ssh_notif_display_off(ctrl, &response);
@@ -4416,6 +4419,9 @@ static int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 {
 	int status;
 	u8 response;
+
+	if (!ctrl->caps.notif_display)
+		return 0;
 
 	ssam_dbg(ctrl, "pm: notifying display on\n");
 
@@ -4437,6 +4443,9 @@ static int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 	int status;
 	u8 response;
 
+	if (!ctrl->caps.notif_d0exit)
+		return 0;
+
 	ssam_dbg(ctrl, "pm: notifying D0 exit\n");
 
 	status = ssam_ssh_notif_d0_exit(ctrl, &response);
@@ -4456,6 +4465,9 @@ static int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 {
 	int status;
 	u8 response;
+
+	if (!ctrl->caps.notif_d0exit)
+		return 0;
 
 	ssam_dbg(ctrl, "pm: notifying D0 entry\n");
 
