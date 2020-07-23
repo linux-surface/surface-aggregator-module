@@ -1275,6 +1275,9 @@ static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 	trace_ssam_packet_complete(p, status);
 
 	ptl_dbg_cond(ptl, "ptl: completing packet %p\n", p);
+	if (status && status != -ECANCELED)
+		ptl_dbg_cond(ptl, "ptl: packet error: %d\n", status);
+
 	if (p->ops->complete)
 		p->ops->complete(p, status);
 }
@@ -2531,6 +2534,9 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	// rtl/ptl may not be set if we're cancelling before submitting
 	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x,"
 		     " status: %d)\n", ssh_request_get_rqid_safe(rqst), status);
+
+	if (status && status != -ECANCELED)
+		rtl_dbg_cond(rtl, "rtl: request error: %d\n", status);
 
 	rqst->ops->complete(rqst, NULL, NULL, status);
 }
