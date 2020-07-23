@@ -4882,6 +4882,9 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_ecinit;
 	}
 
+	ec->caps.notif_d0exit = false;
+	ec->caps.notif_display = true;
+
 	ec->irq.num = irq;
 	ssh_seq_reset(&ec->counter.seq);
 	ssh_rqid_reset(&ec->counter.rqid);
