@@ -130,12 +130,14 @@ static const struct mfd_cell sid_devs_sb3[] = {
 };
 
 static const struct mfd_cell sid_devs_sl1[] = {
-	{ .name = "surface_sam_sid_gpelid", .id = -1 },
+	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
+	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sl2[] = {
-	{ .name = "surface_sam_sid_gpelid", .id = -1 },
+	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
+	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
