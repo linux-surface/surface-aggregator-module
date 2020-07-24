@@ -3954,6 +3954,11 @@ enum ssam_controller_state {
 	SSAM_CONTROLLER_SUSPENDED,
 };
 
+struct ssam_device_caps {
+	u32 notif_display:1;
+	u32 notif_d0exit:1;
+};
+
 struct ssam_controller {
 	struct mutex lock;
 	enum ssam_controller_state state;
@@ -3971,10 +3976,7 @@ struct ssam_controller {
 		bool wakeup_enabled;
 	} irq;
 
-	struct {
-		u32 notif_display:1;
-		u32 notif_d0exit:1;
-	} caps;
+	struct ssam_device_caps caps;
 };
 
 static struct ssam_controller ssam_controller = {
@@ -4714,7 +4716,7 @@ static void ssam_irq_free(struct ssam_controller *ctrl)
 }
 
 
-/* -- Serial device setup. -------------------------------------------------- */
+/* -- ACPI based device setup. ---------------------------------------------- */
 
 static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 						  void *ctx)
@@ -4778,6 +4780,52 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 {
 	return acpi_walk_resources(handle, METHOD_NAME__CRS,
 				   ssam_serdev_setup_via_acpi_crs, serdev);
+}
+
+
+#define SSAM_SSH_DSM_REVISION	0
+#define SSAM_SSH_DSM_NOTIF_D0	8
+static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
+		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
+
+static int ssam_device_caps_load_from_acpi(acpi_handle handle,
+					   struct ssam_device_caps *caps)
+{
+	union acpi_object *obj;
+	u64 funcs = 0;
+	int i;
+
+	// set defaults
+	caps->notif_display = true;
+	caps->notif_d0exit = false;
+
+	if (!acpi_has_method(handle, "_DSM"))
+		return 0;
+
+	// get function availability bitfield
+	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID, 0, 0, NULL,
+			ACPI_TYPE_BUFFER);
+	if (!obj)
+		return -EFAULT;
+
+	for (i = 0; i < obj->buffer.length && i < 8; i++)
+		funcs |= (((u64)obj->buffer.pointer[i]) << (i * 8));
+
+	ACPI_FREE(obj);
+
+	// D0 exit/entry notification
+	if (funcs & BIT(SSAM_SSH_DSM_NOTIF_D0)) {
+		obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID,
+				SSAM_SSH_DSM_REVISION, SSAM_SSH_DSM_NOTIF_D0,
+				NULL, ACPI_TYPE_INTEGER);
+		if (!obj)
+			return -EFAULT;
+
+		caps->notif_d0exit = !!obj->integer.value;
+		ACPI_FREE(obj);
+	}
+
+	return 0;
 }
 
 
@@ -4893,8 +4941,13 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_ecinit;
 	}
 
-	ec->caps.notif_d0exit = false;
-	ec->caps.notif_display = true;
+	status = ssam_device_caps_load_from_acpi(ssh, &ec->caps);
+	if (status)
+		goto err_ecinit;
+
+	dev_dbg(&serdev->dev, "device capabilities:\n");
+	dev_dbg(&serdev->dev, "  notif_display: %u\n", ec->caps.notif_display);
+	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ec->caps.notif_d0exit);
 
 	ssh_seq_reset(&ec->counter.seq);
 	ssh_rqid_reset(&ec->counter.rqid);
