@@ -2135,7 +2135,7 @@ static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 	int used;
 
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
-		return used;
+		return -ESHUTDOWN;
 
 	used = kfifo_in(&ptl->rx.fifo, buf, n);
 	if (used)
@@ -3635,7 +3635,7 @@ static int ssam_nf_refcount_inc(struct ssam_nf *nf,
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
 	struct rb_node **link = &nf->refcount.rb_node;
-	struct rb_node *parent;
+	struct rb_node *parent = NULL;
 	int cmp;
 
 	key.reg = reg;
