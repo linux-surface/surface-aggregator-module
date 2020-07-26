@@ -4707,7 +4707,8 @@ static int ssam_irq_setup(struct ssam_controller *ctrl)
 	if (status)
 		return status;
 
-	return irq;
+	ctrl->irq.num = irq;
+	return 0;
 }
 
 static void ssam_irq_free(struct ssam_controller *ctrl)
@@ -4997,10 +4998,8 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	// setup IRQ
 	status = ssam_irq_setup(ec);
-	if (status < 0)
+	if (status)
 		goto err_finalize;
-
-	ec->irq.num = status;
 
 	mutex_unlock(&ssam_controller_lock);
 
