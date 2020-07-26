@@ -3960,7 +3960,6 @@ struct ssam_device_caps {
 };
 
 struct ssam_controller {
-	struct mutex lock;
 	enum ssam_controller_state state;
 
 	struct ssh_rtl rtl;
@@ -3980,9 +3979,10 @@ struct ssam_controller {
 };
 
 static struct ssam_controller ssam_controller = {
-	.lock  = __MUTEX_INITIALIZER(ssam_controller.lock),
 	.state = SSAM_CONTROLLER_UNINITIALIZED,
 };
+
+static DEFINE_MUTEX(ssam_controller_lock);
 
 
 #define ssam_dbg(ctrl, fmt, ...)  rtl_dbg(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
@@ -4072,9 +4072,9 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	struct ssam_controller *c = &ssam_controller;
 	int status;
 
-	mutex_lock(&c->lock);
+	mutex_lock(&ssam_controller_lock);
 	status = __ssam_client_link(c, client);
-	mutex_unlock(&c->lock);
+	mutex_unlock(&ssam_controller_lock);
 
 	*ctrl = status == 0 ? c : NULL;
 	return status;
@@ -4932,7 +4932,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		return status;
 
 	// set up EC
-	mutex_lock(&ec->lock);
+	mutex_lock(&ssam_controller_lock);
 
 	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
@@ -5002,7 +5002,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	ec->irq.num = status;
 
-	mutex_unlock(&ec->lock);
+	mutex_unlock(&ssam_controller_lock);
 
 	// TODO: The EC can wake up the system via the associated GPIO interrupt in
 	// multiple situations. One of which is the remaining battery capacity
@@ -5030,7 +5030,7 @@ err_rtl:
 	ssam_cplt_destroy(&ec->cplt);
 err_ecinit:
 	serdev_device_set_drvdata(serdev, NULL);
-	mutex_unlock(&ec->lock);
+	mutex_unlock(&ssam_controller_lock);
 	return status;
 }
 
@@ -5039,7 +5039,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	struct ssam_controller *ec = serdev_device_get_drvdata(serdev);
 	int status;
 
-	mutex_lock(&ec->lock);
+	mutex_lock(&ssam_controller_lock);
 	ssam_irq_free(ec);
 
 	// suspend EC and disable events
@@ -5091,7 +5091,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
-	mutex_unlock(&ec->lock);
+	mutex_unlock(&ssam_controller_lock);
 }
 
 
