@@ -4865,7 +4865,7 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Power management. ----------------------------------------------------- */
 
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
@@ -4953,6 +4953,8 @@ static int surface_sam_ssh_resume(struct device *dev)
 static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
 
+
+/* -- Device/driver setup. -------------------------------------------------- */
 
 static struct ssam_controller ssam_controller = {
 	.state = SSAM_CONTROLLER_UNINITIALIZED,
@@ -5149,6 +5151,8 @@ static struct serdev_device_driver surface_sam_ssh = {
 	},
 };
 
+
+/* -- Module setup. --------------------------------------------------------- */
 
 static int __init surface_sam_ssh_init(void)
 {
