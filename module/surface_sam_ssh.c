@@ -4840,7 +4840,7 @@ static void ssam_write_wakeup(struct serdev_device *dev)
 	ssam_controller_write_wakeup(ctrl);
 }
 
-struct serdev_device_ops ssam_serdev_ops = {
+static const struct serdev_device_ops ssam_serdev_ops = {
 	.receive_buf = ssam_receive_buf,
 	.write_wakeup = ssam_write_wakeup,
 };
