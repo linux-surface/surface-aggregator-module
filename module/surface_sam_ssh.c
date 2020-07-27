@@ -4867,6 +4867,8 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 
 /* -- Power management. ----------------------------------------------------- */
 
+// TODO: add comments and explanations
+
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
 	struct ssam_controller *ec = dev_get_drvdata(dev);
@@ -5046,6 +5048,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_devinit;
 
+	// TODO: move/re-think controller state
 	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
 	// initial SAM requests: log version, notify default/init power states
