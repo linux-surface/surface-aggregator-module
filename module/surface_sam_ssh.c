@@ -5067,14 +5067,16 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	mutex_unlock(&ssam_controller_lock);
 
-	// TODO: The EC can wake up the system via the associated GPIO interrupt
-	//       in multiple situations. One of which is the remaining battery
-	//       capacity falling below a certain threshold. Normally, we should
-	//       use the device_init_wakeup function, however, the EC also seems
-	//       to have other reasons for waking up the system and it seems
-	//       that Windows has additional checks whether the system should be
-	//       resumed. In short, this causes some spurious unwanted wake-ups.
-	//       For now let's thus default power/wakeup to false.
+	/*
+	 * TODO: The EC can wake up the system via the associated GPIO interrupt
+	 *       in multiple situations. One of which is the remaining battery
+	 *       capacity falling below a certain threshold. Normally, we should
+	 *       use the device_init_wakeup function, however, the EC also seems
+	 *       to have other reasons for waking up the system and it seems
+	 *       that Windows has additional checks whether the system should be
+	 *       resumed. In short, this causes some spurious unwanted wake-ups.
+	 *       For now let's thus default power/wakeup to false.
+	 */
 	device_set_wakeup_capable(&serdev->dev, true);
 	acpi_walk_dep_device_list(ssh);
 
