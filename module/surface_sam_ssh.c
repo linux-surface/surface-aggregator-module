@@ -3978,12 +3978,6 @@ struct ssam_controller {
 	struct ssam_device_caps caps;
 };
 
-static struct ssam_controller ssam_controller = {
-	.state = SSAM_CONTROLLER_UNINITIALIZED,
-};
-
-static DEFINE_MUTEX(ssam_controller_lock);
-
 
 #define ssam_dbg(ctrl, fmt, ...)  rtl_dbg(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
 #define ssam_info(ctrl, fmt, ...) rtl_info(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
@@ -4166,48 +4160,6 @@ static inline void ssam_controller_write_wakeup(struct ssam_controller *ctrl)
 {
 	ssh_ptl_tx_wakeup(&ctrl->rtl.ptl, true);
 }
-
-
-static int __ssam_client_link(struct ssam_controller *c, struct device *client)
-{
-	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
-	struct device_link *link;
-	struct device *ctrldev;
-
-	if (READ_ONCE(c->state) == SSAM_CONTROLLER_UNINITIALIZED)
-		return -ENXIO;
-
-	if ((ctrldev = ssam_controller_device(c)) == NULL)
-		return -ENXIO;
-
-	if ((link = device_link_add(client, ctrldev, flags)) == NULL)
-		return -ENOMEM;
-
-	/*
-	 * Return -ENXIO if supplier driver is on its way to be removed. In this
-	 * case, the controller won't be around for much longer and the device
-	 * link is not going to save us any more, as unbinding is already in
-	 * progress.
-	 */
-	if (link->status == DL_STATE_SUPPLIER_UNBIND)
-		return -ENXIO;
-
-	return 0;
-}
-
-int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
-{
-	struct ssam_controller *c = &ssam_controller;
-	int status;
-
-	mutex_lock(&ssam_controller_lock);
-	status = __ssam_client_link(c, client);
-	mutex_unlock(&ssam_controller_lock);
-
-	*ctrl = status == 0 ? c : NULL;
-	return status;
-}
-EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 
 /* -- Top-level request interface ------------------------------------------- */
@@ -5000,6 +4952,53 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
+
+
+static struct ssam_controller ssam_controller = {
+	.state = SSAM_CONTROLLER_UNINITIALIZED,
+};
+static DEFINE_MUTEX(ssam_controller_lock);
+
+static int __ssam_client_link(struct ssam_controller *c, struct device *client)
+{
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
+	struct device_link *link;
+	struct device *ctrldev;
+
+	if (READ_ONCE(c->state) == SSAM_CONTROLLER_UNINITIALIZED)
+		return -ENXIO;
+
+	if ((ctrldev = ssam_controller_device(c)) == NULL)
+		return -ENXIO;
+
+	if ((link = device_link_add(client, ctrldev, flags)) == NULL)
+		return -ENOMEM;
+
+	/*
+	 * Return -ENXIO if supplier driver is on its way to be removed. In this
+	 * case, the controller won't be around for much longer and the device
+	 * link is not going to save us any more, as unbinding is already in
+	 * progress.
+	 */
+	if (link->status == DL_STATE_SUPPLIER_UNBIND)
+		return -ENXIO;
+
+	return 0;
+}
+
+int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
+{
+	struct ssam_controller *c = &ssam_controller;
+	int status;
+
+	mutex_lock(&ssam_controller_lock);
+	status = __ssam_client_link(c, client);
+	mutex_unlock(&ssam_controller_lock);
+
+	*ctrl = status == 0 ? c : NULL;
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
