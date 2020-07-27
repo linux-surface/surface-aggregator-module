@@ -4920,6 +4920,89 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
 
 
+static int ssam_controller_init(struct ssam_controller *ctrl,
+				struct serdev_device *serdev)
+{
+	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
+	int status;
+
+	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
+	if (status)
+		return status;
+
+	dev_dbg(&serdev->dev, "device capabilities:\n");
+	dev_dbg(&serdev->dev, "  notif_display: %u\n", ctrl->caps.notif_display);
+	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ctrl->caps.notif_d0exit);
+
+	ssh_seq_reset(&ctrl->counter.seq);
+	ssh_rqid_reset(&ctrl->counter.rqid);
+
+	// initialize event/request completion system
+	status = ssam_cplt_init(&ctrl->cplt, &serdev->dev);
+	if (status)
+		return status;
+
+	// initialize request and packet transmission layers
+	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
+	if (status) {
+		ssam_cplt_flush(&ctrl->cplt);
+		ssam_cplt_destroy(&ctrl->cplt);
+	}
+
+	return status;
+}
+
+static int ssam_controller_start(struct ssam_controller *ctrl)
+{
+	int status;
+
+	status = ssh_rtl_tx_start(&ctrl->rtl);
+	if (status)
+		return status;
+
+	status = ssh_rtl_rx_start(&ctrl->rtl);
+	if (status)
+		ssh_rtl_tx_flush(&ctrl->rtl);
+
+	return status;
+}
+
+static void ssam_controller_shutdown(struct ssam_controller *ctrl)
+{
+	int status;
+
+	// try to flush pending events and requests while everything still works
+	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
+	if (status) {
+		ssam_err(ctrl, "failed to flush request transmission layer: %d\n",
+			status);
+	}
+
+	// flush out all currently completing requests and events
+	ssam_cplt_flush(&ctrl->cplt);
+
+	// cancel rem. requests, ensure no new ones can be queued, stop threads
+	ssh_rtl_tx_flush(&ctrl->rtl);
+	ssh_rtl_shutdown(&ctrl->rtl);
+}
+
+static void ssam_controller_destroy(struct ssam_controller *ctrl)
+{
+	/*
+	 * Ensure _all_ events are completed. New ones could still have been
+	 * received after the previous flush in ssam_controller_shutdown, before
+	 * the request transport layer has been shut down. At this point we can
+	 * be sure that no new requests will be queued for completion after this
+	 * call.
+	 */
+	ssam_cplt_flush(&ctrl->cplt);
+
+	// actually free resources
+	ssam_cplt_destroy(&ctrl->cplt);
+	ssh_rtl_destroy(&ctrl->rtl);
+}
+
+
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
 	struct ssam_controller *ec = &ssam_controller;
@@ -4938,69 +5021,50 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
 		dev_err(&serdev->dev, "embedded controller already initialized\n");
-
-		status = -EBUSY;
-		goto err_ecinit;
+		mutex_unlock(&ssam_controller_lock);
+		return -EBUSY;
 	}
 
-	status = ssam_device_caps_load_from_acpi(ssh, &ec->caps);
+	// initialize controller
+	status = ssam_controller_init(ec, serdev);
 	if (status)
-		goto err_ecinit;
+		goto err_ctrl_init;
 
-	dev_dbg(&serdev->dev, "device capabilities:\n");
-	dev_dbg(&serdev->dev, "  notif_display: %u\n", ec->caps.notif_display);
-	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ec->caps.notif_d0exit);
-
-	ssh_seq_reset(&ec->counter.seq);
-	ssh_rqid_reset(&ec->counter.rqid);
-
-	// initialize event/request completion system
-	status = ssam_cplt_init(&ec->cplt, &serdev->dev);
-	if (status)
-		goto err_ecinit;
-
-	// initialize request and packet transmission layers
-	status = ssh_rtl_init(&ec->rtl, serdev, &ssam_rtl_ops);
-	if (status)
-		goto err_rtl;
-
+	// set up serdev device
 	serdev_device_set_drvdata(serdev, ec);
-
 	serdev_device_set_client_ops(serdev, &ssam_serdev_ops);
 	status = serdev_device_open(serdev);
 	if (status)
-		goto err_open;
+		goto err_devopen;
 
 	status = ssam_serdev_setup_via_acpi(ssh, serdev);
 	if (ACPI_FAILURE(status))
 		goto err_devinit;
 
-	status = ssh_rtl_tx_start(&ec->rtl);
-	if (status)
-		goto err_devinit;
-
-	status = ssh_rtl_rx_start(&ec->rtl);
+	// start controller
+	status = ssam_controller_start(ec);
 	if (status)
 		goto err_devinit;
 
 	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
+	// initial SAM requests: log version, notify default/init power states
 	status = ssam_log_firmware_version(ec);
 	if (status)
-		goto err_finalize;
+		goto err_initrq;
 
 	status = ssam_ctrl_notif_d0_entry(ec);
 	if (status)
-		goto err_finalize;
+		goto err_initrq;
 
 	status = ssam_ctrl_notif_display_on(ec);
 	if (status)
-		goto err_finalize;
+		goto err_initrq;
 
 	// setup IRQ
 	status = ssam_irq_setup(ec);
 	if (status)
-		goto err_finalize;
+		goto err_initrq;
 
 	mutex_unlock(&ssam_controller_lock);
 
@@ -5017,18 +5081,13 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 
 	return 0;
 
-err_finalize:
-	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
-	ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
+err_initrq:
+	ssam_controller_shutdown(ec);
 err_devinit:
 	serdev_device_close(serdev);
-err_open:
-	ssh_rtl_shutdown(&ec->rtl);
-	ssh_rtl_destroy(&ec->rtl);
-err_rtl:
-	ssam_cplt_flush(&ec->cplt);
-	ssam_cplt_destroy(&ec->cplt);
-err_ecinit:
+err_devopen:
+	ssam_controller_destroy(ec);
+err_ctrl_init:
 	serdev_device_set_drvdata(serdev, NULL);
 	mutex_unlock(&ssam_controller_lock);
 	return status;
@@ -5055,39 +5114,16 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 			status);
 	}
 
-	// flush pending events and requests while everything still works
-	status = ssh_rtl_flush(&ec->rtl, msecs_to_jiffies(5000));
-	if (status) {
-		dev_err(&serdev->dev, "failed to flush request transmission layer: %d\n",
-			status);
-	}
-
-	ssam_cplt_flush(&ec->cplt);
-
-	// mark device as uninitialized
-	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
-
-	// cancel rem. requests, ensure no new ones can be queued, stop threads
-	ssh_rtl_tx_flush(&ec->rtl);
-	ssh_rtl_shutdown(&ec->rtl);
+	ssam_controller_shutdown(ec);
 
 	// shut down actual transport
 	serdev_device_wait_until_sent(serdev, 0);
 	serdev_device_close(serdev);
 
-	/*
-	 * Ensure _all_ events are completed. New ones could still have been
-	 * received after the last flush, before the request transport layer
-	 * has been shut down. At this point we can be sure that no requests
-	 * will remain after this call.
-	 */
-	ssam_cplt_flush(&ec->cplt);
+	// mark device as uninitialized
+	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
 
-	// actually free resources
-	ssam_cplt_destroy(&ec->cplt);
-	ssh_rtl_destroy(&ec->rtl);
-
-	ec->irq.num = -1;
+	ssam_controller_destroy(ec);
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
