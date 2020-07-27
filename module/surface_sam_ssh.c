@@ -4714,6 +4714,7 @@ static int ssam_irq_setup(struct ssam_controller *ctrl)
 static void ssam_irq_free(struct ssam_controller *ctrl)
 {
 	free_irq(ctrl->irq.num, ctrl);
+	ctrl->irq.num = -1;
 }
 
 
