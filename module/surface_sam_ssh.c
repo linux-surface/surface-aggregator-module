@@ -4027,6 +4027,134 @@ static const struct ssh_rtl_ops ssam_rtl_ops = {
 };
 
 
+#define SSAM_SSH_DSM_REVISION	0
+#define SSAM_SSH_DSM_NOTIF_D0	8
+static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
+		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
+
+static int ssam_device_caps_load_from_acpi(acpi_handle handle,
+					   struct ssam_device_caps *caps)
+{
+	union acpi_object *obj;
+	u64 funcs = 0;
+	int i;
+
+	// set defaults
+	caps->notif_display = true;
+	caps->notif_d0exit = false;
+
+	if (!acpi_has_method(handle, "_DSM"))
+		return 0;
+
+	// get function availability bitfield
+	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID, 0, 0, NULL,
+			ACPI_TYPE_BUFFER);
+	if (!obj)
+		return -EFAULT;
+
+	for (i = 0; i < obj->buffer.length && i < 8; i++)
+		funcs |= (((u64)obj->buffer.pointer[i]) << (i * 8));
+
+	ACPI_FREE(obj);
+
+	// D0 exit/entry notification
+	if (funcs & BIT(SSAM_SSH_DSM_NOTIF_D0)) {
+		obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID,
+				SSAM_SSH_DSM_REVISION, SSAM_SSH_DSM_NOTIF_D0,
+				NULL, ACPI_TYPE_INTEGER);
+		if (!obj)
+			return -EFAULT;
+
+		caps->notif_d0exit = !!obj->integer.value;
+		ACPI_FREE(obj);
+	}
+
+	return 0;
+}
+
+static int ssam_controller_init(struct ssam_controller *ctrl,
+				struct serdev_device *serdev)
+{
+	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
+	int status;
+
+	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
+	if (status)
+		return status;
+
+	dev_dbg(&serdev->dev, "device capabilities:\n");
+	dev_dbg(&serdev->dev, "  notif_display: %u\n", ctrl->caps.notif_display);
+	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ctrl->caps.notif_d0exit);
+
+	ssh_seq_reset(&ctrl->counter.seq);
+	ssh_rqid_reset(&ctrl->counter.rqid);
+
+	// initialize event/request completion system
+	status = ssam_cplt_init(&ctrl->cplt, &serdev->dev);
+	if (status)
+		return status;
+
+	// initialize request and packet transmission layers
+	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
+	if (status) {
+		ssam_cplt_flush(&ctrl->cplt);
+		ssam_cplt_destroy(&ctrl->cplt);
+	}
+
+	return status;
+}
+
+static int ssam_controller_start(struct ssam_controller *ctrl)
+{
+	int status;
+
+	status = ssh_rtl_tx_start(&ctrl->rtl);
+	if (status)
+		return status;
+
+	status = ssh_rtl_rx_start(&ctrl->rtl);
+	if (status)
+		ssh_rtl_tx_flush(&ctrl->rtl);
+
+	return status;
+}
+
+static void ssam_controller_shutdown(struct ssam_controller *ctrl)
+{
+	int status;
+
+	// try to flush pending events and requests while everything still works
+	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
+	if (status) {
+		ssam_err(ctrl, "failed to flush request transmission layer: %d\n",
+			status);
+	}
+
+	// flush out all currently completing requests and events
+	ssam_cplt_flush(&ctrl->cplt);
+
+	// cancel rem. requests, ensure no new ones can be queued, stop threads
+	ssh_rtl_tx_flush(&ctrl->rtl);
+	ssh_rtl_shutdown(&ctrl->rtl);
+}
+
+static void ssam_controller_destroy(struct ssam_controller *ctrl)
+{
+	/*
+	 * Ensure _all_ events are completed. New ones could still have been
+	 * received after the previous flush in ssam_controller_shutdown, before
+	 * the request transport layer has been shut down. At this point we can
+	 * be sure that no new requests will be queued for completion after this
+	 * call.
+	 */
+	ssam_cplt_flush(&ctrl->cplt);
+
+	// actually free resources
+	ssam_cplt_destroy(&ctrl->cplt);
+	ssh_rtl_destroy(&ctrl->rtl);
+}
+
+
 static inline
 int ssam_controller_receive_buf(struct ssam_controller *ctrl,
 				const unsigned char *buf, size_t n)
@@ -4624,27 +4752,6 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
 
 
-/* -- Glue layer (serdev_device -> ssam_controller). ------------------------ */
-
-static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf,
-			    size_t n)
-{
-	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
-	return ssam_controller_receive_buf(ctrl, buf, n);
-}
-
-static void ssam_write_wakeup(struct serdev_device *dev)
-{
-	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
-	ssam_controller_write_wakeup(ctrl);
-}
-
-struct serdev_device_ops ssam_serdev_ops = {
-	.receive_buf = ssam_receive_buf,
-	.write_wakeup = ssam_write_wakeup,
-};
-
-
 /* -- Wakeup IRQ. ----------------------------------------------------------- */
 
 static const struct acpi_gpio_params gpio_ssam_wakeup_int = { 0, 0, false };
@@ -4718,6 +4825,27 @@ static void ssam_irq_free(struct ssam_controller *ctrl)
 }
 
 
+/* -- Glue layer (serdev_device -> ssam_controller). ------------------------ */
+
+static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf,
+			    size_t n)
+{
+	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
+	return ssam_controller_receive_buf(ctrl, buf, n);
+}
+
+static void ssam_write_wakeup(struct serdev_device *dev)
+{
+	struct ssam_controller *ctrl = serdev_device_get_drvdata(dev);
+	ssam_controller_write_wakeup(ctrl);
+}
+
+struct serdev_device_ops ssam_serdev_ops = {
+	.receive_buf = ssam_receive_buf,
+	.write_wakeup = ssam_write_wakeup,
+};
+
+
 /* -- ACPI based device setup. ---------------------------------------------- */
 
 static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
@@ -4782,52 +4910,6 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 {
 	return acpi_walk_resources(handle, METHOD_NAME__CRS,
 				   ssam_serdev_setup_via_acpi_crs, serdev);
-}
-
-
-#define SSAM_SSH_DSM_REVISION	0
-#define SSAM_SSH_DSM_NOTIF_D0	8
-static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
-		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
-
-static int ssam_device_caps_load_from_acpi(acpi_handle handle,
-					   struct ssam_device_caps *caps)
-{
-	union acpi_object *obj;
-	u64 funcs = 0;
-	int i;
-
-	// set defaults
-	caps->notif_display = true;
-	caps->notif_d0exit = false;
-
-	if (!acpi_has_method(handle, "_DSM"))
-		return 0;
-
-	// get function availability bitfield
-	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID, 0, 0, NULL,
-			ACPI_TYPE_BUFFER);
-	if (!obj)
-		return -EFAULT;
-
-	for (i = 0; i < obj->buffer.length && i < 8; i++)
-		funcs |= (((u64)obj->buffer.pointer[i]) << (i * 8));
-
-	ACPI_FREE(obj);
-
-	// D0 exit/entry notification
-	if (funcs & BIT(SSAM_SSH_DSM_NOTIF_D0)) {
-		obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID,
-				SSAM_SSH_DSM_REVISION, SSAM_SSH_DSM_NOTIF_D0,
-				NULL, ACPI_TYPE_INTEGER);
-		if (!obj)
-			return -EFAULT;
-
-		caps->notif_d0exit = !!obj->integer.value;
-		ACPI_FREE(obj);
-	}
-
-	return 0;
 }
 
 
@@ -4918,89 +5000,6 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
-
-
-static int ssam_controller_init(struct ssam_controller *ctrl,
-				struct serdev_device *serdev)
-{
-	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
-	int status;
-
-	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
-	if (status)
-		return status;
-
-	dev_dbg(&serdev->dev, "device capabilities:\n");
-	dev_dbg(&serdev->dev, "  notif_display: %u\n", ctrl->caps.notif_display);
-	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ctrl->caps.notif_d0exit);
-
-	ssh_seq_reset(&ctrl->counter.seq);
-	ssh_rqid_reset(&ctrl->counter.rqid);
-
-	// initialize event/request completion system
-	status = ssam_cplt_init(&ctrl->cplt, &serdev->dev);
-	if (status)
-		return status;
-
-	// initialize request and packet transmission layers
-	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
-	if (status) {
-		ssam_cplt_flush(&ctrl->cplt);
-		ssam_cplt_destroy(&ctrl->cplt);
-	}
-
-	return status;
-}
-
-static int ssam_controller_start(struct ssam_controller *ctrl)
-{
-	int status;
-
-	status = ssh_rtl_tx_start(&ctrl->rtl);
-	if (status)
-		return status;
-
-	status = ssh_rtl_rx_start(&ctrl->rtl);
-	if (status)
-		ssh_rtl_tx_flush(&ctrl->rtl);
-
-	return status;
-}
-
-static void ssam_controller_shutdown(struct ssam_controller *ctrl)
-{
-	int status;
-
-	// try to flush pending events and requests while everything still works
-	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
-	if (status) {
-		ssam_err(ctrl, "failed to flush request transmission layer: %d\n",
-			status);
-	}
-
-	// flush out all currently completing requests and events
-	ssam_cplt_flush(&ctrl->cplt);
-
-	// cancel rem. requests, ensure no new ones can be queued, stop threads
-	ssh_rtl_tx_flush(&ctrl->rtl);
-	ssh_rtl_shutdown(&ctrl->rtl);
-}
-
-static void ssam_controller_destroy(struct ssam_controller *ctrl)
-{
-	/*
-	 * Ensure _all_ events are completed. New ones could still have been
-	 * received after the previous flush in ssam_controller_shutdown, before
-	 * the request transport layer has been shut down. At this point we can
-	 * be sure that no new requests will be queued for completion after this
-	 * call.
-	 */
-	ssam_cplt_flush(&ctrl->cplt);
-
-	// actually free resources
-	ssam_cplt_destroy(&ctrl->cplt);
-	ssh_rtl_destroy(&ctrl->rtl);
-}
 
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
