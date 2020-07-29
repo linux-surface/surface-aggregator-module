@@ -695,7 +695,7 @@ struct ssh_ptl {
 		struct {
 			u16 seqs[8];
 			u16 offset;
-		} blacklist;
+		} blocked;
 	} rx;
 
 	struct {
@@ -1901,23 +1901,23 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 }
 
 
-static bool ssh_ptl_rx_blacklist_check(struct ssh_ptl *ptl, u8 seq)
+static bool ssh_ptl_rx_retransmit_check(struct ssh_ptl *ptl, u8 seq)
 {
 	int i;
 
-	// check if SEQ is blacklisted
-	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++) {
-		if (likely(ptl->rx.blacklist.seqs[i] != seq))
+	// check if SEQ has been seen recently (i.e. packet was re-transmitted)
+	for (i = 0; i < ARRAY_SIZE(ptl->rx.blocked.seqs); i++) {
+		if (likely(ptl->rx.blocked.seqs[i] != seq))
 			continue;
 
 		ptl_dbg(ptl, "ptl: ignoring repeated data packet\n");
 		return true;
 	}
 
-	// update blacklist
-	ptl->rx.blacklist.seqs[ptl->rx.blacklist.offset] = seq;
-	ptl->rx.blacklist.offset = (ptl->rx.blacklist.offset + 1)
-				   % ARRAY_SIZE(ptl->rx.blacklist.seqs);
+	// update list of blocked seuence IDs
+	ptl->rx.blocked.seqs[ptl->rx.blocked.offset] = seq;
+	ptl->rx.blocked.offset = (ptl->rx.blocked.offset + 1)
+				  % ARRAY_SIZE(ptl->rx.blocked.seqs);
 
 	return false;
 }
@@ -1926,7 +1926,7 @@ static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
 				 const struct ssh_frame *frame,
 				 const struct ssam_span *payload)
 {
-	if (ssh_ptl_rx_blacklist_check(ptl, frame->seq))
+	if (ssh_ptl_rx_retransmit_check(ptl, frame->seq))
 		return;
 
 	ptl->ops.data_received(ptl, payload);
@@ -2367,10 +2367,10 @@ static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	ptl->ops = *ops;
 
-	// initialize SEQ blacklist with invalid sequence IDs
-	for (i = 0; i < ARRAY_SIZE(ptl->rx.blacklist.seqs); i++)
-		ptl->rx.blacklist.seqs[i] = 0xFFFF;
-	ptl->rx.blacklist.offset = 0;
+	// initialize list of recent/blocked SEQs with invalid sequence IDs
+	for (i = 0; i < ARRAY_SIZE(ptl->rx.blocked.seqs); i++)
+		ptl->rx.blocked.seqs[i] = 0xFFFF;
+	ptl->rx.blocked.offset = 0;
 
 	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
 	if (status)
