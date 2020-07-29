@@ -4914,8 +4914,6 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 
 /* -- Power management. ----------------------------------------------------- */
 
-// TODO: add comments and explanations
-
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
