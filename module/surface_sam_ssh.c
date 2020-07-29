@@ -3951,6 +3951,8 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 enum ssam_controller_state {
 	SSAM_CONTROLLER_UNINITIALIZED,
 	SSAM_CONTROLLER_INITIALIZED,
+	SSAM_CONTROLLER_STARTED,
+	SSAM_CONTROLLER_STOPPED,
 	SSAM_CONTROLLER_SUSPENDED,
 };
 
@@ -4072,6 +4074,11 @@ static int ssam_controller_init(struct ssam_controller *ctrl,
 	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
 	int status;
 
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_UNINITIALIZED) {
+		dev_err(&serdev->dev, "embedded controller already initialized\n");
+		return -EBUSY;
+	}
+
 	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
 	if (status)
 		return status;
@@ -4093,29 +4100,42 @@ static int ssam_controller_init(struct ssam_controller *ctrl,
 	if (status) {
 		ssam_cplt_flush(&ctrl->cplt);
 		ssam_cplt_destroy(&ctrl->cplt);
+		return status;
 	}
 
-	return status;
+	// update state
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_INITIALIZED);
+	return 0;
 }
 
 static int ssam_controller_start(struct ssam_controller *ctrl)
 {
 	int status;
 
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+		return -EINVAL;
+
 	status = ssh_rtl_tx_start(&ctrl->rtl);
 	if (status)
 		return status;
 
 	status = ssh_rtl_rx_start(&ctrl->rtl);
-	if (status)
+	if (status) {
 		ssh_rtl_tx_flush(&ctrl->rtl);
+		return status;
+	}
 
-	return status;
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
+	return 0;
 }
 
 static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 {
+	enum ssam_controller_state s = smp_load_acquire(&ctrl->state);
 	int status;
+
+	if (s == SSAM_CONTROLLER_UNINITIALIZED || s == SSAM_CONTROLLER_STOPPED)
+		return;
 
 	// try to flush pending events and requests while everything still works
 	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
@@ -4130,10 +4150,15 @@ static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
 	ssh_rtl_tx_flush(&ctrl->rtl);
 	ssh_rtl_shutdown(&ctrl->rtl);
+
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STOPPED);
 }
 
 static void ssam_controller_destroy(struct ssam_controller *ctrl)
 {
+	if (smp_load_acquire(&ctrl->state) == SSAM_CONTROLLER_UNINITIALIZED)
+		return;
+
 	/*
 	 * Ensure _all_ events are completed. New ones could still have been
 	 * received after the previous flush in ssam_controller_shutdown, before
@@ -4146,6 +4171,26 @@ static void ssam_controller_destroy(struct ssam_controller *ctrl)
 	// actually free resources
 	ssam_cplt_destroy(&ctrl->cplt);
 	ssh_rtl_destroy(&ctrl->rtl);
+
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_UNINITIALIZED);
+}
+
+static inline int ssam_controller_suspend(struct ssam_controller *ctrl)
+{
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
+		return -EINVAL;
+
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_SUSPENDED);
+	return 0;
+}
+
+static inline int ssam_controller_resume(struct ssam_controller *ctrl)
+{
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED)
+		return -EINVAL;
+
+	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
+	return 0;
 }
 
 
@@ -4270,16 +4315,16 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	enum ssam_controller_state state = smp_load_acquire(&ctrl->state);
 	int status;
 
-	if (state == SSAM_CONTROLLER_UNINITIALIZED) {
-		ssam_warn(ctrl, "rqst: embedded controller is uninitialized\n");
-		ssh_request_put(&rqst->base);
-		return -ENXIO;
-	}
-
 	if (state == SSAM_CONTROLLER_SUSPENDED) {
 		ssam_warn(ctrl, "rqst: embedded controller is suspended\n");
 		ssh_request_put(&rqst->base);
 		return -EPERM;
+	}
+
+	if (state != SSAM_CONTROLLER_STARTED) {
+		ssam_warn(ctrl, "rqst: embedded controller is uninitialized\n");
+		ssh_request_put(&rqst->base);
+		return -ENXIO;
 	}
 
 	status = ssh_rtl_submit(&ctrl->rtl, &rqst->base);
@@ -4618,7 +4663,7 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
 		return -ENXIO;
 
 	nf = &ctrl->cplt.event.notif;
@@ -4672,7 +4717,7 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
 		return -ENXIO;
 
 	nf = &ctrl->cplt.event.notif;
@@ -4914,7 +4959,7 @@ static int surface_sam_ssh_suspend(struct device *dev)
 		ec->irq.wakeup_enabled = false;
 	}
 
-	smp_store_release(&ec->state, SSAM_CONTROLLER_SUSPENDED);
+	WARN_ON(ssam_controller_suspend(ec));
 	return 0;
 
 err_irq:
@@ -4931,7 +4976,7 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 	dev_dbg(dev, "pm: resuming\n");
 
-	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
+	WARN_ON(ssam_controller_resume(ec));
 
 	if (ec->irq.wakeup_enabled) {
 		status = disable_irq_wake(ec->irq.num);
@@ -4969,7 +5014,7 @@ static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 	struct device_link *link;
 	struct device *ctrldev;
 
-	if (READ_ONCE(c->state) == SSAM_CONTROLLER_UNINITIALIZED)
+	if (smp_load_acquire(&c->state) != SSAM_CONTROLLER_STARTED)
 		return -ENXIO;
 
 	if ((ctrldev = ssam_controller_device(c)) == NULL)
@@ -5021,12 +5066,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	// set up EC
 	mutex_lock(&ssam_controller_lock);
 
-	if (smp_load_acquire(&ec->state) != SSAM_CONTROLLER_UNINITIALIZED) {
-		dev_err(&serdev->dev, "embedded controller already initialized\n");
-		mutex_unlock(&ssam_controller_lock);
-		return -EBUSY;
-	}
-
 	// initialize controller
 	status = ssam_controller_init(ec, serdev);
 	if (status)
@@ -5047,9 +5086,6 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	status = ssam_controller_start(ec);
 	if (status)
 		goto err_devinit;
-
-	// TODO: move/re-think controller state
-	smp_store_release(&ec->state, SSAM_CONTROLLER_INITIALIZED);
 
 	// initial SAM requests: log version, notify default/init power states
 	status = ssam_log_firmware_version(ec);
@@ -5124,9 +5160,6 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	// shut down actual transport
 	serdev_device_wait_until_sent(serdev, 0);
 	serdev_device_close(serdev);
-
-	// mark device as uninitialized
-	smp_store_release(&ec->state, SSAM_CONTROLLER_UNINITIALIZED);
 
 	ssam_controller_destroy(ec);
 
