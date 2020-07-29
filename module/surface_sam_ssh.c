@@ -789,7 +789,7 @@ ALLOW_ERROR_INJECTION(ssh_ptl_should_fail_write, ERRNO);
  * data being sent to the EC
  *
  * Hook to simulate corrupt/invalid data being sent from host (driver) to EC.
- * Causes the package data to be actively corrupted by overwriting it with
+ * Causes the packet data to be actively corrupted by overwriting it with
  * pre-defined values, such that it becomes invalid, causing the EC to respond
  * with a NAK packet. Useful to test handling of NAK packets received by the
  * driver.
