@@ -4121,7 +4121,7 @@ static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
 	if (status) {
 		ssam_err(ctrl, "failed to flush request transmission layer: %d\n",
-			status);
+			 status);
 	}
 
 	// flush out all currently completing requests and events
