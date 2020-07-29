@@ -4916,83 +4916,83 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 
 static void surface_sam_ssh_shutdown(struct device *dev)
 {
-	struct ssam_controller *ec = dev_get_drvdata(dev);
+	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
-	status = ssam_ctrl_notif_display_off(ec);
+	status = ssam_ctrl_notif_display_off(c);
 	if (status)
-		ssam_err(ec, "pm: display-off notification failed: %d\n", status);
+		ssam_err(c, "pm: display-off notification failed: %d\n", status);
 
-	status = ssam_ctrl_notif_d0_exit(ec);
+	status = ssam_ctrl_notif_d0_exit(c);
 	if (status)
-		ssam_err(ec, "pm: D0-exit notification failed: %d\n", status);
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 }
 
 static int surface_sam_ssh_suspend(struct device *dev)
 {
-	struct ssam_controller *ec = dev_get_drvdata(dev);
+	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
 	dev_dbg(dev, "pm: suspending\n");
 
-	status = ssam_ctrl_notif_display_off(ec);
+	status = ssam_ctrl_notif_display_off(c);
 	if (status) {
-		ssam_err(ec, "pm: display-off notification failed: %d\n", status);
+		ssam_err(c, "pm: display-off notification failed: %d\n", status);
 		return status;
 	}
 
-	status = ssam_ctrl_notif_d0_exit(ec);
+	status = ssam_ctrl_notif_d0_exit(c);
 	if (status) {
-		ssam_err(ec, "pm: D0-exit notification failed: %d\n", status);
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 		goto err_notif;
 	}
 
 	if (device_may_wakeup(dev)) {
-		status = enable_irq_wake(ec->irq.num);
+		status = enable_irq_wake(c->irq.num);
 		if (status) {
-			ssam_err(ec, "failed to disable wake IRQ: %d\n", status);
+			ssam_err(c, "failed to disable wake IRQ: %d\n", status);
 			goto err_irq;
 		}
 
-		ec->irq.wakeup_enabled = true;
+		c->irq.wakeup_enabled = true;
 	} else {
-		ec->irq.wakeup_enabled = false;
+		c->irq.wakeup_enabled = false;
 	}
 
-	WARN_ON(ssam_controller_suspend(ec));
+	WARN_ON(ssam_controller_suspend(c));
 	return 0;
 
 err_irq:
-	ssam_ctrl_notif_d0_entry(ec);
+	ssam_ctrl_notif_d0_entry(c);
 err_notif:
-	ssam_ctrl_notif_display_on(ec);
+	ssam_ctrl_notif_display_on(c);
 	return status;
 }
 
 static int surface_sam_ssh_resume(struct device *dev)
 {
-	struct ssam_controller *ec = dev_get_drvdata(dev);
+	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
 	dev_dbg(dev, "pm: resuming\n");
 
-	WARN_ON(ssam_controller_resume(ec));
+	WARN_ON(ssam_controller_resume(c));
 
-	if (ec->irq.wakeup_enabled) {
-		status = disable_irq_wake(ec->irq.num);
+	if (c->irq.wakeup_enabled) {
+		status = disable_irq_wake(c->irq.num);
 		if (status)
-			ssam_err(ec, "failed to disable wake IRQ: %d\n", status);
+			ssam_err(c, "failed to disable wake IRQ: %d\n", status);
 
-		ec->irq.wakeup_enabled = false;
+		c->irq.wakeup_enabled = false;
 	}
 
-	status = ssam_ctrl_notif_d0_entry(ec);
+	status = ssam_ctrl_notif_d0_entry(c);
 	if (status)
-		ssam_err(ec, "pm: display-on notification failed: %d\n", status);
+		ssam_err(c, "pm: display-on notification failed: %d\n", status);
 
-	status = ssam_ctrl_notif_display_on(ec);
+	status = ssam_ctrl_notif_display_on(c);
 	if (status)
-		ssam_err(ec, "pm: D0-entry notification failed: %d\n", status);
+		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
 
 	return 0;
 }
@@ -5052,7 +5052,7 @@ EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
-	struct ssam_controller *ec = &ssam_controller;
+	struct ssam_controller *ctrl = &ssam_controller;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	int status;
 
@@ -5067,12 +5067,12 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	mutex_lock(&ssam_controller_lock);
 
 	// initialize controller
-	status = ssam_controller_init(ec, serdev);
+	status = ssam_controller_init(ctrl, serdev);
 	if (status)
 		goto err_ctrl_init;
 
 	// set up serdev device
-	serdev_device_set_drvdata(serdev, ec);
+	serdev_device_set_drvdata(serdev, ctrl);
 	serdev_device_set_client_ops(serdev, &ssam_serdev_ops);
 	status = serdev_device_open(serdev);
 	if (status)
@@ -5083,25 +5083,25 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_devinit;
 
 	// start controller
-	status = ssam_controller_start(ec);
+	status = ssam_controller_start(ctrl);
 	if (status)
 		goto err_devinit;
 
 	// initial SAM requests: log version, notify default/init power states
-	status = ssam_log_firmware_version(ec);
+	status = ssam_log_firmware_version(ctrl);
 	if (status)
 		goto err_initrq;
 
-	status = ssam_ctrl_notif_d0_entry(ec);
+	status = ssam_ctrl_notif_d0_entry(ctrl);
 	if (status)
 		goto err_initrq;
 
-	status = ssam_ctrl_notif_display_on(ec);
+	status = ssam_ctrl_notif_display_on(ctrl);
 	if (status)
 		goto err_initrq;
 
 	// setup IRQ
-	status = ssam_irq_setup(ec);
+	status = ssam_irq_setup(ctrl);
 	if (status)
 		goto err_initrq;
 
@@ -5123,11 +5123,11 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	return 0;
 
 err_initrq:
-	ssam_controller_shutdown(ec);
+	ssam_controller_shutdown(ctrl);
 err_devinit:
 	serdev_device_close(serdev);
 err_devopen:
-	ssam_controller_destroy(ec);
+	ssam_controller_destroy(ctrl);
 err_ctrl_init:
 	serdev_device_set_drvdata(serdev, NULL);
 	mutex_unlock(&ssam_controller_lock);
@@ -5136,32 +5136,32 @@ err_ctrl_init:
 
 static void surface_sam_ssh_remove(struct serdev_device *serdev)
 {
-	struct ssam_controller *ec = serdev_device_get_drvdata(serdev);
+	struct ssam_controller *ctrl = serdev_device_get_drvdata(serdev);
 	int status;
 
 	mutex_lock(&ssam_controller_lock);
-	ssam_irq_free(ec);
+	ssam_irq_free(ctrl);
 
 	// suspend EC and disable events
-	status = ssam_ctrl_notif_display_off(ec);
+	status = ssam_ctrl_notif_display_off(ctrl);
 	if (status) {
 		dev_err(&serdev->dev, "display-off notification failed: %d\n",
 			status);
 	}
 
-	status = ssam_ctrl_notif_d0_exit(ec);
+	status = ssam_ctrl_notif_d0_exit(ctrl);
 	if (status) {
 		dev_err(&serdev->dev, "D0-exit notification failed: %d\n",
 			status);
 	}
 
-	ssam_controller_shutdown(ec);
+	ssam_controller_shutdown(ctrl);
 
 	// shut down actual transport
 	serdev_device_wait_until_sent(serdev, 0);
 	serdev_device_close(serdev);
 
-	ssam_controller_destroy(ec);
+	ssam_controller_destroy(ctrl);
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
