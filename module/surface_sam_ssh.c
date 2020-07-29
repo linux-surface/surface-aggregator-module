@@ -4921,6 +4921,13 @@ static void surface_sam_ssh_shutdown(struct device *dev)
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
+	/*
+	 * Try to signal display-off and D0-exit, ignore any errors.
+	 *
+	 * Note: It has not been established yet if this is actually
+	 * necessary/useful for shutdown.
+	 */
+
 	status = ssam_ctrl_notif_display_off(c);
 	if (status)
 		ssam_err(c, "pm: display-off notification failed: %d\n", status);
@@ -4934,6 +4941,15 @@ static int surface_sam_ssh_suspend(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
+
+	/*
+	 * Try to signal display-off and D0-exit, enable IRQ wakeup if
+	 * specified. Abort on error.
+	 *
+	 * Note: Signalling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available, signal
+	 * it here.
+	 */
 
 	status = ssam_ctrl_notif_display_off(c);
 	if (status) {
@@ -4975,6 +4991,16 @@ static int surface_sam_ssh_resume(struct device *dev)
 	int status;
 
 	WARN_ON(ssam_controller_resume(c));
+
+	/*
+	 * Try to disable IRQ wakeup (if specified), signal display-on and
+	 * D0-entry. In case of errors, log them and try to restore normal
+	 * operation state as far as possible.
+	 *
+	 * Note: Signalling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available, signal
+	 * it here.
+	 */
 
 	if (c->irq.wakeup_enabled) {
 		status = disable_irq_wake(c->irq.num);
