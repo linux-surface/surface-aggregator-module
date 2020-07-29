@@ -2173,65 +2173,6 @@ static const struct ssh_packet_ops ssh_flush_packet_ops =  {
 };
 
 /**
- * ssh_ptl_flush - flush the packet transmission layer
- * @ptl:     packet transmission layer
- * @timeout: timeout for the flush operation in jiffies
- *
- * Queue a special flush-packet and wait for its completion. This packet will
- * be completed after all other currently queued and pending packets have been
- * completed. Flushing guarantees that all previously submitted data packets
- * have been fully completed before this call returns. Additionally, flushing
- * blocks execution of all later submitted data packets until the flush has been
- * completed.
- *
- * Control (i.e. ACK/NAK) packets that have been submitted after this call will
- * be placed before the flush packet in the queue, as long as the flush-packet
- * has not been chosen for processing yet.
- *
- * Flushing, even when no new data packets are submitted after this call, does
- * not guarantee that no more packets are scheduled. For example, incoming
- * messages can promt automated submission of ACK or NAK type packets. If this
- * happens while the flush-packet is being processed (i.e. after it has been
- * taken from the queue), such packets may still be queued after this function
- * returns.
- *
- * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
- * canceled as a result of the timeout, or -ESHUTDOWN if the packet transmission
- * layer has been shut down before this call. May also return -EINTR if the
- * packet transmission has been interrupted.
- */
-static int ssh_ptl_flush(struct ssh_ptl *ptl, unsigned long timeout)
-{
-	struct ssh_flush_packet packet;
-	struct ssh_packet_args args;
-	int status;
-
-	args.type = BIT(SSH_PACKET_TY_FLUSH_BIT) | BIT(SSH_PACKET_TY_BLOCKING_BIT);
-	args.priority = SSH_PACKET_PRIORITY(FLUSH, 0);
-	args.ops = &ssh_flush_packet_ops;
-
-	ssh_packet_init(&packet.base, &args);
-	init_completion(&packet.completion);
-
-	status = ssh_ptl_submit(ptl, &packet.base);
-	if (status)
-		return status;
-
-	ssh_packet_put(&packet.base);
-
-	if (wait_for_completion_timeout(&packet.completion, timeout))
-		return 0;
-
-	ssh_ptl_cancel(&packet.base);
-	wait_for_completion(&packet.completion);
-
-	WARN_ON(packet.status != 0 && packet.status != -ECANCELED
-		&& packet.status != -ESHUTDOWN && packet.status != -EINTR);
-
-	return packet.status == -ECANCELED ? -ETIMEDOUT : status;
-}
-
-/**
  * ssh_ptl_shutdown - shut down the packet transmission layer
  * @ptl:     packet transmission layer
  *
