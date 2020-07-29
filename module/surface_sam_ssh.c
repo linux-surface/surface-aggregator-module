@@ -4180,6 +4180,7 @@ static inline int ssam_controller_suspend(struct ssam_controller *ctrl)
 	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
 		return -EINVAL;
 
+	ssam_dbg(ctrl, "pm: suspending controller\n");
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_SUSPENDED);
 	return 0;
 }
@@ -4189,6 +4190,7 @@ static inline int ssam_controller_resume(struct ssam_controller *ctrl)
 	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED)
 		return -EINVAL;
 
+	ssam_dbg(ctrl, "pm: resuming controller\n");
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
 	return 0;
 }
@@ -4933,8 +4935,6 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
-	dev_dbg(dev, "pm: suspending\n");
-
 	status = ssam_ctrl_notif_display_off(c);
 	if (status) {
 		ssam_err(c, "pm: display-off notification failed: %d\n", status);
@@ -4973,8 +4973,6 @@ static int surface_sam_ssh_resume(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
-
-	dev_dbg(dev, "pm: resuming\n");
 
 	WARN_ON(ssam_controller_resume(c));
 
