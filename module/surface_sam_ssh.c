@@ -1065,9 +1065,9 @@ static void ssh_packet_init(struct ssh_packet *packet,
 }
 
 
-static int ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
-				 struct ssh_packet **packet,
-				 struct ssam_span *buffer, gfp_t flags)
+static int ssh_ptl_ctrl_packet_alloc(struct ssh_ptl *ptl,
+				     struct ssh_packet **packet,
+				     struct ssam_span *buffer, gfp_t flags)
 {
 	// TODO: cache packets
 
@@ -1081,7 +1081,7 @@ static int ptl_alloc_ctrl_packet(struct ssh_ptl *ptl,
 	return 0;
 }
 
-static void ptl_free_ctrl_packet(struct ssh_packet *p)
+static void ssh_ptl_ctrl_packet_free(struct ssh_packet *p)
 {
 	// TODO: cache packets
 
@@ -1090,7 +1090,7 @@ static void ptl_free_ctrl_packet(struct ssh_packet *p)
 
 static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
 	.complete = NULL,
-	.release = ptl_free_ctrl_packet,
+	.release = ssh_ptl_ctrl_packet_free,
 };
 
 
@@ -1940,7 +1940,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	struct msgbuf msgb;
 	int status;
 
-	status = ptl_alloc_ctrl_packet(ptl, &packet, &buf, GFP_KERNEL);
+	status = ssh_ptl_ctrl_packet_alloc(ptl, &packet, &buf, GFP_KERNEL);
 	if (status) {
 		ptl_err(ptl, "ptl: failed to allocate ACK packet\n");
 		return;
@@ -1967,7 +1967,7 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 	struct msgbuf msgb;
 	int status;
 
-	status = ptl_alloc_ctrl_packet(ptl, &packet, &buf, GFP_KERNEL);
+	status = ssh_ptl_ctrl_packet_alloc(ptl, &packet, &buf, GFP_KERNEL);
 	if (status) {
 		ptl_err(ptl, "ptl: failed to allocate NAK packet\n");
 		return;
