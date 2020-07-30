@@ -885,10 +885,8 @@ static bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 	}
 }
 
-static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
-				    struct ssh_packet *packet,
-				    const unsigned char *buf,
-				    size_t count)
+static int ssh_ptl_write_buf(struct ssh_ptl *ptl, struct ssh_packet *packet,
+			     const unsigned char *buf, size_t count)
 {
 	int status;
 
@@ -905,7 +903,7 @@ static inline int ssh_ptl_write_buf(struct ssh_ptl *ptl,
 	return serdev_device_write_buf(ptl->serdev, buf, count);
 }
 
-static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
+static void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 {
 	// ignore packets that don't carry any data (i.e. flush)
 	if (!packet->data.ptr || !packet->data.len)
@@ -931,8 +929,8 @@ static inline void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 	memset(packet->data.ptr, 0xb3, packet->data.len);
 }
 
-static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
-						 struct ssam_span *data)
+static void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
+					  struct ssam_span *data)
 {
 	struct ssam_span frame;
 
@@ -948,8 +946,8 @@ static inline void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 	data->ptr[1] = 0xb3;	// set second byte of SYN to "random" value
 }
 
-static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
-						  struct ssam_span *frame)
+static void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
+					   struct ssam_span *frame)
 {
 	size_t payload_len, message_len;
 	struct ssh_frame *sshf;
@@ -4134,7 +4132,7 @@ static void ssam_controller_destroy(struct ssam_controller *ctrl)
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_UNINITIALIZED);
 }
 
-static inline int ssam_controller_suspend(struct ssam_controller *ctrl)
+static int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
 	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
 		return -EINVAL;
@@ -4144,7 +4142,7 @@ static inline int ssam_controller_suspend(struct ssam_controller *ctrl)
 	return 0;
 }
 
-static inline int ssam_controller_resume(struct ssam_controller *ctrl)
+static int ssam_controller_resume(struct ssam_controller *ctrl)
 {
 	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED)
 		return -EINVAL;
