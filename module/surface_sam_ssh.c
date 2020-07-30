@@ -1065,13 +1065,33 @@ static void ssh_packet_init(struct ssh_packet *packet,
 }
 
 
+static struct kmem_cache *ssh_ptl_ctrl_packet_cache;
+
+static int __init ssh_ptl_ctrl_packet_cache_init(void)
+{
+	const unsigned int size = sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL;
+	const unsigned int align = __alignof__(struct ssh_packet);
+	struct kmem_cache *cache;
+
+	cache = kmem_cache_create("ssam_ctrl_packet", size, align, 0, NULL);
+	if (!cache)
+		return -ENOMEM;
+
+	ssh_ptl_ctrl_packet_cache = cache;
+	return 0;
+}
+
+static void __exit ssh_ptl_ctrl_packet_cache_destroy(void)
+{
+	kmem_cache_destroy(ssh_ptl_ctrl_packet_cache);
+	ssh_ptl_ctrl_packet_cache = NULL;
+}
+
 static int ssh_ptl_ctrl_packet_alloc(struct ssh_ptl *ptl,
 				     struct ssh_packet **packet,
 				     struct ssam_span *buffer, gfp_t flags)
 {
-	// TODO: cache packets
-
-	*packet = kzalloc(sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL, flags);
+	*packet = kmem_cache_alloc(ssh_ptl_ctrl_packet_cache, flags);
 	if (!*packet)
 		return -ENOMEM;
 
@@ -1083,9 +1103,7 @@ static int ssh_ptl_ctrl_packet_alloc(struct ssh_ptl *ptl,
 
 static void ssh_ptl_ctrl_packet_free(struct ssh_packet *p)
 {
-	// TODO: cache packets
-
-	kfree(p);
+	kmem_cache_free(ssh_ptl_ctrl_packet_cache, p);
 }
 
 static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
@@ -5155,12 +5173,23 @@ static struct serdev_device_driver surface_sam_ssh = {
 
 static int __init surface_sam_ssh_init(void)
 {
-	return serdev_device_driver_register(&surface_sam_ssh);
+	int status;
+
+	status = ssh_ptl_ctrl_packet_cache_init();
+	if (status)
+		return status;
+
+	status = serdev_device_driver_register(&surface_sam_ssh);
+	if (status)
+		ssh_ptl_ctrl_packet_cache_init();
+
+	return status;
 }
 
 static void __exit surface_sam_ssh_exit(void)
 {
 	serdev_device_driver_unregister(&surface_sam_ssh);
+	ssh_ptl_ctrl_packet_cache_destroy();
 }
 
 /*
