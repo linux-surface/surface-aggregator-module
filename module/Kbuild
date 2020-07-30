@@ -16,4 +16,5 @@ obj-m += surface_sam_debugfs.o
 #ccflags-y += -DCONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 ccflags-y += -Wall -Wextra
 ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
+ccflags-y += -Wmaybe-uninitialized -Wuninitialized
 ccflags-y += -I$(src)
