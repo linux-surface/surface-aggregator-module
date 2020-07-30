@@ -4655,7 +4655,7 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
 	struct ssam_nf_head *nf_head;
 	struct ssam_nf *nf;
-	int rc, status;
+	int rc, status = 0;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
