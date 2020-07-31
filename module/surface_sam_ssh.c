@@ -3948,7 +3948,7 @@ struct ssam_controller {
 
 struct device *ssam_controller_device(struct ssam_controller *c)
 {
-	return (c && c->rtl.ptl.serdev) ? &c->rtl.ptl.serdev->dev : NULL;
+	return ssh_rtl_get_device(&c->rtl);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_device);
 
