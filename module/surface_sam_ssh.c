@@ -3767,7 +3767,7 @@ static void __ssam_event_item_free_generic(struct ssam_event_item *item)
 	kfree(item);
 }
 
-static void ssam_event_item_free(struct ssam_event_item *item)
+static inline void ssam_event_item_free(struct ssam_event_item *item)
 {
 	item->ops.free(item);
 }
