@@ -1023,9 +1023,9 @@ static void ssh_packet_init(struct ssh_packet *packet,
 }
 
 
-static struct kmem_cache *ssh_ptl_ctrl_packet_cache;
+static struct kmem_cache *ssh_ctrl_packet_cache;
 
-static int __init ssh_ptl_ctrl_packet_cache_init(void)
+static int __init ssh_ctrl_packet_cache_init(void)
 {
 	const unsigned int size = sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL;
 	const unsigned int align = __alignof__(struct ssh_packet);
@@ -1035,20 +1035,20 @@ static int __init ssh_ptl_ctrl_packet_cache_init(void)
 	if (!cache)
 		return -ENOMEM;
 
-	ssh_ptl_ctrl_packet_cache = cache;
+	ssh_ctrl_packet_cache = cache;
 	return 0;
 }
 
-static void __exit ssh_ptl_ctrl_packet_cache_destroy(void)
+static void __exit ssh_ctrl_packet_cache_destroy(void)
 {
-	kmem_cache_destroy(ssh_ptl_ctrl_packet_cache);
-	ssh_ptl_ctrl_packet_cache = NULL;
+	kmem_cache_destroy(ssh_ctrl_packet_cache);
+	ssh_ctrl_packet_cache = NULL;
 }
 
-static int ssh_ptl_ctrl_packet_alloc(struct ssh_packet **packet,
-				     struct ssam_span *buffer, gfp_t flags)
+static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
+				 struct ssam_span *buffer, gfp_t flags)
 {
-	*packet = kmem_cache_alloc(ssh_ptl_ctrl_packet_cache, flags);
+	*packet = kmem_cache_alloc(ssh_ctrl_packet_cache, flags);
 	if (!*packet)
 		return -ENOMEM;
 
@@ -1058,14 +1058,14 @@ static int ssh_ptl_ctrl_packet_alloc(struct ssh_packet **packet,
 	return 0;
 }
 
-static void ssh_ptl_ctrl_packet_free(struct ssh_packet *p)
+static void ssh_ctrl_packet_free(struct ssh_packet *p)
 {
-	kmem_cache_free(ssh_ptl_ctrl_packet_cache, p);
+	kmem_cache_free(ssh_ctrl_packet_cache, p);
 }
 
 static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
 	.complete = NULL,
-	.release = ssh_ptl_ctrl_packet_free,
+	.release = ssh_ctrl_packet_free,
 };
 
 
@@ -1915,7 +1915,7 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 	struct msgbuf msgb;
 	int status;
 
-	status = ssh_ptl_ctrl_packet_alloc(&packet, &buf, GFP_KERNEL);
+	status = ssh_ctrl_packet_alloc(&packet, &buf, GFP_KERNEL);
 	if (status) {
 		ptl_err(ptl, "ptl: failed to allocate ACK packet\n");
 		return;
@@ -1942,7 +1942,7 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 	struct msgbuf msgb;
 	int status;
 
-	status = ssh_ptl_ctrl_packet_alloc(&packet, &buf, GFP_KERNEL);
+	status = ssh_ctrl_packet_alloc(&packet, &buf, GFP_KERNEL);
 	if (status) {
 		ptl_err(ptl, "ptl: failed to allocate NAK packet\n");
 		return;
@@ -5136,13 +5136,13 @@ static int __init surface_sam_ssh_init(void)
 {
 	int status;
 
-	status = ssh_ptl_ctrl_packet_cache_init();
+	status = ssh_ctrl_packet_cache_init();
 	if (status)
 		return status;
 
 	status = serdev_device_driver_register(&surface_sam_ssh);
 	if (status)
-		ssh_ptl_ctrl_packet_cache_init();
+		ssh_ctrl_packet_cache_init();
 
 	return status;
 }
@@ -5150,7 +5150,7 @@ static int __init surface_sam_ssh_init(void)
 static void __exit surface_sam_ssh_exit(void)
 {
 	serdev_device_driver_unregister(&surface_sam_ssh);
-	ssh_ptl_ctrl_packet_cache_destroy();
+	ssh_ctrl_packet_cache_destroy();
 }
 
 /*
