@@ -3767,6 +3767,11 @@ static void __ssam_event_item_free_generic(struct ssam_event_item *item)
 	kfree(item);
 }
 
+static void ssam_event_item_free(struct ssam_event_item *item)
+{
+	item->ops.free(item);
+}
+
 static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 {
 	struct ssam_event_item *item;
@@ -3788,11 +3793,6 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 
 	item->event.length = len;
 	return item;
-}
-
-static void ssam_event_item_free(struct ssam_event_item *item)
-{
-	item->ops.free(item);
 }
 
 
