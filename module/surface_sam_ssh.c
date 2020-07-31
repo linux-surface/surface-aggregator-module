@@ -68,11 +68,6 @@ static inline u16 ssh_rqid_next_valid(u16 rqid)
 	return rqid > 0 ? rqid + 1u : rqid + SSH_NUM_EVENTS + 1u;
 }
 
-static inline u16 ssh_event_to_rqid(u16 event)
-{
-	return event + 1u;
-}
-
 static inline u16 ssh_rqid_to_event(u16 rqid)
 {
 	return rqid - 1u;
@@ -86,11 +81,6 @@ static inline bool ssh_rqid_is_event(u16 rqid)
 static inline int ssh_tc_to_rqid(u8 tc)
 {
 	return tc;
-}
-
-static inline int ssh_tc_to_event(u8 tc)
-{
-	return ssh_rqid_to_event(ssh_tc_to_rqid(tc));
 }
 
 static inline u8 ssh_channel_to_index(u8 channel)
@@ -166,31 +156,6 @@ static inline void msgb_init(struct msgbuf *msgb, u8 *ptr, size_t cap)
 	msgb->begin = ptr;
 	msgb->end = ptr + cap;
 	msgb->ptr = ptr;
-}
-
-static inline int msgb_alloc(struct msgbuf *msgb, size_t cap, gfp_t flags)
-{
-	u8 *buf;
-
-	buf = kzalloc(cap, flags);
-	if (!buf)
-		return -ENOMEM;
-
-	msgb_init(msgb, buf, cap);
-	return 0;
-}
-
-static inline void msgb_free(struct msgbuf *msgb)
-{
-	kfree(msgb->begin);
-	msgb->begin = NULL;
-	msgb->end = NULL;
-	msgb->ptr = NULL;
-}
-
-static inline void msgb_reset(struct msgbuf *msgb)
-{
-	msgb->ptr = msgb->begin;
 }
 
 static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
@@ -464,11 +429,6 @@ static inline void sshp_buf_free(struct sshp_buf *buf)
 	buf->ptr = NULL;
 	buf->len = 0;
 	buf->cap = 0;
-}
-
-static inline void sshp_buf_reset(struct sshp_buf *buf)
-{
-	buf->len = 0;
 }
 
 static inline void sshp_buf_drop(struct sshp_buf *buf, size_t n)
