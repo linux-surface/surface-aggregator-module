@@ -3925,6 +3925,42 @@ struct device *ssam_controller_device(struct ssam_controller *c)
 EXPORT_SYMBOL_GPL(ssam_controller_device);
 
 
+/**
+ * Maximum payload length for cached `ssam_event_item`s.
+ *
+ * This length has been chosen to be accomodate standard touchpad and keyboard
+ * input events. Events with larger payloads will be allocated separately.
+ */
+#define SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN	32
+
+static struct kmem_cache *ssam_event_item_cache;
+
+static int ssam_event_item_cache_init(void)
+{
+	const unsigned int size = sizeof(struct ssam_event_item)
+				  + SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN;
+	const unsigned int align = __alignof__(struct ssam_event_item);
+	struct kmem_cache *cache;
+
+	cache = kmem_cache_create("ssam_event_item", size, align, 0, NULL);
+	if (!cache)
+		return -ENOMEM;
+
+	ssam_event_item_cache = cache;
+	return 0;
+}
+
+static void ssam_event_item_cache_destroy(void)
+{
+	kmem_cache_destroy(ssam_event_item_cache);
+	ssam_event_item_cache = NULL;
+}
+
+static void ssam_event_item_free_cached(struct ssam_event_item *item)
+{
+	kmem_cache_free(ssam_event_item_cache, item);
+}
+
 static void ssam_event_item_free_generic(struct ssam_event_item *item)
 {
 	kfree(item);
@@ -3934,15 +3970,22 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 {
 	struct ssam_event_item *item;
 
-	// TODO: cache
+	if (len <= SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN) {
+		item = kmem_cache_alloc(ssam_event_item_cache, GFP_KERNEL);
+		if (!item)
+			return NULL;
 
-	item = kzalloc(sizeof(struct ssam_event_item) + len, GFP_KERNEL);
-	if (!item)
-		return NULL;
+		item->ops.free = ssam_event_item_free_cached;
+	} else {
+		const size_t n = sizeof(struct ssam_event_item) + len;
+		item = kzalloc(n, GFP_KERNEL);
+		if (!item)
+			return NULL;
 
-	item->ops.free = ssam_event_item_free_generic;
+		item->ops.free = ssam_event_item_free_generic;
+	}
+
 	item->event.length = len;
-
 	return item;
 }
 
@@ -5166,18 +5209,30 @@ static int __init surface_sam_ssh_init(void)
 
 	status = ssh_ctrl_packet_cache_init();
 	if (status)
-		return status;
+		goto err_cpkg;
+
+	status = ssam_event_item_cache_init();
+	if (status)
+		goto err_evitem;
 
 	status = serdev_device_driver_register(&surface_sam_ssh);
 	if (status)
-		ssh_ctrl_packet_cache_init();
+		goto err_register;
 
+	return 0;
+
+err_register:
+	ssam_event_item_cache_destroy();
+err_evitem:
+	ssh_ctrl_packet_cache_destroy();
+err_cpkg:
 	return status;
 }
 
 static void __exit surface_sam_ssh_exit(void)
 {
 	serdev_device_driver_unregister(&surface_sam_ssh);
+	ssam_event_item_cache_destroy();
 	ssh_ctrl_packet_cache_destroy();
 }
 
