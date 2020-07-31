@@ -3689,10 +3689,17 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 
 
 struct ssam_cplt;
+struct ssam_event_item;
+
+struct ssam_event_item_ops {
+	void (*free)(struct ssam_event_item *);
+};
 
 struct ssam_event_item {
 	struct list_head node;
 	u16 rqid;
+
+	struct ssam_event_item_ops ops;
 	struct ssam_event event;	// must be last
 };
 
@@ -3814,7 +3821,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 			return;
 
 		ssam_nf_call(nf, dev, item->rqid, &item->event);
-		kfree(item);
+		item->ops.free(item);
 	}
 
 	if (!ssam_event_queue_is_empty(queue))
@@ -3918,6 +3925,28 @@ struct device *ssam_controller_device(struct ssam_controller *c)
 EXPORT_SYMBOL_GPL(ssam_controller_device);
 
 
+static void ssam_event_item_free_generic(struct ssam_event_item *item)
+{
+	kfree(item);
+}
+
+static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
+{
+	struct ssam_event_item *item;
+
+	// TODO: cache
+
+	item = kzalloc(sizeof(struct ssam_event_item) + len, GFP_KERNEL);
+	if (!item)
+		return NULL;
+
+	item->ops.free = ssam_event_item_free_generic;
+	item->event.length = len;
+
+	return item;
+}
+
+
 static void ssam_handle_event(struct ssh_rtl *rtl,
 			      const struct ssh_command *cmd,
 			      const struct ssam_span *data)
@@ -3925,7 +3954,7 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 	struct ssam_controller *ctrl = to_ssam_controller(rtl, rtl);
 	struct ssam_event_item *item;
 
-	item = kzalloc(sizeof(struct ssam_event_item) + data->len, GFP_KERNEL);
+	item = ssam_event_item_alloc(data->len, GFP_KERNEL);
 	if (!item)
 		return;
 
@@ -3934,7 +3963,6 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 	item->event.command_id = cmd->cid;
 	item->event.instance_id = cmd->iid;
 	item->event.channel = cmd->chn_in;
-	item->event.length  = data->len;
 	memcpy(&item->event.data[0], data->ptr, data->len);
 
 	ssam_cplt_submit_event(&ctrl->cplt, item);
