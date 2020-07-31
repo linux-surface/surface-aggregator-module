@@ -3726,6 +3726,76 @@ struct ssam_cplt {
 };
 
 
+/**
+ * Maximum payload length for cached `ssam_event_item`s.
+ *
+ * This length has been chosen to be accomodate standard touchpad and keyboard
+ * input events. Events with larger payloads will be allocated separately.
+ */
+#define SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN	32
+
+static struct kmem_cache *ssam_event_item_cache;
+
+static int ssam_event_item_cache_init(void)
+{
+	const unsigned int size = sizeof(struct ssam_event_item)
+				  + SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN;
+	const unsigned int align = __alignof__(struct ssam_event_item);
+	struct kmem_cache *cache;
+
+	cache = kmem_cache_create("ssam_event_item", size, align, 0, NULL);
+	if (!cache)
+		return -ENOMEM;
+
+	ssam_event_item_cache = cache;
+	return 0;
+}
+
+static void ssam_event_item_cache_destroy(void)
+{
+	kmem_cache_destroy(ssam_event_item_cache);
+	ssam_event_item_cache = NULL;
+}
+
+static void __ssam_event_item_free_cached(struct ssam_event_item *item)
+{
+	kmem_cache_free(ssam_event_item_cache, item);
+}
+
+static void __ssam_event_item_free_generic(struct ssam_event_item *item)
+{
+	kfree(item);
+}
+
+static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
+{
+	struct ssam_event_item *item;
+
+	if (len <= SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN) {
+		item = kmem_cache_alloc(ssam_event_item_cache, GFP_KERNEL);
+		if (!item)
+			return NULL;
+
+		item->ops.free = __ssam_event_item_free_cached;
+	} else {
+		const size_t n = sizeof(struct ssam_event_item) + len;
+		item = kzalloc(n, GFP_KERNEL);
+		if (!item)
+			return NULL;
+
+		item->ops.free = __ssam_event_item_free_generic;
+	}
+
+	item->event.length = len;
+	return item;
+}
+
+static void ssam_event_item_free(struct ssam_event_item *item)
+{
+	item->ops.free(item);
+}
+
+
 static void ssam_event_queue_push(struct ssam_event_queue *q,
 				  struct ssam_event_item *item)
 {
@@ -3821,7 +3891,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 			return;
 
 		ssam_nf_call(nf, dev, item->rqid, &item->event);
-		item->ops.free(item);
+		ssam_event_item_free(item);
 	}
 
 	if (!ssam_event_queue_is_empty(queue))
@@ -3923,71 +3993,6 @@ struct device *ssam_controller_device(struct ssam_controller *c)
 	return ssh_rtl_get_device(&c->rtl);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_device);
-
-
-/**
- * Maximum payload length for cached `ssam_event_item`s.
- *
- * This length has been chosen to be accomodate standard touchpad and keyboard
- * input events. Events with larger payloads will be allocated separately.
- */
-#define SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN	32
-
-static struct kmem_cache *ssam_event_item_cache;
-
-static int ssam_event_item_cache_init(void)
-{
-	const unsigned int size = sizeof(struct ssam_event_item)
-				  + SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN;
-	const unsigned int align = __alignof__(struct ssam_event_item);
-	struct kmem_cache *cache;
-
-	cache = kmem_cache_create("ssam_event_item", size, align, 0, NULL);
-	if (!cache)
-		return -ENOMEM;
-
-	ssam_event_item_cache = cache;
-	return 0;
-}
-
-static void ssam_event_item_cache_destroy(void)
-{
-	kmem_cache_destroy(ssam_event_item_cache);
-	ssam_event_item_cache = NULL;
-}
-
-static void ssam_event_item_free_cached(struct ssam_event_item *item)
-{
-	kmem_cache_free(ssam_event_item_cache, item);
-}
-
-static void ssam_event_item_free_generic(struct ssam_event_item *item)
-{
-	kfree(item);
-}
-
-static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
-{
-	struct ssam_event_item *item;
-
-	if (len <= SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN) {
-		item = kmem_cache_alloc(ssam_event_item_cache, GFP_KERNEL);
-		if (!item)
-			return NULL;
-
-		item->ops.free = ssam_event_item_free_cached;
-	} else {
-		const size_t n = sizeof(struct ssam_event_item) + len;
-		item = kzalloc(n, GFP_KERNEL);
-		if (!item)
-			return NULL;
-
-		item->ops.free = ssam_event_item_free_generic;
-	}
-
-	item->event.length = len;
-	return item;
-}
 
 
 static void ssam_handle_event(struct ssh_rtl *rtl,
