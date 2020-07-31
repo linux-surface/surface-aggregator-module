@@ -3858,6 +3858,12 @@ static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
 
 static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 {
+	/*
+	 * Note: destroy_workqueue ensures that all currently queued work will
+	 * be fully completed and the workqueue drained. This means that this
+	 * call will inherently also free any queued ssam_event_items, thus we
+	 * don't have to take care of that here explicitly.
+	 */
 	destroy_workqueue(cplt->wq);
 	ssam_nf_destroy(&cplt->event.notif);
 }
@@ -4015,7 +4021,6 @@ static int ssam_controller_init(struct ssam_controller *ctrl,
 	// initialize request and packet transmission layers
 	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
 	if (status) {
-		ssam_cplt_flush(&ctrl->cplt);
 		ssam_cplt_destroy(&ctrl->cplt);
 		return status;
 	}
@@ -4061,7 +4066,7 @@ static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 			 status);
 	}
 
-	// flush out all currently completing requests and events
+	// try to flush out all currently completing requests and events
 	ssam_cplt_flush(&ctrl->cplt);
 
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
@@ -4077,13 +4082,12 @@ static void ssam_controller_destroy(struct ssam_controller *ctrl)
 		return;
 
 	/*
-	 * Ensure _all_ events are completed. New ones could still have been
-	 * received after the previous flush in ssam_controller_shutdown, before
-	 * the request transport layer has been shut down. At this point we can
-	 * be sure that no new requests will be queued for completion after this
-	 * call.
+	 * Note: New events could still have been received after the previous
+	 * flush in ssam_controller_shutdown, before the request transport layer
+	 * has been shut down. At this point, after the shutdown, we can be sure
+	 * that no new events will be queued. The call to ssam_cplt_destroy will
+	 * ensure that those remaining are being completed and freed.
 	 */
-	ssam_cplt_flush(&ctrl->cplt);
 
 	// actually free resources
 	ssam_cplt_destroy(&ctrl->cplt);
