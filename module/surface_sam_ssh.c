@@ -4688,13 +4688,15 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
-		return -ENXIO;
-
 	nf = &ctrl->cplt.event.notif;
 	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 
 	mutex_lock(&nf->lock);
+
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED) {
+		mutex_unlock(&nf->lock);
+		return -ENXIO;
+	}
 
 	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
@@ -4742,13 +4744,15 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
-		return -ENXIO;
-
 	nf = &ctrl->cplt.event.notif;
 	nf_head = &nf->head[ssh_rqid_to_event(rqid)];
 
 	mutex_lock(&nf->lock);
+
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED) {
+		mutex_unlock(&nf->lock);
+		return -ENXIO;
+	}
 
 	rc = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 	if (rc < 0) {
