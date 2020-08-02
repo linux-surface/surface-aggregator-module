@@ -468,6 +468,31 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 	)
 
 
+DECLARE_EVENT_CLASS(ssam_alloc_class,
+	TP_PROTO(void *ptr, size_t len),
+
+	TP_ARGS(ptr, len),
+
+	TP_STRUCT__entry(
+		__array(char, uid, SSAM_PTR_UID_LEN)
+		__field(size_t, len)
+	),
+
+	TP_fast_assign(
+		ssam_trace_ptr_uid(ptr, __entry->uid);
+		__entry->len = len;
+	),
+
+	TP_printk("uid=%s, len=%zu", __entry->uid, __entry->len)
+);
+
+#define DEFINE_SSAM_ALLOC_EVENT(name)					\
+	DEFINE_EVENT(ssam_alloc_class, ssam_##name,			\
+		TP_PROTO(void *ptr, size_t len),			\
+		TP_ARGS(ptr, len)					\
+	)
+
+
 DECLARE_EVENT_CLASS(ssam_generic_uint_class,
 	TP_PROTO(const char* property, unsigned int value),
 
