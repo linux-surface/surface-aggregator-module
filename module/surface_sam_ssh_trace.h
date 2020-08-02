@@ -572,6 +572,9 @@ DEFINE_SSAM_REQUEST_EVENT(ei_rx_drop_response);
 DEFINE_SSAM_ALLOC_EVENT(ctrl_packet_alloc);
 DEFINE_SSAM_FREE_EVENT(ctrl_packet_free);
 
+DEFINE_SSAM_ALLOC_EVENT(event_item_alloc);
+DEFINE_SSAM_FREE_EVENT(event_item_free);
+
 #endif /* _SURFACE_SAM_SSH_TRACE_H */
 
 /* This part must be outside protection */
