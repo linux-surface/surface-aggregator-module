@@ -1055,7 +1055,7 @@ static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
 	buffer->ptr = (u8 *)(*packet + 1);
 	buffer->len = SSH_MSG_LEN_CTRL;
 
-	trace_ssam_ctrl_packet_alloc(packet, buffer->len);
+	trace_ssam_ctrl_packet_alloc(*packet, buffer->len);
 	return 0;
 }
 
