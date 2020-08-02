@@ -2251,7 +2251,7 @@ static void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 
 static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
 {
-	return &ptl->serdev->dev;
+	return ptl->serdev ? &ptl->serdev->dev : NULL;
 }
 
 static int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
