@@ -493,6 +493,30 @@ DECLARE_EVENT_CLASS(ssam_alloc_class,
 	)
 
 
+DECLARE_EVENT_CLASS(ssam_free_class,
+	TP_PROTO(void *ptr),
+
+	TP_ARGS(ptr),
+
+	TP_STRUCT__entry(
+		__array(char, uid, SSAM_PTR_UID_LEN)
+		__field(size_t, len)
+	),
+
+	TP_fast_assign(
+		ssam_trace_ptr_uid(ptr, __entry->uid);
+	),
+
+	TP_printk("uid=%s", __entry->uid)
+);
+
+#define DEFINE_SSAM_FREE_EVENT(name)					\
+	DEFINE_EVENT(ssam_free_class, ssam_##name,			\
+		TP_PROTO(void *ptr),					\
+		TP_ARGS(ptr)						\
+	)
+
+
 DECLARE_EVENT_CLASS(ssam_generic_uint_class,
 	TP_PROTO(const char* property, unsigned int value),
 
