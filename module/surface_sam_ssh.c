@@ -3623,6 +3623,11 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 	return -ENOENT;
 }
 
+static bool ssam_nf_refcount_empty(struct ssam_nf *nf)
+{
+	return RB_EMPTY_ROOT(&nf->refcount);
+}
+
 static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 			 struct ssam_event *event)
 {
@@ -4026,6 +4031,10 @@ static const struct ssh_rtl_ops ssam_rtl_ops = {
 };
 
 
+static bool ssam_notifier_empty(struct ssam_controller *ctrl);
+static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
+
+
 #define SSAM_SSH_DSM_REVISION	0
 #define SSAM_SSH_DSM_NOTIF_D0	8
 static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
@@ -4148,6 +4157,19 @@ static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 
 	// try to flush out all currently completing requests and events
 	ssam_cplt_flush(&ctrl->cplt);
+
+	/*
+	 * We expect all notifiers to have been removed by the respective client
+	 * driver that set them up at this point. If this warning occurs, some
+	 * client driver has not done that...
+	 */
+	WARN_ON(!ssam_notifier_empty(ctrl));
+
+	/*
+	 * Nevertheless, we should still take care of drivers that don't behave
+	 * well. Thus disable all enabled events, unregister all notifiers.
+	 */
+	ssam_notifier_unregister_all(ctrl);
 
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
 	ssh_rtl_tx_flush(&ctrl->rtl);
@@ -4750,6 +4772,33 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 	return status;
 }
 EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
+
+static bool ssam_notifier_empty(struct ssam_controller *ctrl)
+{
+	struct ssam_nf *nf = &ctrl->cplt.event.notif;
+	bool result;
+
+	mutex_lock(&nf->lock);
+	result = ssam_nf_refcount_empty(nf);
+	mutex_unlock(&nf->lock);
+
+	return result;
+}
+
+static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
+{
+	struct ssam_nf *nf = &ctrl->cplt.event.notif;
+	struct ssam_nf_refcount_entry *pos, *n;
+
+	mutex_lock(&nf->lock);
+	rbtree_postorder_for_each_entry_safe(pos, n, &nf->refcount, node) {
+		// ignore errors, will get logged in call
+		ssam_ssh_event_disable(ctrl, pos->key.reg, pos->key.id, 0);
+		kfree(pos);
+	}
+	nf->refcount = RB_ROOT;
+	mutex_unlock(&nf->lock);
+}
 
 
 /* -- Wakeup IRQ. ----------------------------------------------------------- */
