@@ -569,6 +569,9 @@ DEFINE_SSAM_GENERIC_UINT_EVENT(ei_rx_corrupt_syn);
 DEFINE_SSAM_FRAME_EVENT(ei_rx_corrupt_data);
 DEFINE_SSAM_REQUEST_EVENT(ei_rx_drop_response);
 
+DEFINE_SSAM_ALLOC_EVENT(ctrl_packet_alloc);
+DEFINE_SSAM_FREE_EVENT(ctrl_packet_free);
+
 #endif /* _SURFACE_SAM_SSH_TRACE_H */
 
 /* This part must be outside protection */

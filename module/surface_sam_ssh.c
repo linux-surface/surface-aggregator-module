@@ -1055,11 +1055,13 @@ static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
 	buffer->ptr = (u8 *)(*packet + 1);
 	buffer->len = SSH_MSG_LEN_CTRL;
 
+	trace_ssam_ctrl_packet_alloc(packet, buffer->len);
 	return 0;
 }
 
 static void ssh_ctrl_packet_free(struct ssh_packet *p)
 {
+	trace_ssam_ctrl_packet_free(p);
 	kmem_cache_free(ssh_ctrl_packet_cache, p);
 }
 
