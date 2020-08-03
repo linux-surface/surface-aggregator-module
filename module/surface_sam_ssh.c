@@ -4846,11 +4846,23 @@ static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
 
 static int ssam_irq_setup(struct ssam_controller *ctrl)
 {
-	const int irqf = IRQF_SHARED | IRQF_ONESHOT;
 	struct device *dev = ssam_controller_device(ctrl);
 	struct gpio_desc *gpiod;
 	int irq;
 	int status;
+
+	/*
+	 * The actual GPIO interrupt is declared in ACPI as TRIGGER_HIGH.
+	 * However, the GPIO line only gets reset by sending the GPIO callback
+	 * command to SAM (or alternatively the display-on notification). As
+	 * proper handling for this interrupt is not implemented yet, leaving
+	 * the IRQ at TRIGGER_HIGH would cause an IRQ storm (as the callback
+	 * never gets sent and thus the line line never gets reset). To avoid
+	 * this, mark the IRQ as TRIGGER_RISING for now, only creating a single
+	 * interrupt, and let the SAM resume callback during the controller
+	 * resume process clear it.
+	 */
+	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING;
 
 	gpiod = gpiod_get(dev, "ssam_wakeup-int", GPIOD_ASIS);
 	if (IS_ERR(gpiod))
