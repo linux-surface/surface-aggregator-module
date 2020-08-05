@@ -5152,7 +5152,7 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 static struct ssam_controller *__ssam_controller = NULL;
 static DEFINE_SPINLOCK(__ssam_controller_lock);
 
-struct ssam_controller *ssam_controller(void)
+struct ssam_controller *ssam_get_controller(void)
 {
 	struct ssam_controller *ctrl;
 
@@ -5169,7 +5169,7 @@ out:
 	spin_unlock(&__ssam_controller_lock);
 	return ctrl;
 }
-EXPORT_SYMBOL_GPL(ssam_controller);
+EXPORT_SYMBOL_GPL(ssam_get_controller);
 
 static int ssam_try_set_controller(struct ssam_controller *ctrl)
 {
@@ -5239,7 +5239,7 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	struct ssam_controller *c;
 	int status;
 
-	c = ssam_controller();
+	c = ssam_get_controller();
 	if (!c)
 		return -ENXIO;
 

@@ -408,7 +408,7 @@ struct ssam_response {
 };
 
 
-struct ssam_controller *ssam_controller(void);
+struct ssam_controller *ssam_get_controller(void);
 int ssam_client_link(struct ssam_controller *ctrl, struct device *client);
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl);
 
