@@ -4176,6 +4176,7 @@ static void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	ssh_rtl_shutdown(&ctrl->rtl);
 
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STOPPED);
+	ctrl->rtl.ptl.serdev = NULL;
 }
 
 static void ssam_controller_destroy(struct ssam_controller *ctrl)
