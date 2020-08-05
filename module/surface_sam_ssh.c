@@ -3971,6 +3971,8 @@ struct ssam_device_caps {
 };
 
 struct ssam_controller {
+	struct kref kref;
+
 	enum ssam_controller_state state;
 
 	struct ssh_rtl rtl;
@@ -4003,6 +4005,29 @@ struct device *ssam_controller_device(struct ssam_controller *c)
 	return ssh_rtl_get_device(&c->rtl);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_device);
+
+
+static void ssam_controller_destroy(struct ssam_controller *ctrl);
+
+static void __ssam_controller_release(struct kref *kref)
+{
+	struct ssam_controller *ctrl = to_ssam_controller(kref, kref);
+
+	ssam_controller_destroy(ctrl);
+	kfree(ctrl);
+}
+
+void ssam_controller_get(struct ssam_controller *c)
+{
+	kref_get(&c->kref);
+}
+EXPORT_SYMBOL_GPL(ssam_controller_get);
+
+void ssam_controller_put(struct ssam_controller *c)
+{
+	kref_put(&c->kref, __ssam_controller_release);
+}
+EXPORT_SYMBOL_GPL(ssam_controller_put);
 
 
 static void ssam_handle_event(struct ssh_rtl *rtl,
@@ -4086,10 +4111,7 @@ static int ssam_controller_init(struct ssam_controller *ctrl,
 	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
 	int status;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_UNINITIALIZED) {
-		dev_err(&serdev->dev, "embedded controller already initialized\n");
-		return -EBUSY;
-	}
+	kref_init(&ctrl->kref);
 
 	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
 	if (status)
@@ -5083,12 +5105,52 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 			 surface_sam_ssh_resume);
 
 
-/* -- Device/driver setup. -------------------------------------------------- */
+/* -- Static controller reference. ------------------------------------------ */
 
-static struct ssam_controller ssam_controller = {
-	.state = SSAM_CONTROLLER_UNINITIALIZED,
-};
-static DEFINE_MUTEX(ssam_controller_lock);
+static struct ssam_controller *__ssam_controller = NULL;
+static DEFINE_SPINLOCK(__ssam_controller_lock);
+
+static struct ssam_controller *get_ssam_controller(void)
+{
+	struct ssam_controller *ctrl;
+
+	spin_lock(&__ssam_controller_lock);
+
+	ctrl = __ssam_controller;
+	if (!ctrl)
+		goto out;
+
+	if (WARN_ON(!kref_get_unless_zero(&ctrl->kref)))
+		ctrl = NULL;
+
+out:
+	spin_unlock(&__ssam_controller_lock);
+	return ctrl;
+}
+
+static int try_set_ssam_controller(struct ssam_controller *ctrl)
+{
+	int status = 0;
+
+	spin_lock(&__ssam_controller_lock);
+	if (!__ssam_controller)
+		__ssam_controller = ctrl;
+	else
+		status = -EBUSY;
+	spin_unlock(&__ssam_controller_lock);
+
+	return status;
+}
+
+static void clear_ssam_controller(void)
+{
+	spin_lock(&__ssam_controller_lock);
+	__ssam_controller = NULL;
+	spin_unlock(&__ssam_controller_lock);
+}
+
+
+/* -- Device/driver setup. -------------------------------------------------- */
 
 static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 {
@@ -5119,12 +5181,23 @@ static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 {
-	struct ssam_controller *c = &ssam_controller;
+	struct ssam_controller *c;
 	int status;
 
-	mutex_lock(&ssam_controller_lock);
+	c = get_ssam_controller();
+	if (!c)
+		return -ENXIO;
+
 	status = __ssam_client_link(c, client);
-	mutex_unlock(&ssam_controller_lock);
+
+	/*
+	 * Note that we can drop our controller reference in both success and
+	 * failure cases: On success, we have bound the controller lifetime
+	 * inherently to the client driver lifetime, i.e. it the controller is
+	 * now guaranteed to outlive the client driver. On failure, we're not
+	 * going to use the controller any more.
+	 */
+	ssam_controller_put(c);
 
 	*ctrl = status == 0 ? c : NULL;
 	return status;
@@ -5134,7 +5207,7 @@ EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 static int surface_sam_ssh_probe(struct serdev_device *serdev)
 {
-	struct ssam_controller *ctrl = &ssam_controller;
+	struct ssam_controller *ctrl;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
 	int status;
 
@@ -5145,8 +5218,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		return status;
 
-	// set up EC
-	mutex_lock(&ssam_controller_lock);
+	// allocate controller
+	ctrl = kzalloc(sizeof(struct ssam_controller), GFP_KERNEL);
+	if (!ctrl)
+		return -ENOMEM;
 
 	// initialize controller
 	status = ssam_controller_init(ctrl, serdev);
@@ -5187,7 +5262,10 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_initrq;
 
-	mutex_unlock(&ssam_controller_lock);
+	// finally, set main controller reference
+	status = try_set_ssam_controller(ctrl);
+	if (status)
+		goto err_initrq;
 
 	/*
 	 * TODO: The EC can wake up the system via the associated GPIO interrupt
@@ -5210,9 +5288,9 @@ err_devinit:
 	serdev_device_close(serdev);
 err_devopen:
 	ssam_controller_destroy(ctrl);
-err_ctrl_init:
 	serdev_device_set_drvdata(serdev, NULL);
-	mutex_unlock(&ssam_controller_lock);
+err_ctrl_init:
+	kfree(ctrl);
 	return status;
 }
 
@@ -5221,10 +5299,12 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	struct ssam_controller *ctrl = serdev_device_get_drvdata(serdev);
 	int status;
 
-	mutex_lock(&ssam_controller_lock);
+	// clear static reference, so that no one else can get a new one
+	clear_ssam_controller();
+
 	ssam_irq_free(ctrl);
 
-	// suspend EC and disable events
+	// act as if suspending to disable events
 	status = ssam_ctrl_notif_display_off(ctrl);
 	if (status) {
 		dev_err(&serdev->dev, "display-off notification failed: %d\n",
@@ -5237,17 +5317,18 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 			status);
 	}
 
+	// shut down controller and remove serdev device reference from it
 	ssam_controller_shutdown(ctrl);
 
 	// shut down actual transport
 	serdev_device_wait_until_sent(serdev, 0);
 	serdev_device_close(serdev);
 
-	ssam_controller_destroy(ctrl);
+	// drop our controller reference
+	ssam_controller_put(ctrl);
 
 	device_set_wakeup_capable(&serdev->dev, false);
 	serdev_device_set_drvdata(serdev, NULL);
-	mutex_unlock(&ssam_controller_lock);
 }
 
 
