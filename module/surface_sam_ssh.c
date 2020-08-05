@@ -4404,7 +4404,11 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	/*
 	 * This is only a superficial checks. In general, the caller needs to
 	 * ensure that the controller is initialized and is not (and does not
-	 * get) suspended during use.
+	 * get) suspended during use, i.e. until the request has been completed
+	 * (if _absolutely_ necessary, by use of ssam_controller_statelock/
+	 * ssam_controller_stateunlock, but something like ssam_client_bind
+	 * should be preferred as this needs to last until the request has been
+	 * completed).
 	 *
 	 * Note that it is actually safe to use this function while the
 	 * controller is in the process of being shut down (as ssh_rtl_submit
