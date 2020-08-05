@@ -5152,7 +5152,7 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 static struct ssam_controller *__ssam_controller = NULL;
 static DEFINE_SPINLOCK(__ssam_controller_lock);
 
-static struct ssam_controller *get_ssam_controller(void)
+static struct ssam_controller *ssam_controller(void)
 {
 	struct ssam_controller *ctrl;
 
@@ -5170,7 +5170,7 @@ out:
 	return ctrl;
 }
 
-static int try_set_ssam_controller(struct ssam_controller *ctrl)
+static int ssam_try_set_controller(struct ssam_controller *ctrl)
 {
 	int status = 0;
 
@@ -5184,7 +5184,7 @@ static int try_set_ssam_controller(struct ssam_controller *ctrl)
 	return status;
 }
 
-static void clear_ssam_controller(void)
+static void ssam_clear_controller(void)
 {
 	spin_lock(&__ssam_controller_lock);
 	__ssam_controller = NULL;
@@ -5226,7 +5226,7 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	struct ssam_controller *c;
 	int status;
 
-	c = get_ssam_controller();
+	c = ssam_controller();
 	if (!c)
 		return -ENXIO;
 
@@ -5307,7 +5307,7 @@ static int surface_sam_ssh_probe(struct serdev_device *serdev)
 		goto err_initrq;
 
 	// finally, set main controller reference
-	status = try_set_ssam_controller(ctrl);
+	status = ssam_try_set_controller(ctrl);
 	if (status)
 		goto err_initrq;
 
@@ -5344,7 +5344,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	int status;
 
 	// clear static reference, so that no one else can get a new one
-	clear_ssam_controller();
+	ssam_clear_controller();
 
 	ssam_irq_free(ctrl);
 	ssam_controller_lock(ctrl);
