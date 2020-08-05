@@ -5152,7 +5152,7 @@ static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
 static struct ssam_controller *__ssam_controller = NULL;
 static DEFINE_SPINLOCK(__ssam_controller_lock);
 
-static struct ssam_controller *ssam_controller(void)
+struct ssam_controller *ssam_controller(void)
 {
 	struct ssam_controller *ctrl;
 
@@ -5169,6 +5169,7 @@ out:
 	spin_unlock(&__ssam_controller_lock);
 	return ctrl;
 }
+EXPORT_SYMBOL_GPL(ssam_controller);
 
 static int ssam_try_set_controller(struct ssam_controller *ctrl)
 {

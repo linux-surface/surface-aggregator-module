@@ -408,6 +408,7 @@ struct ssam_response {
 };
 
 
+struct ssam_controller *ssam_controller(void);
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl);
 
 struct device *ssam_controller_device(struct ssam_controller *c);
