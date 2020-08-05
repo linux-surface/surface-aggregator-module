@@ -4406,7 +4406,7 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	 * ensure that the controller is initialized and is not (and does not
 	 * get) suspended during use, i.e. until the request has been completed
 	 * (if _absolutely_ necessary, by use of ssam_controller_statelock/
-	 * ssam_controller_stateunlock, but something like ssam_client_bind
+	 * ssam_controller_stateunlock, but something like ssam_client_link
 	 * should be preferred as this needs to last until the request has been
 	 * completed).
 	 *
@@ -5222,6 +5222,18 @@ static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 	return 0;
 }
 
+int ssam_client_link(struct ssam_controller *ctrl, struct device *client)
+{
+	int status;
+
+	ssam_controller_statelock(ctrl);
+	status = __ssam_client_link(ctrl, client);
+	ssam_controller_stateunlock(ctrl);
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_client_link);
+
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 {
 	struct ssam_controller *c;
@@ -5231,9 +5243,7 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	if (!c)
 		return -ENXIO;
 
-	ssam_controller_statelock(c);
-	status = __ssam_client_link(c, client);
-	ssam_controller_stateunlock(c);
+	status = ssam_client_link(c, client);
 
 	/*
 	 * Note that we can drop our controller reference in both success and
