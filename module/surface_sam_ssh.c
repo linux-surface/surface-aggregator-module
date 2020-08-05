@@ -22,6 +22,7 @@
 #include <linux/mutex.h>
 #include <linux/pm.h>
 #include <linux/refcount.h>
+#include <linux/rwsem.h>
 #include <linux/serdev.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
@@ -3973,6 +3974,7 @@ struct ssam_device_caps {
 struct ssam_controller {
 	struct kref kref;
 
+	struct rw_semaphore lock;
 	enum ssam_controller_state state;
 
 	struct ssh_rtl rtl;
@@ -4028,6 +4030,29 @@ void ssam_controller_put(struct ssam_controller *c)
 	kref_put(&c->kref, __ssam_controller_release);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_put);
+
+
+void ssam_controller_statelock(struct ssam_controller *c)
+{
+	down_read(&c->lock);
+}
+EXPORT_SYMBOL_GPL(ssam_controller_statelock);
+
+void ssam_controller_stateunlock(struct ssam_controller *c)
+{
+	up_read(&c->lock);
+}
+EXPORT_SYMBOL_GPL(ssam_controller_stateunlock);
+
+static inline void ssam_controller_lock(struct ssam_controller *c)
+{
+	down_write(&c->lock);
+}
+
+static inline void ssam_controller_unlock(struct ssam_controller *c)
+{
+	up_write(&c->lock);
+}
 
 
 static void ssam_handle_event(struct ssh_rtl *rtl,
@@ -4111,6 +4136,7 @@ static int ssam_controller_init(struct ssam_controller *ctrl,
 	acpi_handle handle = ACPI_HANDLE(&serdev->dev);
 	int status;
 
+	init_rwsem(&ctrl->lock);
 	kref_init(&ctrl->kref);
 
 	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
@@ -4223,21 +4249,33 @@ static void ssam_controller_destroy(struct ssam_controller *ctrl)
 
 static int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED)
+	ssam_controller_lock(ctrl);
+
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED) {
+		ssam_controller_unlock(ctrl);
 		return -EINVAL;
+	}
 
 	ssam_dbg(ctrl, "pm: suspending controller\n");
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_SUSPENDED);
+
+	ssam_controller_unlock(ctrl);
 	return 0;
 }
 
 static int ssam_controller_resume(struct ssam_controller *ctrl)
 {
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED)
+	ssam_controller_lock(ctrl);
+
+	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED) {
+		ssam_controller_unlock(ctrl);
 		return -EINVAL;
+	}
 
 	ssam_dbg(ctrl, "pm: resuming controller\n");
 	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
+
+	ssam_controller_unlock(ctrl);
 	return 0;
 }
 
@@ -5188,7 +5226,9 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	if (!c)
 		return -ENXIO;
 
+	ssam_controller_statelock(c);
 	status = __ssam_client_link(c, client);
+	ssam_controller_stateunlock(c);
 
 	/*
 	 * Note that we can drop our controller reference in both success and
@@ -5303,6 +5343,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	clear_ssam_controller();
 
 	ssam_irq_free(ctrl);
+	ssam_controller_lock(ctrl);
 
 	// act as if suspending to disable events
 	status = ssam_ctrl_notif_display_off(ctrl);
@@ -5325,6 +5366,7 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	serdev_device_close(serdev);
 
 	// drop our controller reference
+	ssam_controller_unlock(ctrl);
 	ssam_controller_put(ctrl);
 
 	device_set_wakeup_capable(&serdev->dev, false);
