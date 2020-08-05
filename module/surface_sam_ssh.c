@@ -4340,14 +4340,17 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	enum ssam_controller_state state = smp_load_acquire(&ctrl->state);
 	int status;
 
-	if (state == SSAM_CONTROLLER_SUSPENDED) {
-		ssam_warn(ctrl, "rqst: embedded controller is suspended\n");
-		ssh_request_put(&rqst->base);
-		return -EPERM;
-	}
-
-	if (state != SSAM_CONTROLLER_STARTED) {
-		ssam_warn(ctrl, "rqst: embedded controller is uninitialized\n");
+	/*
+	 * This is only a superficial checks. In general, the caller needs to
+	 * ensure that the controller is initialized and is not (and does not
+	 * get) suspended during use.
+	 *
+	 * Note that it is actually safe to use this function while the
+	 * controller is in the process of being shut down (as ssh_rtl_submit
+	 * is safe with regards to this), but it is generally discouraged to do
+	 * so.
+	 */
+	if (WARN_ON(state != SSAM_CONTROLLER_STARTED)) {
 		ssh_request_put(&rqst->base);
 		return -ENXIO;
 	}
