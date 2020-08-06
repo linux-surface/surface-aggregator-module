@@ -31,7 +31,7 @@
 #include <linux/surface_aggregator_module.h>
 
 #define CREATE_TRACE_POINTS
-#include "surface_sam_ssh_trace.h"
+#include "ssam_trace.h"
 
 
 /* -- SSH protocol utility functions and definitions. ----------------------- */

@@ -8,7 +8,7 @@ sources-core := Makefile
 sources-core += Kbuild
 sources-core += dkms.conf
 sources-core += surface_sam_ssh.c
-sources-core += surface_sam_ssh_trace.h
+sources-core += ssam_trace.h
 
 sources-inc := include/linux/surface_aggregator_module.h
 
