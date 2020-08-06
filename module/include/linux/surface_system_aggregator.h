@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+// TODO: update documentation
 /*
- * Interface for Surface Serial Hub (SSH).
+ * Interface for Surface System Aggregator Module (SSAM).
  *
  * The SSH is the main communication hub for communication between host and
  * the Surface/System Aggregator Module (SAM) on newer Microsoft Surface
@@ -8,8 +9,8 @@
  * Older devices (Book 1, Pro 4) use SAM-over-HID (via I2C).
  */
 
-#ifndef _SURFACE_SAM_SSH_H
-#define _SURFACE_SAM_SSH_H
+#ifndef _SURFACE_SYSTEM_AGGREGATOR_H
+#define _SURFACE_SYSTEM_AGGREGATOR_H
 
 #include <linux/types.h>
 #include <linux/device.h>
@@ -722,4 +723,4 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n);
 
-#endif /* _SURFACE_SAM_SSH_H */
+#endif /* _SURFACE_SYSTEM_AGGREGATOR_H */

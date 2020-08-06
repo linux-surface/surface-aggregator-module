@@ -2,8 +2,8 @@
 #ifndef _SURFACE_SAM_SID_VHF_H
 #define _SURFACE_SAM_SID_VHF_H
 
+#include <linux/surface_system_aggregator.h>
 #include <linux/types.h>
-#include "../surface_sam_ssh.h"
 
 
 struct ssam_hid_properties {

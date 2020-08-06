@@ -10,3 +10,5 @@ obj-m += surface_sam_sid_perfmode.o
 obj-m += surface_sam_sid_power.o
 obj-m += surface_sam_sid_vhf.o
 obj-m += surface_sam_debugfs.o
+
+ccflags-y += -I$(src)/../include

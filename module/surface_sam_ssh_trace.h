@@ -4,9 +4,8 @@
 #if !defined(_SURFACE_SAM_SSH_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _SURFACE_SAM_SSH_TRACE_H
 
+#include <linux/surface_system_aggregator.h>
 #include <linux/tracepoint.h>
-
-#include "surface_sam_ssh.h"
 
 
 TRACE_DEFINE_ENUM(SSH_FRAME_TYPE_DATA_SEQ);

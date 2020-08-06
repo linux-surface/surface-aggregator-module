@@ -7,9 +7,10 @@ KVERSION := "$(shell uname -r)"
 sources-core := Makefile
 sources-core += Kbuild
 sources-core += dkms.conf
-sources-core += surface_sam_ssh.h
-sources-core += surface_sam_ssh_trace.h
 sources-core += surface_sam_ssh.c
+sources-core += surface_sam_ssh_trace.h
+
+sources-inc := include/linux/surface_system_aggregator.h
 
 sources-clients := clients/Kbuild
 sources-clients += clients/surface_sam_san.c
@@ -33,9 +34,12 @@ clean:
 	make -C /lib/modules/$(KVERSION)/build M=$(PWD) clean
 
 dkms-install: $(sources-core) $(sources-clients)
-	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/clients
+	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
+	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/include/linux/
+	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/clients/
 	cp -t /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/ $(sources-core)
-	cp -t /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/clients $(sources-clients)
+	cp -t /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/include/linux/ $(sources-inc)
+	cp -t /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/clients/ $(sources-clients)
 	dkms add $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms build $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms install $(MODULE_NAME)/$(MODULE_VERSION)

@@ -11,7 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 
-#include "../surface_sam_ssh.h"
+#include <linux/surface_system_aggregator.h>
 #include "surface_sam_san.h"
 
 

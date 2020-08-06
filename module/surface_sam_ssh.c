@@ -28,7 +28,7 @@
 #include <linux/sysfs.h>
 #include <linux/workqueue.h>
 
-#include "surface_sam_ssh.h"
+#include <linux/surface_system_aggregator.h>
 
 #define CREATE_TRACE_POINTS
 #include "surface_sam_ssh_trace.h"
