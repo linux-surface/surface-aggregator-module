@@ -11,4 +11,8 @@ obj-m += surface_sam_sid_power.o
 obj-m += surface_sam_sid_vhf.o
 obj-m += surface_sam_debugfs.o
 
+#ccflags-y += -DDEBUG
+ccflags-y += -Wall -Wextra
+ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
+ccflags-y += -Wmaybe-uninitialized -Wuninitialized
 ccflags-y += -I$(src)/../include
