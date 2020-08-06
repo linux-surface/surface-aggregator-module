@@ -1,12 +1,13 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
-// TODO: update documentation
 /*
- * Interface for Surface System Aggregator Module (SSAM).
+ * Interface for Surface System Aggregator Module (SSAM) via Surface Serial
+ * Hub (SSH).
  *
- * The SSH is the main communication hub for communication between host and
- * the Surface/System Aggregator Module (SAM) on newer Microsoft Surface
- * devices (Book 2, Pro 5, Laptops, ...). Also referred to as SAM-over-SSH.
- * Older devices (Book 1, Pro 4) use SAM-over-HID (via I2C).
+ * The Surface Serial Hub (SSH) is the main communication hub for
+ * communication between host and the Surface/System Aggregator Module (SSAM),
+ * an embedded controller on newer Microsoft Surface devices (Book 2, Pro 5,
+ * Laptops, and later). Also referred to as SAM-over-SSH. Older devices (Book
+ * 1, Pro 4) use SAM-over-HID (via I2C), which this driver does not support.
  */
 
 #ifndef _SURFACE_SYSTEM_AGGREGATOR_H
