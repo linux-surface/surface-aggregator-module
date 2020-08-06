@@ -9,7 +9,6 @@
 #include <linux/atomic.h>
 #include <linux/completion.h>
 #include <linux/crc-ccitt.h>
-#include <linux/dmaengine.h>
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/jiffies.h>
