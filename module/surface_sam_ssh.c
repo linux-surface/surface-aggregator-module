@@ -2114,33 +2114,6 @@ static int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 }
 
 
-struct ssh_flush_packet {
-	struct ssh_packet base;
-	struct completion completion;
-	int status;
-};
-
-static void ssh_ptl_flush_complete(struct ssh_packet *p, int status)
-{
-	struct ssh_flush_packet *packet;
-
-	packet = container_of(p, struct ssh_flush_packet, base);
-	packet->status = status;
-}
-
-static void ssh_ptl_flush_release(struct ssh_packet *p)
-{
-	struct ssh_flush_packet *packet;
-
-	packet = container_of(p, struct ssh_flush_packet, base);
-	complete_all(&packet->completion);
-}
-
-static const struct ssh_packet_ops ssh_flush_packet_ops =  {
-	.complete = ssh_ptl_flush_complete,
-	.release = ssh_ptl_flush_release,
-};
-
 /**
  * ssh_ptl_shutdown - shut down the packet transmission layer
  * @ptl:     packet transmission layer
