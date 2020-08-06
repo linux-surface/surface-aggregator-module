@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM surface_sam_ssh
 
