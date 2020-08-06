@@ -10,7 +10,7 @@ sources-core += dkms.conf
 sources-core += surface_sam_ssh.c
 sources-core += surface_sam_ssh_trace.h
 
-sources-inc := include/linux/surface_system_aggregator.h
+sources-inc := include/linux/surface_aggregator_module.h
 
 sources-clients := clients/Kbuild
 sources-clients += clients/surface_sam_san.c

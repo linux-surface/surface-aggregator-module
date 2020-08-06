@@ -2,7 +2,7 @@
 #ifndef _SURFACE_SAM_SID_POWER_H
 #define _SURFACE_SAM_SID_POWER_H
 
-#include <linux/surface_system_aggregator.h>
+#include <linux/surface_aggregator_module.h>
 #include <linux/types.h>
 
 

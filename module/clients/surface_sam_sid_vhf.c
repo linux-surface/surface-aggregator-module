@@ -10,7 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
-#include <linux/surface_system_aggregator.h>
+#include <linux/surface_aggregator_module.h>
 #include "surface_sam_sid_vhf.h"
 
 #define SID_VHF_INPUT_NAME	"Microsoft Surface HID"

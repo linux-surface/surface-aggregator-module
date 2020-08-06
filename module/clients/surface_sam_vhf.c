@@ -10,7 +10,7 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
-#include <linux/surface_system_aggregator.h>
+#include <linux/surface_aggregator_module.h>
 
 
 #define USB_VENDOR_ID_MICROSOFT		0x045e

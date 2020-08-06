@@ -13,7 +13,7 @@
 #include <linux/power_supply.h>
 #include <linux/workqueue.h>
 
-#include <linux/surface_system_aggregator.h>
+#include <linux/surface_aggregator_module.h>
 #include "surface_sam_sid_power.h"
 
 #define SPWR_WARN	KERN_WARNING KBUILD_MODNAME ": "

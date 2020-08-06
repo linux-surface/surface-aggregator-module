@@ -9,7 +9,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
-#include <linux/surface_system_aggregator.h>
+#include <linux/surface_aggregator_module.h>
 
 
 #define SID_PARAM_PERM		0644
