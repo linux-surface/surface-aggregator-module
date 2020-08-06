@@ -34,15 +34,6 @@
 #include "surface_sam_ssh_trace.h"
 
 
-/* -- Error injection helpers. ---------------------------------------------- */
-
-#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
-#define noinline_if_inject noinline
-#else /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
-#define noinline_if_inject inline
-#endif /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
-
-
 /* -- SSH protocol utility functions and definitions. ----------------------- */
 
 /*
@@ -2374,17 +2365,28 @@ static inline struct ssh_rtl *ssh_request_rtl(struct ssh_request *rqst)
 }
 
 
+#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
+
 /**
  * ssh_rtl_should_drop_response - error injection hook to drop request responses
  *
  * Useful to cause request transmission timeouts in the driver by dropping the
  * response to a request.
  */
-static noinline_if_inject bool ssh_rtl_should_drop_response(void)
+static noinline bool ssh_rtl_should_drop_response(void)
 {
 	return false;
 }
 ALLOW_ERROR_INJECTION(ssh_rtl_should_drop_response, TRUE);
+
+#else
+
+static inline bool ssh_rtl_should_drop_response(void)
+{
+	return false;
+}
+
+#endif
 
 
 static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
