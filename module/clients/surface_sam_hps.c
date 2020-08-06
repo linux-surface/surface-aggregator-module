@@ -15,7 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
 
-#include "surface_sam_ssh.h"
+#include "../surface_sam_ssh.h"
 #include "surface_sam_san.h"
 
 

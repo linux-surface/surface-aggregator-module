@@ -9,7 +9,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 
-#include "surface_sam_ssh.h"
+#include "../surface_sam_ssh.h"
 
 
 #define SID_PARAM_PERM		0644

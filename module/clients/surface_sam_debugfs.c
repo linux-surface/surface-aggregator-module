@@ -8,7 +8,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include "surface_sam_ssh.h"
+#include "../surface_sam_ssh.h"
 
 #define SSAM_DBGDEV_NAME	"surface_sam_dbgdev"
 #define SSAM_DBGDEV_VERS	0x0100

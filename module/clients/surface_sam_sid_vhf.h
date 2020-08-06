@@ -3,7 +3,7 @@
 #define _SURFACE_SAM_SID_VHF_H
 
 #include <linux/types.h>
-#include "surface_sam_ssh.h"
+#include "../surface_sam_ssh.h"
 
 
 struct ssam_hid_properties {

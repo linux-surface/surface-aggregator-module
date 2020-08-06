@@ -1,0 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+
+obj-m += surface_sam_san.o
+obj-m += surface_sam_dtx.o
+obj-m += surface_sam_hps.o
+obj-m += surface_sam_vhf.o
+obj-m += surface_sam_sid.o
+obj-m += surface_sam_sid_gpelid.o
+obj-m += surface_sam_sid_perfmode.o
+obj-m += surface_sam_sid_power.o
+obj-m += surface_sam_sid_vhf.o
+obj-m += surface_sam_debugfs.o

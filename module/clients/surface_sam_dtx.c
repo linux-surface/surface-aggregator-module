@@ -17,7 +17,7 @@
 #include <linux/spinlock.h>
 #include <linux/platform_device.h>
 
-#include "surface_sam_ssh.h"
+#include "../surface_sam_ssh.h"
 
 
 #define USB_VENDOR_ID_MICROSOFT				0x045e
