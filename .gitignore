@@ -16,6 +16,7 @@ scripts/tmp/
 *.d
 Module.symvers
 modules.order
+.tmp_*/
 
 # python
 __pycache__
