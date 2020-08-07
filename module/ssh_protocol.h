@@ -5,8 +5,6 @@
 #include <linux/types.h>
 #include <linux/crc-ccitt.h>
 
-#include <linux/surface_aggregator_module.h>
-
 
 /*
  * The number of reserved event IDs, used for registering an SSH event
@@ -25,6 +23,7 @@
  * SSH message syncrhonization (SYN) bytes.
  */
 #define SSH_MSG_SYN		((u16)0x55aa)
+
 
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
