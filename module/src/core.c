@@ -7,6 +7,7 @@
 #include <linux/acpi.h>
 #include <linux/atomic.h>
 #include <linux/completion.h>
+#include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
 #include <linux/kref.h>
 #include <linux/pm.h>
