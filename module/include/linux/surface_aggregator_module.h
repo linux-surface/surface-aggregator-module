@@ -13,8 +13,12 @@
 #ifndef _SURFACE_SYSTEM_AGGREGATOR_H
 #define _SURFACE_SYSTEM_AGGREGATOR_H
 
+#include <linux/completion.h>
 #include <linux/types.h>
 #include <linux/device.h>
+#include <linux/kref.h>
+#include <linux/ktime.h>
+#include <linux/list.h>
 
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
