@@ -8,7 +8,6 @@
 #include <linux/acpi.h>
 #include <linux/atomic.h>
 #include <linux/completion.h>
-#include <linux/crc-ccitt.h>
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/jiffies.h>
@@ -28,61 +27,10 @@
 #include <linux/workqueue.h>
 
 #include <linux/surface_aggregator_module.h>
+#include "ssh_protocol.h"
 
 #define CREATE_TRACE_POINTS
 #include "ssam_trace.h"
-
-
-/* -- SSH protocol utility functions and definitions. ----------------------- */
-
-/*
- * The number of reserved event IDs, used for registering an SSH event
- * handler. Valid event IDs are numbers below or equal to this value, with
- * exception of zero, which is not an event ID. Thus, this is also the
- * absolute maximum number of event handlers that can be registered.
- */
-#define SSH_NUM_EVENTS		34
-
-/*
- * The number of communication channels used in the protocol.
- */
-#define SSH_NUM_CHANNELS	2
-
-
-static inline u16 ssh_crc(const u8 *buf, size_t len)
-{
-	return crc_ccitt_false(0xffff, buf, len);
-}
-
-static inline u16 ssh_rqid_next_valid(u16 rqid)
-{
-	return rqid > 0 ? rqid + 1u : rqid + SSH_NUM_EVENTS + 1u;
-}
-
-static inline u16 ssh_rqid_to_event(u16 rqid)
-{
-	return rqid - 1u;
-}
-
-static inline bool ssh_rqid_is_event(u16 rqid)
-{
-	return ssh_rqid_to_event(rqid) < SSH_NUM_EVENTS;
-}
-
-static inline int ssh_tc_to_rqid(u8 tc)
-{
-	return tc;
-}
-
-static inline u8 ssh_channel_to_index(u8 channel)
-{
-	return channel - 1u;
-}
-
-static inline bool ssh_channel_is_valid(u8 channel)
-{
-	return ssh_channel_to_index(channel) < SSH_NUM_CHANNELS;
-}
 
 
 /* -- Safe counters. -------------------------------------------------------- */
