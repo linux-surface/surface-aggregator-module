@@ -3,6 +3,8 @@
 #include <linux/acpi.h>
 #include <linux/atomic.h>
 #include <linux/completion.h>
+#include <linux/gpio/consumer.h>
+#include <linux/interrupt.h>
 #include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
@@ -1393,4 +1395,80 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
 	}
 	nf->refcount = RB_ROOT;
 	mutex_unlock(&nf->lock);
+}
+
+
+/* -- Wakeup IRQ. ----------------------------------------------------------- */
+
+static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
+{
+	struct ssam_controller *ctrl = dev_id;
+
+	ssam_dbg(ctrl, "pm: wake irq triggered\n");
+
+	// Note: Proper wakeup detection is currently unimplemented.
+	//       When the EC is in display-off or any other non-D0 state, it
+	//       does not send events/notifications to the host. Instead it
+	//       signals that there are events available via the wakeup IRQ.
+	//       This driver is responsible for calling back to the EC to
+	//       release these events one-by-one.
+	//
+	//       This IRQ should not cause a full system resume by its own.
+	//       Instead, events should be handled by their respective subsystem
+	//       drivers, which in turn should signal whether a full system
+	//       resume should be performed.
+	//
+	// TODO: Send GPIO callback command repeatedly to EC until callback
+	//       returns 0x00. Return flag of callback is "has more events".
+	//       Each time the command is sent, one event is "released". Once
+	//       all events have been released (return = 0x00), the GPIO is
+	//       re-armed. Detect wakeup events during this process, go back to
+	//       sleep if no wakeup event has been received.
+
+	return IRQ_HANDLED;
+}
+
+int ssam_irq_setup(struct ssam_controller *ctrl)
+{
+	struct device *dev = ssam_controller_device(ctrl);
+	struct gpio_desc *gpiod;
+	int irq;
+	int status;
+
+	/*
+	 * The actual GPIO interrupt is declared in ACPI as TRIGGER_HIGH.
+	 * However, the GPIO line only gets reset by sending the GPIO callback
+	 * command to SAM (or alternatively the display-on notification). As
+	 * proper handling for this interrupt is not implemented yet, leaving
+	 * the IRQ at TRIGGER_HIGH would cause an IRQ storm (as the callback
+	 * never gets sent and thus the line line never gets reset). To avoid
+	 * this, mark the IRQ as TRIGGER_RISING for now, only creating a single
+	 * interrupt, and let the SAM resume callback during the controller
+	 * resume process clear it.
+	 */
+	const int irqf = IRQF_SHARED | IRQF_ONESHOT | IRQF_TRIGGER_RISING;
+
+	gpiod = gpiod_get(dev, "ssam_wakeup-int", GPIOD_ASIS);
+	if (IS_ERR(gpiod))
+		return PTR_ERR(gpiod);
+
+	irq = gpiod_to_irq(gpiod);
+	gpiod_put(gpiod);
+
+	if (irq < 0)
+		return irq;
+
+	status = request_threaded_irq(irq, NULL, ssam_irq_handle, irqf,
+				      "surface_sam_wakeup", ctrl);
+	if (status)
+		return status;
+
+	ctrl->irq.num = irq;
+	return 0;
+}
+
+void ssam_irq_free(struct ssam_controller *ctrl)
+{
+	free_irq(ctrl->irq.num, ctrl);
+	ctrl->irq.num = -1;
 }
