@@ -265,8 +265,6 @@ static void ssam_clear_controller(void)
 }
 
 
-/* -- Device/driver setup. -------------------------------------------------- */
-
 static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 {
 	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
@@ -331,6 +329,8 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 }
 EXPORT_SYMBOL_GPL(ssam_client_bind);
 
+
+/* -- Device/driver setup. -------------------------------------------------- */
 
 static const struct acpi_gpio_params gpio_ssam_wakeup_int = { 0, 0, false };
 static const struct acpi_gpio_params gpio_ssam_wakeup     = { 1, 0, false };
