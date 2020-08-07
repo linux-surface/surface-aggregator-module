@@ -9,12 +9,12 @@ sources-dkms += Makefile
 
 
 all:
-	make -C /lib/modules/$(KVERSION)/build M=$(PWD)/src modules
+	make -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src modules
 
 clean:
-	make -C /lib/modules/$(KVERSION)/build M=$(PWD)/src clean
+	make -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src clean
 
-dkms-install: $(sources-core) $(sources-clients)
+dkms-install: clean
 	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
 	cp -rt /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/ src/
 	cp -rt /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/ include/
