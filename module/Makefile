@@ -6,9 +6,14 @@ KVERSION := "$(shell uname -r)"
 KDIR := /lib/modules/$(KVERSION)/build
 MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 
+CHECKPATCH_OPTS := -f -q --no-tree
+CHECKPATCH := $(KDIR)/scripts/checkpatch.pl $(CHECKPATCH_OPTS)
 
 sources-dkms := dkms.conf
 sources-dkms += Makefile
+
+sources-c := $(shell find . -type f \( -name "*.c" -and -not -name "*.mod.c" \))
+sources-h := $(shell find . -type f -name "*.h")
 
 
 all:
@@ -16,6 +21,12 @@ all:
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(shell pwd)/src clean
+
+%.check:
+	@$(CHECKPATCH) $(basename $@) || true
+
+check:
+	@$(CHECKPATCH) $(sources-c) $(sources-h)
 
 dkms-install: clean
 	mkdir -p $(MDIR)
