@@ -9,6 +9,8 @@ MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 CHECKPATCH_OPTS := -f -q --no-tree
 CHECKPATCH := $(KDIR)/scripts/checkpatch.pl $(CHECKPATCH_OPTS)
 
+SSAM_MODPROBE := $(shell pwd)/../scripts/ssam-modprobe
+
 
 sources-dkms := dkms.conf
 sources-dkms += Makefile
@@ -46,3 +48,15 @@ dkms-uninstall:
 	dkms uninstall $(MODULE_NAME)/$(MODULE_VERSION) || true
 	dkms remove $(MODULE_NAME)/$(MODULE_VERSION) --all || true
 	rm -rf $(MDIR)
+
+insmod:
+	@cd src/ && sudo $(SSAM_MODPROBE) insmod
+
+rmmod:
+	@cd src/ && sudo $(SSAM_MODPROBE) rmmod
+
+modprobe-load:
+	@sudo $(SSAM_MODPROBE)
+
+modprobe-unload:
+	@sudo $(SSAM_MODPROBE) -r
