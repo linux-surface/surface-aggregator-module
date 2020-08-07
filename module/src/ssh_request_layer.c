@@ -79,6 +79,18 @@ static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 		ssh_request_put(rqst);
 }
 
+static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
+{
+	bool empty;
+
+	spin_lock(&rtl->queue.lock);
+	empty = list_empty(&rtl->queue.head);
+	spin_unlock(&rtl->queue.lock);
+
+	return empty;
+}
+
+
 static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
@@ -96,6 +108,30 @@ static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 
 	if (remove)
 		ssh_request_put(rqst);
+}
+
+static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
+{
+	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
+
+	spin_lock(&rtl->pending.lock);
+
+	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
+		spin_unlock(&rtl->pending.lock);
+		return -EINVAL;
+	}
+
+	if (test_and_set_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state)) {
+		spin_unlock(&rtl->pending.lock);
+		return -EALREADY;
+	}
+
+	atomic_inc(&rtl->pending.count);
+	ssh_request_get(rqst);
+	list_add_tail(&rqst->node, &rtl->pending.head);
+
+	spin_unlock(&rtl->pending.lock);
+	return 0;
 }
 
 
@@ -175,30 +211,6 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 	return rqst;
 }
 
-static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
-{
-	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
-
-	spin_lock(&rtl->pending.lock);
-
-	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state)) {
-		spin_unlock(&rtl->pending.lock);
-		return -EINVAL;
-	}
-
-	if (test_and_set_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state)) {
-		spin_unlock(&rtl->pending.lock);
-		return -EALREADY;
-	}
-
-	atomic_inc(&rtl->pending.count);
-	ssh_request_get(rqst);
-	list_add_tail(&rqst->node, &rtl->pending.head);
-
-	spin_unlock(&rtl->pending.lock);
-	return 0;
-}
-
 static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 {
 	struct ssh_request *rqst;
@@ -252,17 +264,6 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 
 	ssh_request_put(rqst);
 	return 0;
-}
-
-static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
-{
-	bool empty;
-
-	spin_lock(&rtl->queue.lock);
-	empty = list_empty(&rtl->queue.head);
-	spin_unlock(&rtl->queue.lock);
-
-	return empty;
 }
 
 static bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
