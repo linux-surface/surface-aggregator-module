@@ -10,6 +10,7 @@
 #include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/serdev.h>
+#include <linux/slab.h>
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 
