@@ -3,6 +3,9 @@
 obj-m += surface_sam_ssh.o
 obj-m += clients/
 
+surface_sam_ssh-objs := core.o
+surface_sam_ssh-objs += ssh_parser.o
+
 #ccflags-y += -DDEBUG
 #ccflags-y += -DCONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 ccflags-y += -Wall -Wextra
