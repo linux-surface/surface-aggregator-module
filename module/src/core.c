@@ -23,7 +23,6 @@
 #include <linux/rwsem.h>
 #include <linux/serdev.h>
 #include <linux/spinlock.h>
-#include <linux/sysfs.h>
 #include <linux/workqueue.h>
 
 #include <linux/surface_aggregator_module.h>
