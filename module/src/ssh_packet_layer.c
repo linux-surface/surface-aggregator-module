@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include <asm/unaligned.h>
 #include <linux/atomic.h>
 #include <linux/jiffies.h>

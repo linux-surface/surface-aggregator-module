@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 #ifndef _SSAM_SSH_PROTOCOL_H
 #define _SSAM_SSH_PROTOCOL_H
 

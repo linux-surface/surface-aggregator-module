@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-or-later */
+
 #ifndef _SURFACE_SAM_SSH_PARSER_H
 #define _SURFACE_SAM_SSH_PARSER_H
 

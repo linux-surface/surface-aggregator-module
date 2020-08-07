@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 #include <linux/compiler.h>
 
 #include "ssh_parser.h"
