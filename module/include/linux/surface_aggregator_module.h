@@ -255,7 +255,11 @@ struct ssh_packet {
 	container_of(ptr, struct ssh_packet, member)
 
 
-void ssh_packet_get(struct ssh_packet *p);
+static inline void ssh_packet_get(struct ssh_packet *packet)
+{
+	kref_get(&packet->refcnt);
+}
+
 void ssh_packet_put(struct ssh_packet *p);
 
 static inline void ssh_packet_set_data(struct ssh_packet *p, u8 *ptr, size_t len)
