@@ -4,6 +4,7 @@ obj-m += surface_sam_ssh.o
 obj-m += clients/
 
 surface_sam_ssh-objs := core.o
+surface_sam_ssh-objs += ssh_packet_layer.o
 surface_sam_ssh-objs += ssh_parser.o
 
 #ccflags-y += -DDEBUG
