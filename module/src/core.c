@@ -4,35 +4,19 @@
  * Aggregator Module.
  */
 
-#include <asm/unaligned.h>
 #include <linux/acpi.h>
 #include <linux/atomic.h>
 #include <linux/completion.h>
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
-#include <linux/jiffies.h>
 #include <linux/kernel.h>
-#include <linux/kfifo.h>
 #include <linux/kref.h>
-#include <linux/kthread.h>
-#include <linux/ktime.h>
-#include <linux/list.h>
-#include <linux/mutex.h>
 #include <linux/pm.h>
-#include <linux/refcount.h>
-#include <linux/rwsem.h>
 #include <linux/serdev.h>
-#include <linux/spinlock.h>
-#include <linux/workqueue.h>
 
 #include <linux/surface_aggregator_module.h>
 
 #include "controller.h"
-#include "ssh_msgb.h"
-#include "ssh_packet_layer.h"
-#include "ssh_parser.h"
-#include "ssh_protocol.h"
-#include "ssh_request_layer.h"
 
 #define CREATE_TRACE_POINTS
 #include "ssam_trace.h"
