@@ -36,16 +36,16 @@ load() {
     client_pfx=${3}
 
     ${cmd} surface_sam_ssh"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_san"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_vhf"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_dtx"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_hps"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_sid_gpelid"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_sid_perfmode"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_sid_power"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_sid_vhf"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_sid"${ext}"
-    ${cmd} "${client_pfx}"/surface_sam_debugfs"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_san"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_vhf"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_dtx"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_hps"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_sid_gpelid"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_sid_perfmode"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_sid_power"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_sid_vhf"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_sid"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_debugfs"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
     then
@@ -65,7 +65,7 @@ help() {
 
 case ${1} in
     insmod)
-        load "insmod" ".ko" "clients"
+        load "insmod" ".ko" "clients/"
         ;;
 
     rmmod)
