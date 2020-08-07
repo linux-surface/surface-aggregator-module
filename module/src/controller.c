@@ -2,6 +2,7 @@
 
 #include <linux/acpi.h>
 #include <linux/atomic.h>
+#include <linux/completion.h>
 #include <linux/kref.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
