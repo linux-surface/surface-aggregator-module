@@ -10,8 +10,8 @@
  * 1, Pro 4) use SAM-over-HID (via I2C), which this driver does not support.
  */
 
-#ifndef _SURFACE_SYSTEM_AGGREGATOR_H
-#define _SURFACE_SYSTEM_AGGREGATOR_H
+#ifndef _SURFACE_AGGREGATOR_MODULE_H
+#define _SURFACE_AGGREGATOR_MODULE_H
 
 #include <linux/completion.h>
 #include <linux/types.h>
@@ -723,4 +723,4 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n);
 
-#endif /* _SURFACE_SYSTEM_AGGREGATOR_H */
+#endif /* _SURFACE_AGGREGATOR_MODULE_H */
