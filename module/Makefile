@@ -9,11 +9,15 @@ MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 CHECKPATCH_OPTS := -f -q --no-tree
 CHECKPATCH := $(KDIR)/scripts/checkpatch.pl $(CHECKPATCH_OPTS)
 
+
 sources-dkms := dkms.conf
 sources-dkms += Makefile
 
 sources-c := $(shell find . -type f \( -name "*.c" -and -not -name "*.mod.c" \))
 sources-h := $(shell find . -type f -name "*.h")
+sources-Kbuild := $(shell find . -type f -name "Kbuild")
+
+sources := $(sources-c) $(sources-h) $(sources-Kbuild) $(sources-dkms)
 
 
 all:
@@ -28,11 +32,11 @@ clean:
 check:
 	@$(CHECKPATCH) $(sources-c) $(sources-h)
 
-dkms-install: clean
-	mkdir -p $(MDIR)
-	cp -rt $(MDIR)/ src/
-	cp -rt $(MDIR)/ include/
-	cp -t $(MDIR)/ $(sources-dkms)
+dkms-install:
+	@for f in $(sources); do		\
+		mkdir -p `dirname $(MDIR)/$$f`;	\
+		cp -v $$f $(MDIR)/$$f;		\
+	done
 	dkms add $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms build $(MODULE_NAME)/$(MODULE_VERSION)
 	dkms install $(MODULE_NAME)/$(MODULE_VERSION)
