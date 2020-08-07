@@ -9,10 +9,10 @@ sources-dkms += Makefile
 
 
 all:
-	make -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src modules
+	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src modules
 
 clean:
-	make -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src clean
+	$(MAKE) -C /lib/modules/$(KVERSION)/build M=$(shell pwd)/src clean
 
 dkms-install: clean
 	mkdir -p /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)/
