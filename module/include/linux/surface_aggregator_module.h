@@ -127,11 +127,6 @@ struct ssh_notification_params {
 static_assert(sizeof(struct ssh_notification_params) == 5);
 
 /**
- * SSH message syncrhonization (SYN) bytes.
- */
-#define SSH_MSG_SYN		((u16)0x55aa)
-
-/**
  * Base-length of a SSH message. This is the minimum number of bytes required
  * to form a message. The actual message length is SSH_MSG_LEN_BASE plus the
  * length of the frame payload.
