@@ -177,10 +177,6 @@
 #define SSH_PTL_RX_FIFO_LEN		4096
 
 
-#define to_ssh_packet(ptr, member) \
-	container_of(ptr, struct ssh_packet, member)
-
-
 #ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 
 /**

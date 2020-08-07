@@ -251,6 +251,9 @@ struct ssh_packet {
 	const struct ssh_packet_ops *ops;
 };
 
+#define to_ssh_packet(ptr, member) \
+	container_of(ptr, struct ssh_packet, member)
+
 
 void ssh_packet_get(struct ssh_packet *p);
 void ssh_packet_put(struct ssh_packet *p);
@@ -312,6 +315,9 @@ struct ssh_request {
 
 	const struct ssh_request_ops *ops;
 };
+
+#define to_ssh_request(ptr, member) \
+	container_of(ptr, struct ssh_request, member)
 
 
 static inline void ssh_request_get(struct ssh_request *r)

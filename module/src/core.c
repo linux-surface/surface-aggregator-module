@@ -140,9 +140,6 @@ struct ssh_rtl {
 #define to_ssh_rtl(ptr, member) \
 	container_of(ptr, struct ssh_rtl, member)
 
-#define to_ssh_request(ptr, member) \
-	container_of(ptr, struct ssh_request, member)
-
 static inline struct ssh_rtl *ssh_request_rtl(struct ssh_request *rqst)
 {
 	struct ssh_ptl *ptl = READ_ONCE(rqst->packet.ptl);
