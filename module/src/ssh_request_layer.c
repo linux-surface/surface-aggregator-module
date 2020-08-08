@@ -127,8 +127,7 @@ static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 	}
 
 	atomic_inc(&rtl->pending.count);
-	ssh_request_get(rqst);
-	list_add_tail(&rqst->node, &rtl->pending.head);
+	list_add_tail(&ssh_request_get(rqst)->node, &rtl->pending.head);
 
 	spin_unlock(&rtl->pending.lock);
 	return 0;
@@ -338,9 +337,8 @@ int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 		return -EINVAL;
 	}
 
-	ssh_request_get(rqst);
 	set_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
-	list_add_tail(&rqst->node, &rtl->queue.head);
+	list_add_tail(&ssh_request_get(rqst)->node, &rtl->queue.head);
 
 	spin_unlock(&rtl->queue.lock);
 

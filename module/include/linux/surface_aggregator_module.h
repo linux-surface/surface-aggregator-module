@@ -255,9 +255,10 @@ struct ssh_packet {
 	container_of(ptr, struct ssh_packet, member)
 
 
-static inline void ssh_packet_get(struct ssh_packet *packet)
+static inline struct ssh_packet *ssh_packet_get(struct ssh_packet *packet)
 {
 	kref_get(&packet->refcnt);
+	return packet;
 }
 
 void ssh_packet_put(struct ssh_packet *p);
@@ -324,9 +325,10 @@ struct ssh_request {
 	container_of(ptr, struct ssh_request, member)
 
 
-static inline void ssh_request_get(struct ssh_request *r)
+static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
 {
 	ssh_packet_get(&r->packet);
+	return r;
 }
 
 static inline void ssh_request_put(struct ssh_request *r)
@@ -425,7 +427,7 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl);
 
 struct device *ssam_controller_device(struct ssam_controller *c);
 
-void ssam_controller_get(struct ssam_controller *c);
+struct ssam_controller *ssam_controller_get(struct ssam_controller *c);
 void ssam_controller_put(struct ssam_controller *c);
 
 void ssam_controller_statelock(struct ssam_controller *c);

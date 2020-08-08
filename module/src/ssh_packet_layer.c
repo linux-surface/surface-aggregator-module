@@ -650,8 +650,7 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
-	ssh_packet_get(packet);
-	list_add_tail(&packet->queue_node, &ptl->queue.head);
+	list_add_tail(&ssh_packet_get(packet)->queue_node, &ptl->queue.head);
 
 	spin_unlock(&ptl->queue.lock);
 	return 0;
@@ -694,8 +693,7 @@ static void ssh_ptl_pending_push(struct ssh_packet *packet)
 	}
 
 	atomic_inc(&ptl->pending.count);
-	ssh_packet_get(packet);
-	list_add_tail(&packet->pending_node, &ptl->pending.head);
+	list_add_tail(&ssh_packet_get(packet)->pending_node, &ptl->pending.head);
 
 	spin_unlock(&ptl->pending.lock);
 }
@@ -1173,8 +1171,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	smp_mb__after_atomic();
 
 	// add packet
-	ssh_packet_get(packet);
-	list_add_tail(&packet->queue_node, head);
+	list_add_tail(&ssh_packet_get(packet)->queue_node, head);
 
 	spin_unlock(&packet->ptl->queue.lock);
 }

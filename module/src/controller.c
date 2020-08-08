@@ -567,9 +567,10 @@ static void __ssam_controller_release(struct kref *kref)
 	kfree(ctrl);
 }
 
-void ssam_controller_get(struct ssam_controller *c)
+struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 {
 	kref_get(&c->kref);
+	return c;
 }
 EXPORT_SYMBOL_GPL(ssam_controller_get);
 
