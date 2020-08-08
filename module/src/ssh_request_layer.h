@@ -75,7 +75,7 @@ int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst);
 bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending);
 
 int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
-                 const struct ssh_rtl_ops *ops);
+		 const struct ssh_rtl_ops *ops);
 
 bool ssh_rtl_tx_flush(struct ssh_rtl *rtl);
 int ssh_rtl_rx_start(struct ssh_rtl *rtl);
@@ -86,6 +86,6 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl);
 void ssh_rtl_destroy(struct ssh_rtl *rtl);
 
 void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
-                      const struct ssh_request_ops *ops);
+		      const struct ssh_request_ops *ops);
 
 #endif /* _SSAM_SSH_REQUEST_LAYER_H */

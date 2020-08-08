@@ -97,7 +97,7 @@ struct ssh_packet_args {
 
 
 int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
-                 struct ssh_ptl_ops *ops);
+		 struct ssh_ptl_ops *ops);
 
 void ssh_ptl_destroy(struct ssh_ptl *ptl);
 

@@ -516,9 +516,9 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 * Note that if the CMPXCHG fails, we are guaranteed that ptl has
 	 * been set and is non-NULL, as states can only be nonzero after this
 	 * has been set. Also note that we need to fetch the static (type) flags
-         * to ensure that they don't cause the cmpxchg to fail.
+	 * to ensure that they don't cause the cmpxchg to fail.
 	 */
-        fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_TY_MASK;
+	fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_TY_MASK;
 	state = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
 	if (!state && !READ_ONCE(r->packet.ptl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
@@ -848,7 +848,7 @@ int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 }
 
 int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
-                 const struct ssh_rtl_ops *ops)
+		 const struct ssh_rtl_ops *ops)
 {
 	struct ssh_ptl_ops ptl_ops;
 	int status;
@@ -895,7 +895,7 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 };
 
 void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
-                      const struct ssh_request_ops *ops)
+		      const struct ssh_request_ops *ops)
 {
 	struct ssh_packet_args packet_args;
 
