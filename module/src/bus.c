@@ -43,6 +43,7 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type)
 	device_initialize(&sdev->dev);
 	sdev->dev.bus = &ssam_bus_type;
 	sdev->dev.type = &ssam_device_type;
+	sdev->dev.parent = ssam_controller_device(sdev->ctrl);
 	sdev->ctrl = ssam_controller_get(ctrl);
 	sdev->type = type;
 
@@ -66,6 +67,11 @@ int ssam_device_add(struct ssam_device *sdev)
 	 * for functions like ssam_request_sync (controller has to be started
 	 * and is not suspended) to hold and thus does not have to check for
 	 * them.
+	 *
+	 * Note that for this to work, the controller has to be a parent device.
+	 * If it is not a direct parent, care has to be taken that the device is
+	 * removed via ssam_device_remove, as device_unregister does not remove
+	 * child devices recursively.
 	 */
 	ssam_controller_statelock(sdev->ctrl);
 
@@ -74,8 +80,6 @@ int ssam_device_add(struct ssam_device *sdev)
 		ssam_controller_stateunlock(sdev->ctrl);
 		return -ENXIO;
 	}
-
-	sdev->dev.parent = ssam_controller_device(sdev->ctrl);
 
 	// TODO: allow for multiple devices of same type
 
