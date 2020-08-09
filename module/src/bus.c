@@ -181,7 +181,6 @@ static int ssam_remove_device(struct device *dev, void *_data)
 	return 0;
 }
 
-
 /*
  * Controller lock should be held during this call and subsequent
  * de-initialization.
