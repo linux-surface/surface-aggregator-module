@@ -19,6 +19,7 @@
 #include <linux/kref.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
+#include <linux/uuid.h>
 
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */
@@ -734,5 +735,89 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n);
+
+
+/* -- Surface System Aggregator Module Bus. --------------------------------- */
+
+#define SSAM_DEVICE_GUID(cat, ty, d0, d1, d2, d3)	\
+	GUID_INIT(0xb6e85f12, 0xdac3, 0x49a5,		\
+		  ((cat) >> 8) & 0xff, (cat) & 0xff,	\
+		  (ty) & 0xff, ((ty) >> 8) & 0xff,	\
+		  d0, d1, d2, d3)
+
+
+// TODO: this struct belongs into mod_devicetable with file2alias support
+struct ssam_device_id {
+	guid_t type;
+	void *driver_data;	// FIXME: should be kernel_ulong_t
+};
+
+struct ssam_device {
+	struct device dev;
+	struct ssam_controller *ctrl;
+
+	guid_t type;
+};
+
+struct ssam_device_driver {
+	struct device_driver driver;
+
+	const struct ssam_device_id *match_table;
+
+	int  (*probe)(struct ssam_device *);
+	void (*remove)(struct ssam_device *);
+};
+
+
+static inline struct ssam_device *to_ssam_device(struct device *d)
+{
+	return container_of(d, struct ssam_device, dev);
+}
+
+static inline
+struct ssam_device_driver *to_ssam_device_driver(struct device_driver *d)
+{
+	return container_of(d, struct ssam_device_driver, driver);
+}
+
+
+const struct ssam_device_id *ssam_device_id_match(
+		const struct ssam_device_id *table, const guid_t *guid);
+
+
+struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type);
+int ssam_device_add(struct ssam_device *sdev);
+void ssam_device_remove(struct ssam_device *sdev);
+
+static inline void ssam_device_get(struct ssam_device *sdev)
+{
+	get_device(&sdev->dev);
+}
+
+static inline void ssam_device_put(struct ssam_device *sdev)
+{
+	put_device(&sdev->dev);
+}
+
+static inline void *ssam_device_get_drvdata(struct ssam_device *sdev)
+{
+	return dev_get_drvdata(&sdev->dev);
+}
+
+static inline void ssam_device_set_drvdata(struct ssam_device *sdev, void *data)
+{
+	dev_set_drvdata(&sdev->dev, data);
+}
+
+
+int __ssam_device_driver_register(struct ssam_device_driver *d, struct module *o);
+void ssam_device_driver_unregister(struct ssam_device_driver *d);
+
+#define ssam_device_driver_register(drv) \
+	__ssam_device_driver_register(drv, THIS_MODULE)
+
+#define module_ssam_device_driver(__drv) \
+	module_driver(__drv, ssam_device_driver_register, \
+		      ssam_device_driver_unregister)
 
 #endif /* _SURFACE_AGGREGATOR_MODULE_H */

@@ -15,6 +15,7 @@
 
 #include <linux/surface_aggregator_module.h>
 
+#include "bus.h"
 #include "controller.h"
 
 #define CREATE_TRACE_POINTS
@@ -442,6 +443,9 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 	ssam_irq_free(ctrl);
 	ssam_controller_lock(ctrl);
 
+	// remove all client devices
+	ssam_controller_remove_clients(ctrl);
+
 	// act as if suspending to disable events
 	status = ssam_ctrl_notif_display_off(ctrl);
 	if (status) {
@@ -496,6 +500,10 @@ static int __init surface_sam_ssh_init(void)
 {
 	int status;
 
+	status = ssam_bus_register();
+	if (status)
+		goto err_bus;
+
 	status = ssh_ctrl_packet_cache_init();
 	if (status)
 		goto err_cpkg;
@@ -515,6 +523,8 @@ err_register:
 err_evitem:
 	ssh_ctrl_packet_cache_destroy();
 err_cpkg:
+	ssam_bus_unregister();
+err_bus:
 	return status;
 }
 
@@ -523,6 +533,7 @@ static void __exit surface_sam_ssh_exit(void)
 	serdev_device_driver_unregister(&surface_sam_ssh);
 	ssam_event_item_cache_destroy();
 	ssh_ctrl_packet_cache_destroy();
+	ssam_bus_unregister();
 }
 
 /*
