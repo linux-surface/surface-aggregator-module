@@ -43,7 +43,7 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type)
 	device_initialize(&sdev->dev);
 	sdev->dev.bus = &ssam_bus_type;
 	sdev->dev.type = &ssam_device_type;
-	sdev->dev.parent = ssam_controller_device(sdev->ctrl);
+	sdev->dev.parent = ssam_controller_device(ctrl);
 	sdev->ctrl = ssam_controller_get(ctrl);
 	sdev->type = type;
 
