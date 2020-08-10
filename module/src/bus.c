@@ -84,7 +84,7 @@ int ssam_device_add(struct ssam_device *sdev)
 
 	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
 		     sdev->uid.category, sdev->uid.channel, sdev->uid.instance,
-		     sdev->uid.interface);
+		     sdev->uid.function);
 
 	status = device_add(&sdev->dev);
 

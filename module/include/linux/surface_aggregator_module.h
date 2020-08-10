@@ -746,7 +746,7 @@ struct ssam_device_uid {
 	u8 category;
 	u8 channel;
 	u8 instance;
-	u8 interface;
+	u8 function;
 };
 
 struct ssam_device_id {
@@ -755,16 +755,16 @@ struct ssam_device_id {
 	void *driver_data;	// FIXME: should be kernel_ulong_t
 };
 
-#define SSAM_DUID(__cat, __chn, __iid, __if)		\
+#define SSAM_DUID(__cat, __chn, __iid, __fun)		\
 	((struct ssam_device_uid) {			\
 		.category = SSAM_SSH_TC_##__cat,	\
 		.channel = (__chn),			\
 		.instance = (__iid),			\
-		.interface = (__if),			\
+		.function = (__fun),			\
 	})
 
-#define SSAM_ANY_IF		0xff
 #define SSAM_ANY_IID		0xff
+#define SSAM_ANY_FUN		0xff
 
 
 struct ssam_device {
