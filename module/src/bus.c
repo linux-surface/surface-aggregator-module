@@ -136,6 +136,15 @@ static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
 	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
 }
 
+static inline bool ssam_device_uid_match(const struct ssam_device_uid mask,
+					 const struct ssam_device_uid uid)
+{
+	return mask.category == uid.category
+		&& (mask.channel == SSAM_ANY_CHN || mask.channel == uid.channel)
+		&& (mask.instance == SSAM_ANY_IID || mask.instance == uid.instance)
+		&& (mask.function == SSAM_ANY_FUN || mask.function == uid.function);
+}
+
 const struct ssam_device_id *ssam_device_id_match(
 		const struct ssam_device_id *table,
 		const struct ssam_device_uid uid)
@@ -143,7 +152,7 @@ const struct ssam_device_id *ssam_device_id_match(
 	const struct ssam_device_id *id;
 
 	for (id = table; !ssam_device_uid_is_null(id->uid); ++id)
-		if (ssam_device_uid_equal(id->uid, uid))
+		if (ssam_device_uid_match(id->uid, uid))
 			return id;
 
 	return NULL;
