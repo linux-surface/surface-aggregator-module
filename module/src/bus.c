@@ -7,8 +7,22 @@
 #include "controller.h"
 
 
-static struct bus_type ssam_bus_type;
+static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
+			     char *buf)
+{
+	struct ssam_device *sdev = to_ssam_device(dev);
 
+	return snprintf(buf, PAGE_SIZE - 1, "ssam:c%02Xt%02Xi%02xf%02X\n",
+			sdev->uid.category, sdev->uid.channel,
+			sdev->uid.instance, sdev->uid.function);
+}
+static DEVICE_ATTR_RO(modalias);
+
+static struct attribute *ssam_device_attrs[] = {
+	&dev_attr_modalias.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(ssam_device);
 
 static void ssam_device_release(struct device *dev)
 {
@@ -20,11 +34,13 @@ static void ssam_device_release(struct device *dev)
 
 static const struct device_type ssam_device_type = {
 	.name    = "ssam_client",
-	.release = ssam_device_release,
-	.groups  = NULL,	// TODO
+	.groups  = ssam_device_groups,
 	.uevent  = NULL,	// TODO
+	.release = ssam_device_release,
 };
 
+
+static struct bus_type ssam_bus_type;
 
 static bool is_ssam_device(struct device *device)
 {
