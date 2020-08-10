@@ -24,6 +24,15 @@ static struct attribute *ssam_device_attrs[] = {
 };
 ATTRIBUTE_GROUPS(ssam_device);
 
+static int ssam_device_uevent(struct device *dev, struct kobj_uevent_env *env)
+{
+	struct ssam_device *sdev = to_ssam_device(dev);
+
+	return add_uevent_var(env, "MODALIAS=ssam:c%02Xt%02Xi%02xf%02X\n",
+			      sdev->uid.category, sdev->uid.channel,
+			      sdev->uid.instance, sdev->uid.function);
+}
+
 static void ssam_device_release(struct device *dev)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
@@ -35,7 +44,7 @@ static void ssam_device_release(struct device *dev)
 static const struct device_type ssam_device_type = {
 	.name    = "ssam_client",
 	.groups  = ssam_device_groups,
-	.uevent  = NULL,	// TODO
+	.uevent  = ssam_device_uevent,
 	.release = ssam_device_release,
 };
 
