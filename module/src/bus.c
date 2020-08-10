@@ -32,7 +32,8 @@ static bool is_ssam_device(struct device *device)
 }
 
 
-struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type)
+struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
+				      struct ssam_device_uid uid)
 {
 	struct ssam_device *sdev;
 
@@ -45,7 +46,7 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type)
 	sdev->dev.type = &ssam_device_type;
 	sdev->dev.parent = ssam_controller_device(ctrl);
 	sdev->ctrl = ssam_controller_get(ctrl);
-	sdev->type = type;
+	sdev->uid = uid;
 
 	return sdev;
 }
@@ -81,11 +82,9 @@ int ssam_device_add(struct ssam_device *sdev)
 		return -ENXIO;
 	}
 
-	// TODO: allow for multiple devices of same type
-
-	dev_set_name(&sdev->dev, "%s-%pUl:00",
-		     dev_name(sdev->dev.parent),
-		     &sdev->type);
+	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
+		     sdev->uid.category, sdev->uid.channel, sdev->uid.instance,
+		     sdev->uid.interface);
 
 	status = device_add(&sdev->dev);
 
@@ -101,13 +100,25 @@ void ssam_device_remove(struct ssam_device *sdev)
 EXPORT_SYMBOL_GPL(ssam_device_remove);
 
 
+static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
+					 const struct ssam_device_uid u2)
+{
+	return memcmp(&u1, &u2, sizeof(struct ssam_device_uid)) == 0;
+}
+
+static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
+{
+	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
+}
+
 const struct ssam_device_id *ssam_device_id_match(
-		const struct ssam_device_id *table, const guid_t *guid)
+		const struct ssam_device_id *table,
+		const struct ssam_device_uid uid)
 {
 	const struct ssam_device_id *id;
 
-	for (id = table; !guid_is_null(&id->type); ++id)
-		if (guid_equal(&id->type, guid))
+	for (id = table; !ssam_device_uid_is_null(id->uid); ++id)
+		if (ssam_device_uid_equal(id->uid, uid))
 			return id;
 
 	return NULL;
@@ -123,7 +134,7 @@ static int ssam_bus_match(struct device *dev, struct device_driver *drv)
 	if (!is_ssam_device(dev))
 		return 0;
 
-	return !!ssam_device_id_match(sdrv->match_table, &sdev->type);
+	return !!ssam_device_id_match(sdrv->match_table, sdev->uid);
 }
 
 static int ssam_bus_probe(struct device *dev)

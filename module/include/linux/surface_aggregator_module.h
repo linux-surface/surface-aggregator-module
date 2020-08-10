@@ -705,8 +705,8 @@ struct ssam_event_id {
 
 #define SSAM_EVENT_ID(tc, iid)				\
 	((struct ssam_event_id) {			\
-		.target_category = tc,			\
-		.instance = iid,			\
+		.target_category = (tc),		\
+		.instance = (iid),			\
 	})
 
 
@@ -739,24 +739,39 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 /* -- Surface System Aggregator Module Bus. --------------------------------- */
 
-#define SSAM_DEVICE_GUID(cat, ty, d0, d1, d2, d3)	\
-	GUID_INIT(0xb6e85f12, 0xdac3, 0x49a5,		\
-		  ((cat) >> 8) & 0xff, (cat) & 0xff,	\
-		  (ty) & 0xff, ((ty) >> 8) & 0xff,	\
-		  d0, d1, d2, d3)
+// TODO: the following two structs belongs into mod_devicetable with file2alias
+//       support
 
+struct ssam_device_uid {
+	u8 category;
+	u8 channel;
+	u8 instance;
+	u8 interface;
+};
 
-// TODO: this struct belongs into mod_devicetable with file2alias support
 struct ssam_device_id {
-	guid_t type;
+	struct ssam_device_uid uid;
+	struct ssam_event_registry reg;
 	void *driver_data;	// FIXME: should be kernel_ulong_t
 };
+
+#define SSAM_DUID(__cat, __chn, __iid, __if)		\
+	((struct ssam_device_uid) {			\
+		.category = SSAM_SSH_TC_##__cat,	\
+		.channel = (__chn),			\
+		.instance = (__iid),			\
+		.interface = (__if),			\
+	})
+
+#define SSAM_ANY_IF		0xff
+#define SSAM_ANY_IID		0xff
+
 
 struct ssam_device {
 	struct device dev;
 	struct ssam_controller *ctrl;
 
-	guid_t type;
+	struct ssam_device_uid uid;
 };
 
 struct ssam_device_driver {
@@ -782,10 +797,12 @@ struct ssam_device_driver *to_ssam_device_driver(struct device_driver *d)
 
 
 const struct ssam_device_id *ssam_device_id_match(
-		const struct ssam_device_id *table, const guid_t *guid);
+		const struct ssam_device_id *table,
+		const struct ssam_device_uid uid);
 
+struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
+				      struct ssam_device_uid uid);
 
-struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl, guid_t type);
 int ssam_device_add(struct ssam_device *sdev);
 void ssam_device_remove(struct ssam_device *sdev);
 
