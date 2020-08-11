@@ -234,7 +234,7 @@ void ssam_controller_remove_clients(struct ssam_controller *ctrl)
 {
 	struct device *dev = ssam_controller_device(ctrl);
 
-	device_for_each_child(dev, NULL, ssam_remove_device);
+	device_for_each_child_reverse(dev, NULL, ssam_remove_device);
 }
 
 
