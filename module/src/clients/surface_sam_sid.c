@@ -50,20 +50,17 @@ static const struct ssam_hid_properties ssam_hid_props_iid6 = {
 };
 
 
-static const struct mfd_cell sid_devs_sp4[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
+static const struct mfd_cell sid_devs_sp5[] = {
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sp6[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sp7[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
 	{
@@ -75,19 +72,12 @@ static const struct mfd_cell sid_devs_sp7[] = {
 	{ },
 };
 
-static const struct mfd_cell sid_devs_sb1[] = {
-	{ .name = "surface_sam_sid_gpelid", .id = -1 },
-	{ },
-};
-
 static const struct mfd_cell sid_devs_sb2[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sb3[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
 	{
@@ -130,19 +120,16 @@ static const struct mfd_cell sid_devs_sb3[] = {
 };
 
 static const struct mfd_cell sid_devs_sl1[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sl2[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ },
 };
 
 static const struct mfd_cell sid_devs_sl3_13[] = {
-	{ .name = "surface_sam_sid_gpelid",   .id = -1 },
 	{ .name = "surface_sam_sid_perfmode", .id = -1 },
 	{ .name = "surface_sam_sid_ac",       .id = -1 },
 	{
@@ -204,16 +191,13 @@ static const struct mfd_cell sid_devs_sl3_15[] = {
 
 static const struct acpi_device_id surface_sam_sid_match[] = {
 	/* Surface Pro 4, 5, and 6 */
-	{ "MSHW0081", (unsigned long)sid_devs_sp4 },
+	{ "MSHW0081", (unsigned long)sid_devs_sp5 },
 
 	/* Surface Pro 6 (OMBR >= 0x10) */
 	{ "MSHW0111", (unsigned long)sid_devs_sp6 },
 
 	/* Surface Pro 7 */
 	{ "MSHW0116", (unsigned long)sid_devs_sp7 },
-
-	/* Surface Book 1 */
-	{ "MSHW0080", (unsigned long)sid_devs_sb1 },
 
 	/* Surface Book 2 */
 	{ "MSHW0107", (unsigned long)sid_devs_sb2 },
