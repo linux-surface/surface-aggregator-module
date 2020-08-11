@@ -28,7 +28,7 @@ static int ssam_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 
-	return add_uevent_var(env, "MODALIAS=ssam:c%02Xt%02Xi%02xf%02X\n",
+	return add_uevent_var(env, "MODALIAS=ssam:c%02Xt%02Xi%02xf%02X",
 			      sdev->uid.category, sdev->uid.channel,
 			      sdev->uid.instance, sdev->uid.function);
 }
