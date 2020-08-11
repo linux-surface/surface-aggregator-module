@@ -73,6 +73,10 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 	sdev->ctrl = ssam_controller_get(ctrl);
 	sdev->uid = uid;
 
+	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
+		     sdev->uid.category, sdev->uid.channel, sdev->uid.instance,
+		     sdev->uid.function);
+
 	return sdev;
 }
 EXPORT_SYMBOL_GPL(ssam_device_alloc);
@@ -106,10 +110,6 @@ int ssam_device_add(struct ssam_device *sdev)
 		ssam_controller_stateunlock(sdev->ctrl);
 		return -ENXIO;
 	}
-
-	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
-		     sdev->uid.category, sdev->uid.channel, sdev->uid.instance,
-		     sdev->uid.function);
 
 	status = device_add(&sdev->dev);
 
