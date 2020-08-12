@@ -49,8 +49,6 @@ static const struct device_type ssam_device_type = {
 };
 
 
-static struct bus_type ssam_bus_type;
-
 static bool is_ssam_device(struct device *device)
 {
 	return device->type == &ssam_device_type;
@@ -188,12 +186,13 @@ static int ssam_bus_remove(struct device *dev)
 	return 0;
 }
 
-static struct bus_type ssam_bus_type = {
+struct bus_type ssam_bus_type = {
 	.name   = "ssam",
 	.match  = ssam_bus_match,
 	.probe  = ssam_bus_probe,
 	.remove = ssam_bus_remove,
 };
+EXPORT_SYMBOL_GPL(ssam_bus_type);
 
 
 int __ssam_device_driver_register(struct ssam_device_driver *sdrv,
