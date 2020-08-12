@@ -763,6 +763,8 @@ struct ssam_device_id {
 		.function = (__fun),			\
 	})
 
+#define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
+
 #define SSAM_ANY_CHN		0xff
 #define SSAM_ANY_IID		0xff
 #define SSAM_ANY_FUN		0xff
