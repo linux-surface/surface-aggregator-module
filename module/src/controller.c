@@ -622,7 +622,7 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 	item->event.channel = cmd->chn_in;
 	memcpy(&item->event.data[0], data->ptr, data->len);
 
-	ssam_cplt_submit_event(&ctrl->cplt, item);
+	WARN_ON(ssam_cplt_submit_event(&ctrl->cplt, item));
 }
 
 static const struct ssh_rtl_ops ssam_rtl_ops = {
