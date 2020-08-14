@@ -41,12 +41,13 @@ static void ssam_device_release(struct device *dev)
 	kfree(sdev);
 }
 
-static const struct device_type ssam_device_type = {
+const struct device_type ssam_device_type = {
 	.name    = "ssam_client",
 	.groups  = ssam_device_groups,
 	.uevent  = ssam_device_uevent,
 	.release = ssam_device_release,
 };
+EXPORT_SYMBOL_GPL(ssam_device_type);
 
 
 static bool is_ssam_device(struct device *device)

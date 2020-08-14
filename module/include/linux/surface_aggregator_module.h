@@ -787,6 +787,7 @@ struct ssam_device_driver {
 };
 
 extern struct bus_type ssam_bus_type;
+extern const struct device_type ssam_device_type;
 
 
 static inline struct ssam_device *to_ssam_device(struct device *d)
