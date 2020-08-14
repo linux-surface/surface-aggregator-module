@@ -141,6 +141,22 @@ const struct ssam_device_id *ssam_device_id_match(
 }
 EXPORT_SYMBOL_GPL(ssam_device_id_match);
 
+const struct ssam_device_id *ssam_device_get_match(
+		const struct ssam_device *dev)
+{
+	const struct ssam_device_driver *sdrv;
+
+	sdrv = to_ssam_device_driver(dev->dev.driver);
+	if (!sdrv)
+		return NULL;
+
+	if (!sdrv->match_table)
+		return NULL;
+
+	return ssam_device_id_match(sdrv->match_table, dev->uid);
+}
+EXPORT_SYMBOL_GPL(ssam_device_get_match);
+
 
 static int ssam_bus_match(struct device *dev, struct device_driver *drv)
 {

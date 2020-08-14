@@ -822,6 +822,9 @@ const struct ssam_device_id *ssam_device_id_match(
 		const struct ssam_device_id *table,
 		const struct ssam_device_uid uid);
 
+const struct ssam_device_id *ssam_device_get_match(
+		const struct ssam_device *dev);
+
 struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 				      struct ssam_device_uid uid);
 
