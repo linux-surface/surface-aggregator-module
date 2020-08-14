@@ -72,7 +72,7 @@ struct ssam_hub_desc {
 #define SSAM_DUID_HID_KEYBOARD	SSAM_DUID(HID, 0x02, 0x01, 0x00)
 #define SSAM_DUID_HID_TOUCHPAD	SSAM_DUID(HID, 0x02, 0x03, 0x00)
 #define SSAM_DUID_HID_IID5	SSAM_DUID(HID, 0x02, 0x05, 0x00)
-#define SSAM_DUID_HID_IID6	SSAM_DUID(HID, 0x02, 0x05, 0x00)
+#define SSAM_DUID_HID_IID6	SSAM_DUID(HID, 0x02, 0x06, 0x00)
 
 
 static const struct ssam_hub_cell ssam_devices_sb2[] = {
