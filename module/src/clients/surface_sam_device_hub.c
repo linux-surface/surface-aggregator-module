@@ -275,6 +275,34 @@ static int ssam_base_hub_query_state(struct ssam_device *sdev,
 }
 
 
+static ssize_t ssam_base_hub_state_show(struct device *dev,
+					struct device_attribute *attr,
+					char *buf)
+{
+	struct ssam_device *sdev = to_ssam_device(dev);
+	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
+	bool connected;
+
+	mutex_lock(&hub->lock);
+	connected = hub->state == SSAM_BASE_HUB_CONNECTED;
+	mutex_unlock(&hub->lock);
+
+	return snprintf(buf, PAGE_SIZE - 1, "%d\n", connected);
+}
+
+static struct device_attribute ssam_base_hub_attr_state =
+	__ATTR(state, S_IRUGO, ssam_base_hub_state_show, NULL);
+
+static struct attribute *ssam_base_hub_attrs[] = {
+	&ssam_base_hub_attr_state.attr,
+	NULL,
+};
+
+const struct attribute_group ssam_base_hub_group = {
+	.attrs = ssam_base_hub_attrs,
+};
+
+
 static int ssam_base_hub_update(struct ssam_device *sdev,
 				enum ssam_base_hub_state new)
 {
@@ -395,8 +423,17 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	}
 
 	status = ssam_base_hub_update(sdev, state);
-	if (status)
+	if (status) {
 		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+		return status;
+	}
+
+	status = sysfs_create_group(&sdev->dev.kobj, &ssam_base_hub_group);
+	if (status) {
+		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+		ssam_hub_remove_devices(&sdev->dev);
+		return status;
+	}
 
 	return status;
 }
@@ -404,6 +441,8 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 static void ssam_base_hub_remove(struct ssam_device *sdev)
 {
 	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
+
+	sysfs_remove_group(&sdev->dev.kobj, &ssam_base_hub_group);
 
 	ssam_notifier_unregister(sdev->ctrl, &hub->notif);
 	ssam_hub_remove_devices(&sdev->dev);
