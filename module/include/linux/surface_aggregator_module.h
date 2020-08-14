@@ -379,6 +379,8 @@ enum ssam_ssh_tc {
 	SSAM_SSH_TC_SMC = 0x1f,
 	SSAM_SSH_TC_KPD = 0x20,
 	SSAM_SSH_TC_REG = 0x21,
+
+	SSAM_SSH_TC__HUB = 0x00, // not an actual ID, used in for hubs
 };
 
 struct ssam_controller;

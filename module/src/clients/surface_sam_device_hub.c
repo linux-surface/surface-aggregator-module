@@ -26,14 +26,9 @@ struct ssam_hub_desc {
 	unsigned int num_cells;
 };
 
-/*
- * This device target category is normally invalid. We use it here to describe
- * device hubs.
- */
-#define SSAM_SSH_TC_HUB		0
 
-#define SSAM_DUID_HUB_MAIN	SSAM_DUID(HUB, 0x01, 0x00, 0x00)
-#define SSAM_DUID_HUB_BASE	SSAM_DUID(HUB, 0x02, 0x00, 0x00)
+#define SSAM_DUID_HUB_MAIN	SSAM_DUID(_HUB, 0x01, 0x00, 0x00)
+#define SSAM_DUID_HUB_BASE	SSAM_DUID(_HUB, 0x02, 0x00, 0x00)
 
 #define SSAM_DEFINE_HUB_DESC(__name, __cells)		\
 	struct ssam_hub_desc __name = {			\
