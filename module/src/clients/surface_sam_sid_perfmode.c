@@ -7,7 +7,7 @@
 #include <asm/unaligned.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
+#include <linux/types.h>
 
 #include <linux/surface_aggregator_module.h>
 
@@ -33,10 +33,6 @@ enum sid_param_perf_mode {
 
 	__SID_PARAM_PERF_MODE__START = 0,
 	__SID_PARAM_PERF_MODE__END   = 4,
-};
-
-struct spm_data {
-	struct ssam_controller *ctrl;
 };
 
 
@@ -103,11 +99,11 @@ MODULE_PARM_DESC(perf_mode_exit, "Performance-mode to be set on module exit");
 
 static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr, char *data)
 {
-	struct spm_data *d = dev_get_drvdata(dev);
+	struct ssam_device *sdev = to_ssam_device(dev);
 	struct ssam_perf_info info;
 	int status;
 
-	status = ssam_tmp_perf_mode_get(d->ctrl, &info);
+	status = ssam_tmp_perf_mode_get(sdev->ctrl, &info);
 	if (status) {
 		dev_err(dev, "failed to get current performance mode: %d\n", status);
 		return -EIO;
@@ -119,7 +115,7 @@ static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr,
 static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr,
 			       const char *data, size_t count)
 {
-	struct spm_data *d = dev_get_drvdata(dev);
+	struct ssam_device *sdev = to_ssam_device(dev);
 	int perf_mode;
 	int status;
 
@@ -127,7 +123,7 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 	if (status)
 		return status;
 
-	status = ssam_tmp_perf_mode_set(d->ctrl, perf_mode);
+	status = ssam_tmp_perf_mode_set(sdev->ctrl, perf_mode);
 	if (status)
 		return status;
 
@@ -150,65 +146,49 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 static const DEVICE_ATTR_RW(perf_mode);
 
 
-static int surface_sam_sid_perfmode_probe(struct platform_device *pdev)
+static int surface_sam_sid_perfmode_probe(struct ssam_device *sdev)
 {
-	struct ssam_controller *ctrl;
-	struct spm_data *data;
 	int status;
-
-	// link to ec
-	status = ssam_client_bind(&pdev->dev, &ctrl);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
-
-	data = devm_kzalloc(&pdev->dev, sizeof(struct spm_data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
-
-	data->ctrl = ctrl;
-	platform_set_drvdata(pdev, data);
 
 	// set initial perf_mode
 	if (param_perf_mode_init != SID_PARAM_PERF_MODE_AS_IS) {
-		status = ssam_tmp_perf_mode_set(ctrl, param_perf_mode_init);
+		status = ssam_tmp_perf_mode_set(sdev->ctrl, param_perf_mode_init);
 		if (status)
 			return status;
 	}
 
 	// register perf_mode attribute
-	status = sysfs_create_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
+	status = sysfs_create_file(&sdev->dev.kobj, &dev_attr_perf_mode.attr);
 	if (status)
-		goto err_sysfs;
+		ssam_tmp_perf_mode_set(sdev->ctrl, param_perf_mode_exit);
 
-	return 0;
-
-err_sysfs:
-	ssam_tmp_perf_mode_set(ctrl, param_perf_mode_exit);
 	return status;
 }
 
-static int surface_sam_sid_perfmode_remove(struct platform_device *pdev)
+static void surface_sam_sid_perfmode_remove(struct ssam_device *sdev)
 {
-	struct spm_data *data = platform_get_drvdata(pdev);
-
-	sysfs_remove_file(&pdev->dev.kobj, &dev_attr_perf_mode.attr);
-	ssam_tmp_perf_mode_set(data->ctrl, param_perf_mode_exit);
-
-	platform_set_drvdata(pdev, NULL);
-	return 0;
+	sysfs_remove_file(&sdev->dev.kobj, &dev_attr_perf_mode.attr);
+	ssam_tmp_perf_mode_set(sdev->ctrl, param_perf_mode_exit);
 }
 
-static struct platform_driver surface_sam_sid_perfmode = {
+
+static const struct ssam_device_id ssam_perfmode_match[] = {
+	{ SSAM_DUID(TMP, 0x01, 0x00, 0x02) },
+	{ },
+};
+MODULE_DEVICE_TABLE(ssam, ssam_perfmode_match);
+
+static struct ssam_device_driver surface_sam_sid_perfmode = {
 	.probe = surface_sam_sid_perfmode_probe,
 	.remove = surface_sam_sid_perfmode_remove,
+	.match_table = ssam_perfmode_match,
 	.driver = {
 		.name = "surface_sam_sid_perfmode",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_sam_sid_perfmode);
+module_ssam_device_driver(surface_sam_sid_perfmode);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Performance Mode Driver for 5th Generation Surface Devices");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:surface_sam_sid_perfmode");
