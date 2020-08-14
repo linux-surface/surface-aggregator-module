@@ -769,6 +769,17 @@ struct ssam_device_id {
 #define SSAM_ANY_IID		0xff
 #define SSAM_ANY_FUN		0xff
 
+static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
+					 const struct ssam_device_uid u2)
+{
+	return memcmp(&u1, &u2, sizeof(struct ssam_device_uid)) == 0;
+}
+
+static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
+{
+	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
+}
+
 
 struct ssam_device {
 	struct device dev;

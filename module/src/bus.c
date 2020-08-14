@@ -118,17 +118,6 @@ void ssam_device_remove(struct ssam_device *sdev)
 EXPORT_SYMBOL_GPL(ssam_device_remove);
 
 
-static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
-					 const struct ssam_device_uid u2)
-{
-	return memcmp(&u1, &u2, sizeof(struct ssam_device_uid)) == 0;
-}
-
-static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
-{
-	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
-}
-
 static inline bool ssam_device_uid_match(const struct ssam_device_uid mask,
 					 const struct ssam_device_uid uid)
 {
