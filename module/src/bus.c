@@ -50,12 +50,6 @@ const struct device_type ssam_device_type = {
 EXPORT_SYMBOL_GPL(ssam_device_type);
 
 
-static bool is_ssam_device(struct device *device)
-{
-	return device->type == &ssam_device_type;
-}
-
-
 struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 				      struct ssam_device_uid uid)
 {

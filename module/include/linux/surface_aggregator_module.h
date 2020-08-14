@@ -790,6 +790,11 @@ extern struct bus_type ssam_bus_type;
 extern const struct device_type ssam_device_type;
 
 
+static inline bool is_ssam_device(struct device *device)
+{
+	return device->type == &ssam_device_type;
+}
+
 static inline struct ssam_device *to_ssam_device(struct device *d)
 {
 	return container_of(d, struct ssam_device, dev);
