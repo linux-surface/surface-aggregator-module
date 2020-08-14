@@ -6,8 +6,10 @@
 #include <linux/acpi.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/notifier.h>
 #include <linux/platform_device.h>
+#include <linux/types.h>
 
 #include <linux/surface_aggregator_module.h>
 
@@ -209,7 +211,6 @@ static void ssam_hub_remove(struct ssam_device *sdev)
 
 static const struct ssam_device_id ssam_hub_match[] = {
 	{ SSAM_DUID_HUB_MAIN },
-	{ SSAM_DUID_HUB_BASE },	// TODO: implement driver supporting base-detach
 	{ },
 };
 
@@ -220,6 +221,211 @@ static struct ssam_device_driver ssam_hub_driver = {
 	.driver = {
 		.name = "surface_sam_hub",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
+	},
+};
+
+
+/* -- SSAM base-hub driver. ------------------------------------------------- */
+
+enum ssam_base_hub_state {
+	SSAM_BASE_HUB_UNINITIALIZED,
+	SSAM_BASE_HUB_CONNECTED,
+	SSAM_BASE_HUB_DISCONNECTED,
+};
+
+struct ssam_base_hub {
+	struct ssam_device *sdev;
+	const struct ssam_hub_desc *devices;
+
+	struct mutex lock;
+	enum ssam_base_hub_state state;
+
+	struct ssam_event_notifier notif;
+};
+
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.command_id      = 0x0d,
+	.instance_id     = 0x00,
+	.channel         = 0x01,
+});
+
+#define SSAM_BAS_OPMODE_TABLET		0x00
+#define SSAM_EVENT_BAS_CID_CONNECTION	0x0c
+
+static int ssam_base_hub_query_state(struct ssam_device *sdev,
+				     enum ssam_base_hub_state *state)
+{
+	u8 opmode;
+	int status;
+
+	status = ssam_bas_query_opmode(sdev->ctrl, &opmode);
+	if (status < 0) {
+		dev_err(&sdev->dev, "failed to query base state: %d\n", status);
+		return status;
+	}
+
+	if (opmode != SSAM_BAS_OPMODE_TABLET)
+		*state = SSAM_BASE_HUB_CONNECTED;
+	else
+		*state = SSAM_BASE_HUB_DISCONNECTED;
+
+	return 0;
+}
+
+
+static int ssam_base_hub_update(struct ssam_device *sdev,
+				enum ssam_base_hub_state new)
+{
+	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
+	int status = 0;
+
+	mutex_lock(&hub->lock);
+	if (hub->state == new) {
+		mutex_unlock(&hub->lock);
+		return 0;
+	}
+	hub->state = new;
+
+	if (hub->state == SSAM_BASE_HUB_CONNECTED)
+		status = ssam_hub_add_devices(&sdev->dev, sdev->ctrl, hub->devices);
+
+	if (hub->state != SSAM_BASE_HUB_CONNECTED || status)
+		ssam_hub_remove_devices(&sdev->dev);
+
+	mutex_unlock(&hub->lock);
+
+	if (status) {
+		dev_err(&sdev->dev, "failed to update base-hub devices: %d\n",
+			status);
+	}
+
+	return status;
+}
+
+static u32 ssam_base_hub_notif(struct ssam_notifier_block *nb,
+			       const struct ssam_event *event)
+{
+	struct ssam_base_hub *hub;
+	struct ssam_device *sdev;
+	enum ssam_base_hub_state new;
+
+	hub = container_of(nb, struct ssam_base_hub, notif.base);
+	sdev = hub->sdev;
+
+	if (event->command_id != SSAM_EVENT_BAS_CID_CONNECTION)
+		return 0;
+
+	if (event->length < 1) {
+		dev_err(&sdev->dev, "unexpected payload size: %u\n",
+			event->length);
+		return 0;
+	}
+
+	if (event->data[0])
+		new = SSAM_BASE_HUB_CONNECTED;
+	else
+		new = SSAM_BASE_HUB_DISCONNECTED;
+
+	ssam_base_hub_update(sdev, new);
+
+	/*
+	 * Do not return SSAM_NOTIF_HANDLED: The event should be picked up and
+	 * consumed by the detachment system driver. We're just a (more or less)
+	 * silent observer.
+	 */
+	return 0;
+}
+
+static int ssam_base_hub_resume(struct device *dev)
+{
+	struct ssam_device *sdev = to_ssam_device(dev);
+	enum ssam_base_hub_state state;
+	int status;
+
+	status = ssam_base_hub_query_state(sdev, &state);
+	if (status)
+		return status;
+
+	return ssam_base_hub_update(sdev, state);
+}
+static SIMPLE_DEV_PM_OPS(ssam_base_hub_pm_ops, NULL, ssam_base_hub_resume);
+
+static int ssam_base_hub_probe(struct ssam_device *sdev)
+{
+	const struct ssam_hub_desc *desc = dev_get_platdata(&sdev->dev);
+	const struct ssam_device_id *match;
+	enum ssam_base_hub_state state;
+	struct ssam_base_hub *hub;
+	int status;
+
+	if (!desc)
+		return -ENODEV;
+
+	match = ssam_device_get_match(sdev);
+	if (!match)
+		return -ENODEV;
+
+	hub = devm_kzalloc(&sdev->dev, sizeof(*hub), GFP_KERNEL);
+	if (!hub)
+		return -ENOMEM;
+
+	hub->sdev = sdev;
+	hub->devices = desc;
+	hub->state = SSAM_BASE_HUB_UNINITIALIZED;
+
+	hub->notif.base.priority = 1000;	// this should execute first
+	hub->notif.base.fn = ssam_base_hub_notif;
+	hub->notif.event.reg = match->reg;
+	hub->notif.event.id.target_category = SSAM_SSH_TC_BAS,
+	hub->notif.event.id.instance = 0,
+	hub->notif.event.flags = SSAM_EVENT_SEQUENCED;
+
+	status = ssam_notifier_register(sdev->ctrl, &hub->notif);
+	if (status)
+		return status;
+
+	ssam_device_set_drvdata(sdev, hub);
+
+	status = ssam_base_hub_query_state(sdev, &state);
+	if (status) {
+		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+		return status;
+	}
+
+	status = ssam_base_hub_update(sdev, state);
+	if (status)
+		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+
+	return status;
+}
+
+static void ssam_base_hub_remove(struct ssam_device *sdev)
+{
+	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
+
+	ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+	ssam_hub_remove_devices(&sdev->dev);
+
+	ssam_device_set_drvdata(sdev, NULL);
+	kfree(hub);
+}
+
+static const struct ssam_device_id ssam_base_hub_match[] = {
+	// TODO: still need to verify registry
+	{ SSAM_DUID_HUB_BASE, SSAM_EVENT_REGISTRY_SAM },
+	{ },
+};
+
+static struct ssam_device_driver ssam_base_hub_driver = {
+	.probe = ssam_base_hub_probe,
+	.remove = ssam_base_hub_remove,
+	.match_table = ssam_base_hub_match,
+	.driver = {
+		.name = "surface_sam_base_hub",
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
+		.pm = &ssam_base_hub_pm_ops,
 	},
 };
 
@@ -307,17 +513,29 @@ static int __init ssam_device_hub_init(void)
 
 	status = platform_driver_register(&ssam_platform_hub_driver);
 	if (status)
-		return status;
+		goto err_platform;
 
 	status = ssam_device_driver_register(&ssam_hub_driver);
 	if (status)
-		platform_driver_unregister(&ssam_platform_hub_driver);
+		goto err_main;
 
+	status = ssam_device_driver_register(&ssam_base_hub_driver);
+	if (status)
+		goto err_base;
+
+	return 0;
+
+err_base:
+	ssam_device_driver_unregister(&ssam_hub_driver);
+err_main:
+	platform_driver_unregister(&ssam_platform_hub_driver);
+err_platform:
 	return status;
 }
 
 static void __exit ssam_device_hub_exit(void)
 {
+	ssam_device_driver_unregister(&ssam_base_hub_driver);
 	ssam_device_driver_unregister(&ssam_hub_driver);
 	platform_driver_unregister(&ssam_platform_hub_driver);
 }
