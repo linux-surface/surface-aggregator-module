@@ -4,6 +4,7 @@ obj-m += surface_sam_san.o
 obj-m += surface_sam_dtx.o
 obj-m += surface_sam_hps.o
 obj-m += surface_sam_vhf.o
+obj-m += surface_sam_device_hub.o
 obj-m += surface_sam_sid.o
 obj-m += surface_sam_sid_perfmode.o
 obj-m += surface_sam_sid_power.o
