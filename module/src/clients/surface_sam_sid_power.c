@@ -17,9 +17,6 @@
 #include <linux/surface_aggregator_module.h>
 #include "surface_sam_sid_power.h"
 
-#define SPWR_WARN	KERN_WARNING KBUILD_MODNAME ": "
-#define SPWR_DEBUG	KERN_DEBUG KBUILD_MODNAME ": "
-
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
 // TODO: DPTF (/SAN notifications)?
