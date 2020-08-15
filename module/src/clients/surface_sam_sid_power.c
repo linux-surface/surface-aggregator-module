@@ -151,7 +151,6 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
 
 struct spwr_battery_device {
 	struct ssam_device *sdev;
-	struct ssam_event_registry registry;
 
 	char name[32];
 	struct power_supply *psy;
@@ -172,7 +171,6 @@ struct spwr_battery_device {
 
 struct spwr_ac_device {
 	struct ssam_device *sdev;
-	struct ssam_event_registry registry;
 
 	char name[32];
 	struct power_supply *psy;
@@ -385,7 +383,8 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 	// if the unit has changed, re-add the battery
 	if (unit != get_unaligned_le32(&bat->bix.power_unit)) {
 		spwr_battery_unregister(bat);
-		status = spwr_battery_register(bat, bat->sdev, bat->registry);
+		status = spwr_battery_register(bat, bat->sdev,
+					       bat->notif.event.reg);
 	}
 
 	return status;
@@ -790,7 +789,6 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	psy_cfg.drv_data = ac;
 
 	ac->sdev = sdev;
-	ac->registry = registry;
 	mutex_init(&ac->lock);
 
 	ac->psy_desc.name = ac->name;
@@ -807,7 +805,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 
 	ac->notif.base.priority = 1;
 	ac->notif.base.fn = spwr_notify_ac;
-	ac->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	ac->notif.event.reg = registry;
 	ac->notif.event.id.target_category = SSAM_SSH_TC_BAT;
 	ac->notif.event.id.instance = 0;
 	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
@@ -848,7 +846,6 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	int status;
 
 	bat->sdev = sdev;
-	bat->registry = registry;
 
 	// make sure the device is there and functioning properly
 	status = ssam_bat_get_sta(sdev, &sta);
@@ -895,7 +892,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 
 	bat->notif.base.priority = 1;
 	bat->notif.base.fn = spwr_notify_bat;
-	bat->notif.event.reg = bat->registry;
+	bat->notif.event.reg = registry;
 	bat->notif.event.id.target_category = SSAM_SSH_TC_BAT;
 	bat->notif.event.id.instance = 0;
 	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
