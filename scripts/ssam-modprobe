@@ -18,7 +18,7 @@ unload() {
     ${cmd} surface_sam_sid_vhf
     ${cmd} surface_sam_sid_power
     ${cmd} surface_sam_sid_perfmode
-    ${cmd} surface_sam_sid
+    ${cmd} surface_sam_device_hub
     ${cmd} surface_sam_hps
     ${cmd} surface_sam_dtx
     ${cmd} surface_sam_vhf
@@ -42,7 +42,7 @@ load() {
     ${cmd} "${client_pfx}"surface_sam_sid_perfmode"${ext}"
     ${cmd} "${client_pfx}"surface_sam_sid_power"${ext}"
     ${cmd} "${client_pfx}"surface_sam_sid_vhf"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_sid"${ext}"
+    ${cmd} "${client_pfx}"surface_sam_device_hub"${ext}"
     ${cmd} "${client_pfx}"surface_sam_debugfs"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
