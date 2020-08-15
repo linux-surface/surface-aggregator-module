@@ -939,6 +939,8 @@ static int surface_sam_sid_battery_resume(struct device *dev)
 {
 	struct spwr_battery_device *bat;
 
+	// TODO: run this on workqueue
+
 	bat = dev_get_drvdata(dev);
 	return spwr_battery_recheck(bat);
 }
