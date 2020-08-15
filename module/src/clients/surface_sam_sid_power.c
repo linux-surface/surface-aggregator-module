@@ -806,7 +806,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	ac->notif.base.priority = 1;
 	ac->notif.base.fn = spwr_notify_ac;
 	ac->notif.event.reg = registry;
-	ac->notif.event.id.target_category = SSAM_SSH_TC_BAT;
+	ac->notif.event.id.target_category = sdev->uid.category;
 	ac->notif.event.id.instance = 0;
 	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
@@ -893,7 +893,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->notif.base.priority = 1;
 	bat->notif.base.fn = spwr_notify_bat;
 	bat->notif.event.reg = registry;
-	bat->notif.event.id.target_category = SSAM_SSH_TC_BAT;
+	bat->notif.event.id.target_category = sdev->uid.category;
 	bat->notif.event.id.instance = 0;
 	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
