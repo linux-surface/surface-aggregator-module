@@ -347,7 +347,14 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 
 static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	return ssam_bat_get_psrc(ac->sdev, &ac->state);
+	int status;
+	u32 old = ac->state;
+
+	status = ssam_bat_get_psrc(ac->sdev, &ac->state);
+	if (status < 0)
+		return status;
+
+	return old != ac->state;
 }
 
 static int spwr_ac_update(struct spwr_ac_device *ac)
@@ -437,7 +444,7 @@ static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 	int status;
 
 	status = spwr_ac_update(ac);
-	if (!status)
+	if (status > 0)
 		power_supply_changed(ac->psy);
 
 	return status;
