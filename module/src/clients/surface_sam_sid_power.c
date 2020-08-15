@@ -5,12 +5,13 @@
  */
 
 #include <asm/unaligned.h>
-#include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/jiffies.h>
+#include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/power_supply.h>
+#include <linux/types.h>
 #include <linux/workqueue.h>
 
 #include <linux/surface_aggregator_module.h>
