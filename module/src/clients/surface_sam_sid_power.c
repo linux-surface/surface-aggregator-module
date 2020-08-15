@@ -9,13 +9,11 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
-#include <linux/platform_device.h>
 #include <linux/power_supply.h>
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
 #include <linux/surface_aggregator_module.h>
-#include "surface_sam_sid_power.h"
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
@@ -173,8 +171,8 @@ struct spwr_battery_device {
 };
 
 struct spwr_ac_device {
-	struct platform_device *pdev;
-	struct ssam_controller *ctrl;
+	struct ssam_device *sdev;
+	struct ssam_event_registry registry;
 
 	char name[32];
 	struct power_supply *psy;
@@ -351,7 +349,7 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 
 static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	return __raw_ssam_bat_get_psrc(ac->ctrl, 0x01, 0x01, &ac->state);
+	return ssam_bat_get_psrc(ac->sdev, &ac->state);
 }
 
 static int spwr_ac_update(struct spwr_ac_device *ac)
@@ -494,7 +492,7 @@ static u32 spwr_notify_ac(struct ssam_notifier_block *nb,
 
 	ac = container_of(nb, struct spwr_ac_device, notif.base);
 
-	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
+	dev_dbg(&ac->sdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
 		event->command_id, event->instance_id, event->channel);
 
 	// AC has IID = 0
@@ -768,16 +766,21 @@ static const struct device_attribute alarm_attr = {
 };
 
 
+static void spwr_ac_set_name(struct spwr_ac_device *ac, const char *name)
+{
+	strncpy(ac->name, name, ARRAY_SIZE(ac->name) - 1);
+}
+
 static int spwr_ac_register(struct spwr_ac_device *ac,
-			    struct platform_device *pdev,
-			    struct ssam_controller *ctrl)
+			    struct ssam_device *sdev,
+			    struct ssam_event_registry registry)
 {
 	struct power_supply_config psy_cfg = {};
 	__le32 sta;
 	int status;
 
 	// make sure the device is there and functioning properly
-	status = __raw_ssam_bat_get_sta(ctrl, 0x01, 0x01, &sta);
+	status = ssam_bat_get_sta(sdev, &sta);
 	if (status)
 		return status;
 
@@ -786,11 +789,9 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 
 	psy_cfg.drv_data = ac;
 
-	ac->pdev = pdev;
-	ac->ctrl = ctrl;
+	ac->sdev = sdev;
+	ac->registry = registry;
 	mutex_init(&ac->lock);
-
-	snprintf(ac->name, ARRAY_SIZE(ac->name), "ADP0");
 
 	ac->psy_desc.name = ac->name;
 	ac->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
@@ -798,7 +799,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	ac->psy_desc.num_properties = ARRAY_SIZE(spwr_ac_props);
 	ac->psy_desc.get_property = spwr_ac_get_property;
 
-	ac->psy = power_supply_register(&ac->pdev->dev, &ac->psy_desc, &psy_cfg);
+	ac->psy = power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
 	if (IS_ERR(ac->psy)) {
 		status = PTR_ERR(ac->psy);
 		goto err_psy;
@@ -811,7 +812,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	ac->notif.event.id.instance = 0;
 	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = ssam_notifier_register(ctrl, &ac->notif);
+	status = ssam_notifier_register(sdev->ctrl, &ac->notif);
 	if (status)
 		goto err_notif;
 
@@ -826,7 +827,7 @@ err_psy:
 
 static int spwr_ac_unregister(struct spwr_ac_device *ac)
 {
-	ssam_notifier_unregister(ac->ctrl, &ac->notif);
+	ssam_notifier_unregister(ac->sdev->ctrl, &ac->notif);
 	power_supply_unregister(ac->psy);
 	mutex_destroy(&ac->lock);
 	return 0;
@@ -1002,40 +1003,48 @@ static struct ssam_device_driver surface_sam_sid_battery = {
  * AC Driver.
  */
 
-static int surface_sam_sid_ac_probe(struct platform_device *pdev)
+static const struct ssam_device_id surface_sam_sid_ac_match[] = {
+	{ SSAM_DUID(BAT, 0x01, 0x01, 0x01), SSAM_EVENT_REGISTRY_SAM, "ADP1" },
+	{ },
+};
+MODULE_DEVICE_TABLE(ssam, surface_sam_sid_ac_match);
+
+static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 {
+	const struct ssam_device_id *match;
 	struct spwr_ac_device *ac;
-	struct ssam_controller *ctrl;
 	int status;
 
-	// link to ec
-	status = ssam_client_bind(&pdev->dev, &ctrl);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
+	match = ssam_device_get_match(sdev);
+	if (!match)
+		return -ENODEV;
 
-	ac = devm_kzalloc(&pdev->dev, sizeof(*ac), GFP_KERNEL);
+	ac = devm_kzalloc(&sdev->dev, sizeof(*ac), GFP_KERNEL);
 	if (!ac)
 		return -ENOMEM;
 
-	status = spwr_ac_register(ac, pdev, ctrl);
+	spwr_ac_set_name(ac, match->driver_data);
+	ssam_device_set_drvdata(sdev, ac);
+
+	status = spwr_ac_register(ac, sdev, match->reg);
 	if (status)
-		return status;
+		ssam_device_set_drvdata(sdev, NULL);
 
-	platform_set_drvdata(pdev, ac);
-	return 0;
+	return status;
 }
 
-static int surface_sam_sid_ac_remove(struct platform_device *pdev)
+static void surface_sam_sid_ac_remove(struct ssam_device *sdev)
 {
-	struct spwr_ac_device *ac;
+	struct spwr_ac_device *ac = ssam_device_get_drvdata(sdev);
 
-	ac = platform_get_drvdata(pdev);
-	return spwr_ac_unregister(ac);
+	spwr_ac_unregister(ac);
+	ssam_device_set_drvdata(sdev, NULL);
 }
 
-static struct platform_driver surface_sam_sid_ac = {
+static struct ssam_device_driver surface_sam_sid_ac = {
 	.probe = surface_sam_sid_ac_probe,
 	.remove = surface_sam_sid_ac_remove,
+	.match_table = surface_sam_sid_ac_match,
 	.driver = {
 		.name = "surface_sam_sid_ac",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
@@ -1051,7 +1060,7 @@ static int __init surface_sam_sid_power_init(void)
 	if (status)
 		return status;
 
-	status = platform_driver_register(&surface_sam_sid_ac);
+	status = ssam_device_driver_register(&surface_sam_sid_ac);
 	if (status) {
 		ssam_device_driver_unregister(&surface_sam_sid_battery);
 		return status;
@@ -1063,7 +1072,7 @@ static int __init surface_sam_sid_power_init(void)
 static void __exit surface_sam_sid_power_exit(void)
 {
 	ssam_device_driver_unregister(&surface_sam_sid_battery);
-	platform_driver_unregister(&surface_sam_sid_ac);
+	ssam_device_driver_unregister(&surface_sam_sid_ac);
 }
 
 module_init(surface_sam_sid_power_init);
@@ -1072,4 +1081,3 @@ module_exit(surface_sam_sid_power_exit);
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices");
 MODULE_LICENSE("GPL");
-MODULE_ALIAS("platform:surface_sam_sid_ac");
