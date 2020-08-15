@@ -460,11 +460,7 @@ static u32 spwr_notify_bat(struct ssam_notifier_block *nb,
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
-	// check for the correct channel and instance ID
-	if (event->channel != bat->sdev->uid.channel)
-		return 0;
-
-	if (event->instance_id != bat->sdev->uid.instance)
+	if (!ssam_event_matches_device(bat->sdev->uid, event))
 		return 0;
 
 	switch (event->command_id) {

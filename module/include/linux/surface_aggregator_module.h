@@ -884,4 +884,12 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 	}
 
 
+static inline bool ssam_event_matches_device(struct ssam_device_uid uid,
+					     const struct ssam_event *event)
+{
+	return uid.category == event->target_category
+		&& uid.channel == event->channel
+		&& uid.instance == event->instance_id;
+}
+
 #endif /* _SURFACE_AGGREGATOR_MODULE_H */
