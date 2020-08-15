@@ -270,7 +270,8 @@ static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 }
 
 
-static inline int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
+static inline int spwr_battery_set_alarm_unlocked(
+		struct spwr_battery_device *bat, u32 value)
 {
 	__le32 alarm = cpu_to_le32(value);
 
@@ -279,7 +280,8 @@ static inline int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *ba
 				&alarm);
 }
 
-static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
+static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat,
+					 u32 value)
 {
 	int status;
 
@@ -290,10 +292,13 @@ static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 va
 	return status;
 }
 
-static inline int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
+static inline int spwr_battery_update_bst_unlocked(
+		struct spwr_battery_device *bat, bool cached)
 {
-	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
+	unsigned long cache_deadline;
 	int status;
+
+	cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
 
 	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
 		return 0;
@@ -449,10 +454,13 @@ static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 	return status;
 }
 
-static u32 spwr_notify_bat(struct ssam_notifier_block *nb, const struct ssam_event *event)
+static u32 spwr_notify_bat(struct ssam_notifier_block *nb,
+			   const struct ssam_event *event)
 {
-	struct spwr_battery_device *bat = container_of(nb, struct spwr_battery_device, notif.base);
+	struct spwr_battery_device *bat;
 	int status;
+
+	bat = container_of(nb, struct spwr_battery_device, notif.base);
 
 	dev_dbg(&bat->pdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
 		event->command_id, event->instance_id, event->channel);
@@ -486,10 +494,13 @@ static u32 spwr_notify_bat(struct ssam_notifier_block *nb, const struct ssam_eve
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
-static u32 spwr_notify_ac(struct ssam_notifier_block *nb, const struct ssam_event *event)
+static u32 spwr_notify_ac(struct ssam_notifier_block *nb,
+			  const struct ssam_event *event)
 {
-	struct spwr_ac_device *ac = container_of(nb, struct spwr_ac_device, notif.base);
+	struct spwr_ac_device *ac;
 	int status;
+
+	ac = container_of(nb, struct spwr_ac_device, notif.base);
 
 	dev_dbg(&ac->pdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
 		event->command_id, event->instance_id, event->channel);
@@ -511,15 +522,19 @@ static u32 spwr_notify_ac(struct ssam_notifier_block *nb, const struct ssam_even
 static void spwr_battery_update_bst_workfn(struct work_struct *work)
 {
 	struct delayed_work *dwork = to_delayed_work(work);
-	struct spwr_battery_device *bat = container_of(dwork, struct spwr_battery_device, update_work);
+	struct spwr_battery_device *bat;
 	int status;
+
+	bat = container_of(dwork, struct spwr_battery_device, update_work);
 
 	status = spwr_battery_update_bst(bat, false);
 	if (!status)
 		power_supply_changed(bat->psy);
 
-	if (status)
-		dev_err(&bat->pdev->dev, "failed to update battery state: %d\n", status);
+	if (status) {
+		dev_err(&bat->pdev->dev, "failed to update battery state: %d\n",
+			status);
+	}
 }
 
 
@@ -934,7 +949,8 @@ static int surface_sam_sid_battery_resume(struct device *dev)
 #define surface_sam_sid_battery_resume NULL
 #endif
 
-SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm, NULL, surface_sam_sid_battery_resume);
+SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm,
+		  NULL, surface_sam_sid_battery_resume);
 
 static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 {
@@ -947,7 +963,7 @@ static int surface_sam_sid_battery_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	bat = devm_kzalloc(&pdev->dev, sizeof(struct spwr_battery_device), GFP_KERNEL);
+	bat = devm_kzalloc(&pdev->dev, sizeof(*bat), GFP_KERNEL);
 	if (!bat)
 		return -ENOMEM;
 
@@ -991,7 +1007,7 @@ static int surface_sam_sid_ac_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	ac = devm_kzalloc(&pdev->dev, sizeof(struct spwr_ac_device), GFP_KERNEL);
+	ac = devm_kzalloc(&pdev->dev, sizeof(*ac), GFP_KERNEL);
 	if (!ac)
 		return -ENOMEM;
 
