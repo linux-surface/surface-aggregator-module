@@ -89,59 +89,59 @@ struct spwr_event_dptf {
 
 
 /* Get battery status (_STA) */
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_sta, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_sta, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x01,
 });
 
 /* Get battery static information (_BIX) */
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_bix, struct spwr_bix, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_bix, struct spwr_bix, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x02,
 });
 
 /* Get battery dynamic information (_BST) */
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_bst, struct spwr_bst, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_bst, struct spwr_bst, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x03,
 });
 
 /* Set battery trip point (_BTP) */
-static SSAM_DEFINE_SYNC_REQUEST_MD_W(ssam_bat_set_btp, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_btp, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x04,
 });
 
 /* Get platform power soruce for battery (DPTF PSRC) */
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_psrc, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0d,
 });
 
 /* Get maximum platform power for battery (DPTF PMAX) */
 __always_unused
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_pmax, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_pmax, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0b,
 });
 
 /* Get adapter rating (DPTF ARTG) */
 __always_unused
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_artg, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_artg, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0f,
 });
 
 /* Unknown (DPTF PSOC) */
 __always_unused
-static SSAM_DEFINE_SYNC_REQUEST_MD_R(ssam_bat_get_psoc, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psoc, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0c,
 });
 
 /* Unknown (DPTF CHGI/ INT3403 SPPC) */
 __always_unused
-static SSAM_DEFINE_SYNC_REQUEST_MD_W(ssam_bat_set_chgi, __le32, {
+static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0e,
 });
@@ -243,44 +243,33 @@ static inline bool spwr_battery_present(struct spwr_battery_device *bat)
 
 static inline int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
-	struct ssam_device *sdev = bat->sdev;
-
-	return ssam_bat_get_sta(sdev->ctrl, sdev->uid.channel,
-				sdev->uid.instance, &bat->sta);
+	return ssam_bat_get_sta(bat->sdev, &bat->sta);
 }
 
 static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
 {
-	struct ssam_device *sdev = bat->sdev;
-
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return ssam_bat_get_bix(sdev->ctrl, sdev->uid.channel,
-				sdev->uid.instance, &bat->bix);
+	return ssam_bat_get_bix(bat->sdev, &bat->bix);
 }
 
 static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 {
-	struct ssam_device *sdev = bat->sdev;
-
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return ssam_bat_get_bst(sdev->ctrl, sdev->uid.channel,
-				sdev->uid.instance, &bat->bst);
+	return ssam_bat_get_bst(bat->sdev, &bat->bst);
 }
 
 
 static inline int spwr_battery_set_alarm_unlocked(
 		struct spwr_battery_device *bat, u32 value)
 {
-	struct ssam_device *sdev = bat->sdev;
 	__le32 alarm = cpu_to_le32(value);
 
 	bat->alarm = value;
-	return ssam_bat_set_btp(sdev->ctrl, sdev->uid.channel,
-				sdev->uid.instance, &alarm);
+	return ssam_bat_set_btp(bat->sdev, &alarm);
 }
 
 static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat,
@@ -362,7 +351,7 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 
 static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	return ssam_bat_get_psrc(ac->ctrl, 0x01, 0x01, &ac->state);
+	return __raw_ssam_bat_get_psrc(ac->ctrl, 0x01, 0x01, &ac->state);
 }
 
 static int spwr_ac_update(struct spwr_ac_device *ac)
@@ -788,7 +777,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	int status;
 
 	// make sure the device is there and functioning properly
-	status = ssam_bat_get_sta(ctrl, 0x01, 0x01, &sta);
+	status = __raw_ssam_bat_get_sta(ctrl, 0x01, 0x01, &sta);
 	if (status)
 		return status;
 
@@ -861,8 +850,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->registry = registry;
 
 	// make sure the device is there and functioning properly
-	status = ssam_bat_get_sta(sdev->ctrl, sdev->uid.channel,
-				  sdev->uid.instance, &sta);
+	status = ssam_bat_get_sta(sdev, &sta);
 	if (status)
 		return status;
 

@@ -864,4 +864,24 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 	module_driver(__drv, ssam_device_driver_register, \
 		      ssam_device_driver_unregister)
 
+
+/* -- Helpers for client-device requests. ----------------------------------- */
+
+#define SSAM_DEFINE_SYNC_REQUEST_CL_W(name, wtype, spec...)		\
+	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, wtype, spec)	\
+	int name(struct ssam_device *sdev, const wtype *in)		\
+	{								\
+		return __raw_##name(sdev->ctrl, sdev->uid.channel,	\
+				    sdev->uid.instance, in);		\
+	}
+
+#define SSAM_DEFINE_SYNC_REQUEST_CL_R(name, rtype, spec...)		\
+	SSAM_DEFINE_SYNC_REQUEST_MD_R(__raw_##name, rtype, spec)	\
+	int name(struct ssam_device *sdev, rtype *out)			\
+	{								\
+		return __raw_##name(sdev->ctrl, sdev->uid.channel,	\
+				    sdev->uid.instance, out);		\
+	}
+
+
 #endif /* _SURFACE_AGGREGATOR_MODULE_H */
