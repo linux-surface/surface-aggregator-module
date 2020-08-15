@@ -497,9 +497,17 @@ static u32 spwr_notify_ac(struct ssam_notifier_block *nb,
 	dev_dbg(&ac->sdev->dev, "power event (cid = 0x%02x, iid = %d, chn = %d)\n",
 		event->command_id, event->instance_id, event->channel);
 
-	// AC has IID = 0
-	if (event->instance_id != 0)
+	if (event->target_category != ac->sdev->uid.category)
 		return 0;
+
+	/*
+	 * Allow events of all channels/instances here. Global adapter status
+	 * seems to be handled via channel=1 and instance=1, but events are
+	 * reported on all channels/instances in use.
+	 *
+	 * While it should be enough to just listen on 1/1, listen everywhere to
+	 * make sure we don't miss anything.
+	 */
 
 	switch (event->command_id) {
 	case SAM_EVENT_PWR_CID_ADAPTER:
