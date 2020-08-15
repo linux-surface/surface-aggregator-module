@@ -1003,6 +1003,8 @@ static struct ssam_device_driver surface_sam_sid_battery = {
  * AC Driver.
  */
 
+// TODO: check/update on resume, call power_supply_changed?
+
 static const struct ssam_device_id surface_sam_sid_ac_match[] = {
 	{ SSAM_DUID(BAT, 0x01, 0x01, 0x01), SSAM_EVENT_REGISTRY_SAM, "ADP1" },
 	{ },
