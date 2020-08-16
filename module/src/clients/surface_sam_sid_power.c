@@ -1110,3 +1110,9 @@ module_exit(surface_sam_sid_power_exit);
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices");
 MODULE_LICENSE("GPL");
+
+#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
+MODULE_ALIAS("ssam:c02t02i01f00");
+MODULE_ALIAS("ssam:c02t01i01f00");
+MODULE_ALIAS("ssam:c02t01i01f01");
+#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

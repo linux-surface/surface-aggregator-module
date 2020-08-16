@@ -428,3 +428,7 @@ module_ssam_device_driver(surface_sam_sid_vhf);
 MODULE_AUTHOR("Blaž Hrastnik <blaz@mxxn.io>");
 MODULE_DESCRIPTION("Driver for HID devices connected via Surface SAM");
 MODULE_LICENSE("GPL");
+
+#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
+MODULE_ALIAS("ssam:c15t*i*f00");
+#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
