@@ -760,6 +760,8 @@ struct ssam_device_uid {
 #define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
 
 
+#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
+
 // TODO: the following definitions and struct belongs into mod_devicetable with
 //       file2alias support
 
@@ -777,6 +779,8 @@ struct ssam_device_id {
 
 	kernel_ulong_t driver_data;
 };
+
+#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
 
 
 #define SSAM_ANY_CHN		0xffff
