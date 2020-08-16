@@ -16,6 +16,8 @@ scripts/tmp/
 *.d
 Module.symvers
 modules.order
+.Module.symvers.cmd
+.modules.order.cmd
 .tmp_*/
 
 # python
