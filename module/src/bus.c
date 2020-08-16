@@ -174,6 +174,18 @@ const struct ssam_device_id *ssam_device_get_match(
 }
 EXPORT_SYMBOL_GPL(ssam_device_get_match);
 
+const void *ssam_device_get_match_data(const struct ssam_device *dev)
+{
+	const struct ssam_device_id *id;
+
+	id = ssam_device_get_match(dev);
+	if (!id)
+		return NULL;
+
+	return (const void *)id->driver_data;
+}
+EXPORT_SYMBOL_GPL(ssam_device_get_match_data);
+
 
 static int ssam_bus_match(struct device *dev, struct device_driver *drv)
 {

@@ -398,9 +398,10 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	hub->devices = desc;
 	hub->state = SSAM_BASE_HUB_UNINITIALIZED;
 
-	hub->notif.base.priority = 1000;	// this should execute first
+	// TODO: still need to verify registry
+	hub->notif.base.priority = 1000;  // this notifier should run first
 	hub->notif.base.fn = ssam_base_hub_notif;
-	hub->notif.event.reg = match->reg;
+	hub->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	hub->notif.event.id.target_category = SSAM_SSH_TC_BAS,
 	hub->notif.event.id.instance = 0,
 	hub->notif.event.flags = SSAM_EVENT_SEQUENCED;
@@ -447,7 +448,7 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
-	{ SSAM_DEVICE(_HUB, 0x02, 0x00, 0x00), SSAM_EVENT_REGISTRY_REG },
+	{ SSAM_DEVICE(_HUB, 0x02, 0x00, 0x00) },
 	{ },
 };
 

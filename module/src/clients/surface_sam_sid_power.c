@@ -149,6 +149,11 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
  * Common Power-Subsystem Interface.
  */
 
+struct spwr_psy_properties {
+	const char *name;
+	struct ssam_event_registry registry;
+};
+
 struct spwr_battery_device {
 	struct ssam_device *sdev;
 
@@ -953,32 +958,24 @@ static int surface_sam_sid_battery_resume(struct device *dev)
 SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm,
 		  NULL, surface_sam_sid_battery_resume);
 
-
-static const struct ssam_device_id surface_sam_sid_battery_match[] = {
-	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x00), SSAM_EVENT_REGISTRY_SAM, (unsigned long)"BAT1" },
-	{ SSAM_DEVICE(BAT, 0x02, 0x01, 0x00), SSAM_EVENT_REGISTRY_REG, (unsigned long)"BAT2" },
-	{ },
-};
-MODULE_DEVICE_TABLE(ssam, surface_sam_sid_battery_match);
-
 static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
 {
-	const struct ssam_device_id *match;
+	const struct spwr_psy_properties *p;
 	struct spwr_battery_device *bat;
 	int status;
 
-	match = ssam_device_get_match(sdev);
-	if (!match)
+	p = ssam_device_get_match_data(sdev);
+	if (!p)
 		return -ENODEV;
 
 	bat = devm_kzalloc(&sdev->dev, sizeof(*bat), GFP_KERNEL);
 	if (!bat)
 		return -ENOMEM;
 
-	spwr_battery_set_name(bat, (const char *)match->driver_data);
+	spwr_battery_set_name(bat, p->name);
 	ssam_device_set_drvdata(sdev, bat);
 
-	status = spwr_battery_register(bat, sdev, match->reg);
+	status = spwr_battery_register(bat, sdev, p->registry);
 	if (status)
 		ssam_device_set_drvdata(sdev, NULL);
 
@@ -994,6 +991,23 @@ static void surface_sam_sid_battery_remove(struct ssam_device *sdev)
 
 	ssam_device_set_drvdata(sdev, NULL);
 }
+
+static const struct spwr_psy_properties spwr_psy_props_bat1 = {
+	.name = "BAT1",
+	.registry = SSAM_EVENT_REGISTRY_SAM,
+};
+
+static const struct spwr_psy_properties spwr_psy_props_bat2_sb3 = {
+	.name = "BAT2",
+	.registry = SSAM_EVENT_REGISTRY_REG,
+};
+
+static const struct ssam_device_id surface_sam_sid_battery_match[] = {
+	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat1     },
+	{ SSAM_DEVICE(BAT, 0x02, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat2_sb3 },
+	{ },
+};
+MODULE_DEVICE_TABLE(ssam, surface_sam_sid_battery_match);
 
 static struct ssam_device_driver surface_sam_sid_battery = {
 	.probe = surface_sam_sid_battery_probe,
@@ -1013,30 +1027,24 @@ static struct ssam_device_driver surface_sam_sid_battery = {
 
 // TODO: check/update on resume, call power_supply_changed?
 
-static const struct ssam_device_id surface_sam_sid_ac_match[] = {
-	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x01), SSAM_EVENT_REGISTRY_SAM, (unsigned long)"ADP1" },
-	{ },
-};
-MODULE_DEVICE_TABLE(ssam, surface_sam_sid_ac_match);
-
 static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 {
-	const struct ssam_device_id *match;
+	const struct spwr_psy_properties *p;
 	struct spwr_ac_device *ac;
 	int status;
 
-	match = ssam_device_get_match(sdev);
-	if (!match)
+	p = ssam_device_get_match_data(sdev);
+	if (!p)
 		return -ENODEV;
 
 	ac = devm_kzalloc(&sdev->dev, sizeof(*ac), GFP_KERNEL);
 	if (!ac)
 		return -ENOMEM;
 
-	spwr_ac_set_name(ac, (const char *)match->driver_data);
+	spwr_ac_set_name(ac, p->name);
 	ssam_device_set_drvdata(sdev, ac);
 
-	status = spwr_ac_register(ac, sdev, match->reg);
+	status = spwr_ac_register(ac, sdev, p->registry);
 	if (status)
 		ssam_device_set_drvdata(sdev, NULL);
 
@@ -1050,6 +1058,17 @@ static void surface_sam_sid_ac_remove(struct ssam_device *sdev)
 	spwr_ac_unregister(ac);
 	ssam_device_set_drvdata(sdev, NULL);
 }
+
+static const struct spwr_psy_properties spwr_psy_props_adp1 = {
+	.name = "ADP1",
+	.registry = SSAM_EVENT_REGISTRY_SAM,
+};
+
+static const struct ssam_device_id surface_sam_sid_ac_match[] = {
+	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x01), (unsigned long)&spwr_psy_props_adp1 },
+	{ },
+};
+MODULE_DEVICE_TABLE(ssam, surface_sam_sid_ac_match);
 
 static struct ssam_device_driver surface_sam_sid_ac = {
 	.probe = surface_sam_sid_ac_probe,
