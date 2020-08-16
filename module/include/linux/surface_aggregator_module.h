@@ -748,9 +748,27 @@ struct ssam_device_uid {
 	u8 function;
 };
 
-// TODO: the following struct belongs into mod_devicetable with file2alias support
+#define SSAM_DUID(__cat, __chn, __iid, __fun) 		\
+	((struct ssam_device_uid) {			\
+		.category = SSAM_SSH_TC_##__cat,	\
+		.channel = (__chn),			\
+		.instance = (__iid),			\
+		.function = (__fun)			\
+	})
+
+#define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
+
+
+// TODO: the following definitions and struct belongs into mod_devicetable with
+//       file2alias support
+
+#define SSAM_MATCH_CHANNEL	0x1
+#define SSAM_MATCH_INSTANCE	0x2
+#define SSAM_MATCH_FUNCTION	0x4
 
 struct ssam_device_id {
+	u8 match_flags;
+
 	u8 category;
 	u8 channel;
 	u8 instance;
@@ -762,20 +780,20 @@ struct ssam_device_id {
 	const void *data;
 };
 
-#define SSAM_DEVICE(__cat, __chn, __iid, __fun)	\
-	.category = SSAM_SSH_TC_##__cat,	\
-	.channel = (__chn),			\
-	.instance = (__iid),			\
-	.function = (__fun)			\
 
-#define SSAM_DUID(__cat, __chn, __iid, __fun) \
-	((struct ssam_device_uid) { SSAM_DEVICE(__cat, __chn, __iid, __fun) })
+#define SSAM_ANY_CHN		0xffff
+#define SSAM_ANY_IID		0xffff
+#define SSAM_ANY_FUN		0xffff
 
-#define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
+#define SSAM_DEVICE(__cat, __chn, __iid, __fun)					\
+	.match_flags = ((__chn) != SSAM_ANY_CHN) ? SSAM_MATCH_CHANNEL : 0	\
+		     | ((__iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0	\
+		     | ((__fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0,	\
+	.category = SSAM_SSH_TC_##__cat,					\
+	.channel = ((__chn) != SSAM_ANY_CHN) ? (__chn) : 0,			\
+	.instance = ((__iid) != SSAM_ANY_IID) ? (__iid) : 0,			\
+	.function = ((__fun) != SSAM_ANY_FUN) ? (__fun) : 0			\
 
-#define SSAM_ANY_CHN		0xff
-#define SSAM_ANY_IID		0xff
-#define SSAM_ANY_FUN		0xff
 
 static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
 					 const struct ssam_device_uid u2)

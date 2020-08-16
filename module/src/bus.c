@@ -118,13 +118,22 @@ void ssam_device_remove(struct ssam_device *sdev)
 EXPORT_SYMBOL_GPL(ssam_device_remove);
 
 
-static inline bool ssam_device_id_compatible(const struct ssam_device_id *mask,
+static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
 					     struct ssam_device_uid uid)
 {
-	return mask->category == uid.category
-		&& (mask->channel == SSAM_ANY_CHN || mask->channel == uid.channel)
-		&& (mask->instance == SSAM_ANY_IID || mask->instance == uid.instance)
-		&& (mask->function == SSAM_ANY_FUN || mask->function == uid.function);
+	if (id->category != uid.category)
+		return false;
+
+	if ((id->match_flags & SSAM_MATCH_CHANNEL) && id->channel != uid.channel)
+		return false;
+
+	if ((id->match_flags & SSAM_MATCH_INSTANCE) && id->instance != uid.instance)
+		return false;
+
+	if ((id->match_flags & SSAM_MATCH_FUNCTION) && id->function != uid.function)
+		return false;
+
+	return true;
 }
 
 static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
