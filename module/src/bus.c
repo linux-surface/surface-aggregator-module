@@ -129,7 +129,10 @@ static inline bool ssam_device_id_compatible(const struct ssam_device_id *mask,
 
 static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
 {
-	return id->category == 0 && id->channel == 0 && id->instance == 0 && id->function == 0;
+	return id->category == 0
+		&& id->channel == 0
+		&& id->instance == 0
+		&& id->function == 0;
 }
 
 const struct ssam_device_id *ssam_device_id_match(
