@@ -398,7 +398,7 @@ static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id surface_sam_sid_vhf_match[] = {
-	{ SSAM_DUID(HID, SSAM_ANY_CHN, SSAM_ANY_IID, 0x00), SSAM_EVENT_REGISTRY_REG },
+	{ SSAM_DEVICE(HID, SSAM_ANY_CHN, SSAM_ANY_IID, 0x00), SSAM_EVENT_REGISTRY_REG },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, surface_sam_sid_vhf_match);

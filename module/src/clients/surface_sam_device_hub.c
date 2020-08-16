@@ -205,7 +205,7 @@ static void ssam_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_hub_match[] = {
-	{ SSAM_DUID_HUB_MAIN },
+	{ SSAM_DEVICE(_HUB, 0x01, 0x00, 0x00) },
 	{ },
 };
 
@@ -447,8 +447,7 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
-	// TODO: still need to verify registry
-	{ SSAM_DUID_HUB_BASE, SSAM_EVENT_REGISTRY_SAM },
+	{ SSAM_DEVICE(_HUB, 0x02, 0x00, 0x00), SSAM_EVENT_REGISTRY_REG },
 	{ },
 };
 

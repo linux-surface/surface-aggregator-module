@@ -741,9 +741,6 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 /* -- Surface System Aggregator Module Bus. --------------------------------- */
 
-// TODO: the following two structs belongs into mod_devicetable with file2alias
-//       support
-
 struct ssam_device_uid {
 	u8 category;
 	u8 channel;
@@ -751,19 +748,28 @@ struct ssam_device_uid {
 	u8 function;
 };
 
+// TODO: the following struct belongs into mod_devicetable with file2alias support
+
 struct ssam_device_id {
-	struct ssam_device_uid uid;
+	u8 category;
+	u8 channel;
+	u8 instance;
+	u8 function;
+
+	/* not matched against */
 	struct ssam_event_registry reg;
-	void *driver_data;	// FIXME: should be kernel_ulong_t
+
+	const void *data;
 };
 
-#define SSAM_DUID(__cat, __chn, __iid, __fun)		\
-	((struct ssam_device_uid) {			\
-		.category = SSAM_SSH_TC_##__cat,	\
-		.channel = (__chn),			\
-		.instance = (__iid),			\
-		.function = (__fun),			\
-	})
+#define SSAM_DEVICE(__cat, __chn, __iid, __fun)	\
+	.category = SSAM_SSH_TC_##__cat,	\
+	.channel = (__chn),			\
+	.instance = (__iid),			\
+	.function = (__fun)			\
+
+#define SSAM_DUID(__cat, __chn, __iid, __fun) \
+	((struct ssam_device_uid) { SSAM_DEVICE(__cat, __chn, __iid, __fun) })
 
 #define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
 

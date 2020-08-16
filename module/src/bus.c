@@ -118,13 +118,18 @@ void ssam_device_remove(struct ssam_device *sdev)
 EXPORT_SYMBOL_GPL(ssam_device_remove);
 
 
-static inline bool ssam_device_uid_match(const struct ssam_device_uid mask,
-					 const struct ssam_device_uid uid)
+static inline bool ssam_device_id_compatible(const struct ssam_device_id *mask,
+					     struct ssam_device_uid uid)
 {
-	return mask.category == uid.category
-		&& (mask.channel == SSAM_ANY_CHN || mask.channel == uid.channel)
-		&& (mask.instance == SSAM_ANY_IID || mask.instance == uid.instance)
-		&& (mask.function == SSAM_ANY_FUN || mask.function == uid.function);
+	return mask->category == uid.category
+		&& (mask->channel == SSAM_ANY_CHN || mask->channel == uid.channel)
+		&& (mask->instance == SSAM_ANY_IID || mask->instance == uid.instance)
+		&& (mask->function == SSAM_ANY_FUN || mask->function == uid.function);
+}
+
+static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
+{
+	return id->category == 0 && id->channel == 0 && id->instance == 0 && id->function == 0;
 }
 
 const struct ssam_device_id *ssam_device_id_match(
@@ -133,8 +138,8 @@ const struct ssam_device_id *ssam_device_id_match(
 {
 	const struct ssam_device_id *id;
 
-	for (id = table; !ssam_device_uid_is_null(id->uid); ++id)
-		if (ssam_device_uid_match(id->uid, uid))
+	for (id = table; !ssam_device_id_is_null(id); ++id)
+		if (ssam_device_id_compatible(id, uid))
 			return id;
 
 	return NULL;
