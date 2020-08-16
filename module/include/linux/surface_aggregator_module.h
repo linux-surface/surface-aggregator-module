@@ -19,6 +19,7 @@
 #include <linux/kref.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
+#include <linux/mod_devicetable.h>
 #include <linux/uuid.h>
 
 
@@ -777,7 +778,7 @@ struct ssam_device_id {
 	/* not matched against */
 	struct ssam_event_registry reg;
 
-	const void *data;
+	kernel_ulong_t driver_data;
 };
 
 
