@@ -788,9 +788,9 @@ struct ssam_device_id {
 #define SSAM_ANY_FUN		0xffff
 
 #define SSAM_DEVICE(__cat, __chn, __iid, __fun)					\
-	.match_flags = ((__chn) != SSAM_ANY_CHN) ? SSAM_MATCH_CHANNEL : 0	\
-		     | ((__iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0	\
-		     | ((__fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0,	\
+	.match_flags = (((__chn) != SSAM_ANY_CHN) ? SSAM_MATCH_CHANNEL : 0)	\
+		     | (((__iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
+		     | (((__fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0),	\
 	.category = SSAM_SSH_TC_##__cat,					\
 	.channel = ((__chn) != SSAM_ANY_CHN) ? (__chn) : 0,			\
 	.instance = ((__iid) != SSAM_ANY_IID) ? (__iid) : 0,			\
