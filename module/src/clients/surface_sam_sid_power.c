@@ -452,7 +452,7 @@ static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 	if (status > 0)
 		power_supply_changed(ac->psy);
 
-	return status;
+	return status >= 0 ? 0 : status;
 }
 
 static u32 spwr_notify_bat(struct ssam_notifier_block *nb,
