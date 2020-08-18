@@ -749,7 +749,7 @@ struct ssam_device_uid {
 	u8 function;
 };
 
-#define SSAM_DUID(__cat, __chn, __iid, __fun) 		\
+#define SSAM_DUID(__cat, __chn, __iid, __fun)		\
 	((struct ssam_device_uid) {			\
 		.category = SSAM_SSH_TC_##__cat,	\
 		.channel = (__chn),			\
@@ -821,8 +821,8 @@ struct ssam_device_driver {
 
 	const struct ssam_device_id *match_table;
 
-	int  (*probe)(struct ssam_device *);
-	void (*remove)(struct ssam_device *);
+	int  (*probe)(struct ssam_device *sdev);
+	void (*remove)(struct ssam_device *sdev);
 };
 
 extern struct bus_type ssam_bus_type;
