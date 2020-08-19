@@ -50,15 +50,14 @@ struct ssam_nf {
 struct ssam_cplt;
 struct ssam_event_item;
 
-struct ssam_event_item_ops {
-	void (*free)(struct ssam_event_item *event);
-};
-
 struct ssam_event_item {
 	struct list_head node;
 	u16 rqid;
 
-	struct ssam_event_item_ops ops;
+	struct {
+		void (*free)(struct ssam_event_item *event);
+	} ops;
+
 	struct ssam_event event;	// must be last
 };
 
