@@ -51,7 +51,7 @@ struct ssam_cplt;
 struct ssam_event_item;
 
 struct ssam_event_item_ops {
-	void (*free)(struct ssam_event_item *);
+	void (*free)(struct ssam_event_item *event);
 };
 
 struct ssam_event_item {
