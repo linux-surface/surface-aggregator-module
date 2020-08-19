@@ -141,8 +141,8 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	trace_ssam_request_complete(rqst, status);
 
 	// rtl/ptl may not be set if we're cancelling before submitting
-	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x,"
-		     " status: %d)\n", ssh_request_get_rqid_safe(rqst), status);
+	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x, status: %d)\n",
+		     ssh_request_get_rqid_safe(rqst), status);
 
 	if (status && status != -ECANCELED)
 		rtl_dbg_cond(rtl, "rtl: request error: %d\n", status);
@@ -158,8 +158,8 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 
 	trace_ssam_request_complete(rqst, 0);
 
-	rtl_dbg(rtl, "rtl: completing request with response"
-		" (rqid: 0x%04x)\n", ssh_request_get_rqid(rqst));
+	rtl_dbg(rtl, "rtl: completing request with response (rqid: 0x%04x)\n",
+		ssh_request_get_rqid(rqst));
 
 	rqst->ops->complete(rqst, cmd, data, 0);
 }
@@ -404,8 +404,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			spin_unlock(&rtl->pending.lock);
 
 			trace_ssam_ei_rx_drop_response(p);
-			rtl_info(rtl, "request error injection: "
-				 "dropping response for request %p\n",
+			rtl_info(rtl, "request error injection: dropping response for request %p\n",
 				 &p->packet);
 			return;
 		}
@@ -429,8 +428,8 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	spin_unlock(&rtl->pending.lock);
 
 	if (!r) {
-		rtl_warn(rtl, "rtl: dropping unexpected command message"
-			 " (rqid = 0x%04x)\n", rqid);
+		rtl_warn(rtl, "rtl: dropping unexpected command message (rqid = 0x%04x)\n",
+			 rqid);
 		return;
 	}
 
@@ -454,7 +453,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	 * should never expect a response as ensured in ssh_rtl_submit. If this
 	 * ever changes, one would have to test for
 	 *
-	 * 	(r->state & (transmitting | transmitted))
+	 *	(r->state & (transmitting | transmitted))
 	 *
 	 * on unsequenced packets to determine if they could have been
 	 * transmitted. There are no synchronization guarantees as in the
@@ -462,8 +461,8 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	 * run on the same thread. Thus an exact determination is impossible.
 	 */
 	if (!test_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state)) {
-		rtl_err(rtl, "rtl: received response before ACK for request"
-			" (rqid = 0x%04x)\n", rqid);
+		rtl_err(rtl, "rtl: received response before ACK for request (rqid = 0x%04x)\n",
+			rqid);
 
 		/*
 		 * NB: Timeout has already been canceled, request already been
@@ -804,8 +803,8 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 		break;
 
 	default:
-		ptl_err(p, "rtl: rx: unknown frame payload type"
-			" (type: 0x%02x)\n", data->ptr[0]);
+		ptl_err(p, "rtl: rx: unknown frame payload type (type: 0x%02x)\n",
+			data->ptr[0]);
 		break;
 	}
 }
@@ -883,7 +882,9 @@ void ssh_rtl_destroy(struct ssh_rtl *rtl)
 
 static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
-	struct ssh_request *rqst = to_ssh_request(p, packet);
+	struct ssh_request *rqst;
+
+	rqst = to_ssh_request(p, packet);
 	rqst->ops->release(rqst);
 }
 
@@ -976,7 +977,7 @@ static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
  */
 int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 {
-	const unsigned init_flags = SSAM_REQUEST_UNSEQUENCED;
+	const unsigned int init_flags = SSAM_REQUEST_UNSEQUENCED;
 	struct ssh_flush_request rqst;
 	int status;
 
