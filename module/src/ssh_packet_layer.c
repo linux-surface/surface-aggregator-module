@@ -1292,9 +1292,9 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	WRITE_ONCE(ptl->rtx_timeout.expires, KTIME_MAX);
 	/*
 	 * Ensure that the reaper is marked as deactivated before we continue
-	 * checking packets to prevent lost-update problems when a new packet
-	 * is added to the pending set and ssh_ptl_timeout_reaper_mod is called
-	 * during execution of part below.
+	 * checking packets to prevent lost-update problems when a packet is
+	 * added to the pending set and ssh_ptl_timeout_reaper_mod is called
+	 * during execution of the part below.
 	 */
 	smp_mb__after_atomic();
 
