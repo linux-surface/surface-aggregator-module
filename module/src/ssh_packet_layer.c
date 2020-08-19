@@ -1153,6 +1153,9 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	return 0;
 }
 
+/*
+ * This function must be called with pending lock held.
+ */
 static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	struct list_head *head;
