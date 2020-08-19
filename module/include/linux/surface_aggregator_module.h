@@ -62,8 +62,10 @@ struct ssh_frame {
 static_assert(sizeof(struct ssh_frame) == 4);
 
 /*
- * Maximum SSH frame payload length in bytes. This is the physical maximum
- * length of the protocol. Implementations may set a more constrained limit.
+ * SSH_FRAME_MAX_PAYLOAD_SIZE - Maximum SSH frame payload length in bytes.
+ *
+ * This is the physical maximum length of the protocol. Implementations may
+ * set a more constrained limit.
  */
 #define SSH_FRAME_MAX_PAYLOAD_SIZE	U16_MAX
 
@@ -102,9 +104,11 @@ struct ssh_command {
 
 static_assert(sizeof(struct ssh_command) == 8);
 
-/*
- * Maximum SSH command payload length in bytes. This is the physical maximum
- * length of the protocol. Implementations may set a more constrained limit.
+/**
+ * SSH_COMMAND_MAX_PAYLOAD_SIZE - Maximum SSH command payload length in bytes.
+ *
+ * This is the physical maximum length of the protocol. Implementations may
+ * set a more constrained limit.
  */
 #define SSH_COMMAND_MAX_PAYLOAD_SIZE \
 	(SSH_FRAME_MAX_PAYLOAD_SIZE - sizeof(struct ssh_command))
@@ -129,36 +133,51 @@ struct ssh_notification_params {
 static_assert(sizeof(struct ssh_notification_params) == 5);
 
 /**
- * Base-length of a SSH message. This is the minimum number of bytes required
- * to form a message. The actual message length is SSH_MSG_LEN_BASE plus the
- * length of the frame payload.
+ * SSH_MSG_LEN_BASE - Base-length of a SSH message.
+ *
+ * This is the minimum number of bytes required to form a message. The actual
+ * message length is SSH_MSG_LEN_BASE plus the length of the frame payload.
  */
 #define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3ull * sizeof(u16))
 
 /**
- * Length of a SSH control message.
+ * SSH_MSG_LEN_CTRL - Length of a SSH control message.
+ *
+ * This is the length of a SSH control message, which is equal to a SSH
+ * message without any payload.
  */
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
 /**
+ * SSH_MESSAGE_LENGTH() - Comute lenght of SSH message.
+ *
  * Length of a SSH message with payload of specified size.
  */
 #define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + payload_size)
 
 /**
+ * SSH_COMMAND_MESSAGE_LENGTH() - Compute length of SSH command message.
+ *
  * Length of a SSH command message with command payload of specified size.
  */
 #define SSH_COMMAND_MESSAGE_LENGTH(payload_size) \
 	SSH_MESSAGE_LENGTH(sizeof(struct ssh_command) + payload_size)
 
 /**
- * Offset of the specified struct ssh_frame field in the raw SSH message data.
+ * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
+ * frame.
+ *
+ * Offset of the specified &struct ssh_frame field in the raw SSH message data.
  */
 #define SSH_MSGOFFSET_FRAME(field) \
 	(sizeof(u16) + offsetof(struct ssh_frame, field))
 
 /**
- * Offset of the specified struct ssh_command field in the raw SSH message data.
+ * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
+ * command.
+ *
+ * Offset of the specified &struct ssh_command field in the raw SSH message
+ * data.
  */
 #define SSH_MSGOFFSET_COMMAND(field) \
 	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
