@@ -1072,8 +1072,7 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 			 * The packet has not been found in the set of pending
 			 * packets.
 			 */
-			ptl_warn(ptl, "ptl: received ACK for non-pending"
-				 " packet\n");
+			ptl_warn(ptl, "ptl: received ACK for non-pending packet\n");
 		} else {
 			/*
 			 * The packet is pending, but we are not allowed to take
@@ -1105,8 +1104,7 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	}
 
 	if (unlikely(!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state))) {
-		ptl_err(ptl, "ptl: received ACK before packet had been fully"
-			" transmitted\n");
+		ptl_err(ptl, "ptl: received ACK before packet had been fully transmitted\n");
 		status = -EREMOTEIO;
 	}
 
