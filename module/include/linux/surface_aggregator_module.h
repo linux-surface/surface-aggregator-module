@@ -83,9 +83,9 @@ enum ssh_payload_type {
  * @type:    The type of the payload. See &enum ssh_payload_type. Should be
  *           SSH_PLD_TYPE_CMD for this struct.
  * @tc:      Command target category.
- * @chn_out: Output channel. Should be zero if this an incoming (EC to host)
+ * @tid_out: Output target ID. Should be zero if this an incoming (EC to host)
  *           message.
- * @chn_in:  Input channel. Should be zero if this is an outgoing (hos to EC)
+ * @tid_in:  Input target ID. Should be zero if this is an outgoing (hos to EC)
  *           message.
  * @iid:     Instance ID.
  * @rqid:    Request ID. Used to match requests with responses and differentiate
@@ -95,8 +95,8 @@ enum ssh_payload_type {
 struct ssh_command {
 	u8 type;
 	u8 tc;
-	u8 chn_out;
-	u8 chn_in;
+	u8 tid_out;
+	u8 tid_in;
 	u8 iid;
 	__le16 rqid;
 	u8 cid;
@@ -415,9 +415,9 @@ enum ssam_event_flags {
 
 struct ssam_event {
 	u8 target_category;
+	u8 target_id;
 	u8 command_id;
 	u8 instance_id;
-	u8 channel;
 	u16 length;
 	u8 data[0];
 };
@@ -429,9 +429,9 @@ enum ssam_request_flags {
 
 struct ssam_request {
 	u8 target_category;
+	u8 target_id;
 	u8 command_id;
 	u8 instance_id;
-	u8 channel;
 	u16 flags;
 	u16 length;
 	const u8 *payload;
@@ -527,9 +527,9 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 
 struct ssam_request_spec {
 	u8 target_category;
+	u8 target_id;
 	u8 command_id;
 	u8 instance_id;
-	u8 channel;
 	u8 flags;
 };
 
@@ -546,9 +546,9 @@ struct ssam_request_spec_md {
 		struct ssam_request rqst;					\
 										\
 		rqst.target_category = s.target_category;			\
+		rqst.target_id = s.target_id;					\
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = s.instance_id;				\
-		rqst.channel = s.channel;					\
 		rqst.flags = s.flags;						\
 		rqst.length = 0;						\
 		rqst.payload = NULL;						\
@@ -563,9 +563,9 @@ struct ssam_request_spec_md {
 		struct ssam_request rqst;					\
 										\
 		rqst.target_category = s.target_category;			\
+		rqst.target_id = s.target_id;					\
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = s.instance_id;				\
-		rqst.channel = s.channel;					\
 		rqst.flags = s.flags;						\
 		rqst.length = sizeof(wtype);					\
 		rqst.payload = (u8 *)in;					\
@@ -583,9 +583,9 @@ struct ssam_request_spec_md {
 		int status;							\
 										\
 		rqst.target_category = s.target_category;			\
+		rqst.target_id = s.target_id;					\
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = s.instance_id;				\
-		rqst.channel = s.channel;					\
 		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
 		rqst.length = 0;						\
 		rqst.payload = NULL;						\
@@ -611,16 +611,16 @@ struct ssam_request_spec_md {
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_MD_W(name, wtype, spec...)			\
-	int name(struct ssam_controller *ctrl, u8 chn, u8 iid, const wtype *in)	\
+	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, const wtype *in)	\
 	{									\
 		struct ssam_request_spec_md s					\
 			= (struct ssam_request_spec_md)spec;			\
 		struct ssam_request rqst;					\
 										\
 		rqst.target_category = s.target_category;			\
+		rqst.target_id = tid;						\
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = iid;						\
-		rqst.channel = chn;						\
 		rqst.flags = s.flags;						\
 		rqst.length = sizeof(wtype);					\
 		rqst.payload = (u8 *)in;					\
@@ -630,7 +630,7 @@ struct ssam_request_spec_md {
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_MD_R(name, rtype, spec...)			\
-	int name(struct ssam_controller *ctrl, u8 chn, u8 iid, rtype *out)	\
+	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, rtype *out)	\
 	{									\
 		struct ssam_request_spec_md s					\
 			= (struct ssam_request_spec_md)spec;			\
@@ -639,9 +639,9 @@ struct ssam_request_spec_md {
 		int status;							\
 										\
 		rqst.target_category = s.target_category;			\
+		rqst.target_id = tid;						\
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = iid;						\
-		rqst.channel = chn;						\
 		rqst.flags = s.flags | SSAM_REQUEST_HAS_RESPONSE;		\
 		rqst.length = 0;						\
 		rqst.payload = NULL;						\
@@ -706,7 +706,7 @@ static inline int ssam_notifier_to_errno(u32 ret)
 
 struct ssam_event_registry {
 	u8 target_category;
-	u8 channel;
+	u8 target_id;
 	u8 cid_enable;
 	u8 cid_disable;
 };
@@ -717,10 +717,10 @@ struct ssam_event_id {
 };
 
 
-#define SSAM_EVENT_REGISTRY(tc, chn, cid_en, cid_dis)	\
+#define SSAM_EVENT_REGISTRY(tc, tid, cid_en, cid_dis)	\
 	((struct ssam_event_registry) {			\
 		.target_category = (tc),		\
-		.channel = (chn),			\
+		.target_id = (tid),			\
 		.cid_enable = (cid_en),			\
 		.cid_disable = (cid_dis),		\
 	})
@@ -763,15 +763,15 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 struct ssam_device_uid {
 	u8 category;
-	u8 channel;
+	u8 target;
 	u8 instance;
 	u8 function;
 };
 
-#define SSAM_DUID(__cat, __chn, __iid, __fun)		\
+#define SSAM_DUID(__cat, __tid, __iid, __fun)		\
 	((struct ssam_device_uid) {			\
 		.category = SSAM_SSH_TC_##__cat,	\
-		.channel = (__chn),			\
+		.target = (__tid),			\
 		.instance = (__iid),			\
 		.function = (__fun)			\
 	})
@@ -784,7 +784,7 @@ struct ssam_device_uid {
 // TODO: the following definitions and struct belongs into mod_devicetable with
 //       file2alias support
 
-#define SSAM_MATCH_CHANNEL	0x1
+#define SSAM_MATCH_TARGET	0x1
 #define SSAM_MATCH_INSTANCE	0x2
 #define SSAM_MATCH_FUNCTION	0x4
 
@@ -792,7 +792,7 @@ struct ssam_device_id {
 	u8 match_flags;
 
 	u8 category;
-	u8 channel;
+	u8 target;
 	u8 instance;
 	u8 function;
 
@@ -802,16 +802,16 @@ struct ssam_device_id {
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
 
 
-#define SSAM_ANY_CHN		0xffff
+#define SSAM_ANY_TID		0xffff
 #define SSAM_ANY_IID		0xffff
 #define SSAM_ANY_FUN		0xffff
 
-#define SSAM_DEVICE(__cat, __chn, __iid, __fun)					\
-	.match_flags = (((__chn) != SSAM_ANY_CHN) ? SSAM_MATCH_CHANNEL : 0)	\
+#define SSAM_DEVICE(__cat, __tid, __iid, __fun)					\
+	.match_flags = (((__tid) != SSAM_ANY_TID) ? SSAM_MATCH_TARGET : 0)	\
 		     | (((__iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
 		     | (((__fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0),	\
 	.category = SSAM_SSH_TC_##__cat,					\
-	.channel = ((__chn) != SSAM_ANY_CHN) ? (__chn) : 0,			\
+	.target   = ((__tid) != SSAM_ANY_TID) ? (__tid) : 0,			\
 	.instance = ((__iid) != SSAM_ANY_IID) ? (__iid) : 0,			\
 	.function = ((__fun) != SSAM_ANY_FUN) ? (__fun) : 0			\
 
@@ -918,7 +918,7 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, wtype, spec)	\
 	int name(struct ssam_device *sdev, const wtype *in)		\
 	{								\
-		return __raw_##name(sdev->ctrl, sdev->uid.channel,	\
+		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
 				    sdev->uid.instance, in);		\
 	}
 
@@ -926,7 +926,7 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 	SSAM_DEFINE_SYNC_REQUEST_MD_R(__raw_##name, rtype, spec)	\
 	int name(struct ssam_device *sdev, rtype *out)			\
 	{								\
-		return __raw_##name(sdev->ctrl, sdev->uid.channel,	\
+		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
 				    sdev->uid.instance, out);		\
 	}
 
@@ -935,7 +935,7 @@ static inline bool ssam_event_matches_device(struct ssam_device_uid uid,
 					     const struct ssam_event *event)
 {
 	return uid.category == event->target_category
-		&& uid.channel == event->channel
+		&& uid.target == event->target_id
 		&& uid.instance == event->instance_id;
 }
 

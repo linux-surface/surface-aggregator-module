@@ -7,12 +7,12 @@ from libssam import Controller, Request
 
 
 EVCMDS = {
-    'sam-enable':  {'chn': 1, 'tc': 0x01, 'cid': 0x0b, 'iid': 0x00, 'snc': 0x01},
-    'sam-disable': {'chn': 1, 'tc': 0x01, 'cid': 0x0c, 'iid': 0x00, 'snc': 0x01},
-    'kip-enable':  {'chn': 2, 'tc': 0x0e, 'cid': 0x27, 'iid': 0x00, 'snc': 0x01},
-    'kip-disable': {'chn': 2, 'tc': 0x0e, 'cid': 0x28, 'iid': 0x00, 'snc': 0x01},
-    'reg-enable':  {'chn': 2, 'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
-    'reg-disable': {'chn': 2, 'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
+    'sam-enable':  {'tid': 1, 'tc': 0x01, 'cid': 0x0b, 'iid': 0x00, 'snc': 0x01},
+    'sam-disable': {'tid': 1, 'tc': 0x01, 'cid': 0x0c, 'iid': 0x00, 'snc': 0x01},
+    'kip-enable':  {'tid': 2, 'tc': 0x0e, 'cid': 0x27, 'iid': 0x00, 'snc': 0x01},
+    'kip-disable': {'tid': 2, 'tc': 0x0e, 'cid': 0x28, 'iid': 0x00, 'snc': 0x01},
+    'reg-enable':  {'tid': 2, 'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
+    'reg-disable': {'tid': 2, 'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
 }
 
 
@@ -28,8 +28,8 @@ def event_payload(rqid, tc, iid, seq):
     return bytes([tc, seq, lo16(rqid), hi16(rqid), iid])
 
 
-def command(tc, cid, iid, chn, snc, payload):
-    return Request(tc, cid, iid, chn, snc, payload, 8)
+def command(tc, tid, cid, iid, snc, payload):
+    return Request(tc, tid, cid, iid, snc, payload, 8)
 
 
 def event_command(name, ev_tc, ev_seq, ev_iid):

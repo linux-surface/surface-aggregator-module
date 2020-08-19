@@ -8,10 +8,10 @@ Basics / Concepts / Nomenclature
 Requests consist of the following bytes:
 
 - TC:  Target category. The category of the command.
+- TID: Target ID. Currently known values are 0x01 and 0x02.
 - CID: Command ID. The ID of the command.
 - IID: Instance ID. In case of multiple devices with the same functionality,
        this is non-zero and indicates the device.
-- CHN: Transport channel. Currently known values are 0x01 and 0x02.
 
 These four bytes uniquely define a command. In addition, commands can have a
 payload and return a response.
@@ -68,7 +68,7 @@ the abbreviation found there.
 List of System Requests (TC = 0x01)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x01  0x00  0x01  no       yes       Get FWCHK_PENDING      probing
     0x02  0x00  0x01  no       yes       Set FWCHK_PENDING      probing
@@ -106,7 +106,7 @@ Abbreviations:
 List of Power Subsystem Requests (TC = 0x02)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x01  #BAT  0x01  no       yes       ACPI/_STA              dsdt
     0x02  #BAT  0x01  no       yes       ACPI/_BIX              dsdt
@@ -125,7 +125,7 @@ Note: CID 0x0b to 0x0f are Intel DPTF commands.
 List of Power Subsystem Events (TC = 0x02)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x15  #BAT  0x01  no       _BIX data changed                log(+dsdt)
     0x16  #BAT  0x01  no       _BST data changed                log(+dsdt)
@@ -139,7 +139,7 @@ List of Power Subsystem Events (TC = 0x02)
 List of Thermal Subsystem Requests (TC = 0x03)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x01  #SEN  0x01  no       yes       ACPI/_TMP              dsdt
     0x02  0x00  0x01  no       yes       Get performance mode   log
@@ -154,7 +154,7 @@ Note: CID 0x09 is an Intel DPTF command.
 List of Thermal Subsystem Events (TC = 0x03)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x0b  #SEN  0x01  ?        Notify sensor trip-point         log+dsdt
 
@@ -162,7 +162,7 @@ List of Thermal Subsystem Events (TC = 0x03)
 List of SL1/SL2 Keyboard Events (TC = 0x08)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x03  0x00  0x02  yes      Keyboard HID input               log
 
@@ -170,7 +170,7 @@ List of SL1/SL2 Keyboard Events (TC = 0x08)
 List of KIP System Requests (TC = 0x0e)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x27     ?  0x02  yes      Events enable                    rev
     0x28     ?  0x02  yes      Events disable                   rev
@@ -179,7 +179,7 @@ List of KIP System Requests (TC = 0x0e)
 List of Detachment System Requests (TC = 0x11)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x06  0x00  0x01  no       no        Lock latch             dsdt
     0x07  0x00  0x01  no       no        Unlock latch           dsdt
@@ -196,7 +196,7 @@ List of Detachment System Requests (TC = 0x11)
 List of Detachment System Events (TC = 0x11)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x0c  0x00  0x01  yes      connection                       log
 
@@ -209,7 +209,7 @@ List of Detachment System Events (TC = 0x11)
 List of Input System Requests (TC = 0x15)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x01  any   0x02  yes      no        output report          log
     0x02  any   0x02  yes      yes       get feature report     log
@@ -223,7 +223,7 @@ accumulated.
 List of Input System Events (TC = 0x15)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x00  #ID   0x02  yes      input report (touchpad)          log
 
@@ -233,7 +233,7 @@ Note: Keyboard events are sent over IID 0 for SL3
 List of REG System Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Name/Function                    Source
+     CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x01     ?  0x02  yes      Events enable                    rev
     0x02     ?  0x02  yes      Events disable                   rev
@@ -254,7 +254,7 @@ off the system), which might be undefined.
 List of Unknown System Requests (TC = 0x01)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
     0x0d   0    0x01  ?        yes       ?                      probing
     0x0e   0    0x01  ?        yes       ?                      probing
@@ -272,7 +272,7 @@ List of Unknown System Requests (TC = 0x01)
 List of Unknown Power Subsystem Requests (TC = 0x02)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
     0x00   01   0x01  ?        yes       ?                      probing
     0x08   01   0x01  ?        yes       ?                      probing
@@ -323,7 +323,7 @@ run on IID=0 likely return the same data as if run on IID=1.
 List of Unknown PMC Requests (TC = 0x04)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
     0x01  0x00  0x01  no       no        reboot                 probing
     0x04  0x00  0x01  no       no        power-off              probing
@@ -335,7 +335,7 @@ List of Unknown PMC Requests (TC = 0x04)
 List of Unknown TCL Requests (TC = 0x0C)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
     0x0a  0x00  0x02  yes      yes       called for CID=0x0c    rev
     0x0b  1+    0x02  yes      yes       called for CID=0x0c    rev
@@ -365,7 +365,7 @@ the buffer does not hold any more data beyond this read request.
 List of Unknown KIP Requests (TC = 0x0E)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
     0x0a  0x00  0x02  no       no        called on display off  rev
     0x0b  0x00  0x02  no       no        called on display on   rev
@@ -377,7 +377,7 @@ List of Unknown KIP Requests (TC = 0x0E)
 List of Unknown REG Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
-     CID   IID   CHN  Payload  Response  Name/Function          Source
+     CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x02  0x00  0x02  yes      yes       ?? (possibly toggle)   log
 

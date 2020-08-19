@@ -179,16 +179,16 @@ MODULE_PARM_DESC(dtx_latch, "lock/unlock DTX base latch in accordance to power-s
 
 static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_lock, {
 	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
 	.command_id      = 0x06,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_unlock, {
 	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
 	.command_id      = 0x07,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, const char *entry) {

@@ -13,7 +13,7 @@ static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 	struct ssam_device *sdev = to_ssam_device(dev);
 
 	return snprintf(buf, PAGE_SIZE - 1, "ssam:c%02Xt%02Xi%02xf%02X\n",
-			sdev->uid.category, sdev->uid.channel,
+			sdev->uid.category, sdev->uid.target,
 			sdev->uid.instance, sdev->uid.function);
 }
 static DEVICE_ATTR_RO(modalias);
@@ -29,7 +29,7 @@ static int ssam_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 	struct ssam_device *sdev = to_ssam_device(dev);
 
 	return add_uevent_var(env, "MODALIAS=ssam:c%02Xt%02Xi%02xf%02X",
-			      sdev->uid.category, sdev->uid.channel,
+			      sdev->uid.category, sdev->uid.target,
 			      sdev->uid.instance, sdev->uid.function);
 }
 
@@ -75,7 +75,7 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 	sdev->uid = uid;
 
 	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
-		     sdev->uid.category, sdev->uid.channel, sdev->uid.instance,
+		     sdev->uid.category, sdev->uid.target, sdev->uid.instance,
 		     sdev->uid.function);
 
 	return sdev;
@@ -168,7 +168,7 @@ static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
 	if (id->category != uid.category)
 		return false;
 
-	if ((id->match_flags & SSAM_MATCH_CHANNEL) && id->channel != uid.channel)
+	if ((id->match_flags & SSAM_MATCH_TARGET) && id->target != uid.target)
 		return false;
 
 	if ((id->match_flags & SSAM_MATCH_INSTANCE) && id->instance != uid.instance)
@@ -191,7 +191,7 @@ static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
 {
 	return id->match_flags == 0
 		&& id->category == 0
-		&& id->channel == 0
+		&& id->target == 0
 		&& id->instance == 0
 		&& id->function == 0
 		&& id->driver_data == 0;

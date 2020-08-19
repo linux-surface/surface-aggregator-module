@@ -69,7 +69,7 @@ struct ssam_event_queue {
 	struct work_struct work;
 };
 
-struct ssam_event_channel {
+struct ssam_event_target {
 	struct ssam_event_queue queue[SSH_NUM_EVENTS];
 };
 
@@ -78,7 +78,7 @@ struct ssam_cplt {
 	struct workqueue_struct *wq;
 
 	struct {
-		struct ssam_event_channel channel[SSH_NUM_CHANNELS];
+		struct ssam_event_target target[SSH_NUM_TARGETS];
 		struct ssam_nf notif;
 	} event;
 };

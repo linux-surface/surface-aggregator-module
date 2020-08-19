@@ -61,9 +61,9 @@ class _RawRequestResponse(ctypes.Structure):
 class _RawRequest(ctypes.Structure):
     _fields_ = [
         ('target_category', ctypes.c_uint8),
+        ('target_id', ctypes.c_uint8),
         ('command_id', ctypes.c_uint8),
         ('instance_id', ctypes.c_uint8),
-        ('channel', ctypes.c_uint8),
         ('flags', ctypes.c_uint16),
         ('status', ctypes.c_int16),
         ('payload', _RawRequestPayload),
@@ -73,19 +73,19 @@ class _RawRequest(ctypes.Structure):
 
 class Request:
     target_category: int
+    target_id: int
     command_id: int
     instance_id: int
-    channel: int
     flags: int
     payload: bytes
     response_cap: int
 
-    def __init__(self, target_category, command_id, instance_id=0, channel=1,
+    def __init__(self, target_category, target_id, command_id, instance_id,
                  flags=0, payload=bytes(), response_cap=1024):
         self.target_category = target_category
+        self.target_id = target_id
         self.command_id = command_id
         self.instance_id = instance_id
-        self.channel = channel
         self.flags = flags
         self.payload = payload
         self.response_cap = response_cap
@@ -111,9 +111,9 @@ def _request(fd, rqst: Request):
     # set up basic request fields
     raw = _RawRequest()
     raw.target_category = rqst.target_category
+    raw.target_id = rqst.target_id
     raw.command_id = rqst.command_id
     raw.instance_id = rqst.instance_id
-    raw.channel = rqst.channel
     raw.flags = rqst.flags
     raw.status = -errno.ENXIO
 

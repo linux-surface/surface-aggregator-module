@@ -279,16 +279,16 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 
 	if (status < 0) {
 		dev_err(dev, "event: error handling event: %d "
-			"(tc: 0x%02x, cid: 0x%02x, iid: 0x%02x, chn: 0x%02x)\n",
-			status, event->target_category, event->command_id,
-			event->instance_id, event->channel);
+			"(tc: 0x%02x, tid: 0x%02x, cid: 0x%02x, iid: 0x%02x)\n",
+			status, event->target_category, event->target_id,
+			event->command_id, event->instance_id);
 	}
 
 	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
 		dev_warn(dev, "event: unhandled event (rqid: 0x%02x, "
-			 "tc: 0x%02x, cid: 0x%02x, iid: 0x%02x, chn: 0x%02x)\n",
-			 rqid, event->target_category, event->command_id,
-			 event->instance_id, event->channel);
+			 "tc: 0x%02x, tid: 0x%02x, cid: 0x%02x, iid: 0x%02x)\n",
+			 rqid, event->target_category, event->target_id,
+			 event->command_id, event->instance_id);
 	}
 }
 
@@ -435,23 +435,22 @@ static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
 }
 
 static struct ssam_event_queue *ssam_cplt_get_event_queue(
-		struct ssam_cplt *cplt, u8 channel, u16 rqid)
+		struct ssam_cplt *cplt, u8 tid, u16 rqid)
 {
 	u16 event = ssh_rqid_to_event(rqid);
-	u16 chidx = ssh_channel_to_index(channel);
+	u16 tidx = ssh_tid_to_index(tid);
 
 	if (!ssh_rqid_is_event(rqid)) {
-		dev_err(cplt->dev, "event: unsupported rqid: 0x%04x\n", rqid);
+		dev_err(cplt->dev, "event: unsupported rquest ID: 0x%04x\n", rqid);
 		return NULL;
 	}
 
-	if (!ssh_channel_is_valid(channel)) {
-		dev_warn(cplt->dev, "event: unsupported channel: %u\n",
-			 channel);
-		chidx = 0;
+	if (!ssh_tid_is_valid(tid)) {
+		dev_warn(cplt->dev, "event: unsupported target ID: %u\n", tid);
+		tidx = 0;
 	}
 
-	return &cplt->event.channel[chidx].queue[event];
+	return &cplt->event.target[tidx].queue[event];
 }
 
 static inline bool ssam_cplt_submit(struct ssam_cplt *cplt,
@@ -465,7 +464,7 @@ static int ssam_cplt_submit_event(struct ssam_cplt *cplt,
 {
 	struct ssam_event_queue *evq;
 
-	evq = ssam_cplt_get_event_queue(cplt, item->event.channel, item->rqid);
+	evq = ssam_cplt_get_event_queue(cplt, item->event.target_id, item->rqid);
 	if (!evq)
 		return -EINVAL;
 
@@ -515,7 +514,7 @@ static void ssam_event_queue_init(struct ssam_cplt *cplt,
 
 static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
 {
-	struct ssam_event_channel *channel;
+	struct ssam_event_target *target;
 	int status, c, i;
 
 	cplt->dev = dev;
@@ -524,11 +523,11 @@ static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
 	if (!cplt->wq)
 		return -ENOMEM;
 
-	for (c = 0; c < ARRAY_SIZE(cplt->event.channel); c++) {
-		channel = &cplt->event.channel[c];
+	for (c = 0; c < ARRAY_SIZE(cplt->event.target); c++) {
+		target = &cplt->event.target[c];
 
-		for (i = 0; i < ARRAY_SIZE(channel->queue); i++)
-			ssam_event_queue_init(cplt, &channel->queue[i]);
+		for (i = 0; i < ARRAY_SIZE(target->queue); i++)
+			ssam_event_queue_init(cplt, &target->queue[i]);
 	}
 
 	status = ssam_nf_init(&cplt->event.notif);
@@ -617,9 +616,9 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 
 	item->rqid = get_unaligned_le16(&cmd->rqid);
 	item->event.target_category = cmd->tc;
+	item->event.target_id = cmd->tid_in;
 	item->event.command_id = cmd->cid;
 	item->event.instance_id = cmd->iid;
-	item->event.channel = cmd->chn_in;
 	memcpy(&item->event.data[0], data->ptr, data->len);
 
 	WARN_ON(ssam_cplt_submit_event(&ctrl->cplt, item));
@@ -1026,37 +1025,37 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_with_buffer);
 
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_get_firmware_version, __le32, {
 	.target_category = SSAM_SSH_TC_SAM,
+	.target_id       = 0x01,
 	.command_id      = 0x13,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_display_off, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
+	.target_id       = 0x01,
 	.command_id      = 0x15,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_display_on, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
+	.target_id       = 0x01,
 	.command_id      = 0x16,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_exit, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
+	.target_id       = 0x01,
 	.command_id      = 0x33,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
 	.target_category = SSAM_SSH_TC_SAM,
+	.target_id       = 0x01,
 	.command_id      = 0x34,
 	.instance_id     = 0x00,
-	.channel         = 0x01,
 });
 
 static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
@@ -1081,9 +1080,9 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	put_unaligned_le16(rqid, &params.request_id);
 
 	rqst.target_category = reg.target_category;
+	rqst.target_id = reg.target_id;
 	rqst.command_id = reg.cid_enable;
 	rqst.instance_id = 0x00;
-	rqst.channel = reg.channel;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(params);
 	rqst.payload = (u8 *)&params;
@@ -1132,9 +1131,9 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	put_unaligned_le16(rqid, &params.request_id);
 
 	rqst.target_category = reg.target_category;
+	rqst.target_id = reg.target_id;
 	rqst.command_id = reg.cid_disable;
 	rqst.instance_id = 0x00;
-	rqst.channel = reg.channel;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(params);
 	rqst.payload = (u8 *)&params;

@@ -22,9 +22,9 @@ def unpack_buffer(buf):
 def build_command(iid, buf_id, offset, size):
     return Request(
         target_category=0x0c,
+        target_id=1,
         command_id=0x0c,
         instance_id=iid,
-        channel=1,
         flags=libssam.REQUEST_HAS_RESPONSE,
         payload=pack_block_data(buf_id, offset, size, 0))
 
