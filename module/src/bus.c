@@ -231,7 +231,7 @@ int __ssam_device_driver_register(struct ssam_device_driver *sdrv,
 	sdrv->driver.bus = &ssam_bus_type;
 
 	/* force drivers to async probe so I/O is possible in probe */
-        sdrv->driver.probe_type = PROBE_PREFER_ASYNCHRONOUS;
+	sdrv->driver.probe_type = PROBE_PREFER_ASYNCHRONOUS;
 
 	return driver_register(&sdrv->driver);
 }
@@ -271,6 +271,7 @@ int ssam_bus_register(void)
 	return bus_register(&ssam_bus_type);
 }
 
-void ssam_bus_unregister(void) {
+void ssam_bus_unregister(void)
+{
 	return bus_unregister(&ssam_bus_type);
 }
