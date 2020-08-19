@@ -578,6 +578,11 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 		return;
 
 	WRITE_ONCE(packet->timestamp, timestamp);
+	/*
+	 * Ensure timestamp is set before starting the reaper. Paired with
+	 * implicit barrier following check on ssh_packet_get_expiration in
+	 * ssh_ptl_timeout_reap.
+	 */
 	smp_mb__after_atomic();
 
 	ssh_ptl_timeout_reaper_mod(packet->ptl, timestamp, timestamp + timeout);
@@ -807,11 +812,8 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 
 		list_del(&p->queue_node);
 
-		/*
-		 * Ensure that the "queued" bit gets cleared after setting the
-		 * "transmitting" bit to guaranteee non-zero flags.
-		 */
 		set_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state);
+		// ensure that state never gets zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
 
@@ -856,11 +858,9 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 
 	ptl_dbg(ptl, "ptl: successfully transmitted packet %p\n", packet);
 
-	/*
-	 * Transition to state to "transmitted". Ensure that the flags never get
-	 * zero with barrier.
-	 */
+	// transition state to "transmitted"
 	set_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &packet->state);
+	// ensure that state never gets zero
 	smp_mb__before_atomic();
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
@@ -879,11 +879,9 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 
 static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 {
-	/*
-	 * Transmission failure: Lock the packet and try to complete it. Ensure
-	 * that the flags never get zero with barrier.
-	 */
+	// transmission failure: lock the packet and try to complete it
 	set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state);
+	// ensure that state never gets zero
 	smp_mb__before_atomic();
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
@@ -983,6 +981,12 @@ void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
 
 	if (force || atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING) {
 		WRITE_ONCE(ptl->tx.thread_signal, true);
+		/*
+		 * Ensure that the signal is set before we wake the transmitter
+		 * thread to prevent lost updates: If the signal is not set,
+		 * when the thread checks it in ssh_ptl_tx_threadfn_wait, it
+		 * may go back to sleep.
+		 */
 		smp_mb__after_atomic();
 		wake_up(&ptl->tx.thread_wq);
 	}
@@ -1026,8 +1030,8 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 			continue;
 
 		/*
-		 * In case we receive an ACK while handling a transmission error
-		 * completion. The packet will be removed shortly.
+		 * In case we receive an ACK while handling a transmission
+		 * error completion. The packet will be removed shortly.
 		 */
 		if (unlikely(test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))) {
 			packet = ERR_PTR(-EPERM);
@@ -1035,10 +1039,11 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 		}
 
 		/*
-		 * Mark packet as ACKed and remove it from pending. Ensure that
-		 * the flags never get zero with barrier.
+		 * Mark the packet as ACKed and remove it from pending by
+		 * removing its node and decrementing the pending counter.
 		 */
 		set_bit(SSH_PACKET_SF_ACKED_BIT, &p->state);
+		// ensure that state never gets zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
 
@@ -1165,8 +1170,13 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	// find first node with lower priority
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
+	/*
+	 * Reset the timestamp. This must be called and executed before the
+	 * pending lock is released. The lock release should be a sufficient
+	 * barrier for this operation, thus there is no need to manually add
+	 * one here.
+	 */
 	WRITE_ONCE(packet->timestamp, KTIME_MAX);
-	smp_mb__after_atomic();
 
 	// add packet
 	list_add_tail(&ssh_packet_get(packet)->queue_node, head);
@@ -1277,6 +1287,12 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	 * packets to avoid lost-update type problems.
 	 */
 	WRITE_ONCE(ptl->rtx_timeout.expires, KTIME_MAX);
+	/*
+	 * Ensure that the reaper is marked as deactivated before we continue
+	 * checking packets to prevent lost-update problems when a new packet
+	 * is added to the pending set and ssh_ptl_timeout_reaper_mod is called
+	 * during execution of part below.
+	 */
 	smp_mb__after_atomic();
 
 	spin_lock(&ptl->pending.lock);
@@ -1618,6 +1634,14 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 
 	// ensure that no new packets (including ACK/NAK) can be submitted
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
+	/*
+	 * Ensure that the layer gets marked as shut-down before actually
+	 * stopping it. In combination with the check in ssh_ptl_queue_push,
+	 * this guarantees that no new packets can be added and all already
+	 * queued packets are properly cancelled. In combination with the check
+	 * in ssh_ptl_rx_rcvbuf, this guarantees that received data is properly
+	 * cut off.
+	 */
 	smp_mb__after_atomic();
 
 	status = ssh_ptl_rx_stop(ptl);
@@ -1654,6 +1678,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	spin_lock(&ptl->queue.lock);
 	list_for_each_entry_safe(p, n, &ptl->queue.head, queue_node) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
+		// ensure that state does not get zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
 
@@ -1666,6 +1691,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	spin_lock(&ptl->pending.lock);
 	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
+		// ensure that state does not get zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
 
