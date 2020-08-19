@@ -938,7 +938,7 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	int status;
 
 	/*
-	 * This is only a superficial checks. In general, the caller needs to
+	 * This is only a superficial check. In general, the caller needs to
 	 * ensure that the controller is initialized and is not (and does not
 	 * get) suspended during use, i.e. until the request has been completed
 	 * (if _absolutely_ necessary, by use of ssam_controller_statelock/
