@@ -192,11 +192,9 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 			break;
 		}
 
-		/*
-		 * Remove from queue and mark as transmitting. Ensure that the
-		 * state does not get zero via memory barrier.
-		 */
+		// remove from queue and mark as transmitting
 		set_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &p->state);
+		// ensure state never gets zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &p->state);
 
@@ -235,7 +233,16 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 		 * down. Complete it here.
 		 */
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state);
-		smp_mb__after_atomic();
+		/*
+		 * Note: A barrier is not required here, as there are only two
+		 * references in the system at this point: The one that we have,
+		 * and the other one that belongs to the pending set. Due to the
+		 * request being marked as "transmitting", our process is the
+		 * only one allowed to remove the pending node and change the
+		 * state. Normally, the task would fall to the packet callback,
+		 * but as this is a path where submission failed, this callback
+		 * will never be executed.
+		 */
 
 		ssh_rtl_pending_remove(rqst);
 		ssh_rtl_complete_with_status(rqst, -ESHUTDOWN);
@@ -373,6 +380,11 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 		return;
 
 	WRITE_ONCE(rqst->timestamp, timestamp);
+	/*
+	 * Ensure timestamp is set before starting the reaper. Paired with
+	 * implicit barrier following check on ssh_request_get_expiration in
+	 * ssh_rtl_timeout_reap.
+	 */
 	smp_mb__after_atomic();
 
 	ssh_rtl_timeout_reaper_mod(rtl, timestamp, timestamp + timeout);
@@ -411,11 +423,11 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 
 		/*
 		 * Mark as "response received" and "locked" as we're going to
-		 * complete it. Ensure that the state doesn't get zero by
-		 * employing a memory barrier.
+		 * complete it.
 		 */
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state);
 		set_bit(SSH_REQUEST_SF_RSPRCVD_BIT, &p->state);
+		// ensure state never gets zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &p->state);
 
@@ -648,11 +660,9 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 		return;
 	}
 
-	/*
-	 * Mark as transmitted, ensure that state doesn't get zero by inserting
-	 * a memory barrier.
-	 */
+	// update state: mark as transmitted and clear transmitting
 	set_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state);
+	// ensure state never gets zero
 	smp_mb__before_atomic();
 	clear_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &r->state);
 
@@ -707,6 +717,12 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	 * requests to avoid lost-update type problems.
 	 */
 	WRITE_ONCE(rtl->rtx_timeout.expires, KTIME_MAX);
+	/*
+	 * Ensure that the reaper is marked as deactivated before we continue
+	 * checking requests to prevent lost-update problems when a request is
+	 * added to the pending set and ssh_rtl_timeout_reaper_mod is called
+	 * during execution of the part below.
+	 */
 	smp_mb__after_atomic();
 
 	spin_lock(&rtl->pending.lock);
@@ -1014,12 +1030,19 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 	int pending;
 
 	set_bit(SSH_RTL_SF_SHUTDOWN_BIT, &rtl->state);
+	/*
+	 * Ensure that the layer gets marked as shut-down before actually
+	 * stopping it. In combination with the check in ssh_rtl_sunmit, this
+	 * guarantees that no new requests can be added and all already queued
+	 * requests are properly cancelled.
+	 */
 	smp_mb__after_atomic();
 
 	// remove requests from queue
 	spin_lock(&rtl->queue.lock);
 	list_for_each_entry_safe(r, n, &rtl->queue.head, node) {
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+		// ensure state never gets zero
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
 
@@ -1053,6 +1076,7 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 		spin_lock(&rtl->pending.lock);
 		list_for_each_entry_safe(r, n, &rtl->pending.head, node) {
 			set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
+			// ensure state never gets zero
 			smp_mb__before_atomic();
 			clear_bit(SSH_REQUEST_SF_PENDING_BIT, &r->state);
 
