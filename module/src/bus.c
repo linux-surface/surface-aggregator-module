@@ -76,7 +76,6 @@ EXPORT_SYMBOL_GPL(ssam_device_alloc);
 
 int ssam_device_add(struct ssam_device *sdev)
 {
-	enum ssam_controller_state state;
 	int status;
 
 	/*
@@ -98,8 +97,7 @@ int ssam_device_add(struct ssam_device *sdev)
 	 */
 	ssam_controller_statelock(sdev->ctrl);
 
-	state = smp_load_acquire(&sdev->ctrl->state);
-	if (state != SSAM_CONTROLLER_STARTED) {
+	if (READ_ONCE(sdev->ctrl->state) != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_stateunlock(sdev->ctrl);
 		return -ENXIO;
 	}

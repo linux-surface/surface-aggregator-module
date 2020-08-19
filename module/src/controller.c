@@ -712,7 +712,7 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	}
 
 	// update state
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_INITIALIZED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_INITIALIZED);
 	return 0;
 }
 
@@ -720,7 +720,7 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 {
 	int status;
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
+	if (READ_ONCE(ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
 		return -EINVAL;
 
 	status = ssh_rtl_tx_start(&ctrl->rtl);
@@ -733,13 +733,13 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 		return status;
 	}
 
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_STARTED);
 	return 0;
 }
 
 void ssam_controller_shutdown(struct ssam_controller *ctrl)
 {
-	enum ssam_controller_state s = smp_load_acquire(&ctrl->state);
+	enum ssam_controller_state s = READ_ONCE(ctrl->state);
 	int status;
 
 	if (s == SSAM_CONTROLLER_UNINITIALIZED || s == SSAM_CONTROLLER_STOPPED)
@@ -772,13 +772,13 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	ssh_rtl_tx_flush(&ctrl->rtl);
 	ssh_rtl_shutdown(&ctrl->rtl);
 
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STOPPED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_STOPPED);
 	ctrl->rtl.ptl.serdev = NULL;
 }
 
 void ssam_controller_destroy(struct ssam_controller *ctrl)
 {
-	if (smp_load_acquire(&ctrl->state) == SSAM_CONTROLLER_UNINITIALIZED)
+	if (READ_ONCE(ctrl->state) == SSAM_CONTROLLER_UNINITIALIZED)
 		return;
 
 	/*
@@ -793,20 +793,20 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
 	ssam_cplt_destroy(&ctrl->cplt);
 	ssh_rtl_destroy(&ctrl->rtl);
 
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_UNINITIALIZED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_UNINITIALIZED);
 }
 
 int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
 	ssam_controller_lock(ctrl);
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_STARTED) {
+	if (READ_ONCE(ctrl->state) != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_unlock(ctrl);
 		return -EINVAL;
 	}
 
 	ssam_dbg(ctrl, "pm: suspending controller\n");
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_SUSPENDED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_SUSPENDED);
 
 	ssam_controller_unlock(ctrl);
 	return 0;
@@ -816,13 +816,13 @@ int ssam_controller_resume(struct ssam_controller *ctrl)
 {
 	ssam_controller_lock(ctrl);
 
-	if (smp_load_acquire(&ctrl->state) != SSAM_CONTROLLER_SUSPENDED) {
+	if (READ_ONCE(ctrl->state) != SSAM_CONTROLLER_SUSPENDED) {
 		ssam_controller_unlock(ctrl);
 		return -EINVAL;
 	}
 
 	ssam_dbg(ctrl, "pm: resuming controller\n");
-	smp_store_release(&ctrl->state, SSAM_CONTROLLER_STARTED);
+	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_STARTED);
 
 	ssam_controller_unlock(ctrl);
 	return 0;
@@ -934,7 +934,6 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_init);
 int ssam_request_sync_submit(struct ssam_controller *ctrl,
 			     struct ssam_request_sync *rqst)
 {
-	enum ssam_controller_state state = smp_load_acquire(&ctrl->state);
 	int status;
 
 	/*
@@ -951,7 +950,7 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	 * is safe with regards to this), but it is generally discouraged to do
 	 * so.
 	 */
-	if (WARN_ON(state != SSAM_CONTROLLER_STARTED)) {
+	if (WARN_ON(READ_ONCE(ctrl->state) != SSAM_CONTROLLER_STARTED)) {
 		ssh_request_put(&rqst->base);
 		return -ENXIO;
 	}

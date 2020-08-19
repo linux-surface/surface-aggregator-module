@@ -273,7 +273,7 @@ static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 	struct device_link *link;
 	struct device *ctrldev;
 
-	if (smp_load_acquire(&c->state) != SSAM_CONTROLLER_STARTED)
+	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED)
 		return -ENXIO;
 
 	if ((ctrldev = ssam_controller_device(c)) == NULL)
