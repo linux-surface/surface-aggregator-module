@@ -48,7 +48,6 @@ struct ssam_nf {
 /* -- Event/async request completion system. -------------------------------- */
 
 struct ssam_cplt;
-struct ssam_event_item;
 
 struct ssam_event_item {
 	struct list_head node;
