@@ -754,6 +754,11 @@ static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 
 /* -- Main SSAM device structures. ------------------------------------------ */
 
+/**
+ * ssam_controller_device - Return the &struct device associated with this
+ * controller.
+ * @c: The controller for which to get the device.
+ */
 struct device *ssam_controller_device(struct ssam_controller *c)
 {
 	return ssh_rtl_get_device(&c->rtl);
@@ -768,6 +773,12 @@ static void __ssam_controller_release(struct kref *kref)
 	kfree(ctrl);
 }
 
+/**
+ * ssam_controller_get - Increment reference count of controller.
+ * @c: The controller.
+ *
+ * Returns the controller, i.e. ``c``.
+ */
 struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 {
 	kref_get(&c->kref);
@@ -775,6 +786,10 @@ struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 }
 EXPORT_SYMBOL_GPL(ssam_controller_get);
 
+/**
+ * ssam_controller_put - Decrement reference count of controller.
+ * @c: The controller.
+ */
 void ssam_controller_put(struct ssam_controller *c)
 {
 	kref_put(&c->kref, __ssam_controller_release);
@@ -782,23 +797,62 @@ void ssam_controller_put(struct ssam_controller *c)
 EXPORT_SYMBOL_GPL(ssam_controller_put);
 
 
+/**
+ * ssam_controller_statelock - Lock the controller against state transitions.
+ * @c: The controller to lock.
+ *
+ * Lock the controller against state transitions. Holding this lock guarantees
+ * that the controller will not transition between states, i.e. if the
+ * controller is in state "started", when this lock has been acquired, it will
+ * remain in this state at least until the lock has been released.
+ *
+ * Multiple clients may concurrently hold this lock. In other words: The
+ * ``statelock`` functions represent the read-lock part of a r/w-semaphore.
+ * Actions causing state transitions of the controller must be executed while
+ * holding the write-part of this r/w-semaphore (see ssam_controller_lock()
+ * and ssam_controller_unlock() for that).
+ *
+ * See ssam_controller_stateunlock() for the corresponding unlock function.
+ */
 void ssam_controller_statelock(struct ssam_controller *c)
 {
 	down_read(&c->lock);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_statelock);
 
+/**
+ * ssam_controller_stateunlock - Unlock controller state transitions.
+ * @c: The controller to unlock.
+ *
+ * See ssam_controller_statelock() for the corresponding lock function.
+ */
 void ssam_controller_stateunlock(struct ssam_controller *c)
 {
 	up_read(&c->lock);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_stateunlock);
 
+/**
+ * ssam_controller_lock - Acquire the main controller lock.
+ * @c: The controller to lock.
+ *
+ * This lock must be held for any state transitions, including transition to
+ * suspend/resumed states and during shutdown. See ssam_controller_statelock()
+ * for more details on controller locking.
+ *
+ * See ssam_controller_unlock() for the corresponding unlock function.
+ */
 void ssam_controller_lock(struct ssam_controller *c)
 {
 	down_write(&c->lock);
 }
 
+/*
+ * ssam_controller_unlock - Release the main controller lock.
+ * @c: The controller to unlock.
+ *
+ * See ssam_controller_lock() for the corresponding lock function.
+ */
 void ssam_controller_unlock(struct ssam_controller *c)
 {
 	up_write(&c->lock);
