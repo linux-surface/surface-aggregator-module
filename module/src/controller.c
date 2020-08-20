@@ -94,7 +94,22 @@ static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
  * and identify new/currently unimplemented features.
  */
 
-int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
+/**
+ * ssam_nfblk_call_chain - Call event notifier callbacks of the given chain.
+ * @nh:    The notifier head for which the notifier callbacks should be called.
+ * @event: The event data provided to the callbacks.
+ *
+ * Call all registered notifier callbacks in order of their priority until
+ * either no notifier is left or a notifier returns a value with the
+ * %SSAM_NOTIF_STOP bit set. Note that this bit is automatically set via
+ * ssam_notifier_from_errno() on any non-zero error value.
+ *
+ * Returns the notifier status value, which contains the notifier status bits
+ * (%SSAM_NOTIF_HANDLED and %SSAM_NOTIF_STOP) as well as a potential error
+ * value returned from the last executed notifier callback. Use
+ * ssam_notifier_to_errno() to convert this value to the original error value.
+ */
+static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
 {
 	struct ssam_notifier_block *nb, *next_nb;
 	int ret = 0, idx;
@@ -116,11 +131,16 @@ int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
 	return ret;
 }
 
-/*
+/**
+ * __ssam_nfblk_insert - Insert a new notifier block into the given notifier
+ * list.
+ * @nh: The notifier head into which the block should be inserted.
+ * @nb: The notifier block to add.
+ *
  * Note: This function must be synchronized by the caller with respect to other
  * insert and/or remove calls.
  */
-int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_block **link = &nh->head;
 
@@ -142,14 +162,18 @@ int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 	return 0;
 }
 
-/*
+/**
+ * __ssam_nfblk_remove - Remove a notifier block from the given notifier list.
+ * @nh: The notifier head from which the block should be removed.
+ * @nb: The notifier block to remove.
+ *
  * Note: This function must be synchronized by the caller with respect to other
  * insert and/or remove calls. On success, the caller _must_ ensure SRCU
  * synchronization by calling `synchronize_srcu(&nh->srcu)` after leaving the
  * critical section, to ensure that the removed notifier block is not in use any
  * more.
  */
-int __ssam_nfblk_remove(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+static int __ssam_nfblk_remove(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 {
 	struct ssam_notifier_block **link = &nh->head;
 
@@ -165,6 +189,10 @@ int __ssam_nfblk_remove(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 	return -ENOENT;
 }
 
+/**
+ * ssam_nf_head_init - Initialize the given notifier head.
+ * @nh: The notifier head to initialize.
+ */
 static int ssam_nf_head_init(struct ssam_nf_head *nh)
 {
 	int status;
@@ -177,6 +205,10 @@ static int ssam_nf_head_init(struct ssam_nf_head *nh)
 	return 0;
 }
 
+/**
+ * ssam_nf_head_destroy - Deinitialize the given notifier head.
+ * @nh: The notifier head to deinitialize.
+ */
 static void ssam_nf_head_destroy(struct ssam_nf_head *nh)
 {
 	cleanup_srcu_struct(&nh->srcu);
@@ -185,11 +217,23 @@ static void ssam_nf_head_destroy(struct ssam_nf_head *nh)
 
 /* -- Event/notification registry. ------------------------------------------ */
 
+/**
+ * ssam_nf_refcount_key - Key used for event activation reference counting.
+ * @reg: The registry via which the event is enabled/disabled.
+ * @id:  The ID uniquely describing the event.
+ */
 struct ssam_nf_refcount_key {
 	struct ssam_event_registry reg;
 	struct ssam_event_id id;
 };
 
+/**
+ * ssam_nf_refcount_entry - RB-tree entry for referecnce counting event
+ * activations.
+ * @node:     The node of this entry in the rb-tree.
+ * @key:      The key of the event.
+ * @refcount: The reference-count of the event.
+ */
 struct ssam_nf_refcount_entry {
 	struct rb_node node;
 	struct ssam_nf_refcount_key key;
@@ -197,6 +241,13 @@ struct ssam_nf_refcount_entry {
 };
 
 
+/**
+ * ssam_nf_refcount_inc - Increment reference-/activation-count of the given
+ * event.
+ * @nf:  The notifier system reference.
+ * @reg: The registry used to enable/disable the event.
+ * @id:  The event ID.
+ */
 static int ssam_nf_refcount_inc(struct ssam_nf *nf,
 				struct ssam_event_registry reg,
 				struct ssam_event_id id)
@@ -238,6 +289,13 @@ static int ssam_nf_refcount_inc(struct ssam_nf *nf,
 	return entry->refcount;
 }
 
+/**
+ * ssam_nf_refcount_dec - Decrement reference-/activation-count of the given
+ * event.
+ * @nf:  The notifier system reference.
+ * @reg: The registry used to enable/disable the event.
+ * @id:  The event ID.
+ */
 static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 				struct ssam_event_registry reg,
 				struct ssam_event_id id)
@@ -273,11 +331,35 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 	return -ENOENT;
 }
 
+/**
+ * ssam_nf_refcount_empty - Test if the notification system has any
+ * enabled/active events.
+ * @nf: The notification system.
+ */
 static bool ssam_nf_refcount_empty(struct ssam_nf *nf)
 {
 	return RB_EMPTY_ROOT(&nf->refcount);
 }
 
+/**
+ * ssam_nf_call - Call notification callbacks for the provided event.
+ * @nf:    The notifier system
+ * @dev:   The associated device, only used for logging.
+ * @rqid:  The request ID of the event.
+ * @event: The event provided to the callbacks.
+ *
+ * Executa registered callbacks in order of their priority until either no
+ * callback is left or a callback returned a value with the %SSAM_NOTIF_STOP
+ * bit set. Note that this bit is set automatically when converting non.zero
+ * error values via ssam_notifier_from_errno() to notifier values.
+ *
+ * Also note that any callback that could handle an event should return a value
+ * with bit %SSAM_NOTIF_HANDLED set, indicating that the event does not go
+ * unhandled/ignored. In case no registered callback could handle an event,
+ * this function will emit a warning.
+ *
+ * In case a callback failed, this function will emit an error message.
+ */
 static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 			 struct ssam_event *event)
 {
@@ -308,6 +390,10 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 	}
 }
 
+/**
+ * ssam_nf_init - Initialize the notifier system.
+ * @nf: The notifier system to initialize.
+ */
 static int ssam_nf_init(struct ssam_nf *nf)
 {
 	int i, status;
@@ -329,6 +415,10 @@ static int ssam_nf_init(struct ssam_nf *nf)
 	return 0;
 }
 
+/**
+ * ssam_nf_destroy - Deinitialize the notifier system.
+ * @nf: The notifier system to deinitialize.
+ */
 static void ssam_nf_destroy(struct ssam_nf *nf)
 {
 	int i;
@@ -345,7 +435,8 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 #define SSAM_CPLT_WQ_NAME	"ssam_cpltq"
 
 /**
- * Maximum payload length for cached `ssam_event_item`s.
+ * SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN - Maximum payload length for a cached
+ * &struct ssam_event_item.
  *
  * This length has been chosen to be accomodate standard touchpad and keyboard
  * input events. Events with larger payloads will be allocated separately.
@@ -354,6 +445,9 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 
 static struct kmem_cache *ssam_event_item_cache;
 
+/**
+ * ssam_event_item_cache_init - Initialize the event item cache.
+ */
 int ssam_event_item_cache_init(void)
 {
 	const unsigned int size = sizeof(struct ssam_event_item)
@@ -369,6 +463,9 @@ int ssam_event_item_cache_init(void)
 	return 0;
 }
 
+/**
+ * ssam_event_item_cache_destroy - Deinitialize the event item cache.
+ */
 void ssam_event_item_cache_destroy(void)
 {
 	kmem_cache_destroy(ssam_event_item_cache);
@@ -385,12 +482,25 @@ static void __ssam_event_item_free_generic(struct ssam_event_item *item)
 	kfree(item);
 }
 
+/**
+ * ssam_event_item_free - Free the provided event item.
+ * @item: The event item to free.
+ */
 static inline void ssam_event_item_free(struct ssam_event_item *item)
 {
 	trace_ssam_event_item_free(item);
 	item->ops.free(item);
 }
 
+/**
+ * ssam_event_item_alloc - Allocate an event item with the given payload size.
+ * @len:   The event payload length.
+ * @flags: The flags used for allocation.
+ *
+ * Allocate an event item with the given payload size, preferring allocation
+ * from the event item cache if the payload is small enough (i.e. smaller than
+ * %SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN).
+ */
 static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 {
 	struct ssam_event_item *item;
@@ -418,6 +528,11 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 }
 
 
+/**
+ * ssam_event_queue_push - Push an event item to the event queue.
+ * @q:    The event queue.
+ * @item: The item to add.
+ */
 static void ssam_event_queue_push(struct ssam_event_queue *q,
 				  struct ssam_event_item *item)
 {
@@ -426,6 +541,13 @@ static void ssam_event_queue_push(struct ssam_event_queue *q,
 	spin_unlock(&q->lock);
 }
 
+/**
+ * ssam_event_queue_pop - Pop the next event item from the event queue.
+ * @q: The event queue.
+ *
+ * Returns and removes the next event item from the queue. Returns NULL If
+ * there is no event item left.
+ */
 static struct ssam_event_item *ssam_event_queue_pop(struct ssam_event_queue *q)
 {
 	struct ssam_event_item *item;
@@ -439,6 +561,10 @@ static struct ssam_event_item *ssam_event_queue_pop(struct ssam_event_queue *q)
 	return item;
 }
 
+/**
+ * ssam_event_queue_is_empty - Check if the event queue is empty.
+ * @q: The event queue.
+ */
 static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
 {
 	bool empty;
@@ -450,6 +576,17 @@ static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
 	return empty;
 }
 
+/**
+ * ssam_cplt_get_event_queue - Get the event queue for the given parameters.
+ * @cplt: The completion system on which to look for the queue.
+ * @tid:  The target ID of the queue.
+ * @rqid: The request ID representing the event ID for which to get the queue.
+ *
+ * Returns the event queue corresponding to the event type described by the
+ * given parameters. If the request ID does not represent an event, this
+ * function returns NULL. If the target ID is not supported, this function
+ * will fall back to the default target ID (tid=1).
+ */
 static struct ssam_event_queue *ssam_cplt_get_event_queue(
 		struct ssam_cplt *cplt, u8 tid, u16 rqid)
 {
@@ -469,12 +606,26 @@ static struct ssam_event_queue *ssam_cplt_get_event_queue(
 	return &cplt->event.target[tidx].queue[event];
 }
 
+/**
+ * ssam_cplt_submit - Submit a work item to the compeltion system workqueue.
+ * @cplt: The completion system.
+ * @work: The work item to submit.
+ */
 static inline bool ssam_cplt_submit(struct ssam_cplt *cplt,
 				    struct work_struct *work)
 {
 	return queue_work(cplt->wq, work);
 }
 
+/**
+ * ssam_cplt_submit_event - Submit an event to the completion system.
+ * @cplt: The completion system.
+ * @item: The event item to submit.
+ *
+ * Submits the event to the completion system by queuing it on the event item
+ * queue and queuing the respective event queue work item on the completion
+ * workqueue, which will eventually complete the event.
+ */
 static int ssam_cplt_submit_event(struct ssam_cplt *cplt,
 				  struct ssam_event_item *item)
 {
@@ -489,6 +640,23 @@ static int ssam_cplt_submit_event(struct ssam_cplt *cplt,
 	return 0;
 }
 
+/**
+ * ssam_cplt_flush - Flush the completion system.
+ * @cplt: The completion system.
+ *
+ * Flush the completion system by waiting until all currently submitted work
+ * items have been completed.
+ *
+ * Note: This function does not guarantee that all events will have been
+ * handled once this call terminates. In case of a larger number of
+ * to-be-completed events, the event queue work function may re-schedule its
+ * work item, which this flush operation will ignore.
+ *
+ * This operation is only intended to, during normal operation prior to
+ * shutdown, try to complete most events and requests to get them out of the
+ * system while the system is still fully operational. It does not aim to
+ * provide any guraantee that all of them have been handled.
+ */
 static void ssam_cplt_flush(struct ssam_cplt *cplt)
 {
 	flush_workqueue(cplt->wq);
@@ -506,6 +674,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 	nf = &queue->cplt->event.notif;
 	dev = queue->cplt->dev;
 
+	// limit number of processed events to avoid livelocking
 	for (i = 0; i < 10; i++) {
 		item = ssam_event_queue_pop(queue);
 		if (item == NULL)
@@ -519,6 +688,11 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 		ssam_cplt_submit(queue->cplt, &queue->work);
 }
 
+/**
+ * ssam_event_queue_init - Initialize an event queue.
+ * @cplt: The completion system on which the queue resides.
+ * @evq:  The event queue to initialize.
+ */
 static void ssam_event_queue_init(struct ssam_cplt *cplt,
 				  struct ssam_event_queue *evq)
 {
@@ -528,6 +702,11 @@ static void ssam_event_queue_init(struct ssam_cplt *cplt,
 	INIT_WORK(&evq->work, ssam_event_queue_work_fn);
 }
 
+/**
+ * ssam_cplt_init - Initialize completion system.
+ * @cplt: The completion system to initialize.
+ * @dev:  The device used for logging.
+ */
 static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
 {
 	struct ssam_event_target *target;
@@ -553,6 +732,13 @@ static int ssam_cplt_init(struct ssam_cplt *cplt, struct device *dev)
 	return status;
 }
 
+/**
+ * ssam_cplt_destroy - Deinitialize the completion system.
+ * @cplt: The completion system to deinitialize.
+ *
+ * Deinitialize the given completion system and ensure that all pending, i.e.
+ * yet-to-be-completed, event items and requests have been handled.
+ */
 static void ssam_cplt_destroy(struct ssam_cplt *cplt)
 {
 	/*
