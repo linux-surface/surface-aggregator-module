@@ -29,11 +29,19 @@
 
 /* -- Safe counters. -------------------------------------------------------- */
 
+/**
+ * ssh_seq_reset - Reset/initialize sequence ID counter.
+ * @c: The counter to reset.
+ */
 static inline void ssh_seq_reset(struct ssh_seq_counter *c)
 {
 	WRITE_ONCE(c->value, 0);
 }
 
+/**
+ * ssh_seq_next - Get next sequence ID.
+ * @c: The counter providing the sequence IDs.
+ */
 static inline u8 ssh_seq_next(struct ssh_seq_counter *c)
 {
 	u8 old = READ_ONCE(c->value);
@@ -48,11 +56,19 @@ static inline u8 ssh_seq_next(struct ssh_seq_counter *c)
 	return old;
 }
 
+/**
+ * ssh_rqid_reset - Reset/initialize request ID counter.
+ * @c: The counter to reset.
+ */
 static inline void ssh_rqid_reset(struct ssh_rqid_counter *c)
 {
 	WRITE_ONCE(c->value, 0);
 }
 
+/**
+ * ssh_rqid_next - Get next request ID.
+ * @c: The counter providing the request IDs.
+ */
 static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 {
 	u16 old = READ_ONCE(c->value);
