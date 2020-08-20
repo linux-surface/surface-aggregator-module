@@ -72,7 +72,7 @@ static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 /*
  * The notifier system is based on linux/notifier.h, specifically the SRCU
  * implementation. The difference to that is, that some bits of the notifier
- * call return value can be tracked accross multiple calls. This is done so that
+ * call return value can be tracked across multiple calls. This is done so that
  * handling of events can be tracked and a warning can be issued in case an
  * event goes unhandled. The idea of that waring is that it should help discover
  * and identify new/currently unimplemented features.
