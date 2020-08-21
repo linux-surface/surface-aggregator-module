@@ -1036,6 +1036,8 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
 	if (READ_ONCE(ctrl->state) == SSAM_CONTROLLER_UNINITIALIZED)
 		return;
 
+	WARN_ON(ctrl->state != SSAM_CONTROLLER_STOPPED);
+
 	/*
 	 * Note: New events could still have been received after the previous
 	 * flush in ssam_controller_shutdown, before the request transport layer
