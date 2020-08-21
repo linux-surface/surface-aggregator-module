@@ -6,7 +6,7 @@ KVERSION := "$(shell uname -r)"
 KDIR := /lib/modules/$(KVERSION)/build
 MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 
-CHECKPATCH_OPTS := -f -q --no-tree
+CHECKPATCH_OPTS := -f -q --no-tree --ignore LONG_LINE
 CHECKPATCH := $(KDIR)/scripts/checkpatch.pl $(CHECKPATCH_OPTS)
 
 SSAM_MODPROBE := $(shell pwd)/../scripts/ssam-modprobe
