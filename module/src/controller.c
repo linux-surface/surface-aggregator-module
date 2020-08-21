@@ -894,6 +894,15 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
 static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
 		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
 
+/**
+ * ssam_device_caps_load_from_acpi - Load controller capabilities from _DSM.
+ * @handle: The handle of the ACPI controller/SSH device.
+ * @caps:   Where to store the capabilities in.
+ *
+ * Initializes the given controller capabilities with default values, then
+ * checks and, if the respective _DSM functions are available, loads the
+ * actual capabilities from the _DSM.
+ */
 static int ssam_device_caps_load_from_acpi(acpi_handle handle,
 					   struct ssam_device_caps *caps)
 {
@@ -934,6 +943,19 @@ static int ssam_device_caps_load_from_acpi(acpi_handle handle,
 	return 0;
 }
 
+/**
+ * ssam_controller_init - Initialize SSAM controller.
+ * @ctrl:   The controller to initialize.
+ * @serdev: The serial device representing the underlying data transport.
+ *
+ * Initializes the given controller. Does neither start receiver nor
+ * transmitter threads. After this call, the controller has to be hooked up to
+ * the serdev core separately via &struct serdev_device_ops, relaying calls to
+ * ssam_controller_receive_buf() and ssam_controller_write_wakeup(). Once the
+ * controller has been hooked up, transmitter and receiver threads may be
+ * started via ssam_controller_start(). These setup steps need to be completed
+ * before controller can be used for requests.
+ */
 int ssam_controller_init(struct ssam_controller *ctrl,
 			 struct serdev_device *serdev)
 {
@@ -971,6 +993,15 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	return 0;
 }
 
+/**
+ * ssam_controller_start - Start the receiver and transmitter threads of the
+ * controller.
+ * @ctrl: The controller.
+ *
+ * Note: When this function is called, the controller shouldbe properly hooked
+ * up to the serdev core via &struct serdev_device_ops. Please refert to
+ * ssam_controller_init() for more details on controller initialization.
+ */
 int ssam_controller_start(struct ssam_controller *ctrl)
 {
 	int status;
@@ -992,6 +1023,25 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_controller_shutdown - Shut down the controller.
+ * @ctrl: The controller.
+ *
+ * Shuts down the controller by flushing all pending requests and stopping the
+ * transmitter and receiver threads. All requests submitted after this call
+ * will fail with -ESHUTDOWN. While it is discouraged to do so, this function
+ * is safe to use in parallel with ongoing request submission.
+ *
+ * In the course of this shutdown procedure, all currently registered
+ * notifiers will be unregistered. It is, however, strongly recommended to not
+ * rely on this behavior, and instead the party registring the notifier should
+ * unregister it before the controller gets shut down, e.g. via the SSAM bus
+ * which guarantees client devices to be removed before a shutdown.
+ *
+ * Note that events may still be pending after this call, but due to the
+ * notifiers being unregistered, the will be dropped when the controller is
+ * subsequently being destroyed via ssam_controller_destroy().
+ */
 void ssam_controller_shutdown(struct ssam_controller *ctrl)
 {
 	enum ssam_controller_state s = READ_ONCE(ctrl->state);
@@ -1031,6 +1081,14 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	ctrl->rtl.ptl.serdev = NULL;
 }
 
+/**
+ * ssam_controller_destroy - Destroy the controller and free its resources.
+ * @ctrl: The controller.
+ *
+ * Ensures that all resources associated with the controller get freed. This
+ * function should only be called after the controller has been stopped via
+ * ssam_controller_shutdown().
+ */
 void ssam_controller_destroy(struct ssam_controller *ctrl)
 {
 	if (READ_ONCE(ctrl->state) == SSAM_CONTROLLER_UNINITIALIZED)
@@ -1053,6 +1111,19 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
 	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_UNINITIALIZED);
 }
 
+/**
+ * ssam_controller_suspend - Suspend the controller.
+ * @ctrl: The controller to suspend.
+ *
+ * Marks the controller as suspended. Note that display-off and D0-exit
+ * notifications have to be sent manually before transitioning the controller
+ * into the suspended state via this function.
+ *
+ * See ssam_controller_resume() for the corresponding resume function.
+ *
+ * Returns ``-EINVAL`` if the controller is currently not in the "started"
+ * state.
+ */
 int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
 	ssam_controller_lock(ctrl);
@@ -1069,6 +1140,17 @@ int ssam_controller_suspend(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_controller_resume - Resume the controller from suspend.
+ * @ctrl: The controller to resume.
+ *
+ * Resume the controller from the suspended state it was put into via
+ * ssam_controller_suspend(). This function does not issue display-on and
+ * D0-entry notifications. If required, those have to be sent manually after
+ * this call.
+ *
+ * Returns ``-EINVAL`` if the controller is currently not suspended.
+ */
 int ssam_controller_resume(struct ssam_controller *ctrl)
 {
 	ssam_controller_lock(ctrl);
