@@ -2,7 +2,7 @@
 
 #include <asm/unaligned.h>
 #include <linux/atomic.h>
-#include <linux/fault-inject.h>
+#include <linux/error-injection.h>
 #include <linux/jiffies.h>
 #include <linux/kfifo.h>
 #include <linux/kref.h>

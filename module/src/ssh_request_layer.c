@@ -2,7 +2,7 @@
 
 #include <linux/atomic.h>
 #include <linux/completion.h>
-#include <linux/fault-inject.h>
+#include <linux/error-injection.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/spinlock.h>
