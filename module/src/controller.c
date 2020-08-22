@@ -1181,6 +1181,9 @@ ssize_t ssam_request_write_data(struct ssam_span *buf,
 	if (spec->length > SSH_COMMAND_MAX_PAYLOAD_SIZE)
 		return -EINVAL;
 
+	if (SSH_COMMAND_MESSAGE_LENGTH(spec->length) > buf->len)
+		return -EINVAL;
+
 	msgb_init(&msgb, buf->ptr, buf->len);
 	seq = ssh_seq_next(&ctrl->counter.seq);
 	rqid = ssh_rqid_next(&ctrl->counter.rqid);
