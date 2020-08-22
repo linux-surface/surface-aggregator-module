@@ -1312,7 +1312,7 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 {
 	struct ssam_request_sync *rqst;
 	struct ssam_span buf;
-	size_t len;
+	ssize_t len;
 	int status;
 
 	// prevent overflow, allows us to skip checks later on
@@ -1329,6 +1329,9 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 	ssam_request_sync_set_resp(rqst, rsp);
 
 	len = ssam_request_write_data(&buf, ctrl, spec);
+	if (len < 0)
+		return len;
+
 	ssam_request_sync_set_data(rqst, buf.ptr, len);
 
 	status = ssam_request_sync_submit(ctrl, rqst);
@@ -1346,7 +1349,7 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 				  struct ssam_span *buf)
 {
 	struct ssam_request_sync rqst;
-	size_t len;
+	ssize_t len;
 	int status;
 
 	// prevent overflow, allows us to skip checks later on
@@ -1359,6 +1362,9 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	ssam_request_sync_set_resp(&rqst, rsp);
 
 	len = ssam_request_write_data(buf, ctrl, spec);
+	if (len < 0)
+		return len;
+
 	ssam_request_sync_set_data(&rqst, buf->ptr, len);
 
 	status = ssam_request_sync_submit(ctrl, &rqst);
