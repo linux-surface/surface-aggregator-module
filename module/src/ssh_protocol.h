@@ -22,7 +22,7 @@
 #define SSH_NUM_TARGETS		2
 
 /**
- * SSH message syncrhonization (SYN) bytes.
+ * SSH message synchronization (SYN) bytes.
  */
 #define SSH_MSG_SYN		((u16)0x55aa)
 

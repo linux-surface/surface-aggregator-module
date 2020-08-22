@@ -801,7 +801,7 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	 * dGPU. Specifically, this function is called from the RQSG handler of
 	 * SAN, invoked by the ACPI _ON method of the dGPU root port. This means
 	 * that this function is run inside `pci_set_power_state(rp, ...)`
-	 * syncrhonously and thus returns before the `pci_set_power_state` call
+	 * synchronously and thus returns before the `pci_set_power_state` call
 	 * does.
 	 *
 	 * `pci_set_power_state` may either be called by us or when the PCI
