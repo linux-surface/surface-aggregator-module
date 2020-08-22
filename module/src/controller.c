@@ -1170,6 +1170,23 @@ int ssam_controller_resume(struct ssam_controller *ctrl)
 
 /* -- Top-level request interface ------------------------------------------- */
 
+/**
+ * ssam_request_write_data - Construct and write SAM request message to buffer.
+ * @buf:  The buffer to write the data to.
+ * @ctrl: The controller via which the request will be sent.
+ * @spec: The request data/specification.
+ *
+ * Constructs a SAM/SSH request message and writes it to the provided buffer.
+ * The request and transport counters, specifically RQID and SEQ, will be set
+ * in this call. These counters are obtained from the controller. It is thus
+ * only valid to send the resulting message via the controller specified here.
+ *
+ * Returns the number of bytes used in the buffer on success. Returns -EINVAL
+ * if the payload length provided in the request specification is too large
+ * (larger than %SSH_COMMAND_MAX_PAYLOAD_SIZE) or if the provided buffer is
+ * too small. For calculation of the required buffer size, refer to the
+ * SSH_COMMAND_MESSAGE_LENGTH() macro.
+ */
 ssize_t ssam_request_write_data(struct ssam_span *buf,
 				struct ssam_controller *ctrl,
 				struct ssam_request *spec)
@@ -1243,6 +1260,23 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 };
 
 
+/**
+ * ssam_request_sync_alloc - Allocate a synchronous request.
+ * @payload_len: The length of the request payload.
+ * @flags:       Flags used for allocation.
+ * @rqst:        Where to store the pointer to the allocated request.
+ * @buffer:      Where to store the buffer descriptor for the message buffer of
+ *               the request.
+ *
+ * Allocates a synchronous request with corresponding message buffer. The
+ * request still needs to be initialized ssam_request_sync_init() before
+ * it can be submitted, and the message buffer data must still be set to the
+ * returned buffer via ssam_request_sync_set_data() after it has been filled,
+ * if need be with adjusted message length.
+ *
+ * After use, the request and its corresponding message buffer should be freed
+ * via ssam_request_sync_free(). The buffer must not be freed separately.
+ */
 int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 			    struct ssam_request_sync **rqst,
 			    struct ssam_span *buffer)
@@ -1260,12 +1294,37 @@ int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_alloc);
 
+/**
+ * ssam_request_sync_free - Free a synchronous request.
+ * @rqst: The request to free.
+ *
+ * Free a synchronous request and its corresponding buffer allocated with
+ * ssam_request_sync_alloc(). Do not use for requests allocated on the stack
+ * or via any other function.
+ *
+ * Warning: The caller must ensure that the request is not in use any more.
+ * I.e. the caller must ensure that it has the only reference to the request
+ * and the request is not currently pending. This means that the caller has
+ * either never submitted the request, request submission has failed, or the
+ * caller has waited until the submitted request has been completed via
+ * ssam_request_sync_wait().
+ */
 void ssam_request_sync_free(struct ssam_request_sync *rqst)
 {
 	kfree(rqst);
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_free);
 
+/**
+ * ssam_request_sync_init - Initialize a synchronous request struct.
+ * @rqst:  The request to initialize.
+ * @flags: The request flags.
+ *
+ * Initializes the given request struct. Does not initialize the request
+ * message data. This has to be done explicitly after this call via
+ * ssam_request_sync_set_data() and the actual message data has to be written
+ * via ssam_request_write_data().
+ */
 void ssam_request_sync_init(struct ssam_request_sync *rqst,
 			    enum ssam_request_flags flags)
 {
@@ -1276,6 +1335,24 @@ void ssam_request_sync_init(struct ssam_request_sync *rqst,
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_init);
 
+/**
+ * ssam_request_sync_submit - Submit a synchronous request.
+ * @ctrl: The controller with which to submit the request.
+ * @rqst: The request to submit.
+ *
+ * Submit a synchronous request. The request has to be initialized and
+ * properly set up, including response buffer (may be NULL if no response is
+ * expected) and command message data. This function does not wait for the
+ * request to be completed.
+ *
+ * If this function succeeds, ssam_request_sync_wait() must be used to ensure
+ * that the request has been completed before the response data can be
+ * accessed and/or the request can be freed. On failure, the request may
+ * immediately be freed.
+ *
+ * This function may only be used if the controller is active, i.e. has been
+ * initialized and not suspended.
+ */
 int ssam_request_sync_submit(struct ssam_controller *ctrl,
 			     struct ssam_request_sync *rqst)
 {
@@ -1307,6 +1384,19 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_submit);
 
+/**
+ * ssam_request_sync - Execute a synchronous request.
+ * @ctrl: The controller via which the request will be submitted.
+ * @spec: The request specification and payload.
+ * @rsp:  The response buffer.
+ *
+ * Allocates a synchronous request with its message data buffer on the heap
+ * via ssam_request_sync_alloc(), fully intializes it via the provided request
+ * specification, submits it, and finally waits for its completion before
+ * freeing it and returning its status.
+ *
+ * Returns the status of the request or any failure during setup.
+ */
 int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 		      struct ssam_response *rsp)
 {
@@ -1343,6 +1433,27 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync);
 
+/**
+ * ssam_request_sync_with_buffer - Execute a synchronous request with the
+ * provided buffer as backend for the message buffer.
+ * @ctrl: The controller via which the request will be submitted.
+ * @spec: The request specification and payload.
+ * @rsp:  The response buffer.
+ * @buf:  The buffer for the request message data.
+ *
+ * Allocates a synchronous request struct on the stack, fully initializes it
+ * using the provided buffer as message data buffer, submits it, and then
+ * waits for its completion before returning its staus. The
+ * SSH_COMMAND_MESSAGE_LENGTH() macro can be used to compute the required
+ * message buffer size.
+ *
+ * This function does essentially the same as ssam_request_sync(), but instead
+ * of dynamically allocating the request and message data buffer, it uses the
+ * provided message data buffer and stores the (small) request struct on the
+ * heap.
+ *
+ * Returns the status of the request or any failure during setup.
+ */
 int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 				  struct ssam_request *spec,
 				  struct ssam_response *rsp,

@@ -479,12 +479,30 @@ void ssam_request_sync_free(struct ssam_request_sync *rqst);
 void ssam_request_sync_init(struct ssam_request_sync *rqst,
 			    enum ssam_request_flags flags);
 
+/**
+ * ssam_request_sync_set_data - Set message data of a synchronous request.
+ * @rqst: The request.
+ * @ptr:  Pointer to the request message data.
+ * @len:  Length of the request message data.
+ *
+ * Set the request message data of a synchronous request. The provided buffer
+ * needs to live until the request has been completed.
+ */
 static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
 					      u8 *ptr, size_t len)
 {
 	ssh_request_set_data(&rqst->base, ptr, len);
 }
 
+/**
+ * ssam_request_sync_set_resp - Set response buffer of a synchronous request.
+ * @rqst: The request.
+ * @rsp:  The response buffer.
+ *
+ * Sets the response buffer ot a synchronous request. This buffer will store
+ * the response of the request after it has been completed. May be NULL if
+ * no response is expected.
+ */
 static inline void ssam_request_sync_set_resp(struct ssam_request_sync *rqst,
 					      struct ssam_response *resp)
 {
@@ -494,6 +512,19 @@ static inline void ssam_request_sync_set_resp(struct ssam_request_sync *rqst,
 int ssam_request_sync_submit(struct ssam_controller *ctrl,
 			     struct ssam_request_sync *rqst);
 
+/**
+ * ssam_request_sync_wait - Wait for completion of a synchronous request.
+ * @rqst: The request to wait for.
+ *
+ * Wait for completion and release of a synchronous request. After this
+ * function terminates, the request is guaranteed to have left the
+ * transmission system. After successful submission of a request, this
+ * function must be called before accessing the response of the request,
+ * freeing the request, or freeing any of the buffers associated with the
+ * request.
+ *
+ * Returns the status of the request.
+ */
 static inline int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 {
 	wait_for_completion(&rqst->comp);
@@ -509,6 +540,24 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 				  struct ssam_span *buf);
 
 
+/**
+ * ssam_request_sync_onstack - Execute a synchronous request on the stack.
+ * @ctrl: The controller via which the request is submitted.
+ * @rqst: The request specification.
+ * @rsp:  The response buffer.
+ * @payload_len: The (maximum) request payload length.
+ *
+ * Allocates a synchronous request with specified payload length on the stack,
+ * fully intializes it via the provided request specification, submits it, and
+ * finally waits for its completion before returning its status. This helper
+ * macro essentially allocates the request message buffer on the stack and
+ * then calls ssam_request_sync_with_buffer().
+ *
+ * Note: The ``payload_len`` parameter specifies the maximum payload length,
+ * used for buffer allocation. The actual payload length may be smaller.
+ *
+ * Returns the status of the request or any failure during setup.
+ */
 #define ssam_request_sync_onstack(ctrl, rqst, rsp, payload_len)			\
 	({									\
 		u8 __data[SSH_COMMAND_MESSAGE_LENGTH(payload_len)];		\
