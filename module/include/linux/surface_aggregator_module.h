@@ -513,17 +513,8 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	({									\
 		u8 __data[SSH_COMMAND_MESSAGE_LENGTH(payload_len)];		\
 		struct ssam_span __buf = { &__data[0], ARRAY_SIZE(__data) };	\
-		int __status;							\
 										\
-		/* ensure input does not overflow buffer */			\
-		if ((rqst)->length <= payload_len) {				\
-			__status = ssam_request_sync_with_buffer(		\
-					ctrl, rqst, rsp, &__buf);		\
-		} else {							\
-			__status = -EINVAL;					\
-		}								\
-										\
-		__status;							\
+		ssam_request_sync_with_buffer(ctrl, rqst, rsp, &__buf);		\
 	})
 
 
