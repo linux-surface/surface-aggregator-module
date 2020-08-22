@@ -1260,6 +1260,12 @@ int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_alloc);
 
+void ssam_request_sync_free(struct ssam_request_sync *rqst)
+{
+	kfree(rqst);
+}
+EXPORT_SYMBOL_GPL(ssam_request_sync_free);
+
 void ssam_request_sync_init(struct ssam_request_sync *rqst,
 			    enum ssam_request_flags flags)
 {
@@ -1329,7 +1335,7 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 	if (!status)
 		status = ssam_request_sync_wait(rqst);
 
-	kfree(rqst);
+	ssam_request_sync_free(rqst);
 	return status;
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync);

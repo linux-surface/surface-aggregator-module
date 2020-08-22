@@ -474,6 +474,8 @@ int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 			    struct ssam_request_sync **rqst,
 			    struct ssam_span *buffer);
 
+void ssam_request_sync_free(struct ssam_request_sync *rqst);
+
 void ssam_request_sync_init(struct ssam_request_sync *rqst,
 			    enum ssam_request_flags flags);
 
