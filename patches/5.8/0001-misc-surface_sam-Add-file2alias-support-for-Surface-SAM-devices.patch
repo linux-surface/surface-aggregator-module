@@ -1,7 +1,7 @@
-From 9b343a52f729d4937ab51a212c22756d7f04f62b Mon Sep 17 00:00:00 2001
+From 0e4ce8f0dcee5559bf89b5d3fc6bc7ed54a6339b Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Mon, 17 Aug 2020 01:23:20 +0200
-Subject: [PATCH] misc/surface_sam: Add file2alias support for Surface SAM
+Date: Sun, 23 Aug 2020 20:24:57 +0200
+Subject: [PATCH] misc: surface_sam: Add file2alias support for Surface SAM
  devices
 
 Implement file2alias support for Surface System Aggregator Module (SSAM)
@@ -10,11 +10,11 @@ their respective module alias.
 ---
  include/linux/mod_devicetable.h   | 17 +++++++++++++++++
  scripts/mod/devicetable-offsets.c |  7 +++++++
- scripts/mod/file2alias.c          | 21 +++++++++++++++++++++
- 3 files changed, 45 insertions(+)
+ scripts/mod/file2alias.c          | 22 ++++++++++++++++++++++
+ 3 files changed, 46 insertions(+)
 
 diff --git a/include/linux/mod_devicetable.h b/include/linux/mod_devicetable.h
-index e14cbe444afcc..a35f82fb36da4 100644
+index e14cbe444afcc..82c8660a5c869 100644
 --- a/include/linux/mod_devicetable.h
 +++ b/include/linux/mod_devicetable.h
 @@ -836,4 +836,21 @@ struct mhi_device_id {
@@ -23,7 +23,7 @@ index e14cbe444afcc..a35f82fb36da4 100644
  
 +/* Surface System Aggregator Module */
 +
-+#define SSAM_MATCH_CHANNEL	0x1
++#define SSAM_MATCH_TARGET	0x1
 +#define SSAM_MATCH_INSTANCE	0x2
 +#define SSAM_MATCH_FUNCTION	0x4
 +
@@ -31,7 +31,7 @@ index e14cbe444afcc..a35f82fb36da4 100644
 +	__u8 match_flags;
 +
 +	__u8 category;
-+	__u8 channel;
++	__u8 target;
 +	__u8 instance;
 +	__u8 function;
 +
@@ -40,7 +40,7 @@ index e14cbe444afcc..a35f82fb36da4 100644
 +
  #endif /* LINUX_MOD_DEVICETABLE_H */
 diff --git a/scripts/mod/devicetable-offsets.c b/scripts/mod/devicetable-offsets.c
-index 010be8ba21160..35b9899b0b0f4 100644
+index 010be8ba21160..ad40fb4462803 100644
 --- a/scripts/mod/devicetable-offsets.c
 +++ b/scripts/mod/devicetable-offsets.c
 @@ -241,5 +241,12 @@ int main(void)
@@ -50,21 +50,22 @@ index 010be8ba21160..35b9899b0b0f4 100644
 +	DEVID(ssam_device_id);
 +	DEVID_FIELD(ssam_device_id, match_flags);
 +	DEVID_FIELD(ssam_device_id, category);
-+	DEVID_FIELD(ssam_device_id, channel);
++	DEVID_FIELD(ssam_device_id, target);
 +	DEVID_FIELD(ssam_device_id, instance);
 +	DEVID_FIELD(ssam_device_id, function);
 +
  	return 0;
  }
 diff --git a/scripts/mod/file2alias.c b/scripts/mod/file2alias.c
-index 9599e2a3f1e61..079672e0747a8 100644
+index 9599e2a3f1e61..2f2337eb5d284 100644
 --- a/scripts/mod/file2alias.c
 +++ b/scripts/mod/file2alias.c
-@@ -1364,6 +1364,26 @@ static int do_mhi_entry(const char *filename, void *symval, char *alias)
+@@ -1364,6 +1364,27 @@ static int do_mhi_entry(const char *filename, void *symval, char *alias)
  	return 1;
  }
  
-+/* Looks like: ssam:cNtNiNfN
++/*
++ * Looks like: ssam:cNtNiNfN
 + *
 + * N is exactly 2 digits, where each is an upper-case hex digit.
 + */
@@ -72,12 +73,12 @@ index 9599e2a3f1e61..079672e0747a8 100644
 +{
 +	DEF_FIELD(symval, ssam_device_id, match_flags);
 +	DEF_FIELD(symval, ssam_device_id, category);
-+	DEF_FIELD(symval, ssam_device_id, channel);
++	DEF_FIELD(symval, ssam_device_id, target);
 +	DEF_FIELD(symval, ssam_device_id, instance);
 +	DEF_FIELD(symval, ssam_device_id, function);
 +
 +	sprintf(alias, "ssam:c%02X", category);
-+	ADD(alias, "t", match_flags & SSAM_MATCH_CHANNEL, channel);
++	ADD(alias, "t", match_flags & SSAM_MATCH_TARGET, target);
 +	ADD(alias, "i", match_flags & SSAM_MATCH_INSTANCE, instance);
 +	ADD(alias, "f", match_flags & SSAM_MATCH_FUNCTION, function);
 +
@@ -87,7 +88,7 @@ index 9599e2a3f1e61..079672e0747a8 100644
  /* Does namelen bytes of name exactly match the symbol? */
  static bool sym_is(const char *name, unsigned namelen, const char *symbol)
  {
-@@ -1438,6 +1458,7 @@ static const struct devtable devtable[] = {
+@@ -1438,6 +1459,7 @@ static const struct devtable devtable[] = {
  	{"tee", SIZE_tee_client_device_id, do_tee_entry},
  	{"wmi", SIZE_wmi_device_id, do_wmi_entry},
  	{"mhi", SIZE_mhi_device_id, do_mhi_entry},
