@@ -1862,6 +1862,15 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 
 /* -- Top-level event registry interface. ----------------------------------- */
 
+/**
+ * ssam_notifier_register - Register an event notifier.
+ * @ctrl: The controller to register the notifier on.
+ * @n:    The event notifier to register.
+ *
+ * Register an event notifier and increment the usage counter of the
+ * associated SAM event. If the event was previously not enabled, it will be
+ * enabled during this call.
+ */
 int ssam_notifier_register(struct ssam_controller *ctrl,
 			   struct ssam_event_notifier *n)
 {
@@ -1913,6 +1922,15 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 }
 EXPORT_SYMBOL_GPL(ssam_notifier_register);
 
+/**
+ * ssam_notifier_unregister - Unregister an event notifier.
+ * @ctrl: The controller the notifier has been registered on.
+ * @n:    The event notifier to unregister.
+ *
+ * Unregister an event notifier and decrement the usage counter of the
+ * associated SAM event. If the usage counter reaches zero, the event will be
+ * disabled.
+ */
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)
 {
@@ -1952,6 +1970,13 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 }
 EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
 
+/**
+ * ssam_notifier_empty - Check if there are any registered notifiers.
+ * @ctrl: The controller to check on.
+ *
+ * Return true if there are currently no notifiers registered on the
+ * controller, false otherwise.
+ */
 static bool ssam_notifier_empty(struct ssam_controller *ctrl)
 {
 	struct ssam_nf *nf = &ctrl->cplt.event.notif;
@@ -1964,6 +1989,15 @@ static bool ssam_notifier_empty(struct ssam_controller *ctrl)
 	return result;
 }
 
+/**
+ * ssam_notifier_unregister_all - Unregister all currently registered
+ * notifiers.
+ * @ctrl: The controller to unregister the notifiers on.
+ *
+ * Unregisters all currently registered notifiers. This function is used to
+ * ensure that all notifiers will be unregistered and assocaited
+ * entries/resources freed when the controller is being shut down.
+ */
 static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
 {
 	struct ssam_nf *nf = &ctrl->cplt.event.notif;
