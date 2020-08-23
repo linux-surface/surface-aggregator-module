@@ -1536,7 +1536,8 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
  * not handle referecnce counting for enable/disable of events. If an event
  * has already been enabled, the EC will ignore this request.
  *
- * Returns the status of the executed SAM request.
+ * Returns the status of the executed SAM request or -EPROTO if the request
+ * response indicates a failure.
  */
 static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 				 struct ssam_event_registry reg,
@@ -1579,10 +1580,11 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	}
 
 	if (buf[0] != 0x00) {
-		ssam_warn(ctrl, "unexpected result while enabling event source: "
-			  "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			  buf[0], id.target_category, id.instance,
-			  reg.target_category);
+		ssam_err(ctrl, "unexpected result while enabling event source: "
+			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 buf[0], id.target_category, id.instance,
+			 reg.target_category);
+		return -EPROTO;
 	}
 
 	return status;
@@ -1601,7 +1603,8 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
  * not handle reference counting for enable/disable of events. If an event has
  * already been disabled, the EC will ignore this request.
  *
- * Returns the status of the executed SAM request.
+ * Returns the status of the executed SAM request or -EPROTO if the request
+ * response indicates a failure.
  */
 static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 				  struct ssam_event_registry reg,
@@ -1644,10 +1647,11 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	}
 
 	if (buf[0] != 0x00) {
-		ssam_warn(ctrl, "unexpected result while disabling event source: "
-			  "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			  buf[0], id.target_category, id.instance,
-			  reg.target_category);
+		ssam_err(ctrl, "unexpected result while disabling event source: "
+			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 buf[0], id.target_category, id.instance,
+			 reg.target_category);
+		return -EPROTO;
 	}
 
 	return status;
