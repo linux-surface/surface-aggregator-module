@@ -1703,7 +1703,8 @@ int ssam_log_firmware_version(struct ssam_controller *ctrl)
  * Use ssam_ctrl_notif_display_on() to reverse the effects of this function.
  *
  * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed.
+ * request has been executed, or -EPROTO if an unexpected response has been
+ * received.
  */
 int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 {
@@ -1722,7 +1723,7 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 	if (response != 0) {
 		ssam_err(ctrl, "unexpected response from display-off notification: 0x%02x\n",
 			 response);
-		return -EIO;
+		return -EPROTO;
 	}
 
 	return 0;
@@ -1744,7 +1745,8 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
  * See ssam_ctrl_notif_display_off() for more details.
  *
  * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed.
+ * request has been executed, or -EPROTO if an unexpected response has been
+ * received.
  */
 int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 {
@@ -1763,7 +1765,7 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 	if (response != 0) {
 		ssam_err(ctrl, "unexpected response from display-on notification: 0x%02x\n",
 			 response);
-		return -EIO;
+		return -EPROTO;
 	}
 
 	return 0;
@@ -1785,7 +1787,8 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
  * Use ssam_ctrl_notif_d0_entry() to reverse the effects of this function.
  *
  * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed.
+ * request has been executed, or -EPROTO if an unexpected response has been
+ * received.
  */
 int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 {
@@ -1804,7 +1807,7 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 	if (response != 0) {
 		ssam_err(ctrl, "unexpected response from D0-exit notification: 0x%02x\n",
 			 response);
-		return -EIO;
+		return -EPROTO;
 	}
 
 	return 0;
@@ -1826,7 +1829,8 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
  * See ssam_ctrl_notif_d0_exit() for more details.
  *
  * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed.
+ * request has been executed, or -EPROTO if an unexpected response has been
+ * received.
  */
 int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 {
@@ -1845,7 +1849,7 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 	if (response != 0) {
 		ssam_err(ctrl, "unexpected response from D0-entry notification: 0x%02x\n",
 			 response);
-		return -EIO;
+		return -EPROTO;
 	}
 
 	return 0;
