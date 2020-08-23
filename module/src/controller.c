@@ -1524,6 +1524,20 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
 	.instance_id     = 0x00,
 });
 
+/**
+ * ssam_ssh_event_enable - Enable SSH event.
+ * @ctrl:  The controller for which to enable the event.
+ * @reg:   The event registry describing what request to use for enabling and
+ *         disabling the event.
+ * @id:    The event identifier.
+ * @flags: The event flags.
+ *
+ * This is a wrapper for the raw SAM request to enable an event, thus it does
+ * not handle referecnce counting for enable/disable of events. If an event
+ * has already been enabled, the EC will ignore this request.
+ *
+ * Returns the status of the executed SAM request.
+ */
 static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 				 struct ssam_event_registry reg,
 				 struct ssam_event_id id, u8 flags)
@@ -1575,6 +1589,20 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 
 }
 
+/**
+ * ssam_ssh_event_disable - Disable SSH event.
+ * @ctrl:  The controller for which to disable the event.
+ * @reg:   The event registry describing what request to use for enabling and
+ *         disabling the event (must be same as used when enabling the event).
+ * @id:    The event identifier.
+ * @flags: The event flags (likely ignored for disabling of events).
+ *
+ * This is a wrapper for the raw SAM request to disable an event, thus it does
+ * not handle reference counting for enable/disable of events. If an event has
+ * already been disabled, the EC will ignore this request.
+ *
+ * Returns the status of the executed SAM request.
+ */
 static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 				  struct ssam_event_registry reg,
 				  struct ssam_event_id id, u8 flags)
@@ -1628,6 +1656,10 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 
 /* -- Wrappers for internal SAM requests. ----------------------------------- */
 
+/**
+ * ssam_log_firmware_version - Log SAM/EC firmware version to kernel log.
+ * @ctrl: The controller.
+ */
 int ssam_log_firmware_version(struct ssam_controller *ctrl)
 {
 	__le32 __version;
@@ -1647,6 +1679,32 @@ int ssam_log_firmware_version(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_ctrl_notif_display_off - Notify EC that the display has been turned
+ * off.
+ * @ctrl: The controller.
+ *
+ * Notify the EC that the display has been turned off and the driver may enter
+ * a lower-power state. This will prevent events from being sent directly.
+ * Rather, the EC signals an event by pulling the wakeup GPIO high for as long
+ * as there are pending events. The events then need to be manually released,
+ * one by one, via the GPIO callback request. All pending events accumulated
+ * during this state can also be released by issuing the display-on
+ * notification, e.g. via ssam_ctrl_notif_display_on(), which will also reset
+ * the GPIO.
+ *
+ * On some devices, specifically ones with an integrated keyboard, the keyboard
+ * backlight will be turned off by this call.
+ *
+ * This function will only send the display-off notification command if
+ * display noticications are supported by the EC. Currently all known devices
+ * support these notification.
+ *
+ * Use ssam_ctrl_notif_display_on() to reverse the effects of this function.
+ *
+ * Returns the status of the executed SAM command, zero on success or if no
+ * request has been executed.
+ */
 int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 {
 	int status;
@@ -1670,6 +1728,24 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_ctrl_notif_display_on - Notify EC that the display has been turned on.
+ * @ctrl: The controller.
+ *
+ * Notify the EC that the display has been turned back on and the driver has
+ * exited its lower-power state. This notification is the counterpart to the
+ * display-off notification sent via ssam_ctrl_notif_display_off() and will
+ * reverse its effects, including resetting events to their default behavior.
+ *
+ * This function will only send the display-on notification command if display
+ * noticications are supported by the EC. Currently all known devices support
+ * these notification.
+ *
+ * See ssam_ctrl_notif_display_off() for more details.
+ *
+ * Returns the status of the executed SAM command, zero on success or if no
+ * request has been executed.
+ */
 int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 {
 	int status;
@@ -1693,6 +1769,24 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_ctrl_notif_d0_exit - Notify EC that the driver/device exits the D0
+ * power state.
+ * @ctrl: The controller
+ *
+ * Notifies the EC that the driver prepares to exit the D0 power state in
+ * favor of a lower-power state. Exact effects of this function related to the
+ * EC are currently unknown.
+ *
+ * This function will only send the D0-exit notification command if D0-state
+ * noticications are supported by the EC. Only newer Surface generations
+ * support these notifications.
+ *
+ * Use ssam_ctrl_notif_d0_entry() to reverse the effects of this function.
+ *
+ * Returns the status of the executed SAM command, zero on success or if no
+ * request has been executed.
+ */
 int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 {
 	int status;
@@ -1716,6 +1810,24 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/**
+ * ssam_ctrl_notif_d0_entry - Notify EC that the driver/device enters the D0
+ * power state.
+ * @ctrl: The controller
+ *
+ * Notifies the EC that the driver has exited a lower-power state and entered
+ * the D0 power state. Exact effects of this function related to the EC are
+ * currently unknown.
+ *
+ * This function will only send the D0-entry notification command if D0-state
+ * noticications are supported by the EC. Only newer Surface generations
+ * support these notifications.
+ *
+ * See ssam_ctrl_notif_d0_exit() for more details.
+ *
+ * Returns the status of the executed SAM command, zero on success or if no
+ * request has been executed.
+ */
 int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 {
 	int status;
