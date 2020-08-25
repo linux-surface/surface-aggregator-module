@@ -2070,6 +2070,89 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
 
 /**
+ * ssam_notifier_disable_registered - Disable events for all registered
+ * notifiers.
+ * @ctrl: The controller for which to disable the notifiers/events.
+ *
+ * Disables events for all currently registered notifiers. In case of an error
+ * (EC command failing), all previously disabled events will be restored and
+ * the error code returned.
+ *
+ * This function is intended to disable all events prior to hibenration entry.
+ * See ssam_notifier_restore_registered() to restore/re-enable all events
+ * disabled with this fucntion.
+ *
+ * Note that this function will not disable events for notifiers registered
+ * after calling this function. It should thus be made sure that no new
+ * notifiers are going to be added after this call and before the corresponding
+ * call to ssam_notifier_restore_registered().
+ *
+ * Returns zero on success. In case of failure returns the error code returned
+ * by the failed EC command to disable an event.
+ */
+int ssam_notifier_disable_registered(struct ssam_controller *ctrl)
+{
+	struct ssam_nf *nf = &ctrl->cplt.event.notif;
+	struct rb_node *n;
+	int status;
+
+	mutex_lock(&nf->lock);
+	for (n = rb_first(&nf->refcount); n != NULL; n = rb_next(n)) {
+		struct ssam_nf_refcount_entry *e;
+
+		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
+		status = ssam_ssh_event_disable(ctrl, e->key.reg,
+						e->key.id, e->flags);
+		if (status)
+			goto err;
+	}
+	mutex_unlock(&nf->lock);
+
+	return 0;
+
+err:
+	for (n = rb_prev(n); n != NULL; n = rb_prev(n)) {
+		struct ssam_nf_refcount_entry *e;
+
+		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
+		ssam_ssh_event_enable(ctrl, e->key.reg, e->key.id, e->flags);
+	}
+	mutex_unlock(&nf->lock);
+
+	return status;
+}
+
+/**
+ * ssam_notifier_restore_registered - Restore/re-enable events for all
+ * registered notifiers.
+ * @ctrl: The controller for which to restore the notifiers/events.
+ *
+ * Restores/re-enables all events for which notifiers have been registered on
+ * the given controller. In case of a failure, the error is logged and the
+ * function continues to try and enable the remaining events.
+ *
+ * This function is intended to restore/re-enable all registered events after
+ * hibernation. See ssam_notifier_disable_registered() for the counter part
+ * disabling the events and more details.
+ */
+void ssam_notifier_restore_registered(struct ssam_controller *ctrl)
+{
+	struct ssam_nf *nf = &ctrl->cplt.event.notif;
+	struct rb_node *n;
+
+	mutex_lock(&nf->lock);
+	for (n = rb_first(&nf->refcount); n != NULL; n = rb_next(n)) {
+		struct ssam_nf_refcount_entry *e;
+
+		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
+
+		// ignore errors, will get logged in call
+		ssam_ssh_event_enable(ctrl, e->key.reg, e->key.id, e->flags);
+	}
+	mutex_unlock(&nf->lock);
+}
+
+/**
  * ssam_notifier_empty - Check if there are any registered notifiers.
  * @ctrl: The controller to check on.
  *
