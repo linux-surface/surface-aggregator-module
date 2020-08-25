@@ -354,7 +354,8 @@ static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
  * returning its entry. If the returned entry has a refcount of zero, the
  * caller is responsible for freeing it using kfree().
  *
- * Returns the refcount entry on success or NULL if the entry has not been found.
+ * Returns the refcount entry on success or NULL if the entry has not been
+ * found.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_dec(
 		struct ssam_nf *nf, struct ssam_event_registry reg,
