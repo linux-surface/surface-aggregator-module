@@ -248,9 +248,9 @@ struct ssam_nf_refcount_entry {
  * @reg: The registry used to enable/disable the event.
  * @id:  The event ID.
  */
-static int ssam_nf_refcount_inc(struct ssam_nf *nf,
-				struct ssam_event_registry reg,
-				struct ssam_event_id id)
+static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
+		struct ssam_nf *nf, struct ssam_event_registry reg,
+		struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
@@ -266,19 +266,21 @@ static int ssam_nf_refcount_inc(struct ssam_nf *nf,
 		parent = *link;
 
 		cmp = memcmp(&key, &entry->key, sizeof(key));
-		if (cmp < 0)
+		if (cmp < 0) {
 			link = &(*link)->rb_left;
-		else if (cmp > 0)
+		} else if (cmp > 0) {
 			link = &(*link)->rb_right;
-		else if (entry->refcount < INT_MAX)
-			return ++entry->refcount;
-		else
-			return -ENOSPC;
+		} else if (entry->refcount < INT_MAX) {
+			entry->refcount++;
+			return entry;
+		} else {
+			return ERR_PTR(-ENOSPC);
+		}
 	}
 
 	entry = kzalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry)
-		return -ENOMEM;
+		return ERR_PTR(-ENOMEM);
 
 	entry->key = key;
 	entry->refcount = 1;
@@ -286,7 +288,7 @@ static int ssam_nf_refcount_inc(struct ssam_nf *nf,
 	rb_link_node(&entry->node, parent, link);
 	rb_insert_color(&entry->node, &nf->refcount);
 
-	return entry->refcount;
+	return entry;
 }
 
 /**
@@ -296,14 +298,14 @@ static int ssam_nf_refcount_inc(struct ssam_nf *nf,
  * @reg: The registry used to enable/disable the event.
  * @id:  The event ID.
  */
-static int ssam_nf_refcount_dec(struct ssam_nf *nf,
-				struct ssam_event_registry reg,
-				struct ssam_event_id id)
+static struct ssam_nf_refcount_entry *ssam_nf_refcount_dec(
+		struct ssam_nf *nf, struct ssam_event_registry reg,
+		struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
 	struct rb_node *node = nf->refcount.rb_node;
-	int cmp, rc;
+	int cmp;
 
 	key.reg = reg;
 	key.id = id;
@@ -317,18 +319,15 @@ static int ssam_nf_refcount_dec(struct ssam_nf *nf,
 		} else if (cmp > 0) {
 			node = node->rb_right;
 		} else {
-			rc = --entry->refcount;
-
-			if (rc == 0) {
+			entry->refcount--;
+			if (entry->refcount == 0)
 				rb_erase(&entry->node, &nf->refcount);
-				kfree(entry);
-			}
 
-			return rc;
+			return entry;
 		}
 	}
 
-	return -ENOENT;
+	return NULL;
 }
 
 /**
@@ -1875,9 +1874,10 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 			   struct ssam_event_notifier *n)
 {
 	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_head *nf_head;
 	struct ssam_nf *nf;
-	int rc, status;
+	int status;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -1887,29 +1887,33 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 
 	mutex_lock(&nf->lock);
 
-	rc = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
-	if (rc < 0) {
+	entry = ssam_nf_refcount_inc(nf, n->event.reg, n->event.id);
+	if (IS_ERR(entry)) {
 		mutex_unlock(&nf->lock);
-		return rc;
+		return PTR_ERR(entry);
 	}
 
 	ssam_dbg(ctrl, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x,"
 		 " rc: %d)\n", n->event.reg.target_category,
-		 n->event.id.target_category, n->event.id.instance, rc);
+		 n->event.id.target_category, n->event.id.instance,
+		 entry->refcount);
 
 	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
-		ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+		entry = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+		if (entry->refcount == 0)
+			kfree(entry);
+
 		mutex_unlock(&nf->lock);
 		return status;
 	}
 
-	if (rc == 1) {
+	if (entry->refcount == 1) {
 		status = ssam_ssh_event_enable(ctrl, n->event.reg, n->event.id,
 					       n->event.flags);
 		if (status) {
 			__ssam_nfblk_remove(nf_head, &n->base);
-			ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+			kfree(ssam_nf_refcount_dec(nf, n->event.reg, n->event.id));
 			mutex_unlock(&nf->lock);
 			synchronize_srcu(&nf_head->srcu);
 			return status;
@@ -1935,9 +1939,10 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)
 {
 	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_head *nf_head;
 	struct ssam_nf *nf;
-	int rc, status = 0;
+	int status = 0;
 
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
@@ -1947,19 +1952,21 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 	mutex_lock(&nf->lock);
 
-	rc = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
-	if (rc < 0) {
+	entry = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
+	if (!entry) {
 		mutex_unlock(&nf->lock);
-		return rc;
+		return -ENOENT;
 	}
 
 	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x,"
 		 " rc: %d)\n", n->event.reg.target_category,
-		 n->event.id.target_category, n->event.id.instance, rc);
+		 n->event.id.target_category, n->event.id.instance,
+		 entry->refcount);
 
-	if (rc == 0) {
+	if (entry->refcount == 0) {
 		status = ssam_ssh_event_disable(ctrl, n->event.reg, n->event.id,
 						n->event.flags);
+		kfree(entry);
 	}
 
 	__ssam_nfblk_remove(nf_head, &n->base);
