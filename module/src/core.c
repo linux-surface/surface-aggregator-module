@@ -209,11 +209,11 @@ static int surface_sam_ssh_resume(struct device *dev)
 
 	status = ssam_ctrl_notif_d0_entry(c);
 	if (status)
-		ssam_err(c, "pm: display-on notification failed: %d\n", status);
+		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
 
 	status = ssam_ctrl_notif_display_on(c);
 	if (status)
-		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
+		ssam_err(c, "pm: display-on notification failed: %d\n", status);
 
 	return 0;
 }
