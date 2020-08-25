@@ -2105,7 +2105,7 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
 	mutex_lock(&nf->lock);
 	rbtree_postorder_for_each_entry_safe(pos, n, &nf->refcount, node) {
 		// ignore errors, will get logged in call
-		ssam_ssh_event_disable(ctrl, pos->key.reg, pos->key.id, 0);
+		ssam_ssh_event_disable(ctrl, pos->key.reg, pos->key.id, pos->flags);
 		kfree(pos);
 	}
 	nf->refcount = RB_ROOT;
