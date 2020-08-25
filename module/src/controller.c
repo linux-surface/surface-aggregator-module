@@ -163,6 +163,49 @@ static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_blo
 }
 
 /**
+ * __ssam_nfblk_find_link - Find a notifier block link on the given list.
+ * @nh: The notifier head on wich the search should be conducted.
+ * @nb: The notifier block to search for.
+ *
+ * Note: This function must be synchronized by the caller with respect to
+ * insert and/or remove calls.
+ *
+ * Returns a pointer to the pointer pointing to the given notifier block from
+ * the previous node in the list, or NULL if the given notifier block is not
+ * contained in the notifier list.
+ */
+static struct ssam_notifier_block **__ssam_nfblk_find_link(
+		struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+{
+	struct ssam_notifier_block **link = &nh->head;
+
+	while ((*link) != NULL) {
+		if ((*link) == nb)
+			return link;
+
+		link = &((*link)->next);
+	}
+
+	return NULL;
+}
+
+/**
+ * __ssam_nfblk_erase - Erase a notifier block link in the given notifier list.
+ * @link: The link to be erased.
+ *
+ * Note: This function must be synchronized by the caller with respect to other
+ * insert and/or remove/erase/find calls. The caller _must_ ensure SRCU
+ * synchronization by calling `synchronize_srcu(&nh->srcu)` after leaving the
+ * critical section, to ensure that the removed notifier block is not in use any
+ * more.
+ */
+static void __ssam_nfblk_erase(struct ssam_notifier_block **link)
+{
+	rcu_assign_pointer(*link, (*link)->next);
+}
+
+
+/**
  * __ssam_nfblk_remove - Remove a notifier block from the given notifier list.
  * @nh: The notifier head from which the block should be removed.
  * @nb: The notifier block to remove.
@@ -173,20 +216,17 @@ static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_blo
  * critical section, to ensure that the removed notifier block is not in use any
  * more.
  */
-static int __ssam_nfblk_remove(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+static int __ssam_nfblk_remove(struct ssam_nf_head *nh,
+			       struct ssam_notifier_block *nb)
 {
-	struct ssam_notifier_block **link = &nh->head;
+	struct ssam_notifier_block **link;
 
-	while ((*link) != NULL) {
-		if ((*link) == nb) {
-			rcu_assign_pointer(*link, nb->next);
-			return 0;
-		}
+	link = __ssam_nfblk_find_link(nh, nb);
+	if (!link)
+		return -ENOENT;
 
-		link = &((*link)->next);
-	}
-
-	return -ENOENT;
+	__ssam_nfblk_erase(link);
+	return 0;
 }
 
 /**
@@ -1948,6 +1988,7 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)
 {
 	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
+	struct ssam_notifier_block **link;
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_head *nf_head;
 	struct ssam_nf *nf;
@@ -1961,8 +2002,14 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 	mutex_lock(&nf->lock);
 
+	link = __ssam_nfblk_find_link(nf_head, &n->base);
+	if (!link) {
+		mutex_unlock(&nf->lock);
+		return -ENOENT;
+	}
+
 	entry = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
-	if (!entry) {
+	if (WARN_ON(!entry)) {
 		mutex_unlock(&nf->lock);
 		return -ENOENT;
 	}
@@ -1985,7 +2032,7 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		kfree(entry);
 	}
 
-	__ssam_nfblk_remove(nf_head, &n->base);
+	__ssam_nfblk_erase(link);
 	mutex_unlock(&nf->lock);
 	synchronize_srcu(&nf_head->srcu);
 
