@@ -204,8 +204,102 @@ static int surface_sam_ssh_resume(struct device *dev)
 	return 0;
 }
 
-static SIMPLE_DEV_PM_OPS(surface_sam_ssh_pm_ops, surface_sam_ssh_suspend,
-			 surface_sam_ssh_resume);
+static int surface_sam_ssh_freeze(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	// tell EC to not send any events while we take the image
+	status = ssam_ctrl_notif_display_off(c);
+	if (status) {
+		ssam_err(c, "pm: display-off notification failed: %d\n", status);
+		return status;
+	}
+
+	WARN_ON(ssam_controller_suspend(c));
+	return 0;
+}
+
+static int surface_sam_ssh_thaw(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	WARN_ON(ssam_controller_resume(c));
+
+	status = ssam_ctrl_notif_display_on(c);
+	if (status)
+		ssam_err(c, "pm: display-on notification failed: %d\n", status);
+
+	return status;
+}
+
+static int surface_sam_ssh_poweroff(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	status = ssam_notifier_disable_registered(c);
+	if (status) {
+		ssam_err(c, "pm: failed to disable notifiers for hibernation: %d\n",
+			 status);
+		return status;
+	}
+
+	status = ssam_ctrl_notif_display_off(c);
+	if (status) {
+		ssam_err(c, "pm: display-off notification failed: %d\n", status);
+		goto err_dpnf;
+	}
+
+	status = ssam_ctrl_notif_d0_exit(c);
+	if (status) {
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
+		goto err_d0nf;
+	}
+
+	WARN_ON(ssam_controller_suspend(c));
+	return 0;
+
+err_d0nf:
+	ssam_ctrl_notif_display_on(c);
+err_dpnf:
+	ssam_notifier_restore_registered(c);
+	return status;
+}
+
+static int surface_sam_ssh_restore(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	/*
+	 * Ignore but log errors, try to restore state as much as possible in
+	 * case of failures.
+	 */
+
+	WARN_ON(ssam_controller_resume(c));
+
+	status = ssam_ctrl_notif_d0_entry(c);
+	if (status)
+		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
+
+	status = ssam_ctrl_notif_display_on(c);
+	if (status)
+		ssam_err(c, "pm: display-on notification failed: %d\n", status);
+
+	ssam_notifier_restore_registered(c);
+	return 0;
+}
+
+static const struct dev_pm_ops surface_sam_ssh_pm_ops = {
+	.suspend  = surface_sam_ssh_suspend,
+	.resume   = surface_sam_ssh_resume,
+	.freeze   = surface_sam_ssh_freeze,
+	.thaw     = surface_sam_ssh_thaw,
+	.poweroff = surface_sam_ssh_poweroff,
+	.restore  = surface_sam_ssh_restore,
+};
 
 
 /* -- Static controller reference. ------------------------------------------ */
