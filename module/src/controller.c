@@ -238,6 +238,7 @@ struct ssam_nf_refcount_entry {
 	struct rb_node node;
 	struct ssam_nf_refcount_key key;
 	int refcount;
+	u8 flags;
 };
 
 
@@ -1918,6 +1919,14 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 			synchronize_srcu(&nf_head->srcu);
 			return status;
 		}
+
+		entry->flags = n->event.flags;
+
+	} else if (entry->flags != n->event.flags) {
+		ssam_warn(ctrl, "inconsistent flags when enabling event: got 0x%02x,"
+			  " expected 0x%02x (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x)",
+			  n->event.flags, entry->flags, n->event.reg.target_category,
+			  n->event.id.target_category, n->event.id.instance);
 	}
 
 	mutex_unlock(&nf->lock);
@@ -1962,6 +1971,13 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		 " rc: %d)\n", n->event.reg.target_category,
 		 n->event.id.target_category, n->event.id.instance,
 		 entry->refcount);
+
+	if (entry->flags != n->event.flags) {
+		ssam_warn(ctrl, "inconsistent flags when enabling event: got 0x%02x,"
+			  " expected 0x%02x (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x)",
+			  n->event.flags, entry->flags, n->event.reg.target_category,
+			  n->event.id.target_category, n->event.id.instance);
+	}
 
 	if (entry->refcount == 0) {
 		status = ssam_ssh_event_disable(ctrl, n->event.reg, n->event.id,
