@@ -2100,13 +2100,13 @@ static bool ssam_notifier_empty(struct ssam_controller *ctrl)
 static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
 {
 	struct ssam_nf *nf = &ctrl->cplt.event.notif;
-	struct ssam_nf_refcount_entry *pos, *n;
+	struct ssam_nf_refcount_entry *e, *n;
 
 	mutex_lock(&nf->lock);
-	rbtree_postorder_for_each_entry_safe(pos, n, &nf->refcount, node) {
+	rbtree_postorder_for_each_entry_safe(e, n, &nf->refcount, node) {
 		// ignore errors, will get logged in call
-		ssam_ssh_event_disable(ctrl, pos->key.reg, pos->key.id, pos->flags);
-		kfree(pos);
+		ssam_ssh_event_disable(ctrl, e->key.reg, e->key.id, e->flags);
+		kfree(e);
 	}
 	nf->refcount = RB_ROOT;
 	mutex_unlock(&nf->lock);
