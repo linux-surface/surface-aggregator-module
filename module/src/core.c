@@ -160,17 +160,9 @@ static int surface_sam_ssh_suspend(struct device *dev)
 		goto err_notif;
 	}
 
-	if (device_may_wakeup(dev)) {
-		status = enable_irq_wake(c->irq.num);
-		if (status) {
-			ssam_err(c, "failed to enable wake IRQ: %d\n", status);
-			goto err_irq;
-		}
-
-		c->irq.wakeup_enabled = true;
-	} else {
-		c->irq.wakeup_enabled = false;
-	}
+	status = ssam_irq_arm_for_wakeup(c);
+	if (status)
+		goto err_irq;
 
 	WARN_ON(ssam_controller_suspend(c));
 	return 0;
@@ -199,13 +191,7 @@ static int surface_sam_ssh_resume(struct device *dev)
 	 * it here.
 	 */
 
-	if (c->irq.wakeup_enabled) {
-		status = disable_irq_wake(c->irq.num);
-		if (status)
-			ssam_err(c, "failed to disable wake IRQ: %d\n", status);
-
-		c->irq.wakeup_enabled = false;
-	}
+	ssam_irq_disarm_wakeup(c);
 
 	status = ssam_ctrl_notif_d0_entry(c);
 	if (status)

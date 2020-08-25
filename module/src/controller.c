@@ -2172,6 +2172,10 @@ static irqreturn_t ssam_irq_handle(int irq, void *dev_id)
  * See also ssam_ctrl_notif_display_off() and ssam_ctrl_notif_display_off()
  * for functions to transition the EC into and out of the display-off state as
  * well as more details on it.
+ *
+ * The IRQ is disabled by default and has to be enabled before it can wake up
+ * the device from suspend via ssam_irq_arm_for_wakeup(). On teardown, the IRQ
+ * should be freed via ssam_irq_free().
  */
 int ssam_irq_setup(struct ssam_controller *ctrl)
 {
@@ -2222,4 +2226,62 @@ void ssam_irq_free(struct ssam_controller *ctrl)
 {
 	free_irq(ctrl->irq.num, ctrl);
 	ctrl->irq.num = -1;
+}
+
+/**
+ * ssam_irq_arm_for_wakeup - Arm the EC IRQ for wakeup, if enabled.
+ * @ctrl: The controller for which the IRQ should be armed.
+ *
+ * Sets up the IRQ so that it can be used to wake the device. Specifically,
+ * this function enables the irq and then, if the device is allowed to wake up
+ * the system, calls enable_irq_wake(). See ssam_irq_disarm_wakeup() for the
+ * corresponding function to disable the IRQ.
+ *
+ * This function is intended to arm the IRQ before entering S2idle suspend.
+ *
+ * Note: calls to ssam_irq_arm_for_wakeup() and ssam_irq_disarm_wakeup() must
+ * be balanced.
+ */
+int ssam_irq_arm_for_wakeup(struct ssam_controller *ctrl)
+{
+	struct device *dev = ssam_controller_device(ctrl);
+	int status;
+
+	if (device_may_wakeup(dev)) {
+		status = enable_irq_wake(ctrl->irq.num);
+		if (status) {
+			ssam_err(ctrl, "failed to enable wake IRQ: %d\n", status);
+			return status;
+		}
+
+		ctrl->irq.wakeup_enabled = true;
+	} else {
+		ctrl->irq.wakeup_enabled = false;
+	}
+
+	return 0;
+}
+
+/**
+ * ssam_irq_disarm_wakeup - Disarm the wakeup IRQ.
+ * @ctrl: The controller for which the IRQ should be disarmed.
+ *
+ * Disarm the IRQ previously set up for wake via ssam_irq_arm_for_wakeup().
+ *
+ * This function is intended to disarm the IRQ after exiting S2idle suspend.
+ *
+ * Note: calls to ssam_irq_arm_for_wakeup() and ssam_irq_disarm_wakeup() must
+ * be balanced.
+ */
+void ssam_irq_disarm_wakeup(struct ssam_controller *ctrl)
+{
+	int status;
+
+	if (ctrl->irq.wakeup_enabled) {
+		status = disable_irq_wake(ctrl->irq.num);
+		if (status)
+			ssam_err(ctrl, "failed to disable wake IRQ: %d\n", status);
+
+		ctrl->irq.wakeup_enabled = false;
+	}
 }

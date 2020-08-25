@@ -247,6 +247,8 @@ void ssam_controller_destroy(struct ssam_controller *ctrl);
 
 int ssam_irq_setup(struct ssam_controller *ctrl);
 void ssam_irq_free(struct ssam_controller *ctrl);
+int ssam_irq_arm_for_wakeup(struct ssam_controller *ctrl);
+void ssam_irq_disarm_wakeup(struct ssam_controller *ctrl);
 
 void ssam_controller_lock(struct ssam_controller *c);
 void ssam_controller_unlock(struct ssam_controller *c);
