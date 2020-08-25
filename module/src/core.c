@@ -163,7 +163,7 @@ static int surface_sam_ssh_suspend(struct device *dev)
 	if (device_may_wakeup(dev)) {
 		status = enable_irq_wake(c->irq.num);
 		if (status) {
-			ssam_err(c, "failed to disable wake IRQ: %d\n", status);
+			ssam_err(c, "failed to enable wake IRQ: %d\n", status);
 			goto err_irq;
 		}
 
