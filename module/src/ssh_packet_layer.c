@@ -1517,7 +1517,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 
 	case SSH_FRAME_TYPE_DATA_SEQ:
 		ssh_ptl_send_ack(ptl, frame->seq);
-		/* fallthrough */
+		fallthrough;
 
 	case SSH_FRAME_TYPE_DATA_NSQ:
 		ssh_ptl_rx_dataframe(ptl, frame, &payload);
