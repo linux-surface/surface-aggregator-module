@@ -2213,6 +2213,7 @@ int ssam_irq_setup(struct ssam_controller *ctrl)
 		return status;
 
 	ctrl->irq.num = irq;
+	disable_irq(ctrl->irq.num);
 	return 0;
 }
 
@@ -2247,10 +2248,12 @@ int ssam_irq_arm_for_wakeup(struct ssam_controller *ctrl)
 	struct device *dev = ssam_controller_device(ctrl);
 	int status;
 
+	enable_irq(ctrl->irq.num);
 	if (device_may_wakeup(dev)) {
 		status = enable_irq_wake(ctrl->irq.num);
 		if (status) {
 			ssam_err(ctrl, "failed to enable wake IRQ: %d\n", status);
+			disable_irq(ctrl->irq.num);
 			return status;
 		}
 
@@ -2284,4 +2287,5 @@ void ssam_irq_disarm_wakeup(struct ssam_controller *ctrl)
 
 		ctrl->irq.wakeup_enabled = false;
 	}
+	disable_irq(ctrl->irq.num);
 }
