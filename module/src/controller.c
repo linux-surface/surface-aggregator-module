@@ -215,6 +215,9 @@ static void __ssam_nfblk_erase(struct ssam_notifier_block **link)
  * synchronization by calling `synchronize_srcu(&nh->srcu)` after leaving the
  * critical section, to ensure that the removed notifier block is not in use any
  * more.
+ *
+ * Returns zero on success, -ENOENT if the specified notifier block could not
+ * be found on the notifier list.
  */
 static int __ssam_nfblk_remove(struct ssam_nf_head *nh,
 			       struct ssam_notifier_block *nb)
@@ -288,6 +291,14 @@ struct ssam_nf_refcount_entry {
  * @nf:  The notifier system reference.
  * @reg: The registry used to enable/disable the event.
  * @id:  The event ID.
+ *
+ * Increments the reference-/activation-count associated with the specified
+ * event type/ID, allocating a new entry for this event ID if necessary. A
+ * newly allocated entry will have a refcount of one.
+ *
+ * Returns the refcount entry on success. Returns ERR_PTR(-ENOSPC) if there
+ * have already been %INT_MAX events of the specified ID and type registered,
+ * or ERR_PTR(-ENOMEM) if the entry could not be allocated.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
 		struct ssam_nf *nf, struct ssam_event_registry reg,
@@ -338,6 +349,12 @@ static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
  * @nf:  The notifier system reference.
  * @reg: The registry used to enable/disable the event.
  * @id:  The event ID.
+ *
+ * Decrements the reference-/activation-count of the specified event,
+ * returning its entry. If the returned entry has a refcount of zero, the
+ * caller is responsible for freeing it using kfree().
+ *
+ * Returns the refcount entry on success or NULL if the entry has not been found.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_dec(
 		struct ssam_nf *nf, struct ssam_event_registry reg,
@@ -1910,6 +1927,13 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
  * Register an event notifier and increment the usage counter of the
  * associated SAM event. If the event was previously not enabled, it will be
  * enabled during this call.
+ *
+ * Returns zero on success, -ENOSPC if there have already been %INT_MAX
+ * notifiers for the event ID/type associated with the notifier block
+ * registered, -ENOMEM if the corresponding event entry could not be
+ * allocated. If this is the first time that a notifier block is registered
+ * for the specific associated event, returns the status of the event enable
+ * EC command.
  */
 int ssam_notifier_register(struct ssam_controller *ctrl,
 			   struct ssam_event_notifier *n)
@@ -1983,6 +2007,11 @@ EXPORT_SYMBOL_GPL(ssam_notifier_register);
  * Unregister an event notifier and decrement the usage counter of the
  * associated SAM event. If the usage counter reaches zero, the event will be
  * disabled.
+ *
+ * Returns zero on success, -ENOENT if the given notifier block has not been
+ * registered on the controller. If the given notifier block was the last one
+ * associated with its specific event, returns the status of the event disable
+ * EC command.
  */
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)
