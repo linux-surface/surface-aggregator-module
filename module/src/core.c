@@ -528,7 +528,7 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 
 	// finally, set main controller reference
 	status = ssam_try_set_controller(ctrl);
-	if (status)
+	if (WARN_ON(status))	// currently, we're the only provider
 		goto err_initrq;
 
 	/*
