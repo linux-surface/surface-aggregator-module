@@ -209,7 +209,17 @@ static int surface_sam_ssh_freeze(struct device *dev)
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
-	// tell EC to not send any events while we take the image
+	/*
+	 * During hibernation image creation, we only have to ensure that the
+	 * EC doesn't send us any events. This is done via the display-off
+	 * and D0-exit notifications. Note that this sets up the wakeup IRQ
+	 * on the EC side, however, we have disabled it by default on our side
+	 * and won't enable it here.
+	 *
+	 * See surface_sam_ssh_poweroff() for more details on the hibernation
+	 * process.
+	 */
+
 	status = ssam_ctrl_notif_display_off(c);
 	if (status) {
 		ssam_err(c, "pm: display-off notification failed: %d\n", status);
@@ -255,6 +265,22 @@ static int surface_sam_ssh_poweroff(struct device *dev)
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
+	/*
+	 * When entering hibernation and powering off the system, the EC, at
+	 * least on some models, may disable events. Without us taking care of
+	 * that, this leads to events not being enabled/restored when the
+	 * system resumes from hibernation, resulting SAM-HID subsystem devices
+	 * (i.e. keyboard, touchpad) not working, AC-plug/AC-unplug events being
+	 * gone, etc.
+	 *
+	 * To avoid these issues, we disable all registered events here (this is
+	 * likely not actually required) and restore them during the drivers PM
+	 * restore callback.
+	 *
+	 * Wakeup from the EC interrupt is not supported during hibernation,
+	 * so don't arm the IRQ here.
+	 */
+
 	status = ssam_notifier_disable_registered(c);
 	if (status) {
 		ssam_err(c, "pm: failed to disable notifiers for hibernation: %d\n",
@@ -291,7 +317,8 @@ static int surface_sam_ssh_restore(struct device *dev)
 
 	/*
 	 * Ignore but log errors, try to restore state as much as possible in
-	 * case of failures.
+	 * case of failures. See surface_sam_ssh_poweroff() for more details on
+	 * the hibernation process.
 	 */
 
 	WARN_ON(ssam_controller_resume(c));
