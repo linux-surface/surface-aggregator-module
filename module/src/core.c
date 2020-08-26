@@ -68,22 +68,30 @@ static void ssam_clear_controller(void)
 }
 
 
-static int __ssam_client_link(struct ssam_controller *c, struct device *client)
+int ssam_client_link(struct ssam_controller *c, struct device *client)
 {
 	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
 	struct device_link *link;
 	struct device *ctrldev;
 
-	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED)
+	ssam_controller_statelock(c);
+
+	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED) {
+		ssam_controller_stateunlock(c);
 		return -ENXIO;
+	}
 
 	ctrldev = ssam_controller_device(c);
-	if (!ctrldev)
+	if (!ctrldev) {
+		ssam_controller_stateunlock(c);
 		return -ENXIO;
+	}
 
 	link = device_link_add(client, ctrldev, flags);
-	if (!link)
+	if (!link) {
+		ssam_controller_stateunlock(c);
 		return -ENOMEM;
+	}
 
 	/*
 	 * Return -ENXIO if supplier driver is on its way to be removed. In this
@@ -91,21 +99,13 @@ static int __ssam_client_link(struct ssam_controller *c, struct device *client)
 	 * link is not going to save us any more, as unbinding is already in
 	 * progress.
 	 */
-	if (link->status == DL_STATE_SUPPLIER_UNBIND)
+	if (link->status == DL_STATE_SUPPLIER_UNBIND) {
+		ssam_controller_stateunlock(c);
 		return -ENXIO;
+	}
 
+	ssam_controller_stateunlock(c);
 	return 0;
-}
-
-int ssam_client_link(struct ssam_controller *ctrl, struct device *client)
-{
-	int status;
-
-	ssam_controller_statelock(ctrl);
-	status = __ssam_client_link(ctrl, client);
-	ssam_controller_stateunlock(ctrl);
-
-	return status;
 }
 EXPORT_SYMBOL_GPL(ssam_client_link);
 
