@@ -24,9 +24,22 @@
 
 /* -- Static controller reference. ------------------------------------------ */
 
+/*
+ * Main controller reference. The corresponding lock must be held while
+ * accessing (reading/writing) the reference.
+ */
 static struct ssam_controller *__ssam_controller;
 static DEFINE_SPINLOCK(__ssam_controller_lock);
 
+/**
+ * ssam_get_controller - Get reference to SSAM controller.
+ *
+ * Returns a reference to the SSAM controller of the system or NULL if there
+ * is none, it hasn't been set up yet, or it has already been unregistered.
+ * This function automatically increments the reference count of the
+ * controller, thus the calling party must ensure that ssam_controller_put()
+ * is called when it doesn't need the controller any more.
+ */
 struct ssam_controller *ssam_get_controller(void)
 {
 	struct ssam_controller *ctrl;
@@ -46,6 +59,14 @@ out:
 }
 EXPORT_SYMBOL_GPL(ssam_get_controller);
 
+/**
+ * ssam_try_set_controller - Try to set the main controller reference.
+ * @ctrl: The controller to which the reference should point.
+ *
+ * Set the main controller reference to the given pointer if the reference
+ * hasn't been set already. Returns zero on success or -EBUSY if the reference
+ * has already been set.
+ */
 static int ssam_try_set_controller(struct ssam_controller *ctrl)
 {
 	int status = 0;
@@ -60,6 +81,12 @@ static int ssam_try_set_controller(struct ssam_controller *ctrl)
 	return status;
 }
 
+/**
+ * ssam_clear_controller - Remove/clear the main controller reference.
+ *
+ * Clears the main controller reference, i.e. sets it to NULL. This function
+ * should be called before the controller is shut down.
+ */
 static void ssam_clear_controller(void)
 {
 	spin_lock(&__ssam_controller_lock);
@@ -68,6 +95,25 @@ static void ssam_clear_controller(void)
 }
 
 
+/**
+ * ssam_client_link - Link an arbitrary client device to the controller.
+ * @c: The controller to link to.
+ * @client: The client device.
+ *
+ * Link an arbitrary client device to the controller by creating a device link
+ * between it as consumer and the controller device as provider. This function
+ * can be used for non-SSAM devices (or SSAM devices not registered as child
+ * under the controller) to guarantee that the controller is valid for as long
+ * as the driver of the client device is bound, and that proper suspend and
+ * resume ordering is guaranteed.
+ *
+ * The device link does not have to be destructed manually. It is removed
+ * automatically once the driver of the client device unbinds.
+ *
+ * Returns zero on success, -ENXIO if the controller is not ready or going to
+ * be removed soon, or -ENOMEM if the device link could not be created for
+ * other reasons.
+ */
 int ssam_client_link(struct ssam_controller *c, struct device *client)
 {
 	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
@@ -109,6 +155,42 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 }
 EXPORT_SYMBOL_GPL(ssam_client_link);
 
+/**
+ * ssam_client_bind - Bind an arbitrary client device to the controller.
+ * @client: The client device.
+ * @ctrl: A pointer to where the controller reference should be returned.
+ *
+ * Link an arbitrary client device to the controller by creating a device link
+ * between it as consumer and the main controller device as provider. This
+ * function can be used for non-SSAM devices to guarantee that the controller
+ * returned by this function is valid for as long as the driver of the client
+ * device is bound, and that proper suspend and resume ordering is guaranteed.
+ *
+ * This function does essentially the same as ssam_client_link(), except that
+ * it first fetches the main controller reference, then creates the link, and
+ * finally returns this reference in the ``ctrl`` parameter. Note that this
+ * function does not increment the reference counter of the controller, as, due
+ * to the link, the controller lifetime is assured as long as the driver of the
+ * client device is bound.
+ *
+ * It is not valid to use the controller reference obtained by this method
+ * outside of the driver bound to the client device at the time of calling
+ * this function, without first incrementing the reference count of the
+ * controller via ssam_controller_get(). Even after doing this, care must be
+ * taken that requests are only submitted and notifiers are only
+ * (un-)registered when the controller is active and not suspended. In other
+ * words: The device link only lives as long as the client driver is bound and
+ * any guarantees enforced by this link (e.g. active controller state) can
+ * only be relied upon as long as this link exists and may need to be enforced
+ * in other ways afterwards.
+ *
+ * The created device link does not have to be destructed manually. It is
+ * removed automatically once the driver of the client device unbinds.
+ *
+ * Returns zero on success, -ENXIO if the controller is not present, not ready
+ * or going to be removed soon, or -ENOMEM if the device link could not be
+ * created for other reasons.
+ */
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 {
 	struct ssam_controller *c;
