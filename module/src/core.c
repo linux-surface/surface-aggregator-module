@@ -168,10 +168,10 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
  *
  * This function does essentially the same as ssam_client_link(), except that
  * it first fetches the main controller reference, then creates the link, and
- * finally returns this reference in the ``ctrl`` parameter. Note that this
- * function does not increment the reference counter of the controller, as, due
- * to the link, the controller lifetime is assured as long as the driver of the
- * client device is bound.
+ * finally returns this reference in the @ctrl parameter. Note that this
+ * function does not increment the reference counter of the controller, as,
+ * due to the link, the controller lifetime is assured as long as the driver
+ * of the client device is bound.
  *
  * It is not valid to use the controller reference obtained by this method
  * outside of the driver bound to the client device at the time of calling

@@ -553,8 +553,8 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
  * macro essentially allocates the request message buffer on the stack and
  * then calls ssam_request_sync_with_buffer().
  *
- * Note: The ``payload_len`` parameter specifies the maximum payload length,
- * used for buffer allocation. The actual payload length may be smaller.
+ * Note: The @payload_len parameter specifies the maximum payload length, used
+ * for buffer allocation. The actual payload length may be smaller.
  *
  * Returns the status of the request or any failure during setup.
  */

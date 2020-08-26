@@ -835,7 +835,7 @@ static void __ssam_controller_release(struct kref *kref)
  * ssam_controller_get - Increment reference count of controller.
  * @c: The controller.
  *
- * Returns the controller, i.e. ``c``.
+ * Returns the controller, i.e. @c.
  */
 struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 {
