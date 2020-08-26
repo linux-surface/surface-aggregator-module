@@ -51,7 +51,7 @@ EXPORT_SYMBOL_GPL(ssam_device_type);
 
 
 /**
- * ssam_device_alloc - Allocate and initialize a SSAM client device.
+ * ssam_device_alloc() - Allocate and initialize a SSAM client device.
  * @ctrl: The controller under which the device should be added.
  * @uid:  The UID of the device to be added.
  *
@@ -83,7 +83,7 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 EXPORT_SYMBOL_GPL(ssam_device_alloc);
 
 /**
- * ssam_device_add - Add a SSAM client device.
+ * ssam_device_add() - Add a SSAM client device.
  * @sdev: The SSAM client device to be added.
  *
  * Added client devices must be guaranteed to always have a valid and active
@@ -141,7 +141,7 @@ int ssam_device_add(struct ssam_device *sdev)
 EXPORT_SYMBOL_GPL(ssam_device_add);
 
 /**
- * ssam_device_remove - Remove a SSAM client device.
+ * ssam_device_remove() - Remove a SSAM client device.
  * @sdev: The device to remove.
  *
  * Removes and unregisters the provided SSAM client device.
@@ -154,7 +154,7 @@ EXPORT_SYMBOL_GPL(ssam_device_remove);
 
 
 /**
- * ssam_device_id_compatible - Check if a device ID matches a UID.
+ * ssam_device_id_compatible() - Check if a device ID matches a UID.
  * @id:  The device ID as potential match.
  * @uid: The device UID matching against.
  *
@@ -181,7 +181,7 @@ static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
 }
 
 /**
- * ssam_device_id_is_null - Check if a device ID is null.
+ * ssam_device_id_is_null() - Check if a device ID is null.
  * @id: The device ID to check.
  *
  * Check if a given device ID is null, i.e. all zeros. Used to check for the
@@ -198,7 +198,7 @@ static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
 }
 
 /**
- * ssam_device_id_match - Find the matching ID table entry for the given UID.
+ * ssam_device_id_match() - Find the matching ID table entry for the given UID.
  * @table: The table to search in.
  * @uid:   The UID to matched against the individual table entries.
  *
@@ -220,7 +220,7 @@ const struct ssam_device_id *ssam_device_id_match(
 EXPORT_SYMBOL_GPL(ssam_device_id_match);
 
 /**
- * ssam_device_get_match - Find and return the ID matching the device in the
+ * ssam_device_get_match() - Find and return the ID matching the device in the
  * ID table of the bound driver.
  * @dev: The device for which to get the matching ID table entry.
  *
@@ -249,7 +249,7 @@ const struct ssam_device_id *ssam_device_get_match(
 EXPORT_SYMBOL_GPL(ssam_device_get_match);
 
 /**
- * ssam_device_get_match_data - Find the ID matching the device in hte
+ * ssam_device_get_match_data() - Find the ID matching the device in hte
  * ID table of the bound driver and return its ``driver_data`` member.
  * @dev: The device for which to get the match data.
  *
@@ -313,7 +313,7 @@ EXPORT_SYMBOL_GPL(ssam_bus_type);
 
 
 /**
- * __ssam_device_driver_register - Register a SSAM device driver.
+ * __ssam_device_driver_register() - Register a SSAM device driver.
  * @sdrv:  The driver to register.
  * @owner: The module owning the provided driver.
  *
@@ -355,7 +355,7 @@ static int ssam_remove_device(struct device *dev, void *_data)
 }
 
 /**
- * ssam_controller_remove_clients - Remove SSAM client devices registered as
+ * ssam_controller_remove_clients() - Remove SSAM client devices registered as
  * direct children under the given controller.
  * @ctrl: The controller to remove all direct clients for.
  *
@@ -378,7 +378,7 @@ void ssam_controller_remove_clients(struct ssam_controller *ctrl)
 
 
 /**
- * ssam_bus_register - Register and set-up the SSAM client device bus.
+ * ssam_bus_register() - Register and set-up the SSAM client device bus.
  */
 int ssam_bus_register(void)
 {
@@ -386,7 +386,7 @@ int ssam_bus_register(void)
 }
 
 /**
- * ssam_bus_unregister - Unregister the SSAM client device bus.
+ * ssam_bus_unregister() - Unregister the SSAM client device bus.
  */
 void ssam_bus_unregister(void)
 {

@@ -211,7 +211,7 @@ struct ssam_controller {
 
 
 /**
- * ssam_controller_receive_buf - Provide input-data to the controller.
+ * ssam_controller_receive_buf() - Provide input-data to the controller.
  * @ctrl: The controller.
  * @buf:  The input buffer.
  * @n:    The number of bytes in the input buffer.
@@ -230,7 +230,7 @@ int ssam_controller_receive_buf(struct ssam_controller *ctrl,
 }
 
 /**
- * ssam_controller_write_wakeup - Notify the controller that the underlying
+ * ssam_controller_write_wakeup() - Notify the controller that the underlying
  * device has space avaliable for data to be written.
  * @ctrl: The controller.
  */

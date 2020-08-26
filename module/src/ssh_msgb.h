@@ -24,7 +24,7 @@ struct msgbuf {
 };
 
 /**
- * msgb_init - Initialize the given message buffer struct.
+ * msgb_init() - Initialize the given message buffer struct.
  * @msgb: The buffer struct to initialize
  * @ptr:  Pointer to the underlying memory by which the buffer will be backed.
  * @cap:  Size of the underlying memory.
@@ -40,7 +40,7 @@ static inline void msgb_init(struct msgbuf *msgb, u8 *ptr, size_t cap)
 }
 
 /**
- * msgb_bytes_used - Return the current number of bytes used in the buffer.
+ * msgb_bytes_used() - Return the current number of bytes used in the buffer.
  * @msgb: The message buffer.
  */
 static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
@@ -49,7 +49,7 @@ static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 }
 
 /**
- * msgb_push_u16 - Push a u16 value to the buffer.
+ * msgb_push_u16() - Push a u16 value to the buffer.
  * @msgb:  The message buffer.
  * @value: The value to push to the buffer.
  */
@@ -63,7 +63,7 @@ static inline void msgb_push_u16(struct msgbuf *msgb, u16 value)
 }
 
 /**
- * msgb_push_syn - Push SSH SYN bytes to the buffer.
+ * msgb_push_syn() - Push SSH SYN bytes to the buffer.
  * @msgb:  The message buffer.
  */
 static inline void msgb_push_syn(struct msgbuf *msgb)
@@ -72,7 +72,7 @@ static inline void msgb_push_syn(struct msgbuf *msgb)
 }
 
 /**
- * msgb_push_buf - Push raw data to the buffer.
+ * msgb_push_buf() - Push raw data to the buffer.
  * @msgb: The message buffer.
  * @buf:  The data to push to the buffer.
  * @len:  The length of the data to push to the buffer.
@@ -83,7 +83,7 @@ static inline void msgb_push_buf(struct msgbuf *msgb, const u8 *buf, size_t len)
 }
 
 /**
- * msgb_push_crc - Compute CRC and push it to the buffer.
+ * msgb_push_crc() - Compute CRC and push it to the buffer.
  * @msgb: The message buffer.
  * @buf:  The data for which the CRC should be computed.
  * @len:  The length of the data for which the CRC should be computed.
@@ -94,7 +94,7 @@ static inline void msgb_push_crc(struct msgbuf *msgb, const u8 *buf, size_t len)
 }
 
 /**
- * msgb_push_frame - Push a SSH message frame header to the buffer.
+ * msgb_push_frame() - Push a SSH message frame header to the buffer.
  * @msgb: The message buffer
  * @ty:   The type of the frame.
  * @len:  The length of the payload of the frame.
@@ -117,7 +117,7 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 }
 
 /**
- * msgb_push_ack - Push a SSH ACK frame to the buffer.
+ * msgb_push_ack() - Push a SSH ACK frame to the buffer.
  * @msgb: The message buffer
  * @seq:  The sequence ID of the frame/packet to be ACKed.
  */
@@ -134,7 +134,7 @@ static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
 }
 
 /**
- * msgb_push_nak - Push a SSH NAK frame to the buffer.
+ * msgb_push_nak() - Push a SSH NAK frame to the buffer.
  * @msgb: The message buffer
  */
 static inline void msgb_push_nak(struct msgbuf *msgb)
@@ -150,7 +150,7 @@ static inline void msgb_push_nak(struct msgbuf *msgb)
 }
 
 /**
- * msgb_push_cmd - Push a SSH command frame with payload to the buffer.
+ * msgb_push_cmd() - Push a SSH command frame with payload to the buffer.
  * @msgb: The message buffer.
  * @seq:  The sequence ID (SEQ) of the frame/packet.
  * @rqid: The request ID (RQID) of the request contained in the frame.

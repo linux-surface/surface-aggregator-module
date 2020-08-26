@@ -11,7 +11,7 @@
 
 
 /**
- * sshp_buf - Parser buffer for SSH messages.
+ * struct sshp_buf - Parser buffer for SSH messages.
  * @ptr: Pointer to the beginning of the buffer.
  * @len: Number of bytes used in the buffer.
  * @cap: Maximum capacity of the buffer.
@@ -23,7 +23,7 @@ struct sshp_buf {
 };
 
 /**
- * sshp_buf_init - Initialize a SSH parser buffer.
+ * sshp_buf_init() - Initialize a SSH parser buffer.
  * @buf: The buffer to initialize.
  * @ptr: The memory backing the buffer.
  * @cap: The length of the memory backing the buffer, i.e. its capacity.
@@ -39,7 +39,7 @@ static inline void sshp_buf_init(struct sshp_buf *buf, u8 *ptr, size_t cap)
 }
 
 /**
- * sshp_buf_alloc - Allocate and initialize a SSH parser buffer.
+ * sshp_buf_alloc() - Allocate and initialize a SSH parser buffer.
  * @buf:   The buffer to initialize/allocate to.
  * @cap:   The desired capacity of the buffer.
  * @flags: The flags used for allocating the memory.
@@ -61,7 +61,7 @@ static inline int sshp_buf_alloc(struct sshp_buf *buf, size_t cap, gfp_t flags)
 }
 
 /**
- * sshp_buf_free - Free a SSH parser buffer.
+ * sshp_buf_free() - Free a SSH parser buffer.
  * @buf: The buffer to free.
  *
  * Frees a SSH parser buffer by freeing the memory backing it and then
@@ -77,7 +77,7 @@ static inline void sshp_buf_free(struct sshp_buf *buf)
 }
 
 /**
- * sshp_buf_drop - Drop data from the beginning of the buffer.
+ * sshp_buf_drop() - Drop data from the beginning of the buffer.
  * @buf: The buffer to drop data from.
  * @n:   The number of bytes to drop.
  *
@@ -91,7 +91,7 @@ static inline void sshp_buf_drop(struct sshp_buf *buf, size_t n)
 }
 
 /**
- * sshp_buf_read_from_fifo - Transfer data from a fifo to the buffer.
+ * sshp_buf_read_from_fifo() - Transfer data from a fifo to the buffer.
  * @buf:  The buffer to write the data into.
  * @fifo: The fifo to read the data from.
  *
@@ -114,7 +114,7 @@ static inline size_t sshp_buf_read_from_fifo(struct sshp_buf *buf,
 }
 
 /**
- * sshp_buf_span_from - Initialize a span from the given buffer and offset.
+ * sshp_buf_span_from() - Initialize a span from the given buffer and offset.
  * @buf:    The buffer to create the span from.
  * @offset: The offset in the buffer at which the span should start.
  * @span:   The span to initialize (output).

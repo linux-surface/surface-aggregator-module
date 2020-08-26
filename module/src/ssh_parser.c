@@ -7,7 +7,7 @@
 
 
 /**
- * sshp_validate_crc - Validate a CRC in raw message data.
+ * sshp_validate_crc() - Validate a CRC in raw message data.
  * @src: The span of data over which the CRC should be computed.
  * @crc: The pointer to the expected u16 CRC value.
  *
@@ -25,7 +25,7 @@ static inline bool sshp_validate_crc(const struct ssam_span *src, const u8 *crc)
 }
 
 /**
- * sshp_starts_with_syn - Check if the given data starts with SSH SYN bytes.
+ * sshp_starts_with_syn() - Check if the given data starts with SSH SYN bytes.
  * @src: The data span to check the start of.
  */
 static inline bool sshp_starts_with_syn(const struct ssam_span *src)
@@ -34,7 +34,7 @@ static inline bool sshp_starts_with_syn(const struct ssam_span *src)
 }
 
 /**
- * sshp_find_syn - Find SSH SYN bytes in the given data span.
+ * sshp_find_syn() - Find SSH SYN bytes in the given data span.
  * @src: The data span to search in.
  * @rem: The span (output) indicating the remaining data, starting with SSH
  *       SYN bytes, if found.
@@ -77,7 +77,7 @@ bool sshp_find_syn(const struct ssam_span *src, struct ssam_span *rem)
 }
 
 /**
- * sshp_parse_frame - Parse SSH frame.
+ * sshp_parse_frame() - Parse SSH frame.
  * @dev: The device used for logging.
  * @source: The source to parse from.
  * @frame: The parsed frame (output).
@@ -167,7 +167,7 @@ int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
 }
 
 /**
- * sshp_parse_command - Parse SSH command frame payload.
+ * sshp_parse_command() - Parse SSH command frame payload.
  * @dev: The device used for logging.
  * @source: The source to parse from.
  * @command: The parsed command (output).

@@ -92,7 +92,7 @@ TRACE_DEFINE_ENUM(SSAM_SSH_TC_REG);
 #define _SURFACE_SAM_SSH_TRACE_HELPERS
 
 /**
- * ssam_trace_ptr_uid - Convert the pointer to a non-pointer UID string.
+ * ssam_trace_ptr_uid() - Convert the pointer to a non-pointer UID string.
  * @ptr: The pointer to convert.
  * @uid_str: A buffer of length SSAM_PTR_UID_LEN where the UID will be stored.
  *
@@ -109,7 +109,7 @@ static inline void ssam_trace_ptr_uid(const void *ptr, char *uid_str)
 }
 
 /**
- * ssam_trace_get_packet_seq - Read the packet's sequence ID.
+ * ssam_trace_get_packet_seq() - Read the packet's sequence ID.
  * @p: The packet.
  *
  * Returns the packet's sequence ID (SEQ) field if present, or
@@ -124,7 +124,7 @@ static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *p)
 }
 
 /**
- * ssam_trace_get_request_id - Read the packet's request ID.
+ * ssam_trace_get_request_id() - Read the packet's request ID.
  * @p: The packet.
  *
  * Returns the packet's request ID (RQID) field if the packet represents a
@@ -140,7 +140,7 @@ static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
 }
 
 /**
- * ssam_trace_get_request_tc - Read the packet's request target category.
+ * ssam_trace_get_request_tc() - Read the packet's request target category.
  * @p: The packet.
  *
  * Returns the packet's request target category (TC) field if the packet

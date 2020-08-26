@@ -32,7 +32,7 @@ static struct ssam_controller *__ssam_controller;
 static DEFINE_SPINLOCK(__ssam_controller_lock);
 
 /**
- * ssam_get_controller - Get reference to SSAM controller.
+ * ssam_get_controller() - Get reference to SSAM controller.
  *
  * Returns a reference to the SSAM controller of the system or NULL if there
  * is none, it hasn't been set up yet, or it has already been unregistered.
@@ -60,7 +60,7 @@ out:
 EXPORT_SYMBOL_GPL(ssam_get_controller);
 
 /**
- * ssam_try_set_controller - Try to set the main controller reference.
+ * ssam_try_set_controller() - Try to set the main controller reference.
  * @ctrl: The controller to which the reference should point.
  *
  * Set the main controller reference to the given pointer if the reference
@@ -82,7 +82,7 @@ static int ssam_try_set_controller(struct ssam_controller *ctrl)
 }
 
 /**
- * ssam_clear_controller - Remove/clear the main controller reference.
+ * ssam_clear_controller() - Remove/clear the main controller reference.
  *
  * Clears the main controller reference, i.e. sets it to NULL. This function
  * should be called before the controller is shut down.
@@ -96,7 +96,7 @@ static void ssam_clear_controller(void)
 
 
 /**
- * ssam_client_link - Link an arbitrary client device to the controller.
+ * ssam_client_link() - Link an arbitrary client device to the controller.
  * @c: The controller to link to.
  * @client: The client device.
  *
@@ -156,7 +156,7 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 EXPORT_SYMBOL_GPL(ssam_client_link);
 
 /**
- * ssam_client_bind - Bind an arbitrary client device to the controller.
+ * ssam_client_bind() - Bind an arbitrary client device to the controller.
  * @client: The client device.
  * @ctrl: A pointer to where the controller reference should be returned.
  *
