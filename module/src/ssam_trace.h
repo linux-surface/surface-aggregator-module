@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
 #undef TRACE_SYSTEM
-#define TRACE_SYSTEM surface_sam_ssh
+#define TRACE_SYSTEM ssam
 
 #if !defined(_SURFACE_SAM_SSH_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _SURFACE_SAM_SSH_TRACE_H
