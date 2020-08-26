@@ -77,7 +77,7 @@ int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
 
 	// ensure packet does not exceed maximum length
 	sp.len = get_unaligned_le16(&((struct ssh_frame *)sf.ptr)->len);
-	if (unlikely(sp.len > maxlen)) {
+	if (unlikely(sp.len + SSH_MESSAGE_LENGTH(0) > maxlen)) {
 		dev_warn(dev, "rx: parser: frame too large: %u bytes\n",
 			 ((struct ssh_frame *)sf.ptr)->len);
 		return -EMSGSIZE;
