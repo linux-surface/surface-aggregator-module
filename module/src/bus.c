@@ -87,8 +87,8 @@ EXPORT_SYMBOL_GPL(ssam_device_alloc);
  * @sdev: The SSAM client device to be added.
  *
  * Added client devices must be guaranteed to always have a valid and active
- * controller. Thus, this function will fail with ``-ENXIO`` if the controller
- * of the device has not been initialized yet, has been suspended, or has been
+ * controller. Thus, this function will fail with -ENXIO if the controller of
+ * the device has not been initialized yet, has been suspended, or has been
  * shut down.
  *
  * The caller of this function should ensure that the corresponding call to

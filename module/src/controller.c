@@ -1179,8 +1179,7 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
  *
  * See ssam_controller_resume() for the corresponding resume function.
  *
- * Returns ``-EINVAL`` if the controller is currently not in the "started"
- * state.
+ * Returns -EINVAL if the controller is currently not in the "started" state.
  */
 int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
@@ -1207,7 +1206,7 @@ int ssam_controller_suspend(struct ssam_controller *ctrl)
  * D0-entry notifications. If required, those have to be sent manually after
  * this call.
  *
- * Returns ``-EINVAL`` if the controller is currently not suspended.
+ * Returns -EINVAL if the controller is currently not suspended.
  */
 int ssam_controller_resume(struct ssam_controller *ctrl)
 {
