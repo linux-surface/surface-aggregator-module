@@ -22,6 +22,119 @@
 #include "ssam_trace.h"
 
 
+/* -- Static controller reference. ------------------------------------------ */
+
+static struct ssam_controller *__ssam_controller;
+static DEFINE_SPINLOCK(__ssam_controller_lock);
+
+struct ssam_controller *ssam_get_controller(void)
+{
+	struct ssam_controller *ctrl;
+
+	spin_lock(&__ssam_controller_lock);
+
+	ctrl = __ssam_controller;
+	if (!ctrl)
+		goto out;
+
+	if (WARN_ON(!kref_get_unless_zero(&ctrl->kref)))
+		ctrl = NULL;
+
+out:
+	spin_unlock(&__ssam_controller_lock);
+	return ctrl;
+}
+EXPORT_SYMBOL_GPL(ssam_get_controller);
+
+static int ssam_try_set_controller(struct ssam_controller *ctrl)
+{
+	int status = 0;
+
+	spin_lock(&__ssam_controller_lock);
+	if (!__ssam_controller)
+		__ssam_controller = ctrl;
+	else
+		status = -EBUSY;
+	spin_unlock(&__ssam_controller_lock);
+
+	return status;
+}
+
+static void ssam_clear_controller(void)
+{
+	spin_lock(&__ssam_controller_lock);
+	__ssam_controller = NULL;
+	spin_unlock(&__ssam_controller_lock);
+}
+
+
+static int __ssam_client_link(struct ssam_controller *c, struct device *client)
+{
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
+	struct device_link *link;
+	struct device *ctrldev;
+
+	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED)
+		return -ENXIO;
+
+	ctrldev = ssam_controller_device(c);
+	if (!ctrldev)
+		return -ENXIO;
+
+	link = device_link_add(client, ctrldev, flags);
+	if (!link)
+		return -ENOMEM;
+
+	/*
+	 * Return -ENXIO if supplier driver is on its way to be removed. In this
+	 * case, the controller won't be around for much longer and the device
+	 * link is not going to save us any more, as unbinding is already in
+	 * progress.
+	 */
+	if (link->status == DL_STATE_SUPPLIER_UNBIND)
+		return -ENXIO;
+
+	return 0;
+}
+
+int ssam_client_link(struct ssam_controller *ctrl, struct device *client)
+{
+	int status;
+
+	ssam_controller_statelock(ctrl);
+	status = __ssam_client_link(ctrl, client);
+	ssam_controller_stateunlock(ctrl);
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_client_link);
+
+int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
+{
+	struct ssam_controller *c;
+	int status;
+
+	c = ssam_get_controller();
+	if (!c)
+		return -ENXIO;
+
+	status = ssam_client_link(c, client);
+
+	/*
+	 * Note that we can drop our controller reference in both success and
+	 * failure cases: On success, we have bound the controller lifetime
+	 * inherently to the client driver lifetime, i.e. it the controller is
+	 * now guaranteed to outlive the client driver. On failure, we're not
+	 * going to use the controller any more.
+	 */
+	ssam_controller_put(c);
+
+	*ctrl = status == 0 ? c : NULL;
+	return status;
+}
+EXPORT_SYMBOL_GPL(ssam_client_bind);
+
+
 /* -- Glue layer (serdev_device -> ssam_controller). ------------------------ */
 
 static int ssam_receive_buf(struct serdev_device *dev, const unsigned char *buf,
@@ -343,119 +456,6 @@ static const struct dev_pm_ops surface_sam_ssh_pm_ops = {
 	.poweroff = surface_sam_ssh_poweroff,
 	.restore  = surface_sam_ssh_restore,
 };
-
-
-/* -- Static controller reference. ------------------------------------------ */
-
-static struct ssam_controller *__ssam_controller;
-static DEFINE_SPINLOCK(__ssam_controller_lock);
-
-struct ssam_controller *ssam_get_controller(void)
-{
-	struct ssam_controller *ctrl;
-
-	spin_lock(&__ssam_controller_lock);
-
-	ctrl = __ssam_controller;
-	if (!ctrl)
-		goto out;
-
-	if (WARN_ON(!kref_get_unless_zero(&ctrl->kref)))
-		ctrl = NULL;
-
-out:
-	spin_unlock(&__ssam_controller_lock);
-	return ctrl;
-}
-EXPORT_SYMBOL_GPL(ssam_get_controller);
-
-static int ssam_try_set_controller(struct ssam_controller *ctrl)
-{
-	int status = 0;
-
-	spin_lock(&__ssam_controller_lock);
-	if (!__ssam_controller)
-		__ssam_controller = ctrl;
-	else
-		status = -EBUSY;
-	spin_unlock(&__ssam_controller_lock);
-
-	return status;
-}
-
-static void ssam_clear_controller(void)
-{
-	spin_lock(&__ssam_controller_lock);
-	__ssam_controller = NULL;
-	spin_unlock(&__ssam_controller_lock);
-}
-
-
-static int __ssam_client_link(struct ssam_controller *c, struct device *client)
-{
-	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
-	struct device_link *link;
-	struct device *ctrldev;
-
-	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED)
-		return -ENXIO;
-
-	ctrldev = ssam_controller_device(c);
-	if (!ctrldev)
-		return -ENXIO;
-
-	link = device_link_add(client, ctrldev, flags);
-	if (!link)
-		return -ENOMEM;
-
-	/*
-	 * Return -ENXIO if supplier driver is on its way to be removed. In this
-	 * case, the controller won't be around for much longer and the device
-	 * link is not going to save us any more, as unbinding is already in
-	 * progress.
-	 */
-	if (link->status == DL_STATE_SUPPLIER_UNBIND)
-		return -ENXIO;
-
-	return 0;
-}
-
-int ssam_client_link(struct ssam_controller *ctrl, struct device *client)
-{
-	int status;
-
-	ssam_controller_statelock(ctrl);
-	status = __ssam_client_link(ctrl, client);
-	ssam_controller_stateunlock(ctrl);
-
-	return status;
-}
-EXPORT_SYMBOL_GPL(ssam_client_link);
-
-int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
-{
-	struct ssam_controller *c;
-	int status;
-
-	c = ssam_get_controller();
-	if (!c)
-		return -ENXIO;
-
-	status = ssam_client_link(c, client);
-
-	/*
-	 * Note that we can drop our controller reference in both success and
-	 * failure cases: On success, we have bound the controller lifetime
-	 * inherently to the client driver lifetime, i.e. it the controller is
-	 * now guaranteed to outlive the client driver. On failure, we're not
-	 * going to use the controller any more.
-	 */
-	ssam_controller_put(c);
-
-	*ctrl = status == 0 ? c : NULL;
-	return status;
-}
-EXPORT_SYMBOL_GPL(ssam_client_bind);
 
 
 /* -- Device/driver setup. -------------------------------------------------- */
