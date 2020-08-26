@@ -216,6 +216,13 @@ static int surface_sam_ssh_freeze(struct device *dev)
 		return status;
 	}
 
+	status = ssam_ctrl_notif_d0_exit(c);
+	if (status) {
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
+		ssam_ctrl_notif_display_on(c);
+		return status;
+	}
+
 	WARN_ON(ssam_controller_suspend(c));
 	return 0;
 }
@@ -226,6 +233,15 @@ static int surface_sam_ssh_thaw(struct device *dev)
 	int status;
 
 	WARN_ON(ssam_controller_resume(c));
+
+	status = ssam_ctrl_notif_d0_entry(c);
+	if (status) {
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
+
+		// try to restore as much as possible in case of failure
+		ssam_ctrl_notif_display_on(c);
+		return status;
+	}
 
 	status = ssam_ctrl_notif_display_on(c);
 	if (status)
