@@ -226,7 +226,7 @@ static acpi_status ssam_serdev_setup_via_acpi(acpi_handle handle,
 
 /* -- Power management. ----------------------------------------------------- */
 
-static void surface_sam_ssh_shutdown(struct device *dev)
+static void ssam_serial_hub_shutdown(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -247,7 +247,7 @@ static void surface_sam_ssh_shutdown(struct device *dev)
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 }
 
-static int surface_sam_ssh_suspend(struct device *dev)
+static int ssam_serial_hub_suspend(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -287,7 +287,7 @@ err_notif:
 	return status;
 }
 
-static int surface_sam_ssh_resume(struct device *dev)
+static int ssam_serial_hub_resume(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -317,7 +317,7 @@ static int surface_sam_ssh_resume(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_ssh_freeze(struct device *dev)
+static int ssam_serial_hub_freeze(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -329,7 +329,7 @@ static int surface_sam_ssh_freeze(struct device *dev)
 	 * on the EC side, however, we have disabled it by default on our side
 	 * and won't enable it here.
 	 *
-	 * See surface_sam_ssh_poweroff() for more details on the hibernation
+	 * See ssam_serial_hub_poweroff() for more details on the hibernation
 	 * process.
 	 */
 
@@ -350,7 +350,7 @@ static int surface_sam_ssh_freeze(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_ssh_thaw(struct device *dev)
+static int ssam_serial_hub_thaw(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -373,7 +373,7 @@ static int surface_sam_ssh_thaw(struct device *dev)
 	return status;
 }
 
-static int surface_sam_ssh_poweroff(struct device *dev)
+static int ssam_serial_hub_poweroff(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -423,14 +423,14 @@ err_dpnf:
 	return status;
 }
 
-static int surface_sam_ssh_restore(struct device *dev)
+static int ssam_serial_hub_restore(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
 	/*
 	 * Ignore but log errors, try to restore state as much as possible in
-	 * case of failures. See surface_sam_ssh_poweroff() for more details on
+	 * case of failures. See ssam_serial_hub_poweroff() for more details on
 	 * the hibernation process.
 	 */
 
@@ -448,13 +448,13 @@ static int surface_sam_ssh_restore(struct device *dev)
 	return 0;
 }
 
-static const struct dev_pm_ops surface_sam_ssh_pm_ops = {
-	.suspend  = surface_sam_ssh_suspend,
-	.resume   = surface_sam_ssh_resume,
-	.freeze   = surface_sam_ssh_freeze,
-	.thaw     = surface_sam_ssh_thaw,
-	.poweroff = surface_sam_ssh_poweroff,
-	.restore  = surface_sam_ssh_restore,
+static const struct dev_pm_ops ssam_serial_hub_pm_ops = {
+	.suspend  = ssam_serial_hub_suspend,
+	.resume   = ssam_serial_hub_resume,
+	.freeze   = ssam_serial_hub_freeze,
+	.thaw     = ssam_serial_hub_thaw,
+	.poweroff = ssam_serial_hub_poweroff,
+	.restore  = ssam_serial_hub_restore,
 };
 
 
@@ -469,7 +469,7 @@ static const struct acpi_gpio_mapping ssam_acpi_gpios[] = {
 	{ },
 };
 
-static int surface_sam_ssh_probe(struct serdev_device *serdev)
+static int ssam_serial_hub_probe(struct serdev_device *serdev)
 {
 	struct ssam_controller *ctrl;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
@@ -558,7 +558,7 @@ err_ctrl_init:
 	return status;
 }
 
-static void surface_sam_ssh_remove(struct serdev_device *serdev)
+static void ssam_serial_hub_remove(struct serdev_device *serdev)
 {
 	struct ssam_controller *ctrl = serdev_device_get_drvdata(serdev);
 	int status;
@@ -601,20 +601,20 @@ static void surface_sam_ssh_remove(struct serdev_device *serdev)
 }
 
 
-static const struct acpi_device_id surface_sam_ssh_match[] = {
+static const struct acpi_device_id ssam_serial_hub_match[] = {
 	{ "MSHW0084", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surface_sam_ssh_match);
+MODULE_DEVICE_TABLE(acpi, ssam_serial_hub_match);
 
-static struct serdev_device_driver surface_sam_ssh = {
-	.probe = surface_sam_ssh_probe,
-	.remove = surface_sam_ssh_remove,
+static struct serdev_device_driver ssam_serial_hub = {
+	.probe = ssam_serial_hub_probe,
+	.remove = ssam_serial_hub_remove,
 	.driver = {
 		.name = "surface_sam_ssh",
-		.acpi_match_table = surface_sam_ssh_match,
-		.pm = &surface_sam_ssh_pm_ops,
-		.shutdown = surface_sam_ssh_shutdown,
+		.acpi_match_table = ssam_serial_hub_match,
+		.pm = &ssam_serial_hub_pm_ops,
+		.shutdown = ssam_serial_hub_shutdown,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
@@ -622,7 +622,7 @@ static struct serdev_device_driver surface_sam_ssh = {
 
 /* -- Module setup. --------------------------------------------------------- */
 
-static int __init surface_sam_ssh_init(void)
+static int __init ssam_core_init(void)
 {
 	int status;
 
@@ -638,7 +638,7 @@ static int __init surface_sam_ssh_init(void)
 	if (status)
 		goto err_evitem;
 
-	status = serdev_device_driver_register(&surface_sam_ssh);
+	status = serdev_device_driver_register(&ssam_serial_hub);
 	if (status)
 		goto err_register;
 
@@ -654,9 +654,9 @@ err_bus:
 	return status;
 }
 
-static void __exit surface_sam_ssh_exit(void)
+static void __exit ssam_core_exit(void)
 {
-	serdev_device_driver_unregister(&surface_sam_ssh);
+	serdev_device_driver_unregister(&ssam_serial_hub);
 	ssam_event_item_cache_destroy();
 	ssh_ctrl_packet_cache_destroy();
 	ssam_bus_unregister();
@@ -672,8 +672,8 @@ static void __exit surface_sam_ssh_exit(void)
  * initialize and via that results in a more stable communication, avoiding
  * such failures.
  */
-late_initcall(surface_sam_ssh_init);
-module_exit(surface_sam_ssh_exit);
+late_initcall(ssam_core_init);
+module_exit(ssam_core_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface Serial Hub Driver for 5th Generation Surface Devices");
