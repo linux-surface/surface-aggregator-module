@@ -64,7 +64,7 @@ EXPORT_SYMBOL_GPL(ssam_get_controller);
  * @ctrl: The controller to which the reference should point.
  *
  * Set the main controller reference to the given pointer if the reference
- * hasn't been set already. Returns zero on success or -EBUSY if the reference
+ * hasn't been set already. Returns zero on success or %-EBUSY if the reference
  * has already been set.
  */
 static int ssam_try_set_controller(struct ssam_controller *ctrl)
@@ -110,8 +110,8 @@ static void ssam_clear_controller(void)
  * The device link does not have to be destructed manually. It is removed
  * automatically once the driver of the client device unbinds.
  *
- * Returns zero on success, -ENXIO if the controller is not ready or going to
- * be removed soon, or -ENOMEM if the device link could not be created for
+ * Returns zero on success, %-ENXIO if the controller is not ready or going to
+ * be removed soon, or %-ENOMEM if the device link could not be created for
  * other reasons.
  */
 int ssam_client_link(struct ssam_controller *c, struct device *client)
@@ -187,9 +187,9 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
  * The created device link does not have to be destructed manually. It is
  * removed automatically once the driver of the client device unbinds.
  *
- * Returns zero on success, -ENXIO if the controller is not present, not ready
- * or going to be removed soon, or -ENOMEM if the device link could not be
- * created for other reasons.
+ * Returns zero on success, %-ENXIO if the controller is not present, not
+ * ready or going to be removed soon, or %-ENOMEM if the device link could not
+ * be created for other reasons.
  */
 int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 {
