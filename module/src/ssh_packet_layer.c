@@ -148,26 +148,25 @@
  * lock must be acquired before the queue lock.
  */
 
-/**
+/*
  * Maximum number transmission attempts per sequenced packet in case of
  * time-outs. Must be smaller than 16.
  */
 #define SSH_PTL_MAX_PACKET_TRIES	3
 
-/**
+/*
  * Timeout as ktime_t delta for ACKs. If we have not received an ACK in this
  * time-frame after starting transmission, the packet will be re-submitted.
  */
 #define SSH_PTL_PACKET_TIMEOUT			ms_to_ktime(1000)
 
-/**
- * Maximum time resolution for timeouts. Currently set to max(2 jiffies, 50ms).
- * Should be larger than one jiffy to avoid direct re-scheduling of reaper
- * work_struct.
+/*
+ * Maximum time resolution for timeouts. Should be larger than one jiffy to
+ * avoid direct re-scheduling of reaper work_struct.
  */
 #define SSH_PTL_PACKET_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
-/**
+/*
  * Maximum number of sequenced packets concurrently waiting for an ACK.
  * Packets marked as blocking will not be transmitted while this limit is
  * reached.
