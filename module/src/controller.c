@@ -214,11 +214,11 @@ static void __ssam_nfblk_erase(struct ssam_notifier_block **link)
  * @nh: The notifier head from which the block should be removed.
  * @nb: The notifier block to remove.
  *
- * Note: This function must be synchronized by the caller with respect to other
- * insert and/or remove calls. On success, the caller _must_ ensure SRCU
- * synchronization by calling `synchronize_srcu(&nh->srcu)` after leaving the
- * critical section, to ensure that the removed notifier block is not in use any
- * more.
+ * Note: This function must be synchronized by the caller with respect to
+ * other insert and/or remove calls. On success, the caller *must* ensure SRCU
+ * synchronization by calling synchronize_srcu() with ``nh->srcu`` after
+ * leaving the critical section, to ensure that the removed notifier block is
+ * not in use any more.
  *
  * Return: Returns zero on success, %-ENOENT if the specified notifier block
  * could not be found on the notifier list.
