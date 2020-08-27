@@ -406,7 +406,7 @@ enum ssam_ssh_tc {
 struct ssam_controller;
 
 /**
- * struct ssam_event_flags - Flags for enabling/disabling SAM-over-SSH events
+ * enum ssam_event_flags - Flags for enabling/disabling SAM-over-SSH events
  * @SSAM_EVENT_SEQUENCED: The event will be sent via a sequenced data frame.
  */
 enum ssam_event_flags {
