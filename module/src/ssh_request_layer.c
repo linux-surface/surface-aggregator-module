@@ -984,8 +984,7 @@ static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
  * this function, the request transmission layer is guaranteed to have no
  * remaining requests when this call returns. The same guarantee does not hold
  * for the packet layer, on which control packets may still be queued after
- * this call. See the documentation of ssh_ptl_flush for more details on
- * packet layer flushing.
+ * this call.
  *
  * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
  * canceled as a result of the timeout, or -ESHUTDOWN if the packet and/or
