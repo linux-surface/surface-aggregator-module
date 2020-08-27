@@ -256,6 +256,7 @@ enum ssh_packet_priority {
 
 
 enum ssh_packet_flags {
+	/* state flags */
 	SSH_PACKET_SF_LOCKED_BIT,
 	SSH_PACKET_SF_QUEUED_BIT,
 	SSH_PACKET_SF_PENDING_BIT,
@@ -265,10 +266,12 @@ enum ssh_packet_flags {
 	SSH_PACKET_SF_CANCELED_BIT,
 	SSH_PACKET_SF_COMPLETED_BIT,
 
+	/* type flags */
 	SSH_PACKET_TY_FLUSH_BIT,
 	SSH_PACKET_TY_SEQUENCED_BIT,
 	SSH_PACKET_TY_BLOCKING_BIT,
 
+	/* mask for state flags */
 	SSH_PACKET_FLAGS_SF_MASK =
 		  BIT(SSH_PACKET_SF_LOCKED_BIT)
 		| BIT(SSH_PACKET_SF_QUEUED_BIT)
@@ -279,6 +282,7 @@ enum ssh_packet_flags {
 		| BIT(SSH_PACKET_SF_CANCELED_BIT)
 		| BIT(SSH_PACKET_SF_COMPLETED_BIT),
 
+	/* mask for type flags */
 	SSH_PACKET_FLAGS_TY_MASK =
 		  BIT(SSH_PACKET_TY_FLUSH_BIT)
 		| BIT(SSH_PACKET_TY_SEQUENCED_BIT)
