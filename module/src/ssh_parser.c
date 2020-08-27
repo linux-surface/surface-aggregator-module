@@ -98,8 +98,8 @@ bool sshp_find_syn(const struct ssam_span *src, struct ssam_span *rem)
  * message length specified in the @maxlen parameter.
  *
  * If no complete SSH frame could be found, the frame pointer will be set to
- * the NULL pointer and the payload span will be set to the NULL span (start
- * pointer NULL, size zero).
+ * the %NULL pointer and the payload span will be set to the null span (start
+ * pointer %NULL, size zero).
  */
 int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
 		     struct ssh_frame **frame, struct ssam_span *payload,

@@ -203,7 +203,7 @@ static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
  * @uid:   The UID to matched against the individual table entries.
  *
  * Find the first match for the provided device UID in the provided ID table
- * and return it. Returns NULL if no match could be found.
+ * and return it. Returns %NULL if no match could be found.
  */
 const struct ssam_device_id *ssam_device_id_match(
 		const struct ssam_device_id *table,
@@ -225,9 +225,9 @@ EXPORT_SYMBOL_GPL(ssam_device_id_match);
  * @dev: The device for which to get the matching ID table entry.
  *
  * Find the fist match for the UID of the device in the ID table of the
- * currently bound driver and return it. Returns NULL if the device does not
+ * currently bound driver and return it. Returns %NULL if the device does not
  * have a driver bound to it, the driver does not have match_table (i.e. it is
- * NULL), or there is no match in the driver's match_table.
+ * %NULL), or there is no match in the driver's match_table.
  *
  * This function essentially calls ssam_device_id_match() with the ID table of
  * the bound device driver and the UID of the device.
@@ -254,10 +254,10 @@ EXPORT_SYMBOL_GPL(ssam_device_get_match);
  * @dev: The device for which to get the match data.
  *
  * Find the fist match for the UID of the device in the ID table of the
- * corresponding driver and return its driver_data. Returns NULL if the device
- * does not have a driver bound to it, the driver does not have match_table
- * (i.e. it is NULL), there is no match in the driver's match_table, or the
- * match does not have any driver_data.
+ * corresponding driver and return its driver_data. Returns %NULL if the
+ * device does not have a driver bound to it, the driver does not have
+ * match_table (i.e. it is %NULL), there is no match in the driver's
+ * match_table, or the match does not have any driver_data.
  *
  * This function essentially calls ssam_device_get_match() and, if any match
  * could be found, returns its &ssam_device_id.driver_data member.

@@ -171,7 +171,7 @@ static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_blo
  * insert and/or remove calls.
  *
  * Returns a pointer to the pointer pointing to the given notifier block from
- * the previous node in the list, or NULL if the given notifier block is not
+ * the previous node in the list, or %NULL if the given notifier block is not
  * contained in the notifier list.
  */
 static struct ssam_notifier_block **__ssam_nfblk_find_link(
@@ -605,7 +605,7 @@ static void ssam_event_queue_push(struct ssam_event_queue *q,
  * ssam_event_queue_pop() - Pop the next event item from the event queue.
  * @q: The event queue.
  *
- * Returns and removes the next event item from the queue. Returns NULL If
+ * Returns and removes the next event item from the queue. Returns %NULL If
  * there is no event item left.
  */
 static struct ssam_event_item *ssam_event_queue_pop(struct ssam_event_queue *q)
@@ -644,7 +644,7 @@ static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
  *
  * Returns the event queue corresponding to the event type described by the
  * given parameters. If the request ID does not represent an event, this
- * function returns NULL. If the target ID is not supported, this function
+ * function returns %NULL. If the target ID is not supported, this function
  * will fall back to the default target ID (tid=1).
  */
 static struct ssam_event_queue *ssam_cplt_get_event_queue(
@@ -1401,7 +1401,7 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_init);
  * @rqst: The request to submit.
  *
  * Submit a synchronous request. The request has to be initialized and
- * properly set up, including response buffer (may be NULL if no response is
+ * properly set up, including response buffer (may be %NULL if no response is
  * expected) and command message data. This function does not wait for the
  * request to be completed.
  *

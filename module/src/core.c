@@ -34,7 +34,7 @@ static DEFINE_SPINLOCK(__ssam_controller_lock);
 /**
  * ssam_get_controller() - Get reference to SSAM controller.
  *
- * Returns a reference to the SSAM controller of the system or NULL if there
+ * Returns a reference to the SSAM controller of the system or %NULL if there
  * is none, it hasn't been set up yet, or it has already been unregistered.
  * This function automatically increments the reference count of the
  * controller, thus the calling party must ensure that ssam_controller_put()
@@ -84,7 +84,7 @@ static int ssam_try_set_controller(struct ssam_controller *ctrl)
 /**
  * ssam_clear_controller() - Remove/clear the main controller reference.
  *
- * Clears the main controller reference, i.e. sets it to NULL. This function
+ * Clears the main controller reference, i.e. sets it to %NULL. This function
  * should be called before the controller is shut down.
  */
 static void ssam_clear_controller(void)

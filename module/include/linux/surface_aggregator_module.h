@@ -500,7 +500,7 @@ static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
  * @rsp:  The response buffer.
  *
  * Sets the response buffer ot a synchronous request. This buffer will store
- * the response of the request after it has been completed. May be NULL if
+ * the response of the request after it has been completed. May be %NULL if
  * no response is expected.
  */
 static inline void ssam_request_sync_set_resp(struct ssam_request_sync *rqst,

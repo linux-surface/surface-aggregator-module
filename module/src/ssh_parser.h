@@ -65,7 +65,7 @@ static inline int sshp_buf_alloc(struct sshp_buf *buf, size_t cap, gfp_t flags)
  * @buf: The buffer to free.
  *
  * Frees a SSH parser buffer by freeing the memory backing it and then
- * reseting its pointer to NULL and length and capacity to zero. Intended to
+ * reseting its pointer to %NULL and length and capacity to zero. Intended to
  * free a buffer previously allocated with sshp_buf_alloc().
  */
 static inline void sshp_buf_free(struct sshp_buf *buf)
