@@ -281,6 +281,7 @@ struct ssam_nf_refcount_key {
  * @node:     The node of this entry in the rb-tree.
  * @key:      The key of the event.
  * @refcount: The reference-count of the event.
+ * @flags:    The flags used when enabling the event.
  */
 struct ssam_nf_refcount_entry {
 	struct rb_node node;

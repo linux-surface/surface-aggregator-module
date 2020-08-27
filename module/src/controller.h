@@ -76,6 +76,7 @@ struct ssam_cplt;
  * struct ssam_event_item - Struct for event queuing and completion.
  * @node:     The node in the queue.
  * @rqid:     The request ID of the event.
+ * @ops:      Instance specific functions.
  * @ops.free: Callback for freeing this event item.
  * @event:    Actual event data.
  */
@@ -119,6 +120,7 @@ struct ssam_event_target {
  *                for logging.
  * @wq:           The &struct workqueue_struct on which all completion work
  *                items are queued.
+ * @event:        Event completion management.
  * @event.target: Array of &struct ssam_event_target, one for each target.
  * @event.notif:  Notifier callbacks and event activation reference counting.
  */
@@ -173,8 +175,10 @@ struct ssam_device_caps {
  * @state: Controller state.
  * @rtl:   Request transport layer for SSH I/O.
  * @cplt:  Completion system for SSH/SSAM events and asynchronous requests.
+ * @counter:      Safe SSH message ID counters.
  * @counter.seq:  Sequence ID counter.
  * @counter.rqid: Request ID counter.
+ * @irq:          Wakeup IRQ resources.
  * @irq.num:      The wakeup IRQ number.
  * @irq.wakeup_enabled: Whether wakeup by IRQ is enabled during suspend.
  * @caps: The controller device capabilities.
