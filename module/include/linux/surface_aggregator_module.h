@@ -497,7 +497,7 @@ static inline void ssam_request_sync_set_data(struct ssam_request_sync *rqst,
 /**
  * ssam_request_sync_set_resp - Set response buffer of a synchronous request.
  * @rqst: The request.
- * @rsp:  The response buffer.
+ * @resp: The response buffer.
  *
  * Sets the response buffer ot a synchronous request. This buffer will store
  * the response of the request after it has been completed. May be %NULL if
