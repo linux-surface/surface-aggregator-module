@@ -150,6 +150,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 
 /**
  * SSH_MESSAGE_LENGTH() - Comute lenght of SSH message.
+ * @payload_size: Length of the payload inside the SSH frame.
  *
  * Length of a SSH message with payload of specified size.
  */
@@ -157,6 +158,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 
 /**
  * SSH_COMMAND_MESSAGE_LENGTH() - Compute length of SSH command message.
+ * @payload_size: Length of the command payload.
  *
  * Length of a SSH command message with command payload of specified size.
  */
@@ -166,6 +168,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 /**
  * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
  * frame.
+ * @field: The field for which the offset should be computed.
  *
  * Offset of the specified &struct ssh_frame field in the raw SSH message data.
  */
@@ -175,6 +178,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
 /**
  * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
  * command.
+ * @field: The field for which the offset should be computed.
  *
  * Offset of the specified &struct ssh_command field in the raw SSH message
  * data.
