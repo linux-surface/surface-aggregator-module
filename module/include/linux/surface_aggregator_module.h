@@ -211,6 +211,13 @@ struct ssam_span {
 
 /* -- Packet transport layer (ptl). ----------------------------------------- */
 
+/**
+ * enum ssh_packet_priority - Base priorities for &struct ssh_packet.
+ * @SSH_PACKET_PRIORITY_FLUSH: Base priority for flush packets.
+ * @SSH_PACKET_PRIORITY_DATA:  Base priority for normal data paackets.
+ * @SSH_PACKET_PRIORITY_NAK:   Base priority for NAK packets.
+ * @SSH_PACKET_PRIORITY_ACK:   Base priority for ACK packets.
+ */
 enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_FLUSH = 0,
 	SSH_PACKET_PRIORITY_DATA  = 0,
@@ -218,9 +225,31 @@ enum ssh_packet_priority {
 	SSH_PACKET_PRIORITY_ACK   = 2 << 4,
 };
 
+/**
+ * SSH_PACKET_PRIORITY() - Compute packet priority from base priority and
+ * number of tries.
+ * @base: The base priority as suffix of &enum ssh_packet_priority, e.g.
+ *        ``FLUSH``, ``DATA``, ``ACK``, or ``NAK``.
+ * @try:  The number of tries (must be less than 16).
+ *
+ * Compute the combined packet priority. The combined priority is dominated by
+ * the base priority, whereas the number of (re-)tries decides the precedence
+ * of packets with the same base priority, giving higher priority to packets
+ * that already have more tries.
+ *
+ * Return: Returns the computed priority as value fitting inside a &u8. A
+ * higher number means a higher priority.
+ */
 #define SSH_PACKET_PRIORITY(base, try) \
 	((SSH_PACKET_PRIORITY_##base) | ((try) & 0x0f))
 
+/**
+ * ssh_packet_priority_get_try() - Get number of tries from packet priority.
+ * @p: The packet priority.
+ *
+ * Return: Returns the number of tries encoded in the specified packet
+ * priority.
+ */
 #define ssh_packet_priority_get_try(p) ((p) & 0x0f)
 
 
