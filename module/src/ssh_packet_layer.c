@@ -182,7 +182,7 @@
 #ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
 
 /**
- * ssh_ptl_should_drop_ack_packet - error injection hook to drop ACK packets
+ * ssh_ptl_should_drop_ack_packet() - Error injection hook to drop ACK packets.
  *
  * Useful to test detection and handling of automated re-transmits by the EC.
  * Specifically of packets that the EC consideres not-ACKed but the driver
@@ -198,7 +198,7 @@ static noinline bool ssh_ptl_should_drop_ack_packet(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_ack_packet, TRUE);
 
 /**
- * ssh_ptl_should_drop_nak_packet - error injection hook to drop NAK packets
+ * ssh_ptl_should_drop_nak_packet() - Error injection hook to drop NAK packets.
  *
  * Useful to test/force automated (timeout-based) re-transmit by the EC.
  * Specifically, packets that have not reached the driver completely/with valid
@@ -211,8 +211,8 @@ static noinline bool ssh_ptl_should_drop_nak_packet(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_nak_packet, TRUE);
 
 /**
- * ssh_ptl_should_drop_dsq_packet - error injection hook to drop sequenced data
- * packet
+ * ssh_ptl_should_drop_dsq_packet() - Error injection hook to drop sequenced
+ * data packet.
  *
  * Useful to test re-transmit timeout of the driver. If the data packet has not
  * been ACKed after a certain time, the driver should re-transmit the packet up
@@ -225,8 +225,8 @@ static noinline bool ssh_ptl_should_drop_dsq_packet(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_drop_dsq_packet, TRUE);
 
 /**
- * ssh_ptl_should_fail_write - error injection hook to make serdev_device_write
- * fail
+ * ssh_ptl_should_fail_write() - Error injection hook to make
+ * serdev_device_write() fail.
  *
  * Hook to simulate errors in serdev_device_write when transmitting packets.
  */
@@ -237,8 +237,8 @@ static noinline int ssh_ptl_should_fail_write(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_fail_write, ERRNO);
 
 /**
- * ssh_ptl_should_corrupt_tx_data - error injection hook to simualte invalid
- * data being sent to the EC
+ * ssh_ptl_should_corrupt_tx_data() - Error injection hook to simualte invalid
+ * data being sent to the EC.
  *
  * Hook to simulate corrupt/invalid data being sent from host (driver) to EC.
  * Causes the packet data to be actively corrupted by overwriting it with
@@ -253,8 +253,8 @@ static noinline bool ssh_ptl_should_corrupt_tx_data(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_tx_data, TRUE);
 
 /**
- * ssh_ptl_should_corrupt_rx_syn - error injection hook to simulate invalid
- * data being sent by the EC
+ * ssh_ptl_should_corrupt_rx_syn() - Error injection hook to simulate invalid
+ * data being sent by the EC.
  *
  * Hook to simulate invalid SYN bytes, i.e. an invalid start of messages and
  * test handling thereof in the driver.
@@ -266,8 +266,8 @@ static noinline bool ssh_ptl_should_corrupt_rx_syn(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_rx_syn, TRUE);
 
 /**
- * ssh_ptl_should_corrupt_rx_data - error injection hook to simulate invalid
- * data being sent by the EC
+ * ssh_ptl_should_corrupt_rx_data() - Error injection hook to simulate invalid
+ * data being sent by the EC.
  *
  * Hook to simulate invalid data/checksum of the message frame and test handling
  * thereof in the driver.
@@ -1617,7 +1617,7 @@ int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 
 
 /**
- * ssh_ptl_shutdown - Shut down the packet transmission layer.
+ * ssh_ptl_shutdown() - Shut down the packet transmission layer.
  * @ptl: The packet transmission layer.
  *
  * Shuts down the packet transmission layer, removing and canceling all queued
