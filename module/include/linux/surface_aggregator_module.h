@@ -85,8 +85,8 @@ enum ssh_payload_type {
  * @tc:      Command target category.
  * @tid_out: Output target ID. Should be zero if this an incoming (EC to host)
  *           message.
- * @tid_in:  Input target ID. Should be zero if this is an outgoing (hos to EC)
- *           message.
+ * @tid_in:  Input target ID. Should be zero if this is an outgoing (host to
+ *           EC) message.
  * @iid:     Instance ID.
  * @rqid:    Request ID. Used to match requests with responses and differentiate
  *           between responses and events.
