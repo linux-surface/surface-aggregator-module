@@ -986,10 +986,11 @@ static const struct ssh_request_ops ssh_rtl_flush_request_ops = {
  * for the packet layer, on which control packets may still be queued after
  * this call.
  *
- * Return: Zero on success, -ETIMEDOUT if the flush timed out and has been
- * canceled as a result of the timeout, or -ESHUTDOWN if the packet and/or
- * request transmission layer has been shut down before this call. May also
- * return -EINTR if the underlying packet transmission has been interrupted.
+ * Return: Returns zero on success, -ETIMEDOUT if the flush timed out and has
+ * been canceled as a result of the timeout, or -ESHUTDOWN if the packet
+ * and/or request transmission layer has been shut down before this call. May
+ * also return -EINTR if the underlying packet transmission has been
+ * interrupted.
  */
 int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 {
