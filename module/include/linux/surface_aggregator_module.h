@@ -27,17 +27,24 @@
 
 /**
  * enum ssh_frame_type - Frame types for SSH frames.
- * @SSH_FRAME_TYPE_DATA_SEQ: Indicates a data frame, followed by a payload with
- *                      the length specified in the ssh_frame.len field. This
- *                      frame is sequenced, meaning that an ACK is required.
- * @SSH_FRAME_TYPE_DATA_NSQ: Same as SSH_FRAME_TYPE_DATA_SEQ, but unsequenced,
- *                      meaning that the message does not have to be ACKed.
- * @SSH_FRAME_TYPE_ACK: Indicates an ACK message.
- * @SSH_FRAME_TYPE_NAK: Indicates an error response for previously sent
- *                      frame. In general, this means that the frame and/or
- *                      payload is malformed, e.g. a CRC is wrong. For command-
- *                      type payloads, this can also mean that the command is
- *                      invalid.
+ *
+ * @SSH_FRAME_TYPE_DATA_SEQ:
+ *	Indicates a data frame, followed by a payload with the length specified
+ *	in the ssh_frame.len field. This frame is sequenced, meaning that an ACK
+ *	is required.
+ *
+ * @SSH_FRAME_TYPE_DATA_NSQ:
+ *	Same as %SSH_FRAME_TYPE_DATA_SEQ, but unsequenced, meaning that the
+ *	message does not have to be ACKed.
+ *
+ * @SSH_FRAME_TYPE_ACK:
+ *	Indicates an ACK message.
+ *
+ * @SSH_FRAME_TYPE_NAK:
+ *	Indicates an error response for previously sent frame. In general, this
+ *	means that the frame and/or payload is malformed, e.g. a CRC is wrong.
+ *	For command-type payloads, this can also mean that the command is
+ *	invalid.
  */
 enum ssh_frame_type {
 	SSH_FRAME_TYPE_DATA_SEQ = 0x80,
