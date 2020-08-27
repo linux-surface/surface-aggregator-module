@@ -190,7 +190,8 @@ static struct ssam_notifier_block **__ssam_nfblk_find_link(
 }
 
 /**
- * __ssam_nfblk_erase() - Erase a notifier block link in the given notifier list.
+ * __ssam_nfblk_erase() - Erase a notifier block link in the given notifier
+ * list.
  * @link: The link to be erased.
  *
  * Note: This function must be synchronized by the caller with respect to other
@@ -1233,7 +1234,7 @@ int ssam_controller_resume(struct ssam_controller *ctrl)
  * buffer.
  * @buf:  The buffer to write the data to.
  * @ctrl: The controller via which the request will be sent.
- * @spec: The request data/specification.
+ * @spec: The request data and specification.
  *
  * Constructs a SAM/SSH request message and writes it to the provided buffer.
  * The request and transport counters, specifically RQID and SEQ, will be set

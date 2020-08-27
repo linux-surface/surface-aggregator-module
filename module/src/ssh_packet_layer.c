@@ -1617,8 +1617,8 @@ int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 
 
 /**
- * ssh_ptl_shutdown - shut down the packet transmission layer
- * @ptl:     packet transmission layer
+ * ssh_ptl_shutdown - Shut down the packet transmission layer.
+ * @ptl: The packet transmission layer.
  *
  * Shuts down the packet transmission layer, removing and canceling all queued
  * and pending packets. Packets canceled by this operation will be completed
