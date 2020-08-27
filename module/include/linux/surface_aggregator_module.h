@@ -111,7 +111,7 @@ struct ssh_command {
 
 static_assert(sizeof(struct ssh_command) == 8);
 
-/**
+/*
  * SSH_COMMAND_MAX_PAYLOAD_SIZE - Maximum SSH command payload length in bytes.
  *
  * This is the physical maximum length of the protocol. Implementations may
@@ -139,7 +139,7 @@ struct ssh_notification_params {
 
 static_assert(sizeof(struct ssh_notification_params) == 5);
 
-/**
+/*
  * SSH_MSG_LEN_BASE - Base-length of a SSH message.
  *
  * This is the minimum number of bytes required to form a message. The actual
@@ -147,7 +147,7 @@ static_assert(sizeof(struct ssh_notification_params) == 5);
  */
 #define SSH_MSG_LEN_BASE	(sizeof(struct ssh_frame) + 3ull * sizeof(u16))
 
-/**
+/*
  * SSH_MSG_LEN_CTRL - Length of a SSH control message.
  *
  * This is the length of a SSH control message, which is equal to a SSH
