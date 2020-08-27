@@ -112,7 +112,7 @@ static inline void ssam_trace_ptr_uid(const void *ptr, char *uid_str)
  * ssam_trace_get_packet_seq() - Read the packet's sequence ID.
  * @p: The packet.
  *
- * Returns the packet's sequence ID (SEQ) field if present, or
+ * Return: Returns the packet's sequence ID (SEQ) field if present, or
  * %SSAM_SEQ_NOT_APPLICABLE if not (e.g. flush packet).
  */
 static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *p)
@@ -127,9 +127,9 @@ static inline u16 ssam_trace_get_packet_seq(const struct ssh_packet *p)
  * ssam_trace_get_request_id() - Read the packet's request ID.
  * @p: The packet.
  *
- * Returns the packet's request ID (RQID) field if the packet represents a
- * request with command data, or %SSAM_RQID_NOT_APPLICABLE if not (e.g. flush
- * request, control packet).
+ * Return: Returns the packet's request ID (RQID) field if the packet
+ * represents a request with command data, or %SSAM_RQID_NOT_APPLICABLE if not
+ * (e.g. flush request, control packet).
  */
 static inline u32 ssam_trace_get_request_id(const struct ssh_packet *p)
 {

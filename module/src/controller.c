@@ -139,6 +139,9 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
  *
  * Note: This function must be synchronized by the caller with respect to other
  * insert and/or remove calls.
+ *
+ * Return: Returns zero on success, %-EINVAL if the notifier block has already
+ * been registered.
  */
 static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 {
@@ -217,8 +220,8 @@ static void __ssam_nfblk_erase(struct ssam_notifier_block **link)
  * critical section, to ensure that the removed notifier block is not in use any
  * more.
  *
- * Returns zero on success, %-ENOENT if the specified notifier block could not
- * be found on the notifier list.
+ * Return: Returns zero on success, %-ENOENT if the specified notifier block
+ * could not be found on the notifier list.
  */
 static int __ssam_nfblk_remove(struct ssam_nf_head *nh,
 			       struct ssam_notifier_block *nb)
@@ -298,8 +301,8 @@ struct ssam_nf_refcount_entry {
  * event type/ID, allocating a new entry for this event ID if necessary. A
  * newly allocated entry will have a refcount of one.
  *
- * Returns the refcount entry on success. Returns ``ERR_PTR(-ENOSPC)`` if
- * there have already been %INT_MAX events of the specified ID and type
+ * Return: Returns the refcount entry on success. Returns ``ERR_PTR(-ENOSPC)``
+ * if there have already been %INT_MAX events of the specified ID and type
  * registered, or ``ERR_PTR(-ENOMEM)`` if the entry could not be allocated.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
@@ -356,8 +359,8 @@ static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
  * returning its entry. If the returned entry has a refcount of zero, the
  * caller is responsible for freeing it using kfree().
  *
- * Returns the refcount entry on success or %NULL if the entry has not been
- * found.
+ * Return: Returns the refcount entry on success or %NULL if the entry has not
+ * been found.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_dec(
 		struct ssam_nf *nf, struct ssam_event_registry reg,
@@ -837,7 +840,7 @@ static void __ssam_controller_release(struct kref *kref)
  * ssam_controller_get() - Increment reference count of controller.
  * @c: The controller.
  *
- * Returns the controller, i.e. @c.
+ * Return: Returns the controller provided as input.
  */
 struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 {
@@ -1181,7 +1184,8 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
  *
  * See ssam_controller_resume() for the corresponding resume function.
  *
- * Returns %-EINVAL if the controller is currently not in the "started" state.
+ * Return: Returns %-EINVAL if the controller is currently not in the
+ * "started" state.
  */
 int ssam_controller_suspend(struct ssam_controller *ctrl)
 {
@@ -1208,7 +1212,7 @@ int ssam_controller_suspend(struct ssam_controller *ctrl)
  * D0-entry notifications. If required, those have to be sent manually after
  * this call.
  *
- * Returns %-EINVAL if the controller is currently not suspended.
+ * Return: Returns %-EINVAL if the controller is currently not suspended.
  */
 int ssam_controller_resume(struct ssam_controller *ctrl)
 {
@@ -1241,11 +1245,13 @@ int ssam_controller_resume(struct ssam_controller *ctrl)
  * in this call. These counters are obtained from the controller. It is thus
  * only valid to send the resulting message via the controller specified here.
  *
- * Returns the number of bytes used in the buffer on success. Returns %-EINVAL
- * if the payload length provided in the request specification is too large
- * (larger than %SSH_COMMAND_MAX_PAYLOAD_SIZE) or if the provided buffer is
- * too small. For calculation of the required buffer size, refer to the
+ * For calculation of the required buffer size, refer to the
  * ``SSH_COMMAND_MESSAGE_LENGTH()`` macro.
+ *
+ * Return: Returns the number of bytes used in the buffer on success. Returns
+ * %-EINVAL if the payload length provided in the request specification is too
+ * large (larger than %SSH_COMMAND_MAX_PAYLOAD_SIZE) or if the provided buffer
+ * is too small.
  */
 ssize_t ssam_request_write_data(struct ssam_span *buf,
 				struct ssam_controller *ctrl,
@@ -1596,8 +1602,8 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
  * not handle referecnce counting for enable/disable of events. If an event
  * has already been enabled, the EC will ignore this request.
  *
- * Returns the status of the executed SAM request or %-EPROTO if the request
- * response indicates a failure.
+ * Return: Returns the status of the executed SAM request or %-EPROTO if the
+ * request response indicates a failure.
  */
 static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 				 struct ssam_event_registry reg,
@@ -1663,8 +1669,8 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
  * not handle reference counting for enable/disable of events. If an event has
  * already been disabled, the EC will ignore this request.
  *
- * Returns the status of the executed SAM request or %-EPROTO if the request
- * response indicates a failure.
+ * Return: Returns the status of the executed SAM request or %-EPROTO if the
+ * request response indicates a failure.
  */
 static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 				  struct ssam_event_registry reg,
@@ -1766,9 +1772,9 @@ int ssam_log_firmware_version(struct ssam_controller *ctrl)
  *
  * Use ssam_ctrl_notif_display_on() to reverse the effects of this function.
  *
- * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed, or %-EPROTO if an unexpected response has been
- * received.
+ * Return: Returns the status of the executed SAM command, zero on success or
+ * if no request has been executed, or %-EPROTO if an unexpected response has
+ * been received.
  */
 int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 {
@@ -1808,9 +1814,9 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
  *
  * See ssam_ctrl_notif_display_off() for more details.
  *
- * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed, or %-EPROTO if an unexpected response has been
- * received.
+ * Return: Returns the status of the executed SAM command, zero on success or
+ * if no request has been executed, or %-EPROTO if an unexpected response has
+ * been received.
  */
 int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 {
@@ -1850,9 +1856,9 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
  *
  * Use ssam_ctrl_notif_d0_entry() to reverse the effects of this function.
  *
- * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed, or %-EPROTO if an unexpected response has been
- * received.
+ * Return: Returns the status of the executed SAM command, zero on success or
+ * if no request has been executed, or %-EPROTO if an unexpected response has
+ * been received.
  */
 int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 {
@@ -1892,9 +1898,9 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
  *
  * See ssam_ctrl_notif_d0_exit() for more details.
  *
- * Returns the status of the executed SAM command, zero on success or if no
- * request has been executed, or %-EPROTO if an unexpected response has been
- * received.
+ * Return: Returns the status of the executed SAM command, zero on success or
+ * if no request has been executed, or %-EPROTO if an unexpected response has
+ * been received.
  */
 int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 {
@@ -1931,8 +1937,8 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
  * associated SAM event. If the event was previously not enabled, it will be
  * enabled during this call.
  *
- * Returns zero on success, %-ENOSPC if there have already been %INT_MAX
- * notifiers for the event ID/type associated with the notifier block
+ * Return: Returns zero on success, %-ENOSPC if there have already been
+ * %INT_MAX notifiers for the event ID/type associated with the notifier block
  * registered, %-ENOMEM if the corresponding event entry could not be
  * allocated. If this is the first time that a notifier block is registered
  * for the specific associated event, returns the status of the event enable
@@ -2011,10 +2017,10 @@ EXPORT_SYMBOL_GPL(ssam_notifier_register);
  * associated SAM event. If the usage counter reaches zero, the event will be
  * disabled.
  *
- * Returns zero on success, %-ENOENT if the given notifier block has not been
- * registered on the controller. If the given notifier block was the last one
- * associated with its specific event, returns the status of the event disable
- * EC command.
+ * Return: Returns zero on success, %-ENOENT if the given notifier block has
+ * not been registered on the controller. If the given notifier block was the
+ * last one associated with its specific event, returns the status of the
+ * event disable EC command.
  */
 int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)

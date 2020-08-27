@@ -92,14 +92,14 @@ bool sshp_find_syn(const struct ssam_span *src, struct ssam_span *rem)
  * This function does not copy any data, but rather only validates the message
  * data and sets pointers (and length values) to indicate the respective parts.
  *
- * Returns zero on success or if the frame is incomplete, %-ENOMSG if the
- * start of the message is invalid, %-EBADMSG if any (frame-header or payload)
- * CRC is ivnalid, or %-EMSGSIZE if the SSH message is bigger than the maximum
- * message length specified in the @maxlen parameter.
- *
  * If no complete SSH frame could be found, the frame pointer will be set to
  * the %NULL pointer and the payload span will be set to the null span (start
  * pointer %NULL, size zero).
+ *
+ * Return: Returns zero on success or if the frame is incomplete, %-ENOMSG if
+ * the start of the message is invalid, %-EBADMSG if any (frame-header or
+ * payload) CRC is ivnalid, or %-EMSGSIZE if the SSH message is bigger than
+ * the maximum message length specified in the @maxlen parameter.
  */
 int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
 		     struct ssh_frame **frame, struct ssam_span *payload,
@@ -187,8 +187,8 @@ int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
  * payload data and sets pointers (and length values) to indicate the
  * respective parts.
  *
- * Returns zero on success or %-ENOMSG if @source does not represent a valid
- * command-type frame payload, i.e. is too short.
+ * Return: Returns zero on success or %-ENOMSG if @source does not represent a
+ * valid command-type frame payload, i.e. is too short.
  */
 int sshp_parse_command(const struct device *dev, const struct ssam_span *source,
 		       struct ssh_command **command,
