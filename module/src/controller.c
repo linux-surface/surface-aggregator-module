@@ -1511,7 +1511,7 @@ EXPORT_SYMBOL_GPL(ssam_request_sync);
  * Allocates a synchronous request struct on the stack, fully initializes it
  * using the provided buffer as message data buffer, submits it, and then
  * waits for its completion before returning its staus. The
- * SSH_COMMAND_MESSAGE_LENGTH() macro can be used to compute the required
+ * ``SSH_COMMAND_MESSAGE_LENGTH()`` macro can be used to compute the required
  * message buffer size.
  *
  * This function does essentially the same as ssam_request_sync(), but instead
