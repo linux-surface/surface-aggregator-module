@@ -462,7 +462,7 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 
 static void __ssh_ptl_packet_release(struct kref *kref)
 {
-	struct ssh_packet *p = to_ssh_packet(kref, refcnt);
+	struct ssh_packet *p = container_of(kref, struct ssh_packet, refcnt);
 
 	trace_ssam_packet_release(p);
 

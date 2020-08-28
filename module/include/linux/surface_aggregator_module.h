@@ -318,9 +318,6 @@ struct ssh_packet {
 	const struct ssh_packet_ops *ops;
 };
 
-#define to_ssh_packet(ptr, member) \
-	container_of(ptr, struct ssh_packet, member)
-
 
 static inline struct ssh_packet *ssh_packet_get(struct ssh_packet *packet)
 {
