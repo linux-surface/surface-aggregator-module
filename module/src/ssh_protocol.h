@@ -8,7 +8,7 @@
 #include <linux/crc-ccitt.h>
 
 
-/**
+/*
  * SSH_NUM_EVENTS - The number of reserved event IDs.
  *
  * The number of reserved event IDs, used for registering an SSH event
@@ -18,12 +18,12 @@
  */
 #define SSH_NUM_EVENTS		34
 
-/**
+/*
  * SSH_NUM_TARGETS - The number of communication targets used in the protocol.
  */
 #define SSH_NUM_TARGETS		2
 
-/**
+/*
  * SSH_MSG_SYN - SSH message synchronization (SYN) bytes as u16.
  */
 #define SSH_MSG_SYN		((u16)0x55aa)
