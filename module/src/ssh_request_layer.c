@@ -638,7 +638,7 @@ bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 
 static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 {
-	struct ssh_request *r = to_ssh_request(p, packet);
+	struct ssh_request *r = to_ssh_request(p);
 
 	if (unlikely(status)) {
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
@@ -901,7 +901,7 @@ static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
 	struct ssh_request *rqst;
 
-	rqst = to_ssh_request(p, packet);
+	rqst = to_ssh_request(p);
 	rqst->ops->release(rqst);
 }
 

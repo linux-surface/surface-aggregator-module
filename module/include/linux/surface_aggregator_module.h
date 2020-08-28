@@ -385,8 +385,10 @@ struct ssh_request {
 	const struct ssh_request_ops *ops;
 };
 
-#define to_ssh_request(ptr, member) \
-	container_of(ptr, struct ssh_request, member)
+static inline struct ssh_request *to_ssh_request(struct ssh_packet *p)
+{
+	return container_of(p, struct ssh_request, packet);
+}
 
 
 static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
