@@ -46,7 +46,7 @@ static inline void sshp_buf_init(struct sshp_buf *buf, u8 *ptr, size_t cap)
  *
  * Allocates @cap bytes and initializes the provided buffer struct with the
  * allocated memory.
- * 
+ *
  * Return: Returns zero on success and %-ENOMEM if allocation failed.
  */
 static inline int sshp_buf_alloc(struct sshp_buf *buf, size_t cap, gfp_t flags)
