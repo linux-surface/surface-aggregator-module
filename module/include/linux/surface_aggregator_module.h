@@ -214,13 +214,13 @@ struct ssam_span {
 /* -- Packet transport layer (ptl). ----------------------------------------- */
 
 /**
- * enum ssh_packet_priority - Base priorities for &struct ssh_packet.
+ * enum ssh_packet_base_priority - Base priorities for &struct ssh_packet.
  * @SSH_PACKET_PRIORITY_FLUSH: Base priority for flush packets.
  * @SSH_PACKET_PRIORITY_DATA:  Base priority for normal data paackets.
  * @SSH_PACKET_PRIORITY_NAK:   Base priority for NAK packets.
  * @SSH_PACKET_PRIORITY_ACK:   Base priority for ACK packets.
  */
-enum ssh_packet_priority {
+enum ssh_packet_base_priority {
 	SSH_PACKET_PRIORITY_FLUSH = 0,	/* same as DATA to sequence flush */
 	SSH_PACKET_PRIORITY_DATA  = 0,
 	SSH_PACKET_PRIORITY_NAK   = 1,
@@ -230,7 +230,7 @@ enum ssh_packet_priority {
 /**
  * SSH_PACKET_PRIORITY() - Compute packet priority from base priority and
  * number of tries.
- * @base: The base priority as suffix of &enum ssh_packet_priority, e.g.
+ * @base: The base priority as suffix of &enum ssh_packet_base_priority, e.g.
  *        ``FLUSH``, ``DATA``, ``ACK``, or ``NAK``.
  * @try:  The number of tries (must be less than 16).
  *
