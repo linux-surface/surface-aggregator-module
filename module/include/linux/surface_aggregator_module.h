@@ -247,12 +247,15 @@ enum ssh_packet_base_priority {
 
 /**
  * ssh_packet_priority_get_try() - Get number of tries from packet priority.
- * @p: The packet priority.
+ * @priority: The packet priority.
  *
  * Return: Returns the number of tries encoded in the specified packet
  * priority.
  */
-#define ssh_packet_priority_get_try(p) ((p) & 0x0f)
+static inline u8 ssh_packet_priority_get_try(u8 priority)
+{
+	return priority & 0x0f;
+}
 
 
 enum ssh_packet_flags {
