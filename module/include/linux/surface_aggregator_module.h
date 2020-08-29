@@ -882,6 +882,24 @@ struct ssam_request_spec_md {
 		return 0;							\
 	}
 
+#define SSAM_DEFINE_SYNC_REQUEST_MD_N(name, spec...)				\
+	int name(struct ssam_controller *ctrl, u8 tid, u8 iid)			\
+	{									\
+		struct ssam_request_spec_md s					\
+			= (struct ssam_request_spec_md)spec;			\
+		struct ssam_request rqst;					\
+										\
+		rqst.target_category = s.target_category;			\
+		rqst.target_id = tid;						\
+		rqst.command_id = s.command_id;					\
+		rqst.instance_id = iid;						\
+		rqst.flags = s.flags;						\
+		rqst.length = 0;						\
+		rqst.payload = NULL;						\
+										\
+		return ssam_request_sync_onstack(ctrl, &rqst, NULL, 0);		\
+	}
+
 #define SSAM_DEFINE_SYNC_REQUEST_MD_W(name, wtype, spec...)			\
 	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, const wtype *in)	\
 	{									\
