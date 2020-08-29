@@ -588,6 +588,16 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
+/* must be executed with queue lock held */
+static void ssh_packet_next_try(struct ssh_packet *p)
+{
+	u8 priority = READ_ONCE(p->priority);
+	u8 base = ssh_packet_priority_get_base(priority);
+	u8 try = ssh_packet_priority_get_try(priority);
+
+	WRITE_ONCE(p->priority, __SSH_PACKET_PRIORITY(base, try + 1));
+}
+
 static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 {
 	struct list_head *head;
@@ -654,6 +664,7 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
+	ssh_packet_next_try(packet);
 	list_add_tail(&ssh_packet_get(packet)->queue_node, &ptl->queue.head);
 
 	spin_unlock(&ptl->queue.lock);
@@ -1179,6 +1190,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	 * one here.
 	 */
 	WRITE_ONCE(packet->timestamp, KTIME_MAX);
+	ssh_packet_next_try(packet);
 
 	// add packet
 	list_add_tail(&ssh_packet_get(packet)->queue_node, head);
