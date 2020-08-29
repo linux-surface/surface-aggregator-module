@@ -470,6 +470,13 @@ static void __ssh_ptl_packet_release(struct kref *kref)
 	p->ops->release(p);
 }
 
+struct ssh_packet *ssh_packet_get(struct ssh_packet *packet)
+{
+	kref_get(&packet->refcnt);
+	return packet;
+}
+EXPORT_SYMBOL_GPL(ssh_packet_get);
+
 void ssh_packet_put(struct ssh_packet *packet)
 {
 	kref_put(&packet->refcnt, __ssh_ptl_packet_release);

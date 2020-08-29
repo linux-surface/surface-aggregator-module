@@ -338,13 +338,7 @@ struct ssh_packet {
 	const struct ssh_packet_ops *ops;
 };
 
-
-static inline struct ssh_packet *ssh_packet_get(struct ssh_packet *packet)
-{
-	kref_get(&packet->refcnt);
-	return packet;
-}
-
+struct ssh_packet* ssh_packet_get(struct ssh_packet *p);
 void ssh_packet_put(struct ssh_packet *p);
 
 static inline void ssh_packet_set_data(struct ssh_packet *p, u8 *ptr, size_t len)
