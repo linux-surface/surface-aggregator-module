@@ -398,6 +398,7 @@ static inline void ssh_packet_set_data(struct ssh_packet *p, u8 *ptr, size_t len
 /* -- Request transport layer (rtl). ---------------------------------------- */
 
 enum ssh_request_flags {
+	/* state flags */
 	SSH_REQUEST_SF_LOCKED_BIT,
 	SSH_REQUEST_SF_QUEUED_BIT,
 	SSH_REQUEST_SF_PENDING_BIT,
@@ -407,9 +408,11 @@ enum ssh_request_flags {
 	SSH_REQUEST_SF_CANCELED_BIT,
 	SSH_REQUEST_SF_COMPLETED_BIT,
 
+	/* type flags */
 	SSH_REQUEST_TY_FLUSH_BIT,
 	SSH_REQUEST_TY_HAS_RESPONSE_BIT,
 
+	/* mask for state flags */
 	SSH_REQUEST_FLAGS_SF_MASK =
 		  BIT(SSH_REQUEST_SF_LOCKED_BIT)
 		| BIT(SSH_REQUEST_SF_QUEUED_BIT)
@@ -420,6 +423,7 @@ enum ssh_request_flags {
 		| BIT(SSH_REQUEST_SF_CANCELED_BIT)
 		| BIT(SSH_REQUEST_SF_COMPLETED_BIT),
 
+	/* mask for type flags */
 	SSH_REQUEST_FLAGS_TY_MASK =
 		  BIT(SSH_REQUEST_TY_FLUSH_BIT)
 		| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
@@ -429,6 +433,26 @@ enum ssh_request_flags {
 struct ssh_rtl;
 struct ssh_request;
 
+/**
+ * struct ssh_request_ops - Callback operations for a SSH request.
+ * @release:  Function called when the request's reference count reaches zero.
+ *            This callback must be relied upon to ensure that the request has
+ *            left the transmission systems (both, packet an request systems).
+ * @complete: Function called when the request is completed, either with
+ *            success or failure. The command data for the request response
+ *            is provided via the &struct ssh_command parameter (``cmd``),
+ *            the command payload of the request response via the &struct
+ *            ssh_span parameter (``data``). If the request does not have any
+ *            response or has not been completed with success, both ``cmd``
+ *            and ``data`` parameters will be NULL. If the request response
+ *            does not have any command payload, the ``data`` span will be an
+ *            empty (zero-length) span. In case of failure, the reason for the
+ *            failure is indicated by the value of the provided status code
+ *            argument (``status``). This value will be zero in case of
+ *            success. Note that a call to this callback does not guarantee
+ *            that the request is not in use by the transmission systems any
+ *            more.
+ */
 struct ssh_request_ops {
 	void (*release)(struct ssh_request *rqst);
 	void (*complete)(struct ssh_request *rqst,
@@ -436,6 +460,19 @@ struct ssh_request_ops {
 			 const struct ssam_span *data, int status);
 };
 
+/**
+ * struct ssh_request - SSH transmission request.
+ * @packet: The underlying SSH transmission packet.
+ * @node:   List node for the request queue and pending set.
+ * @state:  State and type flags describing current request state (dynamic)
+ *          and type (static). See &enum ssh_request_flags for possible
+ *          options.
+ * @timestamp: Timestamp specifying when we start waiting on the respnse of the
+ *          request. This is set once the underlying packet has been completed
+ *          and may be %KTIME_MAX before that, or when the request does not
+ *          expect a response. Used for the request timeout implementation.
+ * @ops:    Request Operations.
+ */
 struct ssh_request {
 	struct ssh_packet packet;
 	struct list_head node;
@@ -446,23 +483,62 @@ struct ssh_request {
 	const struct ssh_request_ops *ops;
 };
 
+/**
+ * to_ssh_request() - Cast a SSH packet to its enclosing SSH request.
+ * @p: The packet to cast.
+ *
+ * Casts the given &struct ssh_packet to its enclosing &struct ssh_request.
+ * The caller is responsible for making sure that the packet is actually
+ * wrapped in a &struct ssh_request.
+ */
 static inline struct ssh_request *to_ssh_request(struct ssh_packet *p)
 {
 	return container_of(p, struct ssh_request, packet);
 }
 
-
+/**
+ * ssh_request_get() - Increment reference count of request.
+ * @r: The request to increment the reference count of.
+ *
+ * Increments the reference count of the given request by incrementing the
+ * reference count of the underlying &struct ssh_packet, enclosed in it.
+ *
+ * See also ssh_request_put(), ssh_packet_get().
+ *
+ * Return: Returns the request provided as input.
+ */
 static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
 {
 	ssh_packet_get(&r->packet);
 	return r;
 }
 
+/**
+ * ssh_request_put() - Decrement reference count of request.
+ * @r: The request to decrement the reference count of.
+ *
+ * Decrements the reference count of the given request by decrementing the
+ * reference count of the underlying &struct ssh_packet, enclosed in it. If
+ * the reference count reaches zero, the ``release`` callback specified in the
+ * request's &struct ssh_request_ops (``r->ops->release``) will be called.
+ *
+ * See also ssh_request_get(), ssh_packet_put().
+ */
 static inline void ssh_request_put(struct ssh_request *r)
 {
 	ssh_packet_put(&r->packet);
 }
 
+/**
+ * ssh_request_set_data() - Set raw message data of request.
+ * @r:   The request for which the message data should be set.
+ * @ptr: Pointer to the memory holding the message data.
+ * @len: Length of the message data.
+ *
+ * Sets the raw message data buffer of the underlying packet to the specified
+ * buffer. Does not copy the actual message data, just sets the buffer pointer
+ * and length. Refer to ssh_packet_set_data() for more details.
+ */
 static inline void ssh_request_set_data(struct ssh_request *r, u8 *ptr, size_t len)
 {
 	ssh_packet_set_data(&r->packet, ptr, len);
