@@ -606,7 +606,7 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	 * from back to front.
 	 */
 
-	if (priority > SSH_PACKET_PRIORITY_DATA) {
+	if (priority > SSH_PACKET_PRIORITY(DATA, 0)) {
 		list_for_each(head, &p->ptl->queue.head) {
 			p = list_entry(head, struct ssh_packet, queue_node);
 
