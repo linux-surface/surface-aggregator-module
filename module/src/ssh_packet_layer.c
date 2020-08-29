@@ -473,7 +473,10 @@ static void __ssh_ptl_packet_release(struct kref *kref)
 /**
  * ssh_packet_get() - Increment reference count of packet.
  * @packet: The packet to increment the reference count of.
- * 
+ *
+ * Increments the reference count of the given packet. See ssh_packet_put()
+ * for the counter-part of this function.
+ *
  * Return: Returns the packet provided as input.
  */
 struct ssh_packet *ssh_packet_get(struct ssh_packet *packet)
@@ -486,10 +489,12 @@ EXPORT_SYMBOL_GPL(ssh_packet_get);
 /**
  * ssh_packet_put() - Decrement reference count of packet.
  * @packet: The packet to decrement the reference count of.
- * 
+ *
  * If the reference count reaches zero, the ``release`` callback specified in
  * the packet's &struct ssh_packet_ops (``packet->ops->release``) will be
  * called.
+ *
+ * See ssh_packet_get() for the counter-part of this function.
  */
 void ssh_packet_put(struct ssh_packet *packet)
 {
