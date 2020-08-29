@@ -549,6 +549,8 @@ static inline void ssh_request_set_data(struct ssh_request *r, u8 *ptr, size_t l
 /* -- Main data types and definitions --------------------------------------- */
 
 enum ssam_ssh_tc {
+	/* Known SSH/EC target categories. */
+				// category 0x00 is invalid for EC use
 	SSAM_SSH_TC_SAM = 0x01,	// generic system functionality, real-time clock
 	SSAM_SSH_TC_BAT = 0x02,	// battery/power subsystem
 	SSAM_SSH_TC_TMP = 0x03,	// thermal subsystem
@@ -583,7 +585,8 @@ enum ssam_ssh_tc {
 	SSAM_SSH_TC_KPD = 0x20,
 	SSAM_SSH_TC_REG = 0x21,
 
-	SSAM_SSH_TC__HUB = 0x00, // not an actual ID, used in for hubs
+	/* Special values. For driver use only, do not use with EC. */
+	SSAM_SSH_TC__HUB = 0x00, // not an actual category, used in for hubs
 };
 
 struct ssam_controller;
