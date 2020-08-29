@@ -599,6 +599,15 @@ enum ssam_event_flags {
 	SSAM_EVENT_SEQUENCED = BIT(0),
 };
 
+/**
+ * struct ssam_event - SAM event sent from the EC to the host.
+ * @target_category: Target category of the event source. See &enum ssam_ssh_tc.
+ * @target_id:       Target ID of the event source.
+ * @command_id:      Command ID of the event.
+ * @instance_id:     Instance ID of the event source.
+ * @length:          Length of the event payload in bytes.
+ * @data:            Event payload data.
+ */
 struct ssam_event {
 	u8 target_category;
 	u8 target_id;
@@ -608,11 +617,39 @@ struct ssam_event {
 	u8 data[0];
 };
 
+/**
+ * enum ssam_request_flags - Flags for SAM requests.
+ *
+ * @SSAM_REQUEST_HAS_RESPONSE:
+ *	Specifies that the request expects a response. If not set, the request
+ *	will be directly completed after its underlying packet has been
+ *	transmitted. If set, the request transmission system waits for a
+ *	response of the request.
+ *
+ * @SSAM_REQUEST_UNSEQUENCED:
+ *	Specifies that the request should be transmitted via an unsequenced
+ *	packet. If set, the request must not have a response, meaning that this
+ *	flag and the %SSAM_REQUEST_HAS_RESPONSE flag are mutually exclusive.
+ */
 enum ssam_request_flags {
 	SSAM_REQUEST_HAS_RESPONSE = BIT(0),
 	SSAM_REQUEST_UNSEQUENCED  = BIT(1),
 };
 
+/**
+ * struct ssam_request - SAM request description.
+ * @target_category: Category of the request's target. See &enum ssam_ssh_tc.
+ * @target_id:       ID of the request's target.
+ * @command_id:      Command ID of the request.
+ * @instance_id:     Instance ID of the request's target.
+ * @flags:           Flags for the request. See &enum ssam_request_flags.
+ * @length:          Length of the request payload in bytes.
+ * @payload:         Request payload data.
+ *
+ * This struct fully describes a SAM request with payload. It is intended to
+ * help set up the actual transport struct, e.g. &struct ssam_request_sync,
+ * and specifically its raw message data via ssam_request_write_data().
+ */
 struct ssam_request {
 	u8 target_category;
 	u8 target_id;
@@ -623,6 +660,13 @@ struct ssam_request {
 	const u8 *payload;
 };
 
+/**
+ * struct ssam_response - Response buffer for SAM request.
+ * @capacity: Capacity of the buffer, in bytes.
+ * @length:   Length of the actual data stored in the memory pointed to by
+ *            @pointer, in bytes. Set by the transmission system.
+ * @pointer:  Pointer to the buffer's memory, storing the response payload data.
+ */
 struct ssam_response {
 	size_t capacity;
 	size_t length;
