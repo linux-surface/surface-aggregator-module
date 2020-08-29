@@ -370,7 +370,7 @@ struct ssh_packet {
 	const struct ssh_packet_ops *ops;
 };
 
-struct ssh_packet* ssh_packet_get(struct ssh_packet *p);
+struct ssh_packet *ssh_packet_get(struct ssh_packet *p);
 void ssh_packet_put(struct ssh_packet *p);
 
 /**
