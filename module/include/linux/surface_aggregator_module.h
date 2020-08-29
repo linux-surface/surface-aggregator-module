@@ -1204,6 +1204,14 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 
 /* -- Helpers for client-device requests. ----------------------------------- */
 
+#define SSAM_DEFINE_SYNC_REQUEST_CL_N(name, spec...)			\
+	SSAM_DEFINE_SYNC_REQUEST_MD_N(__raw_##name, spec)		\
+	int name(struct ssam_device *sdev)				\
+	{								\
+		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
+				    sdev->uid.instance);		\
+	}
+
 #define SSAM_DEFINE_SYNC_REQUEST_CL_W(name, wtype, spec...)		\
 	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, wtype, spec)	\
 	int name(struct ssam_device *sdev, const wtype *in)		\
