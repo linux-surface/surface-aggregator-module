@@ -345,7 +345,8 @@ struct ssh_packet_ops {
  *            options.
  * @timestamp: Timestamp specifying when the latest transmission of a
  *            currently pending packet has been started. May be %KTIME_MAX
- *            before or in-between transmission attempts.
+ *            before or in-between transmission attempts. Used for the packet
+ *            timeout implementation.
  * @queue_node:	The list node for the packet queue.
  * @pending_node: The list node for the set of pending packets.
  * @ops:      Packet operations.
@@ -379,7 +380,7 @@ void ssh_packet_put(struct ssh_packet *p);
  * @ptr: Pointer to the memory holding the message data.
  * @len: Length of the message data.
  *
- * Set the raw message data buffer of the packet to the provided memory. The
+ * Sets the raw message data buffer of the packet to the provided memory. The
  * memory is not copied. Instead, the caller is responsible for management
  * (i.e. allocation and deallocation) of the memory. The caller must ensure
  * that the provided memory is valid and contains a valid SSH message,
