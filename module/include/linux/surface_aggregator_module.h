@@ -227,6 +227,12 @@ enum ssh_packet_base_priority {
 	SSH_PACKET_PRIORITY_ACK   = 2,
 };
 
+/*
+ * Same as SSH_PACKET_PRIORITY() below, only with actual values.
+ */
+#define __SSH_PACKET_PRIORITY(base, try) \
+	(((base) << 4) | ((try) & 0x0f))
+
 /**
  * SSH_PACKET_PRIORITY() - Compute packet priority from base priority and
  * number of tries.
@@ -243,7 +249,7 @@ enum ssh_packet_base_priority {
  * higher number means a higher priority.
  */
 #define SSH_PACKET_PRIORITY(base, try) \
-	(((SSH_PACKET_PRIORITY_##base) << 4) | ((try) & 0x0f))
+	__SSH_PACKET_PRIORITY(SSH_PACKET_PRIORITY_##base, (try))
 
 /**
  * ssh_packet_priority_get_try() - Get number of tries from packet priority.
