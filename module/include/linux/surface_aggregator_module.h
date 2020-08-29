@@ -221,10 +221,10 @@ struct ssam_span {
  * @SSH_PACKET_PRIORITY_ACK:   Base priority for ACK packets.
  */
 enum ssh_packet_priority {
-	SSH_PACKET_PRIORITY_FLUSH = 0,
+	SSH_PACKET_PRIORITY_FLUSH = 0,	/* same as DATA to sequence flush */
 	SSH_PACKET_PRIORITY_DATA  = 0,
-	SSH_PACKET_PRIORITY_NAK   = 1 << 4,
-	SSH_PACKET_PRIORITY_ACK   = 2 << 4,
+	SSH_PACKET_PRIORITY_NAK   = 1,
+	SSH_PACKET_PRIORITY_ACK   = 2,
 };
 
 /**
@@ -243,7 +243,7 @@ enum ssh_packet_priority {
  * higher number means a higher priority.
  */
 #define SSH_PACKET_PRIORITY(base, try) \
-	((SSH_PACKET_PRIORITY_##base) | ((try) & 0x0f))
+	(((SSH_PACKET_PRIORITY_##base) << 4) | ((try) & 0x0f))
 
 /**
  * ssh_packet_priority_get_try() - Get number of tries from packet priority.
