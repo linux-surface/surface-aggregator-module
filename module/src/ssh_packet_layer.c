@@ -491,7 +491,7 @@ EXPORT_SYMBOL_GPL(ssh_packet_get);
  * @packet: The packet to decrement the reference count of.
  *
  * If the reference count reaches zero, the ``release`` callback specified in
- * the packet's &struct ssh_packet_ops (``packet->ops->release``) will be
+ * the packet's &struct ssh_packet_ops, i.e. ``packet->ops->release``, will be
  * called.
  *
  * See ssh_packet_get() for the counter-part of this function.

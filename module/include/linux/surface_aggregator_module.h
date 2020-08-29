@@ -520,7 +520,8 @@ static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
  * Decrements the reference count of the given request by decrementing the
  * reference count of the underlying &struct ssh_packet, enclosed in it. If
  * the reference count reaches zero, the ``release`` callback specified in the
- * request's &struct ssh_request_ops (``r->ops->release``) will be called.
+ * request's &struct ssh_request_ops, i.e. ``r->ops->release``, will be
+ * called.
  *
  * See also ssh_request_get(), ssh_packet_put().
  */
