@@ -313,11 +313,43 @@ enum ssh_packet_flags {
 struct ssh_ptl;
 struct ssh_packet;
 
+/**
+ * struct ssh_packet_ops - Callback operations for a SSH packet.
+ * @release:  Function called when the packet reference count reaches zero.
+ *            This callback must be relied upon to ensure that the packet has
+ *            left the transmission system(s).
+ * @complete: Function called when the packet is completed, either with
+ *            success or failure. In case of failure, the reason for the
+ *            failure is indicated by the value of the provided status code
+ *            argument. This value will be zero in case of success. Note that
+ *            a call to this callback does not guarantee that the packet is
+ *            not in use by the transmission system any more.
+ */
 struct ssh_packet_ops {
 	void (*release)(struct ssh_packet *p);
 	void (*complete)(struct ssh_packet *p, int status);
 };
 
+/**
+ * struct ssh_packet - SSH transmission packet.
+ * @ptl:      Pointer to the packet transition layer. May be %NULL if the
+ *            packet (or enclosing request) has not been submitted yet.
+ * @refcnt:   Reference count of the packet.
+ * @priority: Priority of the packet. Must be computed via
+ *            ``SSH_PACKET_PRIORITY()``.
+ * @data:     Raw message data.
+ * @data.len: Length of the raw message data.
+ * @data.ptr: Pointer to the raw message data buffer.
+ * @state:    State and type flags describing current packet state (dynamic)
+ *            and type (static). See &enum ssh_packet_flags for possible
+ *            options.
+ * @timestamp: Timestamp specifying when the latest transmission of a
+ *            currently pending packet has been started. May be %KTIME_MAX
+ *            before or in-between transmission attempts.
+ * @queue_node:	The list node for the packet queue.
+ * @pending_node: The list node for the set of pending packets.
+ * @ops:      Packet operations.
+ */
 struct ssh_packet {
 	struct ssh_ptl *ptl;
 	struct kref refcnt;
@@ -341,6 +373,20 @@ struct ssh_packet {
 struct ssh_packet* ssh_packet_get(struct ssh_packet *p);
 void ssh_packet_put(struct ssh_packet *p);
 
+/**
+ * ssh_packet_set_data() - Set raw message data of packet.
+ * @p:   The packet for which the message data should be set.
+ * @ptr: Pointer to the memory holding the message data.
+ * @len: Length of the message data.
+ *
+ * Set the raw message data buffer of the packet to the provided memory. The
+ * memory is not copied. Instead, the caller is responsible for management
+ * (i.e. allocation and deallocation) of the memory. The caller must ensure
+ * that the provided memory is valid and contains a valid SSH message,
+ * starting from the time of submission of the packet until the ``release``
+ * callback has been called. During this time, the memory may not be altered
+ * in any way.
+ */
 static inline void ssh_packet_set_data(struct ssh_packet *p, u8 *ptr, size_t len)
 {
 	p->data.ptr = ptr;
