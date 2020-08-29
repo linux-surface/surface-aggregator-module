@@ -257,6 +257,17 @@ static inline u8 ssh_packet_priority_get_try(u8 priority)
 	return priority & 0x0f;
 }
 
+/**
+ * ssh_packet_priority_get_base - Get base priority from packet priority.
+ * @priority: The packet priority.
+ *
+ * Return: Returns the base priority encoded in the given packet priority.
+ */
+static inline u8 ssh_packet_priority_get_base(u8 priority)
+{
+	return (priority & 0xf0) >> 4;
+}
+
 
 enum ssh_packet_flags {
 	/* state flags */
