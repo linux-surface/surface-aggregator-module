@@ -313,7 +313,7 @@ EXPORT_SYMBOL_GPL(ssam_bus_type);
 
 
 /**
- * __ssam_device_driver_register() - Register a SSAM device driver.
+ * __ssam_device_driver_register() - Register a SSAM client device driver.
  * @sdrv:  The driver to register.
  * @owner: The module owning the provided driver.
  *

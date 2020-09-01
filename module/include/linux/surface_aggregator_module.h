@@ -1439,6 +1439,12 @@ static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
 }
 
 
+/**
+ * struct ssam_device - SSAM client device.
+ * @dev:  Driver model representation of the device.
+ * @ctrl: SSAM controller managing this device.
+ * @uid:  UID identifying the device.
+ */
 struct ssam_device {
 	struct device dev;
 	struct ssam_controller *ctrl;
@@ -1446,6 +1452,13 @@ struct ssam_device {
 	struct ssam_device_uid uid;
 };
 
+/**
+ * struct ssam_device_driver - SSAM client device driver.
+ * @driver:      Base driver model structure.
+ * @match_table: Match table specifying which devices the driver should bind to.
+ * @probe:       Called when the driver is being bound to a device.
+ * @remove:      Called when the driver is being unbound from the device.
+ */
 struct ssam_device_driver {
 	struct device_driver driver;
 
@@ -1459,16 +1472,47 @@ extern struct bus_type ssam_bus_type;
 extern const struct device_type ssam_device_type;
 
 
+/**
+ * is_ssam_device() - Check if the given device is a SSAM client device.
+ * @d: The device to test the type of.
+ *
+ * Return: Returns %true iff the specified device is of type &struct
+ * ssam_device, i.e. the device type points to %ssam_device_type, and false
+ * otherwise.
+ */
 static inline bool is_ssam_device(struct device *d)
 {
 	return d->type == &ssam_device_type;
 }
 
+/**
+ * to_ssam_device() - Casts the given device to a SSAM client device.
+ * @d: The device to cast.
+ *
+ * Casts the given &struct device to a &struct ssam_device. The caller has to
+ * ensure that the given device is actually enclosed in a &struct ssam_device,
+ * e.g. by calling is_ssam_device().
+ *
+ * Return: Returns a pointer to the &struct ssam_device wrapping the given
+ * device @d.
+ */
 static inline struct ssam_device *to_ssam_device(struct device *d)
 {
 	return container_of(d, struct ssam_device, dev);
 }
 
+/**
+ * to_ssam_device_driver() - Casts the given device driver to a SSAM client
+ * device driver.
+ * @d: The driver to cast.
+ *
+ * Casts the given &struct device_driver to a &struct ssam_device_driver. The
+ * caller has to ensure that the given driver is actually enclosed in a
+ * &struct ssam_device_driver.
+ *
+ * Return: Returns the pointer to the &struct ssam_device_driver wrapping the
+ * given device driver @d.
+ */
 static inline
 struct ssam_device_driver *to_ssam_device_driver(struct device_driver *d)
 {
@@ -1491,12 +1535,34 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 int ssam_device_add(struct ssam_device *sdev);
 void ssam_device_remove(struct ssam_device *sdev);
 
+/**
+ * ssam_device_get() - Increment reference count of SSAM client device.
+ * @sdev: The device to increment the reference count of.
+ *
+ * Increments the reference count of the given SSAM client device by
+ * incrementing the reference count of the enclosed &struct device via
+ * get_device().
+ *
+ * See ssam_device_put() for the counter-part of this function.
+ *
+ * Return: Returns the device provided as input.
+ */
 static inline struct ssam_device *ssam_device_get(struct ssam_device *sdev)
 {
 	get_device(&sdev->dev);
 	return sdev;
 }
 
+/**
+ * ssam_device_put() - Decrement reference count of SSAM client device.
+ * @sdev: The device to decrement the reference count of.
+ *
+ * Decrements the reference count of the given SSAM client device by
+ * decrementing the reference count of the enclosed &struct device via
+ * put_device().
+ *
+ * See ssam_device_get() for the counter-part of this function.
+ */
 static inline void ssam_device_put(struct ssam_device *sdev)
 {
 	put_device(&sdev->dev);
@@ -1516,6 +1582,10 @@ static inline void ssam_device_set_drvdata(struct ssam_device *sdev, void *data)
 int __ssam_device_driver_register(struct ssam_device_driver *d, struct module *o);
 void ssam_device_driver_unregister(struct ssam_device_driver *d);
 
+/**
+ * ssam_device_driver_register() - Register a SSAM client device driver.
+ * @drv: The driver to register.
+ */
 #define ssam_device_driver_register(drv) \
 	__ssam_device_driver_register(drv, THIS_MODULE)
 
