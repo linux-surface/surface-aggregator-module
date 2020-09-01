@@ -828,8 +828,8 @@ struct ssam_request_spec_md {
 		return ssam_request_sync_onstack(ctrl, &rqst, NULL, 0);		\
 	}
 
-#define SSAM_DEFINE_SYNC_REQUEST_W(name, wtype, spec...)			\
-	int name(struct ssam_controller *ctrl, const wtype *in)			\
+#define SSAM_DEFINE_SYNC_REQUEST_W(name, atype, spec...)			\
+	int name(struct ssam_controller *ctrl, const atype *arg)		\
 	{									\
 		struct ssam_request_spec s = (struct ssam_request_spec)spec;	\
 		struct ssam_request rqst;					\
@@ -839,15 +839,15 @@ struct ssam_request_spec_md {
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = s.instance_id;				\
 		rqst.flags = s.flags;						\
-		rqst.length = sizeof(wtype);					\
-		rqst.payload = (u8 *)in;					\
+		rqst.length = sizeof(atype);					\
+		rqst.payload = (u8 *)arg;					\
 										\
 		return ssam_request_sync_onstack(ctrl, &rqst, NULL,		\
-						 sizeof(wtype));		\
+						 sizeof(atype));		\
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_R(name, rtype, spec...)			\
-	int name(struct ssam_controller *ctrl, rtype *out)			\
+	int name(struct ssam_controller *ctrl, rtype *ret)			\
 	{									\
 		struct ssam_request_spec s = (struct ssam_request_spec)spec;	\
 		struct ssam_request rqst;					\
@@ -864,7 +864,7 @@ struct ssam_request_spec_md {
 										\
 		rsp.capacity = sizeof(rtype);					\
 		rsp.length = 0;							\
-		rsp.pointer = (u8 *)out;					\
+		rsp.pointer = (u8 *)ret;					\
 										\
 		status = ssam_request_sync_onstack(ctrl, &rqst, &rsp, 0);	\
 		if (status)							\
@@ -900,8 +900,8 @@ struct ssam_request_spec_md {
 		return ssam_request_sync_onstack(ctrl, &rqst, NULL, 0);		\
 	}
 
-#define SSAM_DEFINE_SYNC_REQUEST_MD_W(name, wtype, spec...)			\
-	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, const wtype *in)	\
+#define SSAM_DEFINE_SYNC_REQUEST_MD_W(name, atype, spec...)			\
+	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, const atype *arg)\
 	{									\
 		struct ssam_request_spec_md s					\
 			= (struct ssam_request_spec_md)spec;			\
@@ -912,15 +912,15 @@ struct ssam_request_spec_md {
 		rqst.command_id = s.command_id;					\
 		rqst.instance_id = iid;						\
 		rqst.flags = s.flags;						\
-		rqst.length = sizeof(wtype);					\
-		rqst.payload = (u8 *)in;					\
+		rqst.length = sizeof(atype);					\
+		rqst.payload = (u8 *)arg;					\
 										\
 		return ssam_request_sync_onstack(ctrl, &rqst, NULL,		\
-						 sizeof(wtype));		\
+						 sizeof(atype));		\
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_MD_R(name, rtype, spec...)			\
-	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, rtype *out)	\
+	int name(struct ssam_controller *ctrl, u8 tid, u8 iid, rtype *ret)	\
 	{									\
 		struct ssam_request_spec_md s					\
 			= (struct ssam_request_spec_md)spec;			\
@@ -938,7 +938,7 @@ struct ssam_request_spec_md {
 										\
 		rsp.capacity = sizeof(rtype);					\
 		rsp.length = 0;							\
-		rsp.pointer = (u8 *)out;					\
+		rsp.pointer = (u8 *)ret;					\
 										\
 		status = ssam_request_sync_onstack(ctrl, &rqst, &rsp, 0);	\
 		if (status)							\
@@ -1212,20 +1212,20 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 				    sdev->uid.instance);		\
 	}
 
-#define SSAM_DEFINE_SYNC_REQUEST_CL_W(name, wtype, spec...)		\
-	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, wtype, spec)	\
-	int name(struct ssam_device *sdev, const wtype *in)		\
+#define SSAM_DEFINE_SYNC_REQUEST_CL_W(name, atype, spec...)		\
+	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, atype, spec)	\
+	int name(struct ssam_device *sdev, const atype *arg)		\
 	{								\
 		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
-				    sdev->uid.instance, in);		\
+				    sdev->uid.instance, arg);		\
 	}
 
 #define SSAM_DEFINE_SYNC_REQUEST_CL_R(name, rtype, spec...)		\
 	SSAM_DEFINE_SYNC_REQUEST_MD_R(__raw_##name, rtype, spec)	\
-	int name(struct ssam_device *sdev, rtype *out)			\
+	int name(struct ssam_device *sdev, rtype *ret)			\
 	{								\
 		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
-				    sdev->uid.instance, out);		\
+				    sdev->uid.instance, ret);		\
 	}
 
 
