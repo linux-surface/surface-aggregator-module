@@ -1621,6 +1621,15 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 	}
 
 
+/**
+ * ssam_event_matches_device() - Test if an event corresponds to a device.
+ * @uid:   The UID describing the device.
+ * @event: The event to test.
+ *
+ * Return: Returns %true iff the given event corresponds to the given UID,
+ * i.e. iff target category, target ID, and instance ID are equal, and false
+ * otherwise.
+ */
 static inline bool ssam_event_matches_device(struct ssam_device_uid uid,
 					     const struct ssam_event *event)
 {
