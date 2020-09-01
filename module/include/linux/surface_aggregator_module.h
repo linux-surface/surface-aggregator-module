@@ -1231,6 +1231,18 @@ static inline int ssam_notifier_to_errno(u32 ret)
 
 /* -- Event/notification registry. ------------------------------------------ */
 
+/**
+ * struct ssam_event_registry - Registry specification used for enabling events.
+ * @target_category: Target category for the event registry requests.
+ * @target_id:       Target ID for the event registry requests.
+ * @cid_enable:      Command ID for the event-enable request.
+ * @cid_disable:     Command ID for the event-disable request.
+ *
+ * This struct describes a SAM event registry via the minimal collection of
+ * SAM IDs specifying the requests to use for enabling and disabling an event.
+ * The individual event to be enabled/disabled itself is specified via &struct
+ * ssam_event_id.
+ */
 struct ssam_event_registry {
 	u8 target_category;
 	u8 target_id;
@@ -1238,12 +1250,31 @@ struct ssam_event_registry {
 	u8 cid_disable;
 };
 
+/**
+ * struct ssam_event_id - Unique event ID used for enabling events.
+ * @target_category: Target category of the event source.
+ * @instance:        Instance ID of the event source.
+ *
+ * This struct specifies the event to be enabled/disabled via an externally
+ * provided registry. It does not specify the registry to be used itself, this
+ * is done via &struct ssam_event_registry.
+ */
 struct ssam_event_id {
 	u8 target_category;
 	u8 instance;
 };
 
 
+/**
+ * SSAM_EVENT_REGISTRY() - Define a new event registry.
+ * @tc:      Target category for the event registry requests.
+ * @tid:     Target ID for the event registry requests.
+ * @cid_en:  Command ID for the event-enable request.
+ * @cid_dis: Command ID for the event-disable request.
+ *
+ * Return: Returns the &struct ssam_event_registry specified by the given
+ * parameters.
+ */
 #define SSAM_EVENT_REGISTRY(tc, tid, cid_en, cid_dis)	\
 	((struct ssam_event_registry) {			\
 		.target_category = (tc),		\
@@ -1262,6 +1293,14 @@ struct ssam_event_id {
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_REG, 0x02, 0x01, 0x02)
 
 
+/**
+ * struct ssam_event_notifier - Notifier block for SSAM events.
+ * @base:        The base notifier block with callback function and priority.
+ * @event:       The event for which this block will receive notifications.
+ * @event.reg:   Registry via which the event will be enabled/disabled.
+ * @event.id:    ID specifying the event.
+ * @event.flags: Flags used for enabling the event.
+ */
 struct ssam_event_notifier {
 	struct ssam_notifier_block base;
 
