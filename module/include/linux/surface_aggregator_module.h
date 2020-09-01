@@ -1144,8 +1144,10 @@ struct ssam_request_spec_md {
 #define SSAM_NOTIF_STATE_SHIFT		2
 #define SSAM_NOTIF_STATE_MASK		((1 << SSAM_NOTIF_STATE_SHIFT) - 1)
 
-#define SSAM_NOTIF_HANDLED		BIT(0)
-#define SSAM_NOTIF_STOP			BIT(1)
+enum ssam_notif_flags {
+	SSAM_NOTIF_HANDLED = BIT(0),
+	SSAM_NOTIF_STOP    = BIT(1),
+};
 
 
 struct ssam_notifier_block;
