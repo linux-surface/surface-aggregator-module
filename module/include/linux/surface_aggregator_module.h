@@ -1288,12 +1288,12 @@ struct ssam_device_uid {
 	u8 function;
 };
 
-#define SSAM_DUID(__cat, __tid, __iid, __fun)		\
-	((struct ssam_device_uid) {			\
-		.category = SSAM_SSH_TC_##__cat,	\
-		.target = (__tid),			\
-		.instance = (__iid),			\
-		.function = (__fun)			\
+#define SSAM_DUID(cat, tid, iid, fun)		\
+	((struct ssam_device_uid) {		\
+		.category = SSAM_SSH_TC_##cat,	\
+		.target = (tid),		\
+		.instance = (iid),		\
+		.function = (fun)		\
 	})
 
 #define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
@@ -1326,14 +1326,14 @@ struct ssam_device_id {
 #define SSAM_ANY_IID		0xffff
 #define SSAM_ANY_FUN		0xffff
 
-#define SSAM_DEVICE(__cat, __tid, __iid, __fun)					\
-	.match_flags = (((__tid) != SSAM_ANY_TID) ? SSAM_MATCH_TARGET : 0)	\
-		     | (((__iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
-		     | (((__fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0),	\
-	.category = SSAM_SSH_TC_##__cat,					\
-	.target   = ((__tid) != SSAM_ANY_TID) ? (__tid) : 0,			\
-	.instance = ((__iid) != SSAM_ANY_IID) ? (__iid) : 0,			\
-	.function = ((__fun) != SSAM_ANY_FUN) ? (__fun) : 0			\
+#define SSAM_DEVICE(cat, tid, iid, fun)						\
+	.match_flags = (((tid) != SSAM_ANY_TID) ? SSAM_MATCH_TARGET : 0)	\
+		     | (((iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
+		     | (((fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0),	\
+	.category = SSAM_SSH_TC_##cat,						\
+	.target   = ((tid) != SSAM_ANY_TID) ? (tid) : 0,			\
+	.instance = ((iid) != SSAM_ANY_IID) ? (iid) : 0,			\
+	.function = ((fun) != SSAM_ANY_FUN) ? (fun) : 0				\
 
 
 static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
