@@ -693,6 +693,17 @@ ssize_t ssam_request_write_data(struct ssam_span *buf,
 
 /* -- Synchronous request interface. ---------------------------------------- */
 
+/**
+ * struct ssam_request_sync - Synchronous SAM request struct.
+ * @base:   Underlying SSH request.
+ * @comp:   Completion used to signal full completion of the request. After the
+ *          request has been submitted, this struct may only be modified or
+ *          deallocated after the completion has been signaled.
+ *          request has been submitted,
+ * @resp:   Buffer to store the response.
+ * @status: Status of the request, set after the base request has been
+ *          completed or has failed.
+ */
 struct ssam_request_sync {
 	struct ssh_request base;
 	struct completion comp;
@@ -797,6 +808,20 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	})
 
 
+/**
+ * struct ssam_request_spec - Blue-print specification of SAM request.
+ * @target_category: Category of the request's target. See &enum ssam_ssh_tc.
+ * @target_id:       ID of the request's target.
+ * @command_id:      Command ID of the request.
+ * @instance_id:     Instance ID of the request's target.
+ * @flags:           Flags for the request. See &enum ssam_request_flags.
+ *
+ * Blue-print specification for a SAM request. This struct describes the
+ * unique static parameters of a request (i.e. type) without specifying any of
+ * its instance-specific data (e.g. payload). It is intended to be used as base
+ * for defining simple request functions via the
+ * ``SSAM_DEFINE_SYNC_REQUEST_x()`` family of macros.
+ */
 struct ssam_request_spec {
 	u8 target_category;
 	u8 target_id;
@@ -805,6 +830,23 @@ struct ssam_request_spec {
 	u8 flags;
 };
 
+/**
+ * struct ssam_request_spec_md - Blue-print specification of multi-device SAM
+ * request.
+ * @target_category: Category of the request's target. See &enum ssam_ssh_tc.
+ * @command_id:      Command ID of the request.
+ * @flags:           Flags for the request. See &enum ssam_request_flags.
+ *
+ * Blue-print specification for a multi-device SAM request, i.e. a request
+ * that is applicable to multiple device instances, described by their
+ * individual target and instance IDs. This struct describes the unique static
+ * parameters of a request (i.e. type) without specifying any of its
+ * instance-specific data (e.g. payload) and without specifying any of its
+ * device specific IDs (i.e. target and instance ID). It is intended to be
+ * used as base for defining simple multi-device request functions via the
+ * ``SSAM_DEFINE_SYNC_REQUEST_MD_x()`` and ``SSAM_DEFINE_SYNC_REQUEST_CL_x()``
+ * families of macros.
+ */
 struct ssam_request_spec_md {
 	u8 target_category;
 	u8 command_id;
