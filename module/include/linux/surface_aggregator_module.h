@@ -1491,9 +1491,10 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 int ssam_device_add(struct ssam_device *sdev);
 void ssam_device_remove(struct ssam_device *sdev);
 
-static inline void ssam_device_get(struct ssam_device *sdev)
+static inline struct ssam_device *ssam_device_get(struct ssam_device *sdev)
 {
 	get_device(&sdev->dev);
+	return sdev;
 }
 
 static inline void ssam_device_put(struct ssam_device *sdev)
