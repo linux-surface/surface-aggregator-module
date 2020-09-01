@@ -6,7 +6,7 @@
 #if !defined(_SURFACE_SAM_SSH_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
 #define _SURFACE_SAM_SSH_TRACE_H
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 #include <linux/tracepoint.h>
 
 

@@ -15,7 +15,7 @@
 #include <linux/platform_device.h>
 #include <linux/sysfs.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../../include/linux/surface_aggregator_module.h"
 #include "surface_sam_san.h"
 
 

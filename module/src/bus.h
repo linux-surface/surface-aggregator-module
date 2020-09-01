@@ -3,7 +3,7 @@
 #ifndef _SSAM_BUS_H
 #define _SSAM_BUS_H
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 
 
 void ssam_controller_remove_clients(struct ssam_controller *ctrl);

@@ -14,7 +14,7 @@
 #include <linux/wait.h>
 #include <linux/workqueue.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 
 #include "ssh_msgb.h"
 #include "ssh_parser.h"

@@ -13,7 +13,7 @@
 #include <linux/pm.h>
 #include <linux/serdev.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 
 #include "bus.h"
 #include "controller.h"

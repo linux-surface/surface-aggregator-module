@@ -6,7 +6,7 @@
 #include <asm/unaligned.h>
 #include <linux/types.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 #include "ssh_protocol.h"
 
 

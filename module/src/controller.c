@@ -17,7 +17,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 
 #include "controller.h"
 #include "ssh_msgb.h"

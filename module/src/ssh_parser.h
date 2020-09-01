@@ -7,7 +7,7 @@
 #include <linux/kfifo.h>
 #include <linux/slab.h>
 
-#include <linux/surface_aggregator_module.h>
+#include "../include/linux/surface_aggregator_module.h"
 
 
 /**
