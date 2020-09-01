@@ -1320,6 +1320,16 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 /* -- Surface System Aggregator Module Bus. --------------------------------- */
 
+/**
+ * struct ssam_device_uid - Unique identifier for SSAM device.
+ * @category: Target category of the device.
+ * @target:   Target ID of the device.
+ * @instance: Instance ID of the device.
+ * @function: Sub-function of the device. This field can be used to split a
+ *            single SAM device into multiple virtual subdevices to separate
+ *            different functionality of that device and allow one driver per
+ *            such functionality.
+ */
 struct ssam_device_uid {
 	u8 category;
 	u8 target;
@@ -1327,6 +1337,15 @@ struct ssam_device_uid {
 	u8 function;
 };
 
+/**
+ * SSAM_DUID() - Define a &struct ssam_device_uid.
+ * @cat: Target category of the device.
+ * @tid: Target ID of the device.
+ * @iid: Instance ID of the device.
+ * @fun: Sub-function of the (virtual) device.
+ *
+ * Return: The &struct ssam_device_uid specified by the given parameters.
+ */
 #define SSAM_DUID(cat, tid, iid, fun)		\
 	((struct ssam_device_uid) {		\
 		.category = SSAM_SSH_TC_##cat,	\
@@ -1335,6 +1354,9 @@ struct ssam_device_uid {
 		.function = (fun)		\
 	})
 
+/*
+ * SSAM_DUID_NULL - Null device UID.
+ */
 #define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
 
 
@@ -1348,23 +1370,40 @@ struct ssam_device_uid {
 #define SSAM_MATCH_FUNCTION	0x4
 
 struct ssam_device_id {
-	u8 match_flags;
+	u8 match_flags;		/* which fields to match against */
 
-	u8 category;
-	u8 target;
-	u8 instance;
-	u8 function;
+	u8 category;		/* device target category */
+	u8 target;		/* device target ID       */
+	u8 instance;		/* device instance ID     */
+	u8 function;		/* device function        */
 
 	kernel_ulong_t driver_data;
 };
 
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
 
-
+/*
+ * Special values for device matching.
+ */
 #define SSAM_ANY_TID		0xffff
 #define SSAM_ANY_IID		0xffff
 #define SSAM_ANY_FUN		0xffff
 
+/**
+ * SSAM_DEVICE() - Initialize a &struct ssam_device_id with the given
+ * parameters.
+ * @cat: Target category of the device.
+ * @tid: Target ID of the device.
+ * @iid: Instance ID of the device.
+ * @fun: Sub-function of the device.
+ *
+ * Initializes a &struct ssam_device_id with the given parameters. See &struct
+ * ssam_device_uid for details regarding the parameters. The special values
+ * %SSAM_ANY_TID, %SSAM_ANY_IID, and %SSAM_ANY_FUN can be used to specify that
+ * matching should ignore target ID, instance ID, and/or sub-function,
+ * respectively. This macro initializes the ``match_flags`` field based on the
+ * given parameters.
+ */
 #define SSAM_DEVICE(cat, tid, iid, fun)						\
 	.match_flags = (((tid) != SSAM_ANY_TID) ? SSAM_MATCH_TARGET : 0)	\
 		     | (((iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
@@ -1375,12 +1414,25 @@ struct ssam_device_id {
 	.function = ((fun) != SSAM_ANY_FUN) ? (fun) : 0				\
 
 
+/**
+ * ssam_device_uid_equal() - Compare SSAM device UIDs for equality.
+ * @u1: The first UID.
+ * @u2: The second UID.
+ *
+ * Return: Returns %true iff both UIDs are equal, %false otherwise.
+ */
 static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
 					 const struct ssam_device_uid u2)
 {
 	return memcmp(&u1, &u2, sizeof(struct ssam_device_uid)) == 0;
 }
 
+/**
+ * ssam_device_uid_is_null() - Check if a SSAM device UID is null.
+ * @uid: The UID to check.
+ *
+ * Return: Returns %true iff the given UID is null, %false otherwise.
+ */
 static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
 {
 	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
