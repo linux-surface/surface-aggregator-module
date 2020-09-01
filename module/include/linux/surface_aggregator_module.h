@@ -1252,13 +1252,6 @@ struct ssam_event_id {
 		.cid_disable = (cid_dis),		\
 	})
 
-#define SSAM_EVENT_ID(tc, iid)				\
-	((struct ssam_event_id) {			\
-		.target_category = (tc),		\
-		.instance = (iid),			\
-	})
-
-
 #define SSAM_EVENT_REGISTRY_SAM	\
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_SAM, 0x01, 0x0b, 0x0c)
 
