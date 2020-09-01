@@ -1144,6 +1144,27 @@ struct ssam_request_spec_md {
 #define SSAM_NOTIF_STATE_SHIFT		2
 #define SSAM_NOTIF_STATE_MASK		((1 << SSAM_NOTIF_STATE_SHIFT) - 1)
 
+/**
+ * enum ssam_notif_flags - Flags used in return values from SSAM notifier
+ * callback functions.
+ *
+ * @SSAM_NOTIF_HANDLED:
+ *	Indicates that the notification has been handled. This flag should be
+ *	set by the handler if the handler can act/has acted upon the event
+ *	provided to it. This flag should not be set if the handler is not a
+ *	primary handler intended for the provided event.
+ *
+ *	If this flag has not been set by any handler after the notifier chain
+ *	has been traversed, a warning will be emitted, stating that the event
+ *	has not been handled.
+ *
+ * @SSAM_NOTIF_STOP:
+ *	Indicates that the notifier traversal should stop. If this flag is
+ *	returned from a notifier callback, notifier chain traversal will
+ *	immediately stop and any remaining notifiers will not be called. This
+ *	flag is automatically set when ssam_notifier_from_errno() is called
+ *	with a negative error value.
+ */
 enum ssam_notif_flags {
 	SSAM_NOTIF_HANDLED = BIT(0),
 	SSAM_NOTIF_STOP    = BIT(1),
@@ -1155,13 +1176,37 @@ struct ssam_notifier_block;
 typedef u32 (*ssam_notifier_fn_t)(struct ssam_notifier_block *nb,
 				  const struct ssam_event *event);
 
+/**
+ * struct ssam_notifier_block - Base notifier block for SSAM event
+ * notifications.
+ * @next:     The next notifier block in order of priority.
+ * @fn:       The callback function of this notifier. This function takes the
+ *            respective notifier block and event as input and should return
+ *            a notifier value, which can either be obtained from the flags
+ *            provided in &enum ssam_notif_flags, converted from a standard
+ *            error value via ssam_notifier_from_errno(), or a combination of
+ *            both (e.g. ``ssam_notifier_from_errno(e) | SSAM_NOTIF_HANDLED``).
+ * @priority: Priority value determining the order in which notifier callbacks
+ *            will be called. A higher value means higher priority, i.e. the
+ *            associated callback will be executed earlier than other (lower
+ *            priority) callbacks.
+ */
 struct ssam_notifier_block {
 	struct ssam_notifier_block __rcu *next;
 	ssam_notifier_fn_t fn;
 	int priority;
 };
 
-
+/**
+ * ssam_notifier_from_errno() - Convert standard error value to notifier
+ * return code.
+ * @err: The error code to convert, must be negative (in case of failure) or
+ *       zero (in case of success).
+ *
+ * Return: Returns the notifier return value obtained by converting the
+ * specified @err value. In case @err is negative, the %SSAM_NOTIF_STOP flag
+ * will be set, causing notifier call chain traversal to abort.
+ */
 static inline u32 ssam_notifier_from_errno(int err)
 {
 	if (WARN_ON(err > 0) || err == 0)
@@ -1170,6 +1215,14 @@ static inline u32 ssam_notifier_from_errno(int err)
 		return ((-err) << SSAM_NOTIF_STATE_SHIFT) | SSAM_NOTIF_STOP;
 }
 
+/**
+ * ssam_notifier_to_errno() - Convert notifier return code to standard error
+ * value.
+ * @ret: The notifier return value to convert.
+ *
+ * Return: Returns the negative error value encoded in @ret or zero if @ret
+ * indicates success.
+ */
 static inline int ssam_notifier_to_errno(u32 ret)
 {
 	return -(ret >> SSAM_NOTIF_STATE_SHIFT);
