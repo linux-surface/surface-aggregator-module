@@ -508,8 +508,8 @@ static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 }
 
 
-void ssh_packet_init(struct ssh_packet *packet,
-		     const struct ssh_packet_args *args)
+void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
+		     u8 priority, const struct ssh_packet_ops *ops)
 {
 	kref_init(&packet->refcnt);
 
@@ -517,14 +517,14 @@ void ssh_packet_init(struct ssh_packet *packet,
 	INIT_LIST_HEAD(&packet->queue_node);
 	INIT_LIST_HEAD(&packet->pending_node);
 
-	packet->state = args->type & SSH_PACKET_FLAGS_TY_MASK;
-	packet->priority = args->priority;
+	packet->state = type & SSH_PACKET_FLAGS_TY_MASK;
+	packet->priority = priority;
 	packet->timestamp = KTIME_MAX;
 
 	packet->data.ptr = NULL;
 	packet->data.len = 0;
 
-	packet->ops = args->ops;
+	packet->ops = ops;
 }
 
 
@@ -1442,7 +1442,6 @@ static void ssh_ptl_rx_dataframe(struct ssh_ptl *ptl,
 
 static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 {
-	struct ssh_packet_args args;
 	struct ssh_packet *packet;
 	struct ssam_span buf;
 	struct msgbuf msgb;
@@ -1454,10 +1453,8 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 		return;
 	}
 
-	args.type = 0;
-	args.priority = SSH_PACKET_PRIORITY(ACK, 0);
-	args.ops = &ssh_ptl_ctrl_packet_ops;
-	ssh_packet_init(packet, &args);
+	ssh_packet_init(packet, 0, SSH_PACKET_PRIORITY(ACK, 0),
+			&ssh_ptl_ctrl_packet_ops);
 
 	msgb_init(&msgb, buf.ptr, buf.len);
 	msgb_push_ack(&msgb, seq);
@@ -1469,7 +1466,6 @@ static void ssh_ptl_send_ack(struct ssh_ptl *ptl, u8 seq)
 
 static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 {
-	struct ssh_packet_args args;
 	struct ssh_packet *packet;
 	struct ssam_span buf;
 	struct msgbuf msgb;
@@ -1481,10 +1477,8 @@ static void ssh_ptl_send_nak(struct ssh_ptl *ptl)
 		return;
 	}
 
-	args.type = 0;
-	args.priority = SSH_PACKET_PRIORITY(NAK, 0);
-	args.ops = &ssh_ptl_ctrl_packet_ops;
-	ssh_packet_init(packet, &args);
+	ssh_packet_init(packet, 0, SSH_PACKET_PRIORITY(NAK, 0),
+			&ssh_ptl_ctrl_packet_ops);
 
 	msgb_init(&msgb, buf.ptr, buf.len);
 	msgb_push_nak(&msgb);

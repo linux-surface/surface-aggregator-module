@@ -73,12 +73,6 @@ struct ssh_ptl {
 	struct ssh_ptl_ops ops;
 };
 
-struct ssh_packet_args {
-	unsigned long type;
-	u8 priority;
-	const struct ssh_packet_ops *ops;
-};
-
 
 #define __ssam_prcond(func, p, fmt, ...)		\
 	do {						\
@@ -116,8 +110,8 @@ void ssh_ptl_cancel(struct ssh_packet *p);
 int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n);
 void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force);
 
-void ssh_packet_init(struct ssh_packet *packet,
-		     const struct ssh_packet_args *args);
+void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
+		     u8 priority, const struct ssh_packet_ops *ops);
 
 int ssh_ctrl_packet_cache_init(void);
 void ssh_ctrl_packet_cache_destroy(void);

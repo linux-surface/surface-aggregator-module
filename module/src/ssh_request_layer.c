@@ -913,16 +913,14 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
 		      const struct ssh_request_ops *ops)
 {
-	struct ssh_packet_args packet_args;
+	unsigned long type = BIT(SSH_PACKET_TY_BLOCKING_BIT);
 
-	packet_args.type = BIT(SSH_PACKET_TY_BLOCKING_BIT);
 	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
-		packet_args.type |= BIT(SSH_PACKET_TY_SEQUENCED_BIT);
+		type |= BIT(SSH_PACKET_TY_SEQUENCED_BIT);
 
-	packet_args.priority = SSH_PACKET_PRIORITY(DATA, 0);
-	packet_args.ops = &ssh_rtl_packet_ops;
+	ssh_packet_init(&rqst->packet, type, SSH_PACKET_PRIORITY(DATA, 0),
+			&ssh_rtl_packet_ops);
 
-	ssh_packet_init(&rqst->packet, &packet_args);
 	INIT_LIST_HEAD(&rqst->node);
 
 	rqst->state = 0;
