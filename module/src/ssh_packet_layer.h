@@ -20,14 +20,59 @@
 #include "ssh_parser.h"
 
 
+/**
+ * enum ssh_ptl_state_flags - State-flags for &struct ssh_ptl.
+ *
+ * @SSH_PTL_SF_SHUTDOWN_BIT:
+ *	Indicates that the packet transmission layer has been shut down or is
+ *	being shut down and should not accept any new packets/data.
+ */
 enum ssh_ptl_state_flags {
 	SSH_PTL_SF_SHUTDOWN_BIT,
 };
 
+/**
+ * struct ssh_ptl_ops - Callback operations for packet transmission layer.
+ * @data_received: Function called when a data-packet has been received. Both,
+ *                 the packet layer on which the packet has been received and
+ *                 the packet's payload data are provided to this function.
+ */
 struct ssh_ptl_ops {
 	void (*data_received)(struct ssh_ptl *p, const struct ssam_span *data);
 };
 
+/**
+ * struct ssh_ptl - SSH packet transmission layer.
+ * @serdev:        Serial device providing the underlying data transport.
+ * @state:         State(-flags) of the transmission layer.
+ * @queue:         Packet submission queue.
+ * @queue.lock:    Lock for modifying the packet submission queue.
+ * @queue.head:    List-head of the packet submission queue.
+ * @pending:       Set/list of pending packets.
+ * @pending.lock:  Lock for modifying the pending set.
+ * @pending.head:  List-head of the pending set/list.
+ * @pending.count: Number of currently pending packets.
+ * @tx:            Transmitter subsystem.
+ * @tx.thread_signal: Signal notifying transmitter thread of data to be sent.
+ * @tx.thread:     Transmitter thread.
+ * @tx.thread_wq:  Waitqueue-head for transmitter thread.
+ * @tx.packet_wq:  Waitqueue-head for packet transmit completion.
+ * @tx.packet:     Currently sent packet.
+ * @tx.offset:     Data-offset into the packet currently being transmitted.
+ * @rx:            Receiver subsystem.
+ * @rx.thread:     Receiver thread.
+ * @rx.wq:         Waitqueue-head for receiver thread.
+ * @rx.fifo:       Buffer for receiving data/pushing data to receiver thread.
+ * @rx.buf:        Buffer for evaluating data on receiver thread.
+ * @rx.blocked:    List of recent/blocked sequence IDs to detect retransmission.
+ * @rx.blocked.seqs:   Array of blocked sequence IDs.
+ * @rx.blocked.offset: Offset indicating where a new ID should be inserted.
+ * @rtx_timeout:   Retransmission timeout subsystem.
+ * @rtx_timeout.timeout: Timout inverval for retransmission.
+ * @rtx_timeout.expires: Time specifying when the reaper work is next scheduled.
+ * @rtx_timeout.reaper:  Work performing timeout checks and subsequent actions.
+ * @ops:           Packet layer operations.
+ */
 struct ssh_ptl {
 	struct serdev_device *serdev;
 	unsigned long state;
@@ -95,6 +140,13 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 void ssh_ptl_destroy(struct ssh_ptl *ptl);
 
+/**
+ * ssh_ptl_get_device() - Get device associated with packet transmission layer.
+ * @ptl: The packet transmission layer.
+ *
+ * Return: Returns the device on which the given packet transmission layer
+ * builds upon.
+ */
 static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
 {
 	return ptl->serdev ? &ptl->serdev->dev : NULL;
