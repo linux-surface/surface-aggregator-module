@@ -1652,7 +1652,7 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
  * SSAM_DEFINE_SYNC_REQUEST_CL_W() - Define synchronous client-device SAM
  * request function with argument.
  * @name:  Name of the generated function.
- * @rtype: Type of the request's argument.
+ * @atype: Type of the request's argument.
  * @spec:  Specification (&struct ssam_request_spec_md) defining the request.
  *
  * Defines a function executing the synchronous SAM request specified by
