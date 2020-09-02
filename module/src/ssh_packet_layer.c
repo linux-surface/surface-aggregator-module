@@ -1523,6 +1523,11 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 		 *   until direclty after the SYN. This causes the search for
 		 *   the next SYN, which is generally not placed directly after
 		 *   the last one.
+		 *
+		 *   Open question: Should we send this in case of invalid
+		 *   payload CRCs if the frame-type is nonsequential (current
+		 *   implementation) or should we drop that frame without
+		 *   telling the EC?
 		 */
 		ssh_ptl_send_nak(ptl);
 	}
