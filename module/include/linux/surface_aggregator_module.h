@@ -999,7 +999,7 @@ struct ssam_request_spec_md {
  *
  * Defines a function executing the synchronous SAM request specified by
  * @spec, with the request having neither argument nor return value. Device
- * specifying parameters are not hard-coded but instead must be provided to
+ * specifying parameters are not hard-coded, but instead must be provided to
  * the function. The generated function takes care of setting up the request
  * struct, buffer allocation, as well as execution of the request itself,
  * returning once the request has been fully completed. The required transport
@@ -1041,7 +1041,7 @@ struct ssam_request_spec_md {
  *
  * Defines a function executing the synchronous SAM request specified by
  * @spec, with the request taking an argument of type @atype and having no
- * return value. Device specifying parameters are not hard-coded but instead
+ * return value. Device specifying parameters are not hard-coded, but instead
  * must be provided to the function. The generated function takes care of
  * setting up the request struct, buffer allocation, as well as execution of
  * the request itself, returning once the request has been fully completed.
@@ -1085,7 +1085,7 @@ struct ssam_request_spec_md {
  *
  * Defines a function executing the synchronous SAM request specified by
  * @spec, with the request taking no argument but having a return value of
- * type @rtype. Device specifying parameters are not hard-coded but instead
+ * type @rtype. Device specifying parameters are not hard-coded, but instead
  * must be provided to the function. The generated function takes care of
  * setting up the request and response structs, buffer allocation, as well as
  * execution of the request itself, returning once the request has been fully
