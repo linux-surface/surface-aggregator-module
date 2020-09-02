@@ -1596,6 +1596,29 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 
 /* -- Helpers for client-device requests. ----------------------------------- */
 
+/**
+ * SSAM_DEFINE_SYNC_REQUEST_CL_N() - Define synchronous client-device SAM
+ * request function with neither argument nor return value.
+ * @name: Name of the generated function.
+ * @spec: Specification (&struct ssam_request_spec_md) defining the request.
+ *
+ * Defines a function executing the synchronous SAM request specified by
+ * @spec, with the request having neither argument nor return value. Device
+ * specifying parameters are not hard-coded, but instead are provided via the
+ * client device, specifically its UID, supplied when calling this function.
+ * The generated function takes care of setting up the request struct, buffer
+ * allocation, as well as execution of the request itself, returning once the
+ * request has been fully completed. The required transport buffer will be
+ * allocated on the stack.
+ *
+ * The generated function is defined as ``int name(struct ssam_device *sdev)``,
+ * returning the status of the request, which is zero on success and negative
+ * on failure. The ``sdev`` parameter specifies both the target device of the
+ * request and by association the controller via which the request is sent.
+ *
+ * Refer to ssam_request_sync_onstack() for more details on the behavior of
+ * the generated function.
+ */
 #define SSAM_DEFINE_SYNC_REQUEST_CL_N(name, spec...)			\
 	SSAM_DEFINE_SYNC_REQUEST_MD_N(__raw_##name, spec)		\
 	int name(struct ssam_device *sdev)				\
@@ -1604,6 +1627,32 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 				    sdev->uid.instance);		\
 	}
 
+/**
+ * SSAM_DEFINE_SYNC_REQUEST_CL_W() - Define synchronous client-device SAM
+ * request function with argument.
+ * @name:  Name of the generated function.
+ * @rtype: Type of the request's argument.
+ * @spec:  Specification (&struct ssam_request_spec_md) defining the request.
+ *
+ * Defines a function executing the synchronous SAM request specified by
+ * @spec, with the request taking an argument of type @atype and having no
+ * return value. Device specifying parameters are not hard-coded, but instead
+ * are provided via the client device, specifically its UID, supplied when
+ * calling this function. The generated function takes care of setting up the
+ * request struct, buffer allocation, as well as execution of the request
+ * itself, returning once the request has been fully completed. The required
+ * transport buffer will be allocated on the stack.
+ *
+ * The generated function is defined as ``int name(struct ssam_device *sdev,
+ * const atype *arg)``, returning the status of the request, which is zero on
+ * success and negative on failure. The ``sdev`` parameter specifies both the
+ * target device of the request and by association the controller via which
+ * the request is sent. The request's argument is specified via the ``arg``
+ * pointer.
+ *
+ * Refer to ssam_request_sync_onstack() for more details on the behavior of
+ * the generated function.
+ */
 #define SSAM_DEFINE_SYNC_REQUEST_CL_W(name, atype, spec...)		\
 	SSAM_DEFINE_SYNC_REQUEST_MD_W(__raw_##name, atype, spec)	\
 	int name(struct ssam_device *sdev, const atype *arg)		\
@@ -1612,6 +1661,32 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 				    sdev->uid.instance, arg);		\
 	}
 
+/**
+ * SSAM_DEFINE_SYNC_REQUEST_CL_R() - Define synchronous client-device SAM
+ * request function with return value.
+ * @name:  Name of the generated function.
+ * @rtype: Type of the request's return value.
+ * @spec:  Specification (&struct ssam_request_spec_md) defining the request.
+ *
+ * Defines a function executing the synchronous SAM request specified by
+ * @spec, with the request taking no argument but having a return value of
+ * type @rtype. Device specifying parameters are not hard-coded, but instead
+ * are provided via the client device, specifically its UID, supplied when
+ * calling this function. The generated function takes care of setting up the
+ * request struct, buffer allocation, as well as execution of the request
+ * itself, returning once the request has been fully completed. The required
+ * transport buffer will be allocated on the stack.
+ *
+ * The generated function is defined as ``int name(struct ssam_device *sdev,
+ * rtype *ret)``, returning the status of the request, which is zero on
+ * success and negative on failure. The ``sdev`` parameter specifies both the
+ * target device of the request and by association the controller via which
+ * the request is sent. The request's return value is written to the memory
+ * pointed to by the ``ret`` parameter.
+ *
+ * Refer to ssam_request_sync_onstack() for more details on the behavior of
+ * the generated function.
+ */
 #define SSAM_DEFINE_SYNC_REQUEST_CL_R(name, rtype, spec...)		\
 	SSAM_DEFINE_SYNC_REQUEST_MD_R(__raw_##name, rtype, spec)	\
 	int name(struct ssam_device *sdev, rtype *ret)			\
