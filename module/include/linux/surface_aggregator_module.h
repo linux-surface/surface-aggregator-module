@@ -1601,6 +1601,15 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 #define ssam_device_driver_register(drv) \
 	__ssam_device_driver_register(drv, THIS_MODULE)
 
+/**
+ * module_ssam_device_driver() - Helper macro for SSAM device driver
+ * registration.
+ * @drv: The driver managed by this module.
+ *
+ * Helper macro to register a SSAM device driver via module_init() and
+ * module_exit(). This macro may only be used once per module and replaces
+ * the afforementioned definitions.
+ */
 #define module_ssam_device_driver(drv)			\
 	module_driver(drv, ssam_device_driver_register,	\
 		      ssam_device_driver_unregister)
