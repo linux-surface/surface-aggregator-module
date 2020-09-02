@@ -1568,11 +1568,23 @@ static inline void ssam_device_put(struct ssam_device *sdev)
 	put_device(&sdev->dev);
 }
 
+/**
+ * ssam_device_get_drvdata() - Get driver-data of SSAM client device.
+ * @sdev: The device to get the driver-data from.
+ *
+ * Return: Returns the driver-data of the given device, previously set via
+ * ssam_device_set_drvdata().
+ */
 static inline void *ssam_device_get_drvdata(struct ssam_device *sdev)
 {
 	return dev_get_drvdata(&sdev->dev);
 }
 
+/**
+ * ssam_device_set_drvdata() - Set driver-data of SSAM client device.
+ * @sdev: The device to set the driver-data of.
+ * @data: The data to set the device's driver-data pointer to.
+ */
 static inline void ssam_device_set_drvdata(struct ssam_device *sdev, void *data)
 {
 	dev_set_drvdata(&sdev->dev, data);
