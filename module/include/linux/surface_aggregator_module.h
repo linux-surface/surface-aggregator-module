@@ -1589,8 +1589,8 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 #define ssam_device_driver_register(drv) \
 	__ssam_device_driver_register(drv, THIS_MODULE)
 
-#define module_ssam_device_driver(__drv) \
-	module_driver(__drv, ssam_device_driver_register, \
+#define module_ssam_device_driver(drv)			\
+	module_driver(drv, ssam_device_driver_register,	\
 		      ssam_device_driver_unregister)
 
 
