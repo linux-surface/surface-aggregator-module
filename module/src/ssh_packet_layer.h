@@ -160,7 +160,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p);
 void ssh_ptl_cancel(struct ssh_packet *p);
 
 int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n);
-void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force);
+void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl);
 
 void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 		     u8 priority, const struct ssh_packet_ops *ops);

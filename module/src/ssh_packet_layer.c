@@ -1037,22 +1037,20 @@ static int ssh_ptl_tx_threadfn(void *data)
 	return 0;
 }
 
-void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl, bool force)
+void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
 {
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return;
 
-	if (force || atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING) {
-		WRITE_ONCE(ptl->tx.thread_signal, true);
-		/*
-		 * Ensure that the signal is set before we wake the transmitter
-		 * thread to prevent lost updates: If the signal is not set,
-		 * when the thread checks it in ssh_ptl_tx_threadfn_wait, it
-		 * may go back to sleep.
-		 */
-		smp_mb__after_atomic();
-		wake_up(&ptl->tx.thread_wq);
-	}
+	WRITE_ONCE(ptl->tx.thread_signal, true);
+	/*
+	 * Ensure that the signal is set before we wake the transmitter
+	 * thread to prevent lost updates: If the signal is not set,
+	 * when the thread checks it in ssh_ptl_tx_threadfn_wait, it
+	 * may go back to sleep.
+	 */
+	smp_mb__after_atomic();
+	wake_up(&ptl->tx.thread_wq);
 }
 
 int ssh_ptl_tx_start(struct ssh_ptl *ptl)
@@ -1179,7 +1177,8 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	ssh_ptl_remove_and_complete(p, status);
 	ssh_packet_put(p);
 
-	ssh_ptl_tx_wakeup(ptl, false);
+	if (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING)
+		ssh_ptl_tx_wakeup(ptl);
 }
 
 
@@ -1212,7 +1211,10 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	if (status)
 		return status;
 
-	ssh_ptl_tx_wakeup(ptl, !test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state));
+	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state)
+	    || (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING))
+		ssh_ptl_tx_wakeup(ptl);
+
 	return 0;
 }
 
@@ -1287,7 +1289,8 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 
 	spin_unlock(&ptl->pending.lock);
 
-	ssh_ptl_tx_wakeup(ptl, resub);
+	if (resub)
+		ssh_ptl_tx_wakeup(ptl);
 }
 
 void ssh_ptl_cancel(struct ssh_packet *p)
@@ -1320,7 +1323,10 @@ void ssh_ptl_cancel(struct ssh_packet *p)
 
 	if (READ_ONCE(p->ptl)) {
 		ssh_ptl_remove_and_complete(p, -ECANCELED);
-		ssh_ptl_tx_wakeup(p->ptl, false);
+
+		if (atomic_read(&p->ptl->pending.count) < SSH_PTL_MAX_PENDING)
+			ssh_ptl_tx_wakeup(p->ptl);
+
 	} else if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 		__ssh_ptl_complete(p, -ECANCELED);
 	}
@@ -1431,8 +1437,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	if (next != KTIME_MAX)
 		ssh_ptl_timeout_reaper_mod(ptl, now, next);
 
-	// force-wakeup to properly handle re-transmits if we've re-submitted
-	ssh_ptl_tx_wakeup(ptl, resub);
+	if (resub)
+		ssh_ptl_tx_wakeup(ptl);
 }
 
 
