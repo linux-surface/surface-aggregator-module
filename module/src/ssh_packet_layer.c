@@ -43,12 +43,12 @@
  *
  * >> Data Structures, Packet Ownership, General Overview <<
  *
- * The code below employs two main data structures: The packet queue, containing
- * all packets scheduled for transmission, and the set of pending packets,
- * containing all packets awaiting an ACK.
+ * The code below employs two main data structures: The packet queue,
+ * containing all packets scheduled for transmission, and the set of pending
+ * packets, containing all packets awaiting an ACK.
  *
- * Shared ownership of a packet is controlled via reference counting. Inside the
- * transmission system are a total of five packet owners:
+ * Shared ownership of a packet is controlled via reference counting. Inside
+ * the transmission system are a total of five packet owners:
  *
  * - the packet queue,
  * - the pending set,
@@ -59,40 +59,53 @@
  * Normal operation is as follows: The initial reference of the packet is
  * obtained by submitting the packet and queueing it. The receiver thread
  * takes packets from the queue. By doing this, it does not increment the
- * refcount but takes over the reference (removing it from the queue).
- * If the packet is sequenced (i.e. needs to be ACKed by the client), the
- * transmitter thread sets-up the timeout and adds the packet to the pending set
- * before starting to transmit it. As the timeout is handled by a reaper task,
- * no additional reference for it is needed. After the transmit is done, the
- * reference hold by the transmitter thread is dropped. If the packet is
+ * refcount but takes over the reference (removing it from the queue). If the
+ * packet is sequenced (i.e. needs to be ACKed by the client), the transmitter
+ * thread sets-up the timeout and adds the packet to the pending set before
+ * starting to transmit it. As the timeout is handled by a reaper task, no
+ * additional reference for it is needed. After the transmit is done, the
+ * reference held by the transmitter thread is dropped. If the packet is
  * unsequenced (i.e. does not need an ACK), the packet is completed by the
  * transmitter thread before dropping that reference.
  *
- * On receial of an ACK, the receiver thread removes and obtains the refernce to
- * the packet from the pending set. On succes, the receiver thread will then
+ * On receival of an ACK, the receiver thread removes and obtains the
+ * reference to the packet from the pending set. The receiver thread will then
  * complete the packet and drop its reference.
  *
- * On error, the completion callback is immediately run by on thread on which
- * the error was detected.
+ * On receival of a NAK, the receiver thread re-submits all currently pending
+ * packets.
  *
- * To ensure that a packet eventually leaves the system it is marked as "locked"
- * directly before it is going to be completed or when it is canceled. Marking a
- * packet as "locked" has the effect that passing and creating new references
- * of the packet will be blocked. This means that the packet cannot be added
- * to the queue, the pending set, and the timeout, or be picked up by the
- * transmitter thread or receiver thread. To remove a packet from the system it
- * has to be marked as locked and subsequently all references from the data
- * structures (queue, pending) have to be removed. References held by threads
- * will eventually be dropped automatically as their execution progresses.
+ * Packet timeouts are detected by the timeout reaper. This is a task,
+ * scheduled depending on the earliest packet timeout expiration date,
+ * checking all currently pending packets if their timeout has expired. If the
+ * timeout of a packet has expired, it is re-submitted and the number of tries
+ * of this packet is incremented. If this number reaches its limit, the packet
+ * will be completed with a failure.
+ *
+ * On transmission failure (such as repeated packet timeouts), the completion
+ * callback is immediately run by on thread on which the error was detected.
+ *
+ * To ensure that a packet eventually leaves the system it is marked as
+ * "locked" directly before it is going to be completed or when it is
+ * canceled. Marking a packet as "locked" has the effect that passing and
+ * creating new references of the packet is disallowed. This means that the
+ * packet cannot be added to the queue, the pending set, and the timeout, or
+ * be picked up by the transmitter thread or receiver thread. To remove a
+ * packet from the system it has to be marked as locked and subsequently all
+ * references from the data structures (queue, pending) have to be removed.
+ * References held by threads will eventually be dropped automatically as
+ * their execution progresses.
  *
  * Note that the packet completion callback is, in case of success and for a
- * sequenced packet, guaranteed to run on the receiver thread, thus providing a
- * way to reliably identify responses to the packet. The packet completion
- * callback is only run once and it does not indicate that the packet has fully
- * left the system. In case of re-submission (and with somewhat unlikely
- * timing), it may be possible that the packet is being re-transmitted while the
- * completion callback runs. Completion will occur both on success and internal
- * error, as well as when the packet is canceled.
+ * sequenced packet, guaranteed to run on the receiver thread, thus providing
+ * a way to reliably identify responses to the packet. The packet completion
+ * callback is only run once and it does not indicate that the packet has
+ * fully left the system (for this, one should rely on the release method,
+ * triggered when the reference count of the packet reaches zero). In case of
+ * re-submission (and with somewhat unlikely timing), it may be possible that
+ * the packet is being re-transmitted while the completion callback runs.
+ * Completion will occur both on success and internal error, as well as when
+ * the packet is canceled.
  *
  * >> Flags <<
  *
@@ -107,19 +120,19 @@
  *   ACKed, transmitted, ...).
  *
  * - completed
- *   Indicates if the packet completion has been run or is about to be run. This
- *   flag is used to ensure that the packet completion callback is only run
- *   once.
+ *   Indicates if the packet completion callback has been executed or is about
+ *   to be executed. This flag is used to ensure that the packet completion
+ *   callback is only run once.
  *
  * - queued
  *   Indicates if a packet is present in the submission queue or not. This flag
- *   must only be modified with the queue lock held, and must be coherent
+ *   must only be modified with the queue lock held, and must be coherent to the
  *   presence of the packet in the queue.
  *
  * - pending
  *   Indicates if a packet is present in the set of pending packets or not.
  *   This flag must only be modified with the pending lock held, and must be
- *   coherent presence of the packet in the pending set.
+ *   coherent to the presence of the packet in the pending set.
  *
  * - transmitting
  *   Indicates if the packet is currently transmitting. In case of
@@ -135,7 +148,7 @@
  *   Indicates if the packet has been acknowledged by the client. There are no
  *   other guarantees given. For example, the packet may still be canceled
  *   and/or the completion may be triggered an error even though this bit is
- *   set. Rely on the status provided by completion instead.
+ *   set. Rely on the status provided to the completion callback instead.
  *
  * - canceled
  *   Indicates if the packet has been canceled from the outside. There are no
@@ -144,8 +157,8 @@
  *
  * >> General Notes <<
  *
- * To avoid deadlocks, if both queue and pending locks are required, the pending
- * lock must be acquired before the queue lock.
+ * To avoid deadlocks, if both queue and pending locks are required, the
+ * pending lock must be acquired before the queue lock.
  */
 
 /*
