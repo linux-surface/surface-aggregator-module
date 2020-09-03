@@ -332,7 +332,7 @@ struct ssh_packet_ops {
 
 /**
  * struct ssh_packet - SSH transmission packet.
- * @ptl:      Pointer to the packet transition layer. May be %NULL if the
+ * @ptl:      Pointer to the packet transmission layer. May be %NULL if the
  *            packet (or enclosing request) has not been submitted yet.
  * @refcnt:   Reference count of the packet.
  * @priority: Priority of the packet. Must be computed via

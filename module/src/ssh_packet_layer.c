@@ -1299,7 +1299,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	if (status) {
 		/*
 		 * An error here indicates that the packet has either already
-		 * been queued, been locked, or the transition layer is being
+		 * been queued, been locked, or the transmission layer is being
 		 * shut down. In all cases: Ignore the error.
 		 */
 		spin_unlock(&packet->ptl->queue.lock);
