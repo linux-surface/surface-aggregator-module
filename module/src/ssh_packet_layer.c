@@ -691,37 +691,40 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	return head;
 }
 
-static int ssh_ptl_queue_push(struct ssh_packet *packet)
+static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
 	struct list_head *head;
 
-	spin_lock(&ptl->queue.lock);
 
-	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state)) {
-		spin_unlock(&ptl->queue.lock);
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return -ESHUTDOWN;
-	}
 
 	// avoid further transitions when cancelling/completing
-	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state)) {
-		spin_unlock(&ptl->queue.lock);
+	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state))
 		return -EINVAL;
-	}
 
 	// if this packet has already been queued, do not add it
-	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state)) {
-		spin_unlock(&ptl->queue.lock);
+	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state))
 		return -EALREADY;
-	}
 
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
 	ssh_packet_next_try(packet);
 	list_add_tail(&ssh_packet_get(packet)->queue_node, &ptl->queue.head);
 
-	spin_unlock(&ptl->queue.lock);
 	return 0;
+}
+
+static int ssh_ptl_queue_push(struct ssh_packet *packet)
+{
+	int status;
+
+	spin_lock(&packet->ptl->queue.lock);
+	status = __ssh_ptl_queue_push(packet);
+	spin_unlock(&packet->ptl->queue.lock);
+
+	return status;
 }
 
 static void ssh_ptl_queue_remove(struct ssh_packet *packet)
@@ -1219,25 +1222,25 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	return 0;
 }
 
-/*
- * This function must be called with pending lock held.
- */
+/* must be called with pending lock held */
 static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
-	struct list_head *head;
+	int status;
 
 	trace_ssam_packet_resubmit(packet);
 
 	spin_lock(&packet->ptl->queue.lock);
 
-	// if this packet has already been queued, do not add it
-	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state)) {
+	status = __ssh_ptl_queue_push(packet);
+	if (status) {
+		/*
+		 * An error here indicates that the packet has either already
+		 * been queued, been locked, or the transition layer is being
+		 * shut down. In all cases: Ignore the error.
+		 */
 		spin_unlock(&packet->ptl->queue.lock);
 		return;
 	}
-
-	// find first node with lower priority
-	head = __ssh_ptl_queue_find_entrypoint(packet);
 
 	/*
 	 * Reset the timestamp. This must be called and executed before the
@@ -1246,10 +1249,6 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	 * one here.
 	 */
 	WRITE_ONCE(packet->timestamp, KTIME_MAX);
-	ssh_packet_next_try(packet);
-
-	// add packet
-	list_add_tail(&ssh_packet_get(packet)->queue_node, head);
 
 	spin_unlock(&packet->ptl->queue.lock);
 }
