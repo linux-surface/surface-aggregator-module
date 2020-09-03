@@ -290,9 +290,9 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 	int i, status;
 
 	/*
-	 * Try to be nice and not block the workqueue: Run a maximum of 10
-	 * tries, then re-submit if necessary. This should not be neccesary,
-	 * for normal execution, but guarantee it anyway.
+	 * Try to be nice and not block/live-lock the workqueue: Run a maximum
+	 * of 10 tries, then re-submit if necessary. This should not be
+	 * neccesary for normal execution, but guarantee it anyway.
 	 */
 	for (i = 0; i < 10; i++) {
 		status = ssh_rtl_tx_try_process_one(rtl);
@@ -316,6 +316,19 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 }
 
 
+/**
+ * ssh_rtl_submit() - Submit a request to the transmission layer.
+ * @rtl:  The request transmission layer.
+ * @rqst: The request to submit.
+ *
+ * Submits a request to the transmission layer. A single request may not be
+ * submitted multiple times without reinitializing it.
+ *
+ * Return: Returns zero on success, %-EINVAL if the request type is invalid or
+ * the request has been canceled prior to submission, %-EALREADY if the request
+ * has already been submitted, or %-ESHUTDOWN in case the request transmission
+ * layer has been shut down.
+ */
 int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 {
 	trace_ssam_request_submit(rqst);
@@ -612,6 +625,29 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 	return true;
 }
 
+/**
+ * ssh_rtl_cancel() - Cancel request.
+ * @rqst:    The request to cancel.
+ * @pending: Whether to also cancel pending requests.
+ *
+ * Cancels the given request. If @pending is %false, this will not cancel
+ * pending requests, i.e. requests that have already been submitted to the
+ * packet layer but not been completed yet. If @pending is %true, this will
+ * cancel the given request regardless of the state it is in.
+ *
+ * If the request has been canceled by calling this function, both completion
+ * and release callbacks of the request will be executed in a reasonable
+ * time-frame. This may happen during execution of this function, however,
+ * there is no guarantee for this. For example, a request currently
+ * transmitting will be canceled/completed only after transmission has
+ * completed, and the respective callbacks will be executed on the transmitter
+ * thread, which may happen during, but also some time after execution of the
+ * cancel function.
+ *
+ * Return: Returns %true iff the given request has been canceled or completed,
+ * either by this function or prior to calling this function, %false
+ * otherwise. If @pending is %true, this function will always return %true.
+ */
 bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 {
 	struct ssh_rtl *rtl;
@@ -827,11 +863,23 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 }
 
 
+/**
+ * ssh_rtl_rx_start() - Start request receiver.
+ * @rtl: The request transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
 int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_rx_start(&rtl->ptl);
 }
 
+/**
+ * ssh_rtl_tx_start() - Start request transmitter.
+ * @rtl: The request transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
 int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 {
 	int status;
@@ -844,6 +892,20 @@ int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 	return 0;
 }
 
+/**
+ * ssh_rtl_init() - Initialize request transmission layer.
+ * @rtl:    The request transmission layer to initialize.
+ * @serdev: The underlying serial device, i.e. the lower-level transport.
+ * @ops:    Request transmission layer operations.
+ *
+ * Initializes the given request transmission layer and associated packet
+ * transmission layer. Transmitter and receiver threads must be started
+ * separately via ssh_rtl_tx_start() and ssh_rtl_rx_start(), after the
+ * request-layer has been initialized and the lower-level serial device layer
+ * has been set up.
+ *
+ * Return: Returns zero on success and a nonzero error code on failure.
+ */
 int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 		 const struct ssh_rtl_ops *ops)
 {
@@ -874,6 +936,15 @@ int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 	return 0;
 }
 
+/**
+ * ssh_rtl_destroy() - Deinitialize request transmission layer.
+ * @rtl: The request transmission layer to deinitialize.
+ *
+ * Deinitializes the given request transmission layer and frees resources
+ * associated with it. If receiver and/or transmitter threads have been
+ * started, the layer must first be shut down via ssh_rtl_shutdown() before
+ * this function can be called.
+ */
 void ssh_rtl_destroy(struct ssh_rtl *rtl)
 {
 	ssh_ptl_destroy(&rtl->ptl);
@@ -893,6 +964,17 @@ static const struct ssh_packet_ops ssh_rtl_packet_ops = {
 	.release = ssh_rtl_packet_release,
 };
 
+/**
+ * ssh_request_init() - Initialize SSH request.
+ * @rqst:  The request to initialize.
+ * @flags: Request flags, determining the type of the request.
+ * @ops:   Request operations.
+ *
+ * Initializes the given SSH request and underlying packet. Sets the
+ * transmission buffer pointer to %NULL and the transmission buffer length to
+ * zero. This buffer has to be set separately via ssh_request_set_data()
+ * before submission and must contain a valid SSH request message.
+ */
 void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
 		      const struct ssh_request_ops *ops)
 {
@@ -1005,6 +1087,19 @@ int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 }
 
 
+/**
+ * ssh_rtl_shutdown() - Shut down request transmission layer.
+ * @rtl: The request transmission layer.
+ *
+ * Shuts down the request transmission layer, removing and canceling all
+ * queued and pending requests. Requests canceled by this operation will be
+ * completed with %-ESHUTDOWN as status. Receiver and transmitter threads will
+ * be stopped, the lower-level packet layer will be shutdown.
+ *
+ * As a result of this function, the transmission layer will be marked as shut
+ * down. Submission of requests after the transmission layer has been shut
+ * down will fail with %-ESHUTDOWN.
+ */
 void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 {
 	struct ssh_request *r, *n;
