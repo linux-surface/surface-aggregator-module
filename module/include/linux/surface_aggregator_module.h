@@ -317,7 +317,7 @@ struct ssh_packet_ops {
  *            packet (or enclosing request) has not been submitted yet.
  * @refcnt:   Reference count of the packet.
  * @priority: Priority of the packet. Must be computed via
- *            ``SSH_PACKET_PRIORITY()``.
+ *            SSH_PACKET_PRIORITY().
  * @data:     Raw message data.
  * @data.len: Length of the raw message data.
  * @data.ptr: Pointer to the raw message data buffer.

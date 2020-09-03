@@ -1240,7 +1240,7 @@ int ssam_controller_resume(struct ssam_controller *ctrl)
  * only valid to send the resulting message via the controller specified here.
  *
  * For calculation of the required buffer size, refer to the
- * ``SSH_COMMAND_MESSAGE_LENGTH()`` macro.
+ * SSH_COMMAND_MESSAGE_LENGTH() macro.
  *
  * Return: Returns the number of bytes used in the buffer on success. Returns
  * %-EINVAL if the payload length provided in the request specification is too
@@ -1504,7 +1504,7 @@ EXPORT_SYMBOL_GPL(ssam_request_sync);
  * Allocates a synchronous request struct on the stack, fully initializes it
  * using the provided buffer as message data buffer, submits it, and then
  * waits for its completion before returning its staus. The
- * ``SSH_COMMAND_MESSAGE_LENGTH()`` macro can be used to compute the required
+ * SSH_COMMAND_MESSAGE_LENGTH() macro can be used to compute the required
  * message buffer size.
  *
  * This function does essentially the same as ssam_request_sync(), but instead
