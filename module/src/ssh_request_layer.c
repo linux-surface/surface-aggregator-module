@@ -835,24 +835,12 @@ int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 {
 	int status;
-	bool sched;
 
 	status = ssh_ptl_tx_start(&rtl->ptl);
 	if (status)
 		return status;
 
-	/*
-	 * If the packet layer has been shut down and restarted without shutting
-	 * down the request layer, there may still be requests queued and not
-	 * handled.
-	 */
-	spin_lock(&rtl->queue.lock);
-	sched = !list_empty(&rtl->queue.head);
-	spin_unlock(&rtl->queue.lock);
-
-	if (sched)
-		ssh_rtl_tx_schedule(rtl);
-
+	ssh_rtl_tx_schedule(rtl);
 	return 0;
 }
 
