@@ -535,6 +535,19 @@ static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
 }
 
 
+/**
+ * ssh_packet_init() - Initialize SSH packet.
+ * @packet:   The packet to initialize.
+ * @type:     Type-flags of the packet.
+ * @priority: Priority of the packet. See SSH_PACKET_PRIORITY() for details.
+ * @ops:      Packet operations.
+ *
+ * Initializes the given SSH packet. Sets the transmission buffer pointer to
+ * %NULL and the transmission buffer length to zero. For data-type packets,
+ * this buffer has to be set separately via ssh_packet_set_data() before
+ * submission, and must contain a valid SSH message, i.e. frame with optional
+ * payload of any type.
+ */
 void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 		     u8 priority, const struct ssh_packet_ops *ops)
 {
@@ -557,6 +570,9 @@ void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 
 static struct kmem_cache *ssh_ctrl_packet_cache;
 
+/**
+ * ssh_ctrl_packet_cache_init() - Initialize the control packet cache.
+ */
 int ssh_ctrl_packet_cache_init(void)
 {
 	const unsigned int size = sizeof(struct ssh_packet) + SSH_MSG_LEN_CTRL;
@@ -571,12 +587,28 @@ int ssh_ctrl_packet_cache_init(void)
 	return 0;
 }
 
+/**
+ * ssh_ctrl_packet_cache_destroy() - Deinitialize the control packet cache.
+ */
 void ssh_ctrl_packet_cache_destroy(void)
 {
 	kmem_cache_destroy(ssh_ctrl_packet_cache);
 	ssh_ctrl_packet_cache = NULL;
 }
 
+/**
+ * ssh_ctrl_packet_alloc() - Allocate packet from control packet cache.
+ * @packet: Where the pointer to the newly allocated packet should be stored.
+ * @buffer: The buffer corresponding to this packet.
+ * @flags:  Flags used for allocation.
+ *
+ * Allocates a packet and corresponding transport buffer from the control
+ * packet cache. Sets the packet's buffer reference to the allocated buffer.
+ * The packet must be freed via ssh_ctrl_packet_free(), which will also free
+ * the corresponding buffer. The corresponding buffer must not be freed
+ * separately. Intended to be used with %ssh_ptl_ctrl_packet_ops as packet
+ * operations.
+ */
 static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
 				 struct ssam_span *buffer, gfp_t flags)
 {
@@ -591,6 +623,10 @@ static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
 	return 0;
 }
 
+/**
+ * ssh_ctrl_packet_free() - Free packet allocated from control packet cache.
+ * @p: The packet to free.
+ */
 static void ssh_ctrl_packet_free(struct ssh_packet *p)
 {
 	trace_ssam_ctrl_packet_free(p);
@@ -641,7 +677,7 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
-/* must be executed with queue lock held */
+/* must be called with queue lock held */
 static void ssh_packet_next_try(struct ssh_packet *p)
 {
 	u8 priority = READ_ONCE(p->priority);
@@ -651,6 +687,7 @@ static void ssh_packet_next_try(struct ssh_packet *p)
 	WRITE_ONCE(p->priority, __SSH_PACKET_PRIORITY(base, try + 1));
 }
 
+/* must be called with queue lock held */
 static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 {
 	struct list_head *head;
@@ -691,6 +728,7 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	return head;
 }
 
+/* must be called with queue lock held */
 static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
@@ -1040,6 +1078,13 @@ static int ssh_ptl_tx_threadfn(void *data)
 	return 0;
 }
 
+/**
+ * ssh_ptl_tx_wakeup() - Wake up packet transmitter thread.
+ * @ptl: The packet transmission layer.
+ *
+ * Wakes up the packet transmitter thread. If the packet transmission layer
+ * has been shut down, calls to this function will be ignored.
+ */
 void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
 {
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
@@ -1056,6 +1101,12 @@ void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
 	wake_up(&ptl->tx.thread_wq);
 }
 
+/**
+ * ssh_ptl_tx_start() - Start packet transmitter thread.
+ * @ptl: The packet transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
 int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 {
 	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl,
@@ -1186,6 +1237,19 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 }
 
 
+/**
+ * ssh_ptl_submit() - Submit a packet to the transmission layer.
+ * @ptl: The packet transmission layer to to submit to.
+ * @p:   The packet to submit.
+ *
+ * Submits a new packet to the transmission layer, queuing it to be sent. This
+ * function should not be used for re-submission.
+ *
+ * Return: Returns zero on success, %-EINVAL if a packet field is invalid or
+ * the packet has been canceled prior to submission, %-EALREADY if the packet
+ * has already been submitted, or %-ESHUTDOWN if the packet transmission layer
+ * has been shut down.
+ */
 int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 {
 	struct ssh_ptl *ptl_old;
@@ -1293,6 +1357,23 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 		ssh_ptl_tx_wakeup(ptl);
 }
 
+/**
+ * ssh_ptl_cancel() - Cancel a packet.
+ * @p: The packet to cancel.
+ *
+ * Cancels a packet. There are no guarantees on when completion and release
+ * callbacks will be called. This may occur during execution of this function
+ * or may occur at any point later.
+ *
+ * Note that it is not guaranteed that the packet will actually be cancelled
+ * if the packet is concurrently completed by another process. The only
+ * guarantee of this function is that the packet will be completed (with
+ * success, failure, or cancellation) and released from the transmission layer
+ * in a reasonable time-frame.
+ *
+ * May be called before the packet has been submitted, in which case any later
+ * packet submission fails.
+ */
 void ssh_ptl_cancel(struct ssh_packet *p)
 {
 	if (test_and_set_bit(SSH_PACKET_SF_CANCELED_BIT, &p->state))
@@ -1646,6 +1727,12 @@ static inline void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
 	wake_up(&ptl->rx.wq);
 }
 
+/**
+ * ssh_ptl_rx_start() - Start packet transmission layer receiver thread.
+ * @ptl: The packet transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
 int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 {
 	if (ptl->rx.thread)
@@ -1671,6 +1758,20 @@ static int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 	return status;
 }
 
+/**
+ * ssh_ptl_rx_rcvbuf() - Push data from lower-layer transport to the packet
+ * layer.
+ * @ptl: The packet transmission layer.
+ * @buf: Pointer to the data to push to the layer.
+ * @n:   Size of the data to push to the layer, in bytes.
+ *
+ * Pushes data from a lower-layer transport to the receiver fifo buffer of the
+ * packet layer and notifies the reveiver thread. Calls to this function are
+ * ignored once the packet layer has been shut down.
+ *
+ * Return: Returns the number of bytes transferred (positive or zero) on
+ * success. Returns %-ESHUTDOWN if the packet layer has been shut down.
+ */
 int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 {
 	int used;
@@ -1797,6 +1898,19 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 */
 }
 
+/**
+ * ssh_ptl_init() - Initialize packet transmission layer.
+ * @ptl:    The packet transmission layer to initialize.
+ * @serdev: The underlying serial device, i.e. the lower-level transport.
+ * @ops:    Packet layer operations.
+ *
+ * Initializes the given packet transmission layer. Transmitter and receiver
+ * threads must be started separately via ssh_ptl_tx_start() and
+ * ssh_ptl_rx_start(), after the packet-layer has been initialized and the
+ * lower-level transmission layer has been set up.
+ *
+ * Return: Returns zero on success and a nonzero error code on failure.
+ */
 int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 		 struct ssh_ptl_ops *ops)
 {
@@ -1844,6 +1958,15 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	return status;
 }
 
+/**
+ * ssh_ptl_destroy() - Deinitialize packet transmission layer.
+ * @ptl: The packet transmission layer to deinitialize.
+ *
+ * Deinitializes the given packet transmission layer and frees resources
+ * associated with it. If receiver and/or transmitter threads have been
+ * started, the layer must first be shut down via ssh_ptl_shutdown() before
+ * this function can be called.
+ */
 void ssh_ptl_destroy(struct ssh_ptl *ptl)
 {
 	kfifo_free(&ptl->rx.fifo);
