@@ -1117,7 +1117,13 @@ int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 	return 0;
 }
 
-static int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
+/**
+ * ssh_ptl_tx_stop() - Stop packet transmitter thread.
+ * @ptl: The packet transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
+int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 {
 	int status = 0;
 
@@ -1746,7 +1752,13 @@ int ssh_ptl_rx_start(struct ssh_ptl *ptl)
 	return 0;
 }
 
-static int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
+/**
+ * ssh_ptl_rx_stop() - Stop packet transmission layer receiver thread.
+ * @ptl: The packet transmission layer.
+ *
+ * Return: Returns zero on success, a negative error code on failure.
+ */
+int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
 {
 	int status = 0;
 

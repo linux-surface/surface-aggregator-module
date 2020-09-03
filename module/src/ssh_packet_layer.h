@@ -153,7 +153,9 @@ static inline struct device *ssh_ptl_get_device(struct ssh_ptl *ptl)
 }
 
 int ssh_ptl_tx_start(struct ssh_ptl *ptl);
+int ssh_ptl_tx_stop(struct ssh_ptl *ptl);
 int ssh_ptl_rx_start(struct ssh_ptl *ptl);
+int ssh_ptl_rx_stop(struct ssh_ptl *ptl);
 void ssh_ptl_shutdown(struct ssh_ptl *ptl);
 
 int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p);

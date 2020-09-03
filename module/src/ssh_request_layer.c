@@ -864,23 +864,12 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 
 
 /**
- * ssh_rtl_rx_start() - Start request receiver.
+ * ssh_rtl_tx_start() - Start request transmitter and receiver.
  * @rtl: The request transmission layer.
  *
  * Return: Returns zero on success, a negative error code on failure.
  */
-int ssh_rtl_rx_start(struct ssh_rtl *rtl)
-{
-	return ssh_ptl_rx_start(&rtl->ptl);
-}
-
-/**
- * ssh_rtl_tx_start() - Start request transmitter.
- * @rtl: The request transmission layer.
- *
- * Return: Returns zero on success, a negative error code on failure.
- */
-int ssh_rtl_tx_start(struct ssh_rtl *rtl)
+int ssh_rtl_start(struct ssh_rtl *rtl)
 {
 	int status;
 
@@ -889,6 +878,14 @@ int ssh_rtl_tx_start(struct ssh_rtl *rtl)
 		return status;
 
 	ssh_rtl_tx_schedule(rtl);
+
+	status = ssh_ptl_rx_start(&rtl->ptl);
+	if (status) {
+		ssh_rtl_flush(rtl, msecs_to_jiffies(5000));
+		ssh_ptl_tx_stop(&rtl->ptl);
+		return status;
+	}
+
 	return 0;
 }
 

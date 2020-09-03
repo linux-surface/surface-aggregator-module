@@ -1073,15 +1073,9 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 	if (READ_ONCE(ctrl->state) != SSAM_CONTROLLER_INITIALIZED)
 		return -EINVAL;
 
-	status = ssh_rtl_tx_start(&ctrl->rtl);
+	status = ssh_rtl_start(&ctrl->rtl);
 	if (status)
 		return status;
-
-	status = ssh_rtl_rx_start(&ctrl->rtl);
-	if (status) {
-		ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
-		return status;
-	}
 
 	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_STARTED);
 	return 0;
