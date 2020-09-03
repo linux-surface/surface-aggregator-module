@@ -863,31 +863,51 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 }
 
 
-/**
- * ssh_rtl_tx_start() - Start request transmitter and receiver.
- * @rtl: The request transmission layer.
- *
- * Return: Returns zero on success, a negative error code on failure.
- */
-int ssh_rtl_start(struct ssh_rtl *rtl)
+static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
-	int status;
+	struct ssh_request *rqst;
 
-	status = ssh_ptl_tx_start(&rtl->ptl);
-	if (status)
-		return status;
-
-	ssh_rtl_tx_schedule(rtl);
-
-	status = ssh_ptl_rx_start(&rtl->ptl);
-	if (status) {
-		ssh_rtl_flush(rtl, msecs_to_jiffies(5000));
-		ssh_ptl_tx_stop(&rtl->ptl);
-		return status;
-	}
-
-	return 0;
+	rqst = to_ssh_request(p);
+	rqst->ops->release(rqst);
 }
+
+static const struct ssh_packet_ops ssh_rtl_packet_ops = {
+	.complete = ssh_rtl_packet_callback,
+	.release = ssh_rtl_packet_release,
+};
+
+/**
+ * ssh_request_init() - Initialize SSH request.
+ * @rqst:  The request to initialize.
+ * @flags: Request flags, determining the type of the request.
+ * @ops:   Request operations.
+ *
+ * Initializes the given SSH request and underlying packet. Sets the
+ * transmission buffer pointer to %NULL and the transmission buffer length to
+ * zero. This buffer has to be set separately via ssh_request_set_data()
+ * before submission and must contain a valid SSH request message.
+ */
+void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
+		      const struct ssh_request_ops *ops)
+{
+	unsigned long type = BIT(SSH_PACKET_TY_BLOCKING_BIT);
+
+	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
+		type |= BIT(SSH_PACKET_TY_SEQUENCED_BIT);
+
+	ssh_packet_init(&rqst->packet, type, SSH_PACKET_PRIORITY(DATA, 0),
+			&ssh_rtl_packet_ops);
+
+	INIT_LIST_HEAD(&rqst->node);
+
+	rqst->state = 0;
+	if (flags & SSAM_REQUEST_HAS_RESPONSE)
+		rqst->state |= BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT);
+
+	rqst->timestamp = KTIME_MAX;
+	rqst->ops = ops;
+}
+
 
 /**
  * ssh_rtl_init() - Initialize request transmission layer.
@@ -947,52 +967,31 @@ void ssh_rtl_destroy(struct ssh_rtl *rtl)
 	ssh_ptl_destroy(&rtl->ptl);
 }
 
-
-static void ssh_rtl_packet_release(struct ssh_packet *p)
-{
-	struct ssh_request *rqst;
-
-	rqst = to_ssh_request(p);
-	rqst->ops->release(rqst);
-}
-
-static const struct ssh_packet_ops ssh_rtl_packet_ops = {
-	.complete = ssh_rtl_packet_callback,
-	.release = ssh_rtl_packet_release,
-};
-
 /**
- * ssh_request_init() - Initialize SSH request.
- * @rqst:  The request to initialize.
- * @flags: Request flags, determining the type of the request.
- * @ops:   Request operations.
+ * ssh_rtl_tx_start() - Start request transmitter and receiver.
+ * @rtl: The request transmission layer.
  *
- * Initializes the given SSH request and underlying packet. Sets the
- * transmission buffer pointer to %NULL and the transmission buffer length to
- * zero. This buffer has to be set separately via ssh_request_set_data()
- * before submission and must contain a valid SSH request message.
+ * Return: Returns zero on success, a negative error code on failure.
  */
-void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
-		      const struct ssh_request_ops *ops)
+int ssh_rtl_start(struct ssh_rtl *rtl)
 {
-	unsigned long type = BIT(SSH_PACKET_TY_BLOCKING_BIT);
+	int status;
 
-	if (!(flags & SSAM_REQUEST_UNSEQUENCED))
-		type |= BIT(SSH_PACKET_TY_SEQUENCED_BIT);
+	status = ssh_ptl_tx_start(&rtl->ptl);
+	if (status)
+		return status;
 
-	ssh_packet_init(&rqst->packet, type, SSH_PACKET_PRIORITY(DATA, 0),
-			&ssh_rtl_packet_ops);
+	ssh_rtl_tx_schedule(rtl);
 
-	INIT_LIST_HEAD(&rqst->node);
+	status = ssh_ptl_rx_start(&rtl->ptl);
+	if (status) {
+		ssh_rtl_flush(rtl, msecs_to_jiffies(5000));
+		ssh_ptl_tx_stop(&rtl->ptl);
+		return status;
+	}
 
-	rqst->state = 0;
-	if (flags & SSAM_REQUEST_HAS_RESPONSE)
-		rqst->state |= BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT);
-
-	rqst->timestamp = KTIME_MAX;
-	rqst->ops = ops;
+	return 0;
 }
-
 
 struct ssh_flush_request {
 	struct ssh_request base;
