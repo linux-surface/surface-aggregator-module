@@ -140,7 +140,7 @@ struct ssam_cplt {
 /**
  * enum ssam_controller_state - State values for &struct ssam_controller.
  * @SSAM_CONTROLLER_UNINITIALIZED:
- *	The controller has not been initialized yet or has been de-initialized.
+ *	The controller has not been initialized yet or has been deinitialized.
  * @SSAM_CONTROLLER_INITIALIZED:
  *	The controller is initialized, but has not been started yet.
  * @SSAM_CONTROLLER_STARTED:

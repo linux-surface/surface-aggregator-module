@@ -367,7 +367,7 @@ static int ssam_remove_device(struct device *dev, void *_data)
  *
  * To avoid new devices being added in parallel to this call, the main
  * controller lock (not statelock) must be held during this (and if
- * necessary, any subsequent de-initialization) call.
+ * necessary, any subsequent deinitialization) call.
  */
 void ssam_controller_remove_clients(struct ssam_controller *ctrl)
 {
