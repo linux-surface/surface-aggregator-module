@@ -827,11 +827,6 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 }
 
 
-bool ssh_rtl_tx_flush(struct ssh_rtl *rtl)
-{
-	return flush_work(&rtl->tx.work);
-}
-
 int ssh_rtl_rx_start(struct ssh_rtl *rtl)
 {
 	return ssh_ptl_rx_start(&rtl->ptl);

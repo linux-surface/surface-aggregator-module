@@ -1079,7 +1079,7 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 
 	status = ssh_rtl_rx_start(&ctrl->rtl);
 	if (status) {
-		ssh_rtl_tx_flush(&ctrl->rtl);
+		ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
 		return status;
 	}
 
@@ -1138,7 +1138,6 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	ssam_notifier_unregister_all(ctrl);
 
 	// cancel rem. requests, ensure no new ones can be queued, stop threads
-	ssh_rtl_tx_flush(&ctrl->rtl);
 	ssh_rtl_shutdown(&ctrl->rtl);
 
 	WRITE_ONCE(ctrl->state, SSAM_CONTROLLER_STOPPED);

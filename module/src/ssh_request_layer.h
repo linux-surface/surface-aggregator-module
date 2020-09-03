@@ -125,7 +125,6 @@ bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending);
 int ssh_rtl_init(struct ssh_rtl *rtl, struct serdev_device *serdev,
 		 const struct ssh_rtl_ops *ops);
 
-bool ssh_rtl_tx_flush(struct ssh_rtl *rtl);
 int ssh_rtl_rx_start(struct ssh_rtl *rtl);
 int ssh_rtl_tx_start(struct ssh_rtl *rtl);
 
