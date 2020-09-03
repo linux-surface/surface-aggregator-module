@@ -1591,6 +1591,25 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_ssh_notif_d0_entry, u8, {
 });
 
 /**
+ * struct ssh_notification_params - Command payload to enable/disable SSH
+ * notifications.
+ * @target_category: The target category for which notifications should be
+ *                   enabled/disabled.
+ * @flags:           Flags determining how notifications are being sent.
+ * @request_id:      The request ID that is used to send these notifications.
+ * @instance_id:     The specific instance in the given target category for
+ *                   which notifications should be enabled.
+ */
+struct ssh_notification_params {
+	u8 target_category;
+	u8 flags;
+	__le16 request_id;
+	u8 instance_id;
+} __packed;
+
+static_assert(sizeof(struct ssh_notification_params) == 5);
+
+/**
  * ssam_ssh_event_enable() - Enable SSH event.
  * @ctrl:  The controller for which to enable the event.
  * @reg:   The event registry describing what request to use for enabling and

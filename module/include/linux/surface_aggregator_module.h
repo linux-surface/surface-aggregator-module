@@ -120,25 +120,6 @@ static_assert(sizeof(struct ssh_command) == 8);
 #define SSH_COMMAND_MAX_PAYLOAD_SIZE \
 	(SSH_FRAME_MAX_PAYLOAD_SIZE - sizeof(struct ssh_command))
 
-/**
- * struct ssh_notification_params - Command payload to enable/disable SSH
- * notifications.
- * @target_category: The target category for which notifications should be
- *                   enabled/disabled.
- * @flags:           Flags determining how notifications are being sent.
- * @request_id:      The request ID that is used to send these notifications.
- * @instance_id:     The specific instance in the given target category for
- *                   which notifications should be enabled.
- */
-struct ssh_notification_params {
-	u8 target_category;
-	u8 flags;
-	__le16 request_id;
-	u8 instance_id;
-} __packed;
-
-static_assert(sizeof(struct ssh_notification_params) == 5);
-
 /*
  * SSH_MSG_LEN_BASE - Base-length of a SSH message.
  *
