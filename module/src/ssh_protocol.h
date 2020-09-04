@@ -76,7 +76,7 @@ static inline bool ssh_rqid_is_event(u16 rqid)
  * ssh_tc_to_rqid() - Convert target category to its corresponding request ID.
  * @tc: The target category to convert.
  */
-static inline int ssh_tc_to_rqid(u8 tc)
+static inline u16 ssh_tc_to_rqid(u8 tc)
 {
 	return tc;
 }
