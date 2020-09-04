@@ -88,18 +88,18 @@ static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
-	bool remove;
 
 	spin_lock(&rtl->queue.lock);
 
-	remove = test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state);
-	if (remove)
-		list_del(&rqst->node);
+	if(!test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
+		spin_unlock(&rtl->queue.lock);
+		return;
+	}
+
+	list_del(&rqst->node);
 
 	spin_unlock(&rtl->queue.lock);
-
-	if (remove)
-		ssh_request_put(rqst);
+	ssh_request_put(rqst);
 }
 
 static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
@@ -117,20 +117,20 @@ static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
 static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
-	bool remove;
 
 	spin_lock(&rtl->pending.lock);
 
-	remove = test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state);
-	if (remove) {
-		atomic_dec(&rtl->pending.count);
-		list_del(&rqst->node);
+	if (!test_and_clear_bit(SSH_REQUEST_SF_PENDING_BIT, &rqst->state)) {
+		spin_unlock(&rtl->pending.lock);
+		return;
 	}
+
+	atomic_dec(&rtl->pending.count);
+	list_del(&rqst->node);
 
 	spin_unlock(&rtl->pending.lock);
 
-	if (remove)
-		ssh_request_put(rqst);
+	ssh_request_put(rqst);
 }
 
 static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)

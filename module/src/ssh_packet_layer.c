@@ -768,18 +768,18 @@ static int ssh_ptl_queue_push(struct ssh_packet *packet)
 static void ssh_ptl_queue_remove(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
-	bool remove;
 
 	spin_lock(&ptl->queue.lock);
 
-	remove = test_and_clear_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state);
-	if (remove)
-		list_del(&packet->queue_node);
+	if (!test_and_clear_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state)) {
+		spin_unlock(&ptl->queue.lock);
+		return;
+	}
+
+	list_del(&packet->queue_node);
 
 	spin_unlock(&ptl->queue.lock);
-
-	if (remove)
-		ssh_packet_put(packet);
+	ssh_packet_put(packet);
 }
 
 
@@ -810,20 +810,20 @@ static void ssh_ptl_pending_push(struct ssh_packet *packet)
 static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
-	bool remove;
 
 	spin_lock(&ptl->pending.lock);
 
-	remove = test_and_clear_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state);
-	if (remove) {
-		list_del(&packet->pending_node);
-		atomic_dec(&ptl->pending.count);
+	if (!test_and_clear_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state)) {
+		spin_unlock(&ptl->pending.lock);
+		return;
 	}
+
+	list_del(&packet->pending_node);
+	atomic_dec(&ptl->pending.count);
 
 	spin_unlock(&ptl->pending.lock);
 
-	if (remove)
-		ssh_packet_put(packet);
+	ssh_packet_put(packet);
 }
 
 
