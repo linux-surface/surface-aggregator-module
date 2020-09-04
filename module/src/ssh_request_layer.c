@@ -167,9 +167,6 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x, status: %d)\n",
 		     ssh_request_get_rqid_safe(rqst), status);
 
-	if (status && status != -ECANCELED)
-		rtl_dbg_cond(rtl, "rtl: request error: %d\n", status);
-
 	rqst->ops->complete(rqst, NULL, NULL, status);
 }
 
