@@ -79,7 +79,7 @@ static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
 static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 {
 	if (!rqst->packet.data.ptr)
-		return -1;
+		return (u32)-1;
 
 	return ssh_request_get_rqid(rqst);
 }
