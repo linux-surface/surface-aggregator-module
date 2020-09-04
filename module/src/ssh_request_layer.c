@@ -17,9 +17,31 @@
 #include "ssam_trace.h"
 
 
+/*
+ * SSH_RTL_REQUEST_TIMEOUT - Request timeout.
+ *
+ * Timeout as ktime_t delta for request responses. If we have not received a
+ * response in this time-frame after finishing the underlying packet
+ * transmission, the request will be completed with %-ETIMEDOUT as status
+ * code.
+ */
 #define SSH_RTL_REQUEST_TIMEOUT			ms_to_ktime(3000)
+
+/*
+ * SSH_RTL_REQUEST_TIMEOUT_RESOLUTION - Request timeout granularity.
+ *
+ * Time-resolution for timeouts. Should be larger than one jiffy to avoid
+ * direct re-scheduling of reaper work_struct.
+ */
 #define SSH_RTL_REQUEST_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
+/*
+ * SSH_RTL_MAX_PENDING - Maximum number of pending requests.
+ *
+ * Maximum number of requests concurrently waiting to be completed (i.e.
+ * waiting for the corresponding packet transmission to finish if they don't
+ * have a response or waiting for a response if they have one).
+ */
 #define SSH_RTL_MAX_PENDING		3
 
 
