@@ -793,12 +793,12 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 }
 
 
-static ktime_t ssh_request_get_expiration(struct ssh_request *r, ktime_t timeo)
+static ktime_t ssh_request_get_expiration(struct ssh_request *r, ktime_t timeout)
 {
 	ktime_t timestamp = READ_ONCE(r->timestamp);
 
 	if (timestamp != KTIME_MAX)
-		return ktime_add(timestamp, timeo);
+		return ktime_add(timestamp, timeout);
 	else
 		return KTIME_MAX;
 }
