@@ -34,7 +34,8 @@
  * @buf: The pointer pointing to the data for which the CRC should be computed.
  * @len: The length of the data for which the CRC should be computed.
  *
- * Compute and return the CRC of the provided data, as used for SSH messages.
+ * Return: Returns the CRC computed on the provided data, as used for SSH
+ * messages.
  */
 static inline u16 ssh_crc(const u8 *buf, size_t len)
 {
@@ -45,9 +46,9 @@ static inline u16 ssh_crc(const u8 *buf, size_t len)
  * ssh_rqid_next_valid() - Return the next valid request ID.
  * @rqid: The current request ID.
  *
- * Compute and return the next valid request ID, following the current request
- * ID provided to this function. This function skips any request IDs reserved
- * for events.
+ * Return: Returns the next valid request ID, following the current request ID
+ * provided to this function. This function skips any request IDs reserved for
+ * events.
  */
 static inline u16 ssh_rqid_next_valid(u16 rqid)
 {

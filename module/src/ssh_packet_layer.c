@@ -165,7 +165,9 @@
  * SSH_PTL_MAX_PACKET_TRIES - Maximum transmission attempts for packet.
  *
  * Maximum number of transmission attempts per sequenced packet in case of
- * time-outs. Must be smaller than 16.
+ * time-outs. Must be smaller than 16. If the packet times out after this
+ * amount of tries, the packet will be completed with %-ETIMEDOUT as status
+ * code.
  */
 #define SSH_PTL_MAX_PACKET_TRIES		3
 
@@ -180,8 +182,8 @@
 /*
  * SSH_PTL_PACKET_TIMEOUT_RESOLUTION - Packet timeout granularity.
  *
- * Maximum time resolution for timeouts. Should be larger than one jiffy to
- * avoid direct re-scheduling of reaper work_struct.
+ * Time-resolution for timeouts. Should be larger than one jiffy to avoid
+ * direct re-scheduling of reaper work_struct.
  */
 #define SSH_PTL_PACKET_TIMEOUT_RESOLUTION	ms_to_ktime(max(2000 / HZ, 50))
 
@@ -608,6 +610,8 @@ void ssh_ctrl_packet_cache_destroy(void)
  * the corresponding buffer. The corresponding buffer must not be freed
  * separately. Intended to be used with %ssh_ptl_ctrl_packet_ops as packet
  * operations.
+ *
+ * Return: Returns zero on success, %-ENOMEM if the allocation failed.
  */
 static int ssh_ctrl_packet_alloc(struct ssh_packet **packet,
 				 struct ssam_span *buffer, gfp_t flags)
@@ -673,8 +677,8 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 	WRITE_ONCE(packet->timestamp, timestamp);
 	/*
 	 * Ensure timestamp is set before starting the reaper. Paired with
-	 * implicit barrier following check on ssh_packet_get_expiration in
-	 * ssh_ptl_timeout_reap.
+	 * implicit barrier following check on ssh_packet_get_expiration() in
+	 * ssh_ptl_timeout_reap().
 	 */
 	smp_mb__after_atomic();
 
@@ -829,6 +833,7 @@ static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 }
 
 
+/* warning: does not check/set "completed" bit */
 static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	struct ssh_ptl *ptl = READ_ONCE(p->ptl);
@@ -848,7 +853,7 @@ static void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 	 * packet to the structures it's going to be removed from.
 	 *
 	 * The set_bit call does not need explicit memory barriers as the
-	 * implicit barrier of the test_and_set_bit call below ensure that the
+	 * implicit barrier of the test_and_set_bit() call below ensure that the
 	 * flag is visible before we actually attempt to remove the packet.
 	 */
 
@@ -1022,7 +1027,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 			ptl->tx.packet = ssh_ptl_tx_next(ptl);
 			ptl->tx.offset = 0;
 
-			// if no packet is available, we are done
+			// if no packet can be processed, we are done
 			if (IS_ERR(ptl->tx.packet)) {
 				ssh_ptl_tx_threadfn_wait(ptl);
 				continue;
@@ -1037,7 +1042,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 		if (ptl->tx.offset == 0 && !drop)
 			ssh_ptl_tx_inject_invalid_data(ptl->tx.packet);
 
-		// flush-packets don't have any data
+		// note: flush-packets don't have any data
 		if (likely(ptl->tx.packet->data.ptr && !drop)) {
 			buf = ptl->tx.packet->data.ptr + ptl->tx.offset;
 			len = ptl->tx.packet->data.len - ptl->tx.offset;
@@ -1093,7 +1098,7 @@ void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
 	/*
 	 * Ensure that the signal is set before we wake the transmitter
 	 * thread to prevent lost updates: If the signal is not set,
-	 * when the thread checks it in ssh_ptl_tx_threadfn_wait, it
+	 * when the thread checks it in ssh_ptl_tx_threadfn_wait(), it
 	 * may go back to sleep.
 	 */
 	smp_mb__after_atomic();
@@ -1336,7 +1341,7 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 	 * eventually canceled and completed by the timeout. Removing the packet
 	 * here could lead to overly eager cancelation if the packet has not
 	 * been re-transmitted yet but the tries-counter already updated (i.e
-	 * ssh_ptl_tx_next removed the packet from the queue and updated the
+	 * ssh_ptl_tx_next() removed the packet from the queue and updated the
 	 * counter, but re-transmission for the last try has not actually
 	 * started yet).
 	 */
@@ -1833,11 +1838,11 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
 	/*
 	 * Ensure that the layer gets marked as shut-down before actually
-	 * stopping it. In combination with the check in ssh_ptl_queue_push,
+	 * stopping it. In combination with the check in ssh_ptl_queue_push(),
 	 * this guarantees that no new packets can be added and all already
 	 * queued packets are properly cancelled. In combination with the check
-	 * in ssh_ptl_rx_rcvbuf, this guarantees that received data is properly
-	 * cut off.
+	 * in ssh_ptl_rx_rcvbuf(), this guarantees that received data is
+	 * properly cut off.
 	 */
 	smp_mb__after_atomic();
 
@@ -1867,7 +1872,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 * new list via other threads (e.g. canellation).
 	 *
 	 * Note 3: There may be overlap between complete_p and complete_q.
-	 * This is handled via test_and_set_bit on the "completed" flag
+	 * This is handled via test_and_set_bit() on the "completed" flag
 	 * (also handles cancelation).
 	 */
 

@@ -354,7 +354,7 @@ int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 
 	/*
 	 * Ensure that requests expecting a response are sequenced. If this
-	 * invariant ever changes, see the comment in ssh_rtl_complete on what
+	 * invariant ever changes, see the comment in ssh_rtl_complete() on what
 	 * is required to be changed in the code.
 	 */
 	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &rqst->state))
@@ -447,7 +447,7 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	WRITE_ONCE(rqst->timestamp, timestamp);
 	/*
 	 * Ensure timestamp is set before starting the reaper. Paired with
-	 * implicit barrier following check on ssh_request_get_expiration in
+	 * implicit barrier following check on ssh_request_get_expiration() in
 	 * ssh_rtl_timeout_reap.
 	 */
 	smp_mb__after_atomic();
@@ -1179,7 +1179,7 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 	set_bit(SSH_RTL_SF_SHUTDOWN_BIT, &rtl->state);
 	/*
 	 * Ensure that the layer gets marked as shut-down before actually
-	 * stopping it. In combination with the check in ssh_rtl_sunmit, this
+	 * stopping it. In combination with the check in ssh_rtl_sunmit(), this
 	 * guarantees that no new requests can be added and all already queued
 	 * requests are properly cancelled.
 	 */
@@ -1201,8 +1201,8 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 	/*
 	 * We have now guaranteed that the queue is empty and no more new
 	 * requests can be submitted (i.e. it will stay empty). This means that
-	 * calling ssh_rtl_tx_schedule will not schedule tx.work any more. So we
-	 * can simply call cancel_work_sync on tx.work here and when that
+	 * calling ssh_rtl_tx_schedule() will not schedule tx.work any more. So
+	 * we can simply call cancel_work_sync() on tx.work here and when that
 	 * returns, we've locked it down. This also means that after this call,
 	 * we don't submit any more packets to the underlying packet layer, so
 	 * we can also shut that down.
@@ -1233,13 +1233,13 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 		spin_unlock(&rtl->pending.lock);
 	}
 
-	// finally cancel and complete requests
+	// finally, cancel and complete the requests we claimed before
 	list_for_each_entry_safe(r, n, &claimed, node) {
 		// test_and_set because we still might compete with cancellation
 		if (!test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			ssh_rtl_complete_with_status(r, -ESHUTDOWN);
 
-		// drop the reference we've obtained by removing it from list
+		// drop reference we've obtained by removing it from the lists
 		list_del(&r->node);
 		ssh_request_put(r);
 	}

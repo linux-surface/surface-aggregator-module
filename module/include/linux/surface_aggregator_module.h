@@ -30,8 +30,8 @@
  *
  * @SSH_FRAME_TYPE_DATA_SEQ:
  *	Indicates a data frame, followed by a payload with the length specified
- *	in the ssh_frame.len field. This frame is sequenced, meaning that an ACK
- *	is required.
+ *	in the ``struct ssh_frame.len`` field. This frame is sequenced, meaning
+ *	that an ACK is required.
  *
  * @SSH_FRAME_TYPE_DATA_NSQ:
  *	Same as %SSH_FRAME_TYPE_DATA_SEQ, but unsequenced, meaning that the
@@ -166,8 +166,8 @@ static_assert(sizeof(struct ssh_command) == 8);
 	(sizeof(u16) + offsetof(struct ssh_frame, field))
 
 /**
- * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
- * command.
+ * SSH_MSGOFFSET_COMMAND() - Compute offset in SSH message to specified field
+ * in command.
  * @field: The field for which the offset should be computed.
  *
  * Return: Returns the offset of the specified &struct ssh_command field in
@@ -423,16 +423,19 @@ struct ssh_request;
  *            success or failure. The command data for the request response
  *            is provided via the &struct ssh_command parameter (``cmd``),
  *            the command payload of the request response via the &struct
- *            ssh_span parameter (``data``). If the request does not have any
- *            response or has not been completed with success, both ``cmd``
- *            and ``data`` parameters will be NULL. If the request response
- *            does not have any command payload, the ``data`` span will be an
- *            empty (zero-length) span. In case of failure, the reason for the
- *            failure is indicated by the value of the provided status code
- *            argument (``status``). This value will be zero in case of
- *            success. Note that a call to this callback does not guarantee
- *            that the request is not in use by the transmission systems any
- *            more.
+ *            ssh_span parameter (``data``).
+ *
+ *            If the request does not have any response or has not been
+ *            completed with success, both ``cmd`` and ``data`` parameters will
+ *            be NULL. If the request response does not have any command
+ *            payload, the ``data`` span will be an empty (zero-length) span.
+ *
+ *            In case of failure, the reason for the failure is indicated by
+ *            the value of the provided status code argument (``status``). This
+ *            value will be zero in case of success.
+ *
+ *            Note that a call to this callback does not guarantee that the
+ *            request is not in use by the transmission systems any more.
  */
 struct ssh_request_ops {
 	void (*release)(struct ssh_request *rqst);
@@ -471,6 +474,8 @@ struct ssh_request {
  * Casts the given &struct ssh_packet to its enclosing &struct ssh_request.
  * The caller is responsible for making sure that the packet is actually
  * wrapped in a &struct ssh_request.
+ *
+ * Return: Returns the &struct ssh_request wrapping the provided packet.
  */
 static inline struct ssh_request *to_ssh_request(struct ssh_packet *p)
 {
@@ -573,7 +578,7 @@ enum ssam_ssh_tc {
 struct ssam_controller;
 
 /**
- * enum ssam_event_flags - Flags for enabling/disabling SAM-over-SSH events
+ * enum ssam_event_flags - Flags for enabling/disabling SAM events
  * @SSAM_EVENT_SEQUENCED: The event will be sent via a sequenced data frame.
  */
 enum ssam_event_flags {
@@ -745,7 +750,12 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
  * freeing the request, or freeing any of the buffers associated with the
  * request.
  *
- * Returns the status of the request.
+ * This function must not be called if the request has not been submitted yet
+ * and may lead to a deadlock/infinite wait if a subsequent request submission
+ * fails in that case, due to the completion never triggering.
+ *
+ * Return: Returns the status of the given request, which is set on completion
+ * of the packet. This value is zero on success and negative on failure.
  */
 static inline int ssam_request_sync_wait(struct ssam_request_sync *rqst)
 {
@@ -778,7 +788,8 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
  * Note: The @payload_len parameter specifies the maximum payload length, used
  * for buffer allocation. The actual payload length may be smaller.
  *
- * Returns the status of the request or any failure during setup.
+ * Return: Returns the status of the request or any failure during setup, i.e.
+ * zero on success and a negative value on failure.
  */
 #define ssam_request_sync_onstack(ctrl, rqst, rsp, payload_len)			\
 	({									\
@@ -812,7 +823,7 @@ struct ssam_request_spec {
 };
 
 /**
- * struct ssam_request_spec_md - Blue-print specification of multi-device SAM
+ * struct ssam_request_spec_md - Blue-print specification for multi-device SAM
  * request.
  * @target_category: Category of the request's target. See &enum ssam_ssh_tc.
  * @command_id:      Command ID of the request.
@@ -1458,7 +1469,7 @@ extern const struct device_type ssam_device_type;
  * @d: The device to test the type of.
  *
  * Return: Returns %true iff the specified device is of type &struct
- * ssam_device, i.e. the device type points to %ssam_device_type, and false
+ * ssam_device, i.e. the device type points to %ssam_device_type, and %false
  * otherwise.
  */
 static inline bool is_ssam_device(struct device *d)
@@ -1704,7 +1715,7 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
  * @event: The event to test.
  *
  * Return: Returns %true iff the given event corresponds to the given UID,
- * i.e. iff target category, target ID, and instance ID are equal, and false
+ * i.e. iff target category, target ID, and instance ID are equal, and %false
  * otherwise.
  */
 static inline bool ssam_event_matches_device(struct ssam_device_uid uid,
