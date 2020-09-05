@@ -167,7 +167,7 @@
  * Maximum number of transmission attempts per sequenced packet in case of
  * time-outs. Must be smaller than 16.
  */
-#define SSH_PTL_MAX_PACKET_TRIES	3
+#define SSH_PTL_MAX_PACKET_TRIES		3
 
 /*
  * SSH_PTL_PACKET_TIMEOUT - Packet timeout.
@@ -192,17 +192,17 @@
  * Packets marked as blocking will not be transmitted while this limit is
  * reached.
  */
-#define SSH_PTL_MAX_PENDING		1
+#define SSH_PTL_MAX_PENDING			1
 
 /*
  * SSH_PTL_RX_BUF_LEN - Evaluation-buffer size in bytes.
  */
-#define SSH_PTL_RX_BUF_LEN		4096
+#define SSH_PTL_RX_BUF_LEN			4096
 
 /*
  * SSH_PTL_RX_FIFO_LEN - Fifo input-buffer size in bytes.
  */
-#define SSH_PTL_RX_FIFO_LEN		4096
+#define SSH_PTL_RX_FIFO_LEN			4096
 
 
 #ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
@@ -372,8 +372,8 @@ static int ssh_ptl_write_buf(struct ssh_ptl *ptl, struct ssh_packet *packet,
 	if (unlikely(status)) {
 		trace_ssam_ei_tx_fail_write(packet, status);
 		ptl_info(packet->ptl,
-			 "packet error injection: simulating transmit error %d, packet %p\n",
-			 status, packet);
+			 "packet error injection: simulating transmit error %d,"
+			 " packet %p\n", status, packet);
 
 		return status;
 	}
