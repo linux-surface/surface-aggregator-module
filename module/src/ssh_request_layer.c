@@ -361,11 +361,38 @@ int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 		if (!test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &rqst->packet.state))
 			return -EINVAL;
 
-	// try to set ptl and check if this request has already been submitted
-	if (cmpxchg(&rqst->packet.ptl, NULL, &rtl->ptl) != NULL)
-		return -EALREADY;
-
 	spin_lock(&rtl->queue.lock);
+
+	/*
+	 * Try to set ptl and check if this request has already been submitted.
+	 *
+	 * Must be inside lock as we might run into a lost update problem
+	 * otherwise: If this were outside of the lock, cancellation in
+	 * ssh_rtl_cancel_nonpending() may run after we've set the ptl
+	 * reference but before we enter the lock. In that case, we'd detect
+	 * that the request is being added to the queue and would try to remove
+	 * it from that, but removal might fail because it hasn't actually been
+	 * added yet. By putting this cmpxchg in the critical section, we
+	 * ensure that the queuing detection only triggers when we are already
+	 * in the critical section and the remove process will wait until the
+	 * push operation has been completed (via lock) due to that. Only then,
+	 * we can safely try to remove it.
+	 */
+	if (cmpxchg(&rqst->packet.ptl, NULL, &rtl->ptl) != NULL) {
+		spin_unlock(&rtl->queue.lock);
+		return -EALREADY;
+	}
+
+	/*
+	 * Ensure that we set ptl reference before we continue modifying state.
+	 * This is required for non-pending cancellation. This barrier is paired
+	 * with the one in ssh_rtl_cancel_nonpending().
+	 *
+	 * By setting the ptl reference before we test for "locked", we can
+	 * check if the "locked" test may have already run. See comments in
+	 * ssh_rtl_cancel_nonpending() for more detail.
+	 */
+	smp_mb__after_atomic();
 
 	if (test_bit(SSH_RTL_SF_SHUTDOWN_BIT, &rtl->state)) {
 		spin_unlock(&rtl->queue.lock);
@@ -542,7 +569,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
 	struct ssh_rtl *rtl;
-	unsigned long state, fixed;
+	unsigned long flags, fixed;
 	bool remove;
 
 	/*
@@ -551,9 +578,14 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 * setting the state worked, we might still be adding the packet to the
 	 * queue in a currently executing submit call. In that case, however,
 	 * ptl reference must have been set previously, as locked is checked
-	 * after setting ptl. Thus only if we successfully lock this request and
-	 * ptl is NULL, we have successfully removed the request.
-	 * Otherwise we need to try and grab it from the queue.
+	 * after setting ptl. Furthermore, when the ptl reference is set, the
+	 * submission process is guaranteed to have entered the critical
+	 * section. Thus only if we successfully locked this request and ptl is
+	 * NULL, we have successfully removed the request, i.e. we are
+	 * guaranteed that, due to the "locked" check in ssh_rtl_submit(), the
+	 * packet will never be added. Otherwise, we need to try and grab it
+	 * from the queue, where we are now guaranteed that the packet is or has
+	 * been due to the critical section.
 	 *
 	 * Note that if the CMPXCHG fails, we are guaranteed that ptl has
 	 * been set and is non-NULL, as states can only be nonzero after this
@@ -561,8 +593,18 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 	 * to ensure that they don't cause the cmpxchg to fail.
 	 */
 	fixed = READ_ONCE(r->state) & SSH_REQUEST_FLAGS_TY_MASK;
-	state = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
-	if (!state && !READ_ONCE(r->packet.ptl)) {
+	flags = cmpxchg(&r->state, fixed, SSH_REQUEST_SF_LOCKED_BIT);
+
+	/*
+	 * Force correct ordering with regards to state and ptl reference access
+	 * to safe-guard cancellation to concurrent submission against a
+	 * lost-update problem. First try to exchange state, then also check
+	 * ptl if that worked. This barrier is paired with the
+	 * one in ssh_rtl_submit().
+	 */
+	smp_mb__after_atomic();
+
+	if (flags == fixed && !READ_ONCE(r->packet.ptl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
@@ -608,12 +650,16 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 
 	/*
 	 * Now that we have locked the packet, we have guaranteed that it can't
-	 * be added to the system any more. If rtl is zero, the locked
-	 * check in ssh_rtl_submit has not been run and any submission,
+	 * be added to the system any more. If ptl is zero, the locked
+	 * check in ssh_rtl_submit() has not been run and any submission,
 	 * currently in progress or called later, won't add the packet. Thus we
 	 * can directly complete it.
+	 *
+	 * The implicit memory barrier of test_and_set_bit() should be enough
+	 * to ensure that the correct order (first lock, then check ptl) is
+	 * ensured. This is paired with the barrier in ssh_rtl_submit().
 	 */
-	if (!ssh_request_rtl(r)) {
+	if (!READ_ONCE(r->packet.ptl)) {
 		if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			return true;
 
