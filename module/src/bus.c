@@ -288,9 +288,8 @@ static int ssam_bus_match(struct device *dev, struct device_driver *drv)
 
 static int ssam_bus_probe(struct device *dev)
 {
-	struct ssam_device_driver *sdrv = to_ssam_device_driver(dev->driver);
-
-	return sdrv->probe(to_ssam_device(dev));
+	return to_ssam_device_driver(dev->driver)
+		->probe(to_ssam_device(dev));
 }
 
 static int ssam_bus_remove(struct device *dev)
@@ -371,8 +370,9 @@ static int ssam_remove_device(struct device *dev, void *_data)
  */
 void ssam_controller_remove_clients(struct ssam_controller *ctrl)
 {
-	struct device *dev = ssam_controller_device(ctrl);
+	struct device *dev;
 
+	dev = ssam_controller_device(ctrl);
 	device_for_each_child_reverse(dev, NULL, ssam_remove_device);
 }
 
