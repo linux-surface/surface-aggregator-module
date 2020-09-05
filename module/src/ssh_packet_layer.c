@@ -837,10 +837,7 @@ static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 	struct ssh_ptl *ptl = READ_ONCE(p->ptl);
 
 	trace_ssam_packet_complete(p, status);
-
-	ptl_dbg_cond(ptl, "ptl: completing packet %p\n", p);
-	if (status && status != -ECANCELED)
-		ptl_dbg_cond(ptl, "ptl: packet error: %d\n", status);
+	ptl_dbg_cond(ptl, "ptl: completing packet %p (status: %d)\n", p, status);
 
 	if (p->ops->complete)
 		p->ops->complete(p, status);
