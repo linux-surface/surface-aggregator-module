@@ -147,7 +147,7 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 	 * link is not going to save us any more, as unbinding is already in
 	 * progress.
 	 */
-	if (link->status == DL_STATE_SUPPLIER_UNBIND) {
+	if (READ_ONCE(link->status) == DL_STATE_SUPPLIER_UNBIND) {
 		ssam_controller_stateunlock(c);
 		return -ENXIO;
 	}
