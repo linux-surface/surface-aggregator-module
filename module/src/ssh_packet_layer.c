@@ -1292,7 +1292,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 }
 
 /* must be called with pending lock held */
-static void __ssh_ptl_resubmit(struct ssh_packet *packet)
+static int __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	int status;
 
@@ -1308,7 +1308,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 		 * shut down. In all cases: Ignore the error.
 		 */
 		spin_unlock(&packet->ptl->queue.lock);
-		return;
+		return status;
 	}
 
 	/*
@@ -1320,6 +1320,7 @@ static void __ssh_ptl_resubmit(struct ssh_packet *packet)
 	WRITE_ONCE(packet->timestamp, KTIME_MAX);
 
 	spin_unlock(&packet->ptl->queue.lock);
+	return 0;
 }
 
 static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
@@ -1352,8 +1353,13 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 		if (try >= SSH_PTL_MAX_PACKET_TRIES)
 			continue;
 
-		resub = true;
-		__ssh_ptl_resubmit(p);
+		/*
+		 * Submission fails if the packet has been locked, is already
+		 * queued, or the layer is being shut down. No need to
+		 * re-schedule tx-thread in those cases.
+		 */
+		if (!__ssh_ptl_resubmit(p))
+			resub = true;
 	}
 
 	spin_unlock(&ptl->pending.lock);
@@ -1469,17 +1475,19 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 			continue;
 		}
 
-		// avoid further transitions if locked
-		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
-			continue;
-
-		trace_ssam_packet_timeout(p);
-
 		// check if we still have some tries left
 		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
 		if (likely(try < SSH_PTL_MAX_PACKET_TRIES)) {
-			resub = true;
-			__ssh_ptl_resubmit(p);
+			trace_ssam_packet_timeout(p);
+
+			/*
+			 * Submission fails if the packet has been locked, is
+			 * already queued, or the layer is being shut down.
+			 * No need to re-schedule tx-thread in those cases.
+			 */
+			if (!__ssh_ptl_resubmit(p))
+				resub = true;
+
 			continue;
 		}
 
@@ -1488,6 +1496,8 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		// if someone else has locked the packet already, don't use it
 		if (test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
+
+		trace_ssam_packet_timeout(p);
 
 		/*
 		 * We have now marked the packet as locked. Thus it cannot be
