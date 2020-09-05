@@ -1204,6 +1204,7 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 			 * The packet is pending, but we are not allowed to take
 			 * it because it has been locked.
 			 */
+			WARN_ON(PTR_ERR(p) != -EPERM);
 		}
 		return;
 	}
