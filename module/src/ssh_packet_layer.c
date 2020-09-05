@@ -1277,8 +1277,8 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	ptl_old = READ_ONCE(p->ptl);
 	if (ptl_old == NULL)
 		WRITE_ONCE(p->ptl, ptl);
-	else if (ptl_old != ptl)
-		return -EALREADY;
+	else if (WARN_ON(ptl_old != ptl))
+		return -EALREADY;	// submitted on different PTL
 
 	status = ssh_ptl_queue_push(p);
 	if (status)
