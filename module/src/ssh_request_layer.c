@@ -915,6 +915,11 @@ static void ssh_rtl_rx_command(struct ssh_ptl *p, const struct ssam_span *data)
 
 static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 {
+	if (!data->len) {
+		ptl_err(p, "rtl: rx: no data frame payload\n");
+		return;
+	}
+
 	switch (data->ptr[0]) {
 	case SSH_PLD_TYPE_CMD:
 		ssh_rtl_rx_command(p, data);
