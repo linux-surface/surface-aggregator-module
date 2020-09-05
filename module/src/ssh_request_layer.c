@@ -1140,16 +1140,15 @@ int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 
 	ssh_request_put(&rqst.base);
 
-	if (wait_for_completion_timeout(&rqst.completion, timeout))
-		return 0;
-
-	ssh_rtl_cancel(&rqst.base, true);
-	wait_for_completion(&rqst.completion);
+	if (!wait_for_completion_timeout(&rqst.completion, timeout)) {
+		ssh_rtl_cancel(&rqst.base, true);
+		wait_for_completion(&rqst.completion);
+	}
 
 	WARN_ON(rqst.status != 0 && rqst.status != -ECANCELED
 		&& rqst.status != -ESHUTDOWN && rqst.status != -EINTR);
 
-	return rqst.status == -ECANCELED ? -ETIMEDOUT : status;
+	return rqst.status == -ECANCELED ? -ETIMEDOUT : rqst.status;
 }
 
 
