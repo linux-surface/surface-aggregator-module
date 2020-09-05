@@ -91,7 +91,7 @@ static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 
 	spin_lock(&rtl->queue.lock);
 
-	if(!test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
+	if (!test_and_clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &rqst->state)) {
 		spin_unlock(&rtl->queue.lock);
 		return;
 	}
