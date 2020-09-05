@@ -682,7 +682,6 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
-/* must be called with queue lock held */
 static void ssh_packet_next_try(struct ssh_packet *p)
 {
 	u8 priority = READ_ONCE(p->priority);
@@ -753,9 +752,7 @@ static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
-	ssh_packet_next_try(packet);
 	list_add_tail(&ssh_packet_get(packet)->queue_node, &ptl->queue.head);
-
 	return 0;
 }
 
@@ -953,7 +950,7 @@ static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	 * the only place where we update the priority in-flight. As this runs
 	 * only on the tx-thread, this read-modify-write procedure is safe.
 	 */
-	WRITE_ONCE(p->priority, READ_ONCE(p->priority) + 1);
+	ssh_packet_next_try(p);
 
 	return p;
 }
