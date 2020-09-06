@@ -159,11 +159,11 @@ enum ssam_controller_state {
 };
 
 /**
- * struct ssam_device_caps - Controller device capabilities.
+ * struct ssam_controller_caps - Controller device capabilities.
  * @notif_display: The controller supports display-on/-off notifications.
  * @notif_d0exit:  The controller supports D0-entry/D0-exit notifications
  */
-struct ssam_device_caps {
+struct ssam_controller_caps {
 	u32 notif_display:1;
 	u32 notif_d0exit:1;
 };
@@ -202,7 +202,7 @@ struct ssam_controller {
 		bool wakeup_enabled;
 	} irq;
 
-	struct ssam_device_caps caps;
+	struct ssam_controller_caps caps;
 };
 
 #define to_ssam_controller(ptr, member) \

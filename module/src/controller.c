@@ -975,7 +975,8 @@ static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
 		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
 
 /**
- * ssam_device_caps_load_from_acpi() - Load controller capabilities from _DSM.
+ * ssam_controller_caps_load_from_acpi() - Load controller capabilities from
+ * ACPI _DSM.
  * @handle: The handle of the ACPI controller/SSH device.
  * @caps:   Where to store the capabilities in.
  *
@@ -985,8 +986,8 @@ static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
  *
  * Return: Returns zero on success, %-EFAULT on failure.
  */
-static int ssam_device_caps_load_from_acpi(acpi_handle handle,
-					   struct ssam_device_caps *caps)
+static int ssam_controller_caps_load_from_acpi(
+		acpi_handle handle, struct ssam_controller_caps *caps)
 {
 	union acpi_object *obj;
 	u64 funcs = 0;
@@ -1047,7 +1048,7 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	init_rwsem(&ctrl->lock);
 	kref_init(&ctrl->kref);
 
-	status = ssam_device_caps_load_from_acpi(handle, &ctrl->caps);
+	status = ssam_controller_caps_load_from_acpi(handle, &ctrl->caps);
 	if (status)
 		return status;
 
