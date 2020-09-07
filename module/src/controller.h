@@ -223,8 +223,8 @@ struct ssam_controller {
  * Provide input data to be evaluated by the controller, which has been
  * received via the lower-level transport.
  *
- * Return: Returns the number of bytes consumed, or, if the packet
- * transmission layer of the controller has been shut down, %-ESHUTDOWN.
+ * Return: Returns the number of bytes consumed, or, if the packet transport
+ * layer of the controller has been shut down, %-ESHUTDOWN.
  */
 static inline
 int ssam_controller_receive_buf(struct ssam_controller *ctrl,

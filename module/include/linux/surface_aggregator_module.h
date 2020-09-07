@@ -298,13 +298,13 @@ struct ssh_packet;
  * struct ssh_packet_ops - Callback operations for a SSH packet.
  * @release:  Function called when the packet reference count reaches zero.
  *            This callback must be relied upon to ensure that the packet has
- *            left the transmission system(s).
+ *            left the transport system(s).
  * @complete: Function called when the packet is completed, either with
  *            success or failure. In case of failure, the reason for the
  *            failure is indicated by the value of the provided status code
  *            argument. This value will be zero in case of success. Note that
  *            a call to this callback does not guarantee that the packet is
- *            not in use by the transmission system any more.
+ *            not in use by the transport system any more.
  */
 struct ssh_packet_ops {
 	void (*release)(struct ssh_packet *p);
@@ -312,9 +312,9 @@ struct ssh_packet_ops {
 };
 
 /**
- * struct ssh_packet - SSH transmission packet.
- * @ptl:      Pointer to the packet transmission layer. May be %NULL if the
- *            packet (or enclosing request) has not been submitted yet.
+ * struct ssh_packet - SSH transport packet.
+ * @ptl:      Pointer to the packet transport layer. May be %NULL if the packet
+ *            (or enclosing request) has not been submitted yet.
  * @refcnt:   Reference count of the packet.
  * @priority: Priority of the packet. Must be computed via
  *            SSH_PACKET_PRIORITY().
@@ -418,7 +418,7 @@ struct ssh_request;
  * struct ssh_request_ops - Callback operations for a SSH request.
  * @release:  Function called when the request's reference count reaches zero.
  *            This callback must be relied upon to ensure that the request has
- *            left the transmission systems (both, packet an request systems).
+ *            left the transport systems (both, packet an request systems).
  * @complete: Function called when the request is completed, either with
  *            success or failure. The command data for the request response
  *            is provided via the &struct ssh_command parameter (``cmd``),
@@ -435,7 +435,7 @@ struct ssh_request;
  *            value will be zero in case of success.
  *
  *            Note that a call to this callback does not guarantee that the
- *            request is not in use by the transmission systems any more.
+ *            request is not in use by the transport systems any more.
  */
 struct ssh_request_ops {
 	void (*release)(struct ssh_request *rqst);
@@ -445,8 +445,8 @@ struct ssh_request_ops {
 };
 
 /**
- * struct ssh_request - SSH transmission request.
- * @packet: The underlying SSH transmission packet.
+ * struct ssh_request - SSH transport request.
+ * @packet: The underlying SSH transport packet.
  * @node:   List node for the request queue and pending set.
  * @state:  State and type flags describing current request state (dynamic)
  *          and type (static). See &enum ssh_request_flags for possible
@@ -609,8 +609,8 @@ struct ssam_event {
  * @SSAM_REQUEST_HAS_RESPONSE:
  *	Specifies that the request expects a response. If not set, the request
  *	will be directly completed after its underlying packet has been
- *	transmitted. If set, the request transmission system waits for a
- *	response of the request.
+ *	transmitted. If set, the request transport system waits for a response
+ *	of the request.
  *
  * @SSAM_REQUEST_UNSEQUENCED:
  *	Specifies that the request should be transmitted via an unsequenced
@@ -650,7 +650,7 @@ struct ssam_request {
  * struct ssam_response - Response buffer for SAM request.
  * @capacity: Capacity of the buffer, in bytes.
  * @length:   Length of the actual data stored in the memory pointed to by
- *            @pointer, in bytes. Set by the transmission system.
+ *            @pointer, in bytes. Set by the transport system.
  * @pointer:  Pointer to the buffer's memory, storing the response payload data.
  */
 struct ssam_response {
@@ -744,11 +744,10 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
  * @rqst: The request to wait for.
  *
  * Wait for completion and release of a synchronous request. After this
- * function terminates, the request is guaranteed to have left the
- * transmission system. After successful submission of a request, this
- * function must be called before accessing the response of the request,
- * freeing the request, or freeing any of the buffers associated with the
- * request.
+ * function terminates, the request is guaranteed to have left the transport
+ * system. After successful submission of a request, this function must be
+ * called before accessing the response of the request, freeing the request,
+ * or freeing any of the buffers associated with the request.
  *
  * This function must not be called if the request has not been submitted yet
  * and may lead to a deadlock/infinite wait if a subsequent request submission

@@ -1064,7 +1064,7 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	if (status)
 		return status;
 
-	// initialize request and packet transmission layers
+	// initialize request and packet transport layers
 	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
 	if (status) {
 		ssam_cplt_destroy(&ctrl->cplt);
@@ -1130,7 +1130,7 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	// try to flush pending events and requests while everything still works
 	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
 	if (status) {
-		ssam_err(ctrl, "failed to flush request transmission layer: %d\n",
+		ssam_err(ctrl, "failed to flush request transport layer: %d\n",
 			 status);
 	}
 
