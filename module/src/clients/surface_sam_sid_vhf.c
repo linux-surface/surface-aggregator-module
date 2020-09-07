@@ -313,9 +313,9 @@ static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, st
 	return hid;
 }
 
-static u32 sid_vhf_event_handler(struct ssam_notifier_block *nb, const struct ssam_event *event)
+static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
-	struct sid_vhf *vhf = container_of(nb, struct sid_vhf, notif.base);
+	struct sid_vhf *vhf = container_of(nf, struct sid_vhf, notif);
 	int status;
 
 	if (!ssam_event_matches_device(vhf->sdev->uid, event))

@@ -455,13 +455,13 @@ static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 	return status >= 0 ? 0 : status;
 }
 
-static u32 spwr_notify_bat(struct ssam_notifier_block *nb,
+static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 			   const struct ssam_event *event)
 {
 	struct spwr_battery_device *bat;
 	int status;
 
-	bat = container_of(nb, struct spwr_battery_device, notif.base);
+	bat = container_of(nf, struct spwr_battery_device, notif);
 
 	dev_dbg(&bat->sdev->dev, "power event (cid = 0x%02x, iid = %d, tid = %d)\n",
 		event->command_id, event->instance_id, event->target_id);
@@ -491,13 +491,13 @@ static u32 spwr_notify_bat(struct ssam_notifier_block *nb,
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
-static u32 spwr_notify_ac(struct ssam_notifier_block *nb,
+static u32 spwr_notify_ac(struct ssam_event_notifier *nf,
 			  const struct ssam_event *event)
 {
 	struct spwr_ac_device *ac;
 	int status;
 
-	ac = container_of(nb, struct spwr_ac_device, notif.base);
+	ac = container_of(nf, struct spwr_ac_device, notif);
 
 	dev_dbg(&ac->sdev->dev, "power event (cid = 0x%02x, iid = %d, tid = %d)\n",
 		event->command_id, event->instance_id, event->target_id);

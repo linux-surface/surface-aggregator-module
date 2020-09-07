@@ -118,15 +118,17 @@ static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
 {
 	struct ssam_notifier_block *nb, *next_nb;
+	struct ssam_event_notifier *nf;
 	int ret = 0, idx;
 
 	idx = srcu_read_lock(&nh->srcu);
 
 	nb = rcu_dereference_raw(nh->head);
 	while (nb) {
+		nf = container_of(nb, struct ssam_event_notifier, base);
 		next_nb = rcu_dereference_raw(nb->next);
 
-		ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nb, event);
+		ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nf, event);
 		if (ret & SSAM_NOTIF_STOP)
 			break;
 

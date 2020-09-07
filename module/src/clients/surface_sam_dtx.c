@@ -393,9 +393,9 @@ static void surface_dtx_opmode_workfn(struct work_struct *work)
 	surface_dtx_update_opmpde(ddev);
 }
 
-static u32 surface_dtx_notification(struct ssam_notifier_block *nb, const struct ssam_event *in_event)
+static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct ssam_event *in_event)
 {
-	struct surface_dtx_dev *ddev = container_of(nb, struct surface_dtx_dev, notif.base);
+	struct surface_dtx_dev *ddev = container_of(nf, struct surface_dtx_dev, notif);
 	struct surface_dtx_event event;
 	unsigned long delay;
 

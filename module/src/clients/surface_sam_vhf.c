@@ -162,9 +162,9 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 	return hid;
 }
 
-static u32 vhf_event_handler(struct ssam_notifier_block *nb, const struct ssam_event *event)
+static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
-	struct vhf_drvdata *drvdata = container_of(nb, struct vhf_drvdata, notif.base);
+	struct vhf_drvdata *drvdata = container_of(nf, struct vhf_drvdata, notif);
 	int status;
 
 	if (event->target_category != 0x08)

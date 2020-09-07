@@ -327,14 +327,14 @@ static int ssam_base_hub_update(struct ssam_device *sdev,
 	return status;
 }
 
-static u32 ssam_base_hub_notif(struct ssam_notifier_block *nb,
+static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf,
 			       const struct ssam_event *event)
 {
 	struct ssam_base_hub *hub;
 	struct ssam_device *sdev;
 	enum ssam_base_hub_state new;
 
-	hub = container_of(nb, struct ssam_base_hub, notif.base);
+	hub = container_of(nf, struct ssam_base_hub, notif);
 	sdev = hub->sdev;
 
 	if (event->command_id != SSAM_EVENT_BAS_CID_CONNECTION)

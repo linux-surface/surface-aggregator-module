@@ -1162,9 +1162,9 @@ enum ssam_notif_flags {
 };
 
 
-struct ssam_notifier_block;
+struct ssam_event_notifier;
 
-typedef u32 (*ssam_notifier_fn_t)(struct ssam_notifier_block *nb,
+typedef u32 (*ssam_notifier_fn_t)(struct ssam_event_notifier *nf,
 				  const struct ssam_event *event);
 
 /**
