@@ -140,11 +140,8 @@ out:
 		ret = tmp;
 
 	// cleanup
-	if (pldbuf)
-		kfree(pldbuf);
-
-	if (rspbuf)
-		kfree(rspbuf);
+	kfree(pldbuf);
+	kfree(rspbuf);
 
 	return ret;
 }
