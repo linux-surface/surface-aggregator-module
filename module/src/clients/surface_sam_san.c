@@ -696,6 +696,7 @@ static int san_events_register(struct platform_device *pdev)
 	d->nf_bat.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	d->nf_bat.event.id.target_category = SSAM_SSH_TC_BAT;
 	d->nf_bat.event.id.instance = 0;
+	d->nf_bat.event.mask = SSAM_EVENT_MASK_TARGET;
 	d->nf_bat.event.flags = SSAM_EVENT_SEQUENCED;
 
 	d->nf_tmp.base.priority = 1;
@@ -703,6 +704,7 @@ static int san_events_register(struct platform_device *pdev)
 	d->nf_tmp.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	d->nf_tmp.event.id.target_category = SSAM_SSH_TC_TMP;
 	d->nf_tmp.event.id.instance = 0;
+	d->nf_tmp.event.mask = SSAM_EVENT_MASK_TARGET;
 	d->nf_tmp.event.flags = SSAM_EVENT_SEQUENCED;
 
 	status = ssam_notifier_register(d->ctrl, &d->nf_bat);

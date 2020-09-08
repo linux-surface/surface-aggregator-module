@@ -1255,6 +1255,36 @@ struct ssam_event_id {
 	u8 instance;
 };
 
+/**
+ * enum ssam_event_mask - Flags specifying how events are matched to notifiers.
+ *
+ * @SSAM_EVENT_MASK_NONE:
+ *	Run the callback for any event with matching target category. Do not
+ *	do any additional filtering.
+ *
+ * @SSAM_EVENT_MASK_TARGET:
+ *	In addition to filtering by target category, only execute the notifier
+ *	callback for events with a target ID matching to the one of the
+ *	registry used for enabling/disabling the event.
+ *
+ * @SSAM_EVENT_MASK_INSTANCE:
+ *	In addition to filtering by target category, only execute the notifier
+ *	callback for events with an instance ID matching to the instance ID
+ *	used when enabling the event.
+ *
+ * @SSAM_EVENT_MASK_STRICT:
+ *	Do all the filtering above.
+ */
+enum ssam_event_mask {
+	SSAM_EVENT_MASK_TARGET   = BIT(0),
+	SSAM_EVENT_MASK_INSTANCE = BIT(1),
+
+	SSAM_EVENT_MASK_NONE = 0,
+	SSAM_EVENT_MASK_STRICT
+		= SSAM_EVENT_MASK_TARGET
+		| SSAM_EVENT_MASK_INSTANCE,
+};
+
 
 /**
  * SSAM_EVENT_REGISTRY() - Define a new event registry.
@@ -1290,6 +1320,7 @@ struct ssam_event_id {
  * @event:       The event for which this block will receive notifications.
  * @event.reg:   Registry via which the event will be enabled/disabled.
  * @event.id:    ID specifying the event.
+ * @event.mask:  Flags determining how events are matched to the notifier.
  * @event.flags: Flags used for enabling the event.
  */
 struct ssam_event_notifier {
@@ -1298,6 +1329,7 @@ struct ssam_event_notifier {
 	struct {
 		struct ssam_event_registry reg;
 		struct ssam_event_id id;
+		enum ssam_event_mask mask;
 		u8 flags;
 	} event;
 };
@@ -1706,23 +1738,5 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 		return __raw_##name(sdev->ctrl, sdev->uid.target,	\
 				    sdev->uid.instance, ret);		\
 	}
-
-
-/**
- * ssam_event_matches_device() - Test if an event corresponds to a device.
- * @uid:   The UID describing the device.
- * @event: The event to test.
- *
- * Return: Returns %true iff the given event corresponds to the given UID,
- * i.e. iff target category, target ID, and instance ID are equal, and %false
- * otherwise.
- */
-static inline bool ssam_event_matches_device(struct ssam_device_uid uid,
-					     const struct ssam_event *event)
-{
-	return uid.category == event->target_category
-		&& uid.target == event->target_id
-		&& uid.instance == event->instance_id;
-}
 
 #endif /* _SURFACE_AGGREGATOR_MODULE_H */

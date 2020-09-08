@@ -510,6 +510,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	ddev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	ddev->notif.event.id.target_category = SSAM_SSH_TC_BAS;
 	ddev->notif.event.id.instance = 0;
+	ddev->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	ddev->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
 	status = ssam_notifier_register(ctrl, &ddev->notif);

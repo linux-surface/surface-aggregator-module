@@ -282,6 +282,7 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	drvdata->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	drvdata->notif.event.id.target_category = SSAM_SSH_TC_KBD;
 	drvdata->notif.event.id.instance = 0;
+	drvdata->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	drvdata->notif.event.flags = 0;
 
 	platform_set_drvdata(pdev, drvdata);

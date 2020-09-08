@@ -404,6 +404,7 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	hub->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	hub->notif.event.id.target_category = SSAM_SSH_TC_BAS,
 	hub->notif.event.id.instance = 0,
+	hub->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	hub->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
 	status = ssam_notifier_register(sdev->ctrl, &hub->notif);

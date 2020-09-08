@@ -99,6 +99,30 @@ static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
  * and identify new/currently unimplemented features.
  */
 
+
+/**
+ * ssam_event_matches_notifier() - Test if an event matches a notifier;
+ * @notif: The event notifier to test against.
+ * @event: The event to test.
+ *
+ * Return: Returns %true iff the given event matches the given notifier
+ * according to the rules set in the notifier's event mask, %false otherwise.
+ */
+static bool ssam_event_matches_notifier(
+		const struct ssam_event_notifier *notif,
+		const struct ssam_event *event)
+{
+	bool match = notif->event.id.target_category == event->target_category;
+
+	if (notif->event.mask & SSAM_EVENT_MASK_TARGET)
+		match &= notif->event.reg.target_id == event->target_id;
+
+	if (notif->event.mask & SSAM_EVENT_MASK_INSTANCE)
+		match &= notif->event.id.instance == event->instance_id;
+
+	return match;
+}
+
 /**
  * ssam_nfblk_call_chain() - Call event notifier callbacks of the given chain.
  * @nh:    The notifier head for which the notifier callbacks should be called.
@@ -128,9 +152,11 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
 		nf = container_of(nb, struct ssam_event_notifier, base);
 		next_nb = rcu_dereference_raw(nb->next);
 
-		ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nf, event);
-		if (ret & SSAM_NOTIF_STOP)
-			break;
+		if (ssam_event_matches_notifier(nf, event)) {
+			ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nf, event);
+			if (ret & SSAM_NOTIF_STOP)
+				break;
+		}
 
 		nb = next_nb;
 	}

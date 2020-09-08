@@ -318,9 +318,6 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 	struct sid_vhf *vhf = container_of(nf, struct sid_vhf, notif);
 	int status;
 
-	if (!ssam_event_matches_device(vhf->sdev->uid, event))
-		return 0;
-
 	if (event->command_id != 0x00 && event->command_id != 0x03 && event->command_id != 0x04)
 		return 0;
 
@@ -435,6 +432,7 @@ static int surface_sam_sid_vhf_probe(struct ssam_device *sdev)
 	vhf->notif.event.reg = p->registry;
 	vhf->notif.event.id.target_category = sdev->uid.category;
 	vhf->notif.event.id.instance = sdev->uid.instance;
+	vhf->notif.event.mask = SSAM_EVENT_MASK_STRICT;
 	vhf->notif.event.flags = 0;
 
 	ssam_device_set_drvdata(sdev, vhf);
