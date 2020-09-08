@@ -1523,8 +1523,10 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 	ssam_request_sync_set_resp(rqst, rsp);
 
 	len = ssam_request_write_data(&buf, ctrl, spec);
-	if (len < 0)
+	if (len < 0) {
+		ssam_request_sync_free(rqst);
 		return len;
+	}
 
 	ssam_request_sync_set_data(rqst, buf.ptr, len);
 
