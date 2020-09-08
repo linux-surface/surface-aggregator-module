@@ -1515,12 +1515,6 @@ int ssam_request_sync(struct ssam_controller *ctrl, struct ssam_request *spec,
 	ssize_t len;
 	int status;
 
-	// prevent overflow, allows us to skip checks later on
-	if (spec->length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
-		ssam_err(ctrl, "rqst: request payload too large\n");
-		return -EINVAL;
-	}
-
 	status = ssam_request_sync_alloc(spec->length, GFP_KERNEL, &rqst, &buf);
 	if (status)
 		return status;
@@ -1572,12 +1566,6 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	struct ssam_request_sync rqst;
 	ssize_t len;
 	int status;
-
-	// prevent overflow, allows us to skip checks later on
-	if (spec->length > SSH_COMMAND_MAX_PAYLOAD_SIZE) {
-		ssam_err(ctrl, "rqst: request payload too large\n");
-		return -EINVAL;
-	}
 
 	ssam_request_sync_init(&rqst, spec->flags);
 	ssam_request_sync_set_resp(&rqst, rsp);
