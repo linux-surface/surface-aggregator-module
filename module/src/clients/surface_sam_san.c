@@ -37,7 +37,6 @@ static const guid_t SAN_DSM_UUID =
 
 struct san_acpi_consumer {
 	const char *path;
-	u32 flags;
 };
 
 struct san_handler_data {
@@ -730,6 +729,7 @@ static int san_consumers_link(struct platform_device *pdev,
 			      const struct san_acpi_consumer *cons,
 			      struct san_consumers *out)
 {
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS;
 	const struct san_acpi_consumer *con;
 	struct san_consumer_link *links, *link;
 	struct acpi_device *adev;
@@ -763,7 +763,7 @@ static int san_consumers_link(struct platform_device *pdev,
 		if (status)
 			goto cleanup;
 
-		link->link = device_link_add(&adev->dev, &pdev->dev, con->flags);
+		link->link = device_link_add(&adev->dev, &pdev->dev, flags);
 		if (!(link->link)) {
 			status = -EFAULT;
 			goto cleanup;
@@ -779,10 +779,8 @@ static int san_consumers_link(struct platform_device *pdev,
 	return 0;
 
 cleanup:
-	for (link = link - 1; link >= links; --link) {
-		if (link->properties->flags & DL_FLAG_STATELESS)
-			device_link_del(link->link);
-	}
+	for (link = link - 1; link >= links; --link)
+		device_link_del(link->link);
 
 	return status;
 }
@@ -794,10 +792,8 @@ static void san_consumers_unlink(struct san_consumers *consumers)
 	if (!consumers)
 		return;
 
-	for (i = 0; i < consumers->num; ++i) {
-		if (consumers->links[i].properties->flags & DL_FLAG_STATELESS)
-			device_link_del(consumers->links[i].link);
-	}
+	for (i = 0; i < consumers->num; ++i)
+		device_link_del(consumers->links[i].link);
 
 	kfree(consumers->links);
 
@@ -902,10 +898,10 @@ static int surface_sam_san_remove(struct platform_device *pdev)
  * to the SAN device to try and enforce correct suspend/resume orderding.
  */
 static const struct san_acpi_consumer san_mshw0091_consumers[] = {
-	{ "\\_SB.SRTC", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\ADP1",     DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\_SB.BAT1", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\_SB.BAT2", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.SRTC" },
+	{ "\\ADP1"     },
+	{ "\\_SB.BAT1" },
+	{ "\\_SB.BAT2" },
 	{ },
 };
 
