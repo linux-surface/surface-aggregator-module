@@ -770,10 +770,8 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, data);
 
-	status = acpi_install_address_space_handler(san,
-			ACPI_ADR_SPACE_GSBUS,
-			&san_opreg_handler,
-			NULL, &data->info);
+	status = acpi_install_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
+			&san_opreg_handler, NULL, &data->info);
 
 	if (ACPI_FAILURE(status)) {
 		status = -ENODEV;
@@ -815,7 +813,8 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	rqsg_if.san_dev = NULL;
 	mutex_unlock(&rqsg_if.lock);
 
-	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
+					  &san_opreg_handler);
 	san_events_unregister(pdev);
 
 	/*
