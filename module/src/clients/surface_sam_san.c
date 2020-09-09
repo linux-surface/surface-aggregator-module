@@ -460,8 +460,28 @@ static u32 san_evt_thermal_nf(struct ssam_event_notifier *nf, const struct ssam_
 }
 
 
-static struct gsb_data_rqsx
-*san_validate_rqsx(struct device *dev, const char *type, struct gsb_buffer *buffer)
+static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
+{
+	struct gsb_data_etwl *etwl = &buffer->data.etwl;
+
+	if (buffer->len < 3) {
+		dev_err(d->dev, "invalid ETWL package (len = %d)\n", buffer->len);
+		return AE_OK;
+	}
+
+	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n",
+		etwl->etw3, etwl->etw4,
+		buffer->len - 3, (char *)etwl->msg);
+
+	// indicate success
+	buffer->status = 0x00;
+	buffer->len = 0x00;
+
+	return AE_OK;
+}
+
+static struct gsb_data_rqsx *san_validate_rqsx(struct device *dev,
+		const char *type, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *rqsx = &buffer->data.rqsx;
 
@@ -492,40 +512,20 @@ static struct gsb_data_rqsx
 	return rqsx;
 }
 
-static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
-{
-	struct gsb_data_etwl *etwl = &buffer->data.etwl;
-
-	if (buffer->len < 3) {
-		dev_err(d->dev, "invalid ETWL package (len = %d)\n", buffer->len);
-		return AE_OK;
-	}
-
-	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n",
-		etwl->etw3, etwl->etw4,
-		buffer->len - 3, (char *)etwl->msg);
-
-	// indicate success
-	buffer->status = 0x00;
-	buffer->len = 0x00;
-
-	return AE_OK;
-}
-
 static void gsb_rqsx_response_error(struct gsb_buffer *gsb, int status)
 {
-	gsb->status          = 0x00;
-	gsb->len             = 0x02;
+	gsb->status = 0x00;
+	gsb->len = 0x02;
 	gsb->data.out.status = (u8)(-status);
-	gsb->data.out.len    = 0x00;
+	gsb->data.out.len = 0x00;
 }
 
 static void gsb_rqsx_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t len)
 {
-	gsb->status          = 0x00;
-	gsb->len             = len + 2;
+	gsb->status = 0x00;
+	gsb->len = len + 2;
 	gsb->data.out.status = 0x00;
-	gsb->data.out.len    = len;
+	gsb->data.out.len = len;
 
 	if (len)
 		memcpy(&gsb->data.out.pld[0], ptr, len);
@@ -573,7 +573,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	if (!gsb_rqst)
 		return AE_OK;
 
-	rqst.target_category  = gsb_rqst->tc;
+	rqst.target_category = gsb_rqst->tc;
 	rqst.target_id = gsb_rqst->tid;
 	rqst.command_id = gsb_rqst->cid;
 	rqst.instance_id = gsb_rqst->iid;
@@ -582,7 +582,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rqst.payload = &gsb_rqst->pld[0];
 
 	rsp.capacity = ARRAY_SIZE(rspbuf);
-	rsp.length  = 0;
+	rsp.length = 0;
 	rsp.pointer = &rspbuf[0];
 
 	// handle suspended device
@@ -620,7 +620,7 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	if (!gsb_rqsg)
 		return AE_OK;
 
-	rqsg.tc  = gsb_rqsg->tc;
+	rqsg.tc = gsb_rqsg->tc;
 	rqsg.cid = gsb_rqsg->cid;
 	rqsg.iid = gsb_rqsg->iid;
 	rqsg.cdl = get_unaligned(&gsb_rqsg->cdl);
@@ -670,10 +670,12 @@ static acpi_status san_opreg_handler(u32 function,
 
 	case 0x03:
 		return san_rqsg(d, buffer);
-	}
 
-	dev_warn(d->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
-	return AE_OK;
+	default:
+		dev_warn(d->dev, "unsupported SAN0 request (cv: 0x%02x)\n",
+			 buffer->data.in.cv);
+		return AE_OK;
+	}
 }
 
 
