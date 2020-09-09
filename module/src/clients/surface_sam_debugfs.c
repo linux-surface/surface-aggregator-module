@@ -251,14 +251,13 @@ static int __init surface_sam_debugfs_init(void)
 
 	return status;
 }
+module_init(surface_sam_debugfs_init);
 
 static void __exit surface_sam_debugfs_exit(void)
 {
 	platform_driver_unregister(&ssam_dbgdev_driver);
 	platform_device_unregister(&ssam_dbgdev_device);
 }
-
-module_init(surface_sam_debugfs_init);
 module_exit(surface_sam_debugfs_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
