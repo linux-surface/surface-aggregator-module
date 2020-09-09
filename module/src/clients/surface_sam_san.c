@@ -897,6 +897,10 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 }
 
 
+/*
+ * ACPI devices that make use of the SAM EC via the SAN interface. Link them
+ * to the SAN device to try and enforce correct suspend/resume orderding.
+ */
 static const struct san_acpi_consumer san_mshw0091_consumers[] = {
 	{ "\\_SB.SRTC", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ "\\ADP1",     DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
