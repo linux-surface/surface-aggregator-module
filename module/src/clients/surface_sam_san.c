@@ -39,15 +39,11 @@ struct san_acpi_consumer {
 	const char *path;
 };
 
-struct san_handler_data {
-	struct acpi_connection_info info;		// must be first
-};
-
 struct san_data {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
-	struct san_handler_data context;
+	struct acpi_connection_info info;
 
 	struct ssam_event_notifier nf_bat;
 	struct ssam_event_notifier nf_tmp;
@@ -642,7 +638,7 @@ static acpi_status san_opreg_handler(u32 function,
 		acpi_physical_address command, u32 bits, u64 *value64,
 		void *opreg_context, void *region_context)
 {
-	struct san_data *d = to_san_data(opreg_context, context);
+	struct san_data *d = to_san_data(opreg_context, info);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
 	int accessor_type = (function & 0xFFFF0000) >> 16;
 
@@ -777,7 +773,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	status = acpi_install_address_space_handler(san,
 			ACPI_ADR_SPACE_GSBUS,
 			&san_opreg_handler,
-			NULL, &data->context);
+			NULL, &data->info);
 
 	if (ACPI_FAILURE(status)) {
 		status = -ENODEV;
