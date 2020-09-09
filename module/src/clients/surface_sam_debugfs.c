@@ -162,7 +162,7 @@ static long ssam_dbgdev_ioctl(struct file *file, unsigned int cmd,
 		return ssam_dbgdev_request(file, arg);
 
 	default:
-		return -EINVAL;
+		return -ENOIOCTLCMD;
 	}
 }
 
