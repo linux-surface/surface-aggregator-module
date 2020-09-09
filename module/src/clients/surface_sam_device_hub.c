@@ -286,7 +286,7 @@ static ssize_t ssam_base_hub_state_show(struct device *dev,
 }
 
 static struct device_attribute ssam_base_hub_attr_state =
-	__ATTR(state, S_IRUGO, ssam_base_hub_state_show, NULL);
+	__ATTR(state, 0444, ssam_base_hub_state_show, NULL);
 
 static struct attribute *ssam_base_hub_attrs[] = {
 	&ssam_base_hub_attr_state.attr,
