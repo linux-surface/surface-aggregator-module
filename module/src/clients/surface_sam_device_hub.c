@@ -34,7 +34,7 @@ struct ssam_hub_desc {
 	struct ssam_hub_desc __name = {			\
 		.cells = __cells,			\
 		.num_cells = ARRAY_SIZE(__cells),	\
-	};
+	}
 
 #define SSAM_DEFINE_PLATFORM_HUB(__suffix)					\
 	static const SSAM_DEFINE_HUB_DESC(ssam_device_hub_##__suffix,		\
@@ -43,7 +43,7 @@ struct ssam_hub_desc {
 		{ SSAM_DUID_HUB_MAIN, (void *)&ssam_device_hub_##__suffix },	\
 	};									\
 	static const SSAM_DEFINE_HUB_DESC(ssam_platform_hub_##__suffix,		\
-					  ssam_platform_hubs_##__suffix);	\
+					  ssam_platform_hubs_##__suffix)
 
 #define SSAM_DEFINE_PLATFORM_HUB_WITH_BASE(__suffix)				\
 	static const SSAM_DEFINE_HUB_DESC(ssam_device_hub_##__suffix,		\
@@ -55,7 +55,7 @@ struct ssam_hub_desc {
 		{ SSAM_DUID_HUB_BASE, (void *)&ssam_device_hub_##__suffix##_base },\
 	};									\
 	static const SSAM_DEFINE_HUB_DESC(ssam_platform_hub_##__suffix,		\
-					  ssam_platform_hubs_##__suffix);	\
+					  ssam_platform_hubs_##__suffix)
 
 
 /* -- Device registry. ------------------------------------------------------ */
