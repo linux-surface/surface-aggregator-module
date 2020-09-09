@@ -106,6 +106,12 @@ struct gsb_buffer {
 #define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
 #define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
 
+enum san_gsb_request_cv {
+	SAN_GSB_REQUEST_CV_RQST = 0x01,
+	SAN_GSB_REQUEST_CV_ETWL = 0x02,
+	SAN_GSB_REQUEST_CV_RQSG = 0x03,
+};
+
 #define san_request_sync_onstack(ctrl, rqst, rsp) \
 	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
 
@@ -662,13 +668,13 @@ static acpi_status san_opreg_handler(u32 function,
 	}
 
 	switch (buffer->data.in.cv) {
-	case 0x01:
+	case SAN_GSB_REQUEST_CV_RQST:
 		return san_rqst(d, buffer);
 
-	case 0x02:
+	case SAN_GSB_REQUEST_CV_ETWL:
 		return san_etwl(d, buffer);
 
-	case 0x03:
+	case SAN_GSB_REQUEST_CV_RQSG:
 		return san_rqsg(d, buffer);
 
 	default:
