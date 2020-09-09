@@ -567,6 +567,7 @@ err_main:
 err_platform:
 	return status;
 }
+module_init(ssam_device_hub_init);
 
 static void __exit ssam_device_hub_exit(void)
 {
@@ -574,8 +575,6 @@ static void __exit ssam_device_hub_exit(void)
 	ssam_device_driver_unregister(&ssam_hub_driver);
 	platform_driver_unregister(&ssam_platform_hub_driver);
 }
-
-module_init(ssam_device_hub_init);
 module_exit(ssam_device_hub_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
