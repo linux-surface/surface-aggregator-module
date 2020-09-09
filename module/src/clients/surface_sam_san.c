@@ -196,9 +196,8 @@ static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void 
 }
 
 
-static bool san_acpi_can_notify(struct device *dev, u64 func)
+static bool san_acpi_can_notify(acpi_handle san, u64 func)
 {
-	acpi_handle san = ACPI_HANDLE(dev);
 	return acpi_check_dsm(san, &SAN_DSM_UUID, SAN_DSM_REVISION, 1 << func);
 }
 
@@ -207,7 +206,7 @@ static int san_acpi_notify_power_event(struct device *dev, enum san_pwr_event ev
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
 
-	if (!san_acpi_can_notify(dev, event))
+	if (!san_acpi_can_notify(san, event))
 		return 0;
 
 	dev_dbg(dev, "notify power event 0x%02x\n", event);
@@ -232,7 +231,7 @@ static int san_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
 	union acpi_object *obj;
 	union acpi_object param;
 
-	if (!san_acpi_can_notify(dev, SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT))
+	if (!san_acpi_can_notify(san, SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT))
 		return 0;
 
 	param.type = ACPI_TYPE_INTEGER;
@@ -307,7 +306,7 @@ static inline int san_evt_power_dptf(struct device *dev, const struct ssam_event
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
 
-	if (!san_acpi_can_notify(dev, SAN_PWR_EVENT_DPTF))
+	if (!san_acpi_can_notify(san, SAN_PWR_EVENT_DPTF))
 		return 0;
 
 	/*
@@ -536,6 +535,8 @@ static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
 					    struct gsb_buffer *gsb)
 {
 	if (rqst->target_category == 0x11 && rqst->command_id == 0x0D) {
+		u8 base_state = 1;
+
 		/* Base state quirk:
 		 * The base state may be queried from ACPI when the EC is still
 		 * suspended. In this case it will return '-EPERM'. This query
@@ -551,8 +552,7 @@ static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
 		 * delay.
 		 */
 
-		u8 base_state = 1;
-		gsb_response_success(gsb, &base_state, 1);
+		gsb_response_success(gsb, &base_state, sizeof(base_state));
 		return AE_OK;
 	}
 
@@ -569,7 +569,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	int status = 0;
 	int try;
 
- 	gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
+	gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
 	if (!gsb_rqst)
 		return AE_OK;
 
@@ -637,11 +637,9 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-
-static acpi_status
-san_opreg_handler(u32 function, acpi_physical_address command,
-		  u32 bits, u64 *value64,
-		  void *opreg_context, void *region_context)
+static acpi_status san_opreg_handler(u32 function,
+		acpi_physical_address command, u32 bits, u64 *value64,
+		void *opreg_context, void *region_context)
 {
 	struct san_data *d = to_san_data(opreg_context, context);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
@@ -664,14 +662,20 @@ san_opreg_handler(u32 function, acpi_physical_address command,
 	}
 
 	switch (buffer->data.in.cv) {
-	case 0x01:  return san_rqst(d, buffer);
-	case 0x02:  return san_etwl(d, buffer);
-	case 0x03:  return san_rqsg(d, buffer);
+	case 0x01:
+		return san_rqst(d, buffer);
+
+	case 0x02:
+		return san_etwl(d, buffer);
+
+	case 0x03:
+		return san_rqsg(d, buffer);
 	}
 
 	dev_warn(d->dev, "unsupported SAN0 request (cv: 0x%02x)\n", buffer->data.in.cv);
 	return AE_OK;
 }
+
 
 static int san_events_register(struct platform_device *pdev)
 {
@@ -713,7 +717,6 @@ static void san_events_unregister(struct platform_device *pdev)
 	ssam_notifier_unregister(d->ctrl, &d->nf_tmp);
 }
 
-
 static int san_consumers_link(struct platform_device *pdev,
 			      const struct san_acpi_consumer *cons)
 {
@@ -743,7 +746,7 @@ static int san_consumers_link(struct platform_device *pdev,
 static int surface_sam_san_probe(struct platform_device *pdev)
 {
 	const struct san_acpi_consumer *cons;
-	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
+	acpi_handle san = ACPI_HANDLE(&pdev->dev);
 	struct ssam_controller *ctrl;
 	struct san_data *data;
 	int status;
