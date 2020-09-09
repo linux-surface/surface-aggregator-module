@@ -36,7 +36,7 @@ static const guid_t SAN_DSM_UUID =
 
 
 struct san_acpi_consumer {
-	char *path;
+	const char *path;
 	bool required;
 	u32 flags;
 };
@@ -754,7 +754,7 @@ static int san_consumers_link(struct platform_device *pdev,
 
 	// create links
 	for (con = cons; con->path; ++con) {
-		status = acpi_get_handle(NULL, con->path, &handle);
+		status = acpi_get_handle(NULL, (acpi_string)con->path, &handle);
 		if (status) {
 			if (con->required || status != AE_NOT_FOUND) {
 				status = -ENXIO;
