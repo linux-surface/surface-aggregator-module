@@ -37,8 +37,8 @@ static const guid_t SAN_DSM_UUID =
 
 struct san_acpi_consumer {
 	char *path;
-	bool  required;
-	u32   flags;
+	bool required;
+	u32 flags;
 };
 
 struct san_handler_data {
