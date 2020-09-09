@@ -758,19 +758,19 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	data = devm_kzalloc(&pdev->dev, sizeof(struct san_data), GFP_KERNEL);
-	if (!data)
-		return -ENOMEM;
-
-	data->dev = &pdev->dev;
-	data->ctrl = ctrl;
-
 	cons = acpi_device_get_match_data(&pdev->dev);
 	if (cons) {
 		status = san_consumers_link(pdev, cons);
 		if (status)
 			return status;
 	}
+
+	data = devm_kzalloc(&pdev->dev, sizeof(struct san_data), GFP_KERNEL);
+	if (!data)
+		return -ENOMEM;
+
+	data->dev = &pdev->dev;
+	data->ctrl = ctrl;
 
 	platform_set_drvdata(pdev, data);
 
