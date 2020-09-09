@@ -758,7 +758,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	data = kzalloc(sizeof(struct san_data), GFP_KERNEL);
+	data = devm_kzalloc(&pdev->dev, sizeof(struct san_data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 
@@ -768,7 +768,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	cons = acpi_device_get_match_data(&pdev->dev);
 	status = san_consumers_link(pdev, cons);
 	if (status)
-		goto err_consumers;
+		return status;
 
 	platform_set_drvdata(pdev, data);
 
@@ -805,14 +805,11 @@ err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 err_install_handler:
 	platform_set_drvdata(san, NULL);
-err_consumers:
-	kfree(data);
 	return status;
 }
 
 static int surface_sam_san_remove(struct platform_device *pdev)
 {
-	struct san_data *data = platform_get_drvdata(pdev);
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
@@ -830,8 +827,6 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	flush_scheduled_work();
 
 	platform_set_drvdata(pdev, NULL);
-	kfree(data);
-
 	return status;
 }
 
