@@ -468,40 +468,39 @@ static u32 san_evt_thermal_nf(struct ssam_event_notifier *nf, const struct ssam_
 }
 
 
-static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
+static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *b)
 {
-	struct gsb_data_etwl *etwl = &buffer->data.etwl;
+	struct gsb_data_etwl *etwl = &b->data.etwl;
 
-	if (buffer->len < 3) {
-		dev_err(d->dev, "invalid ETWL package (len = %d)\n", buffer->len);
+	if (b->len < sizeof(struct gsb_data_etwl)) {
+		dev_err(d->dev, "invalid ETWL package (len = %d)\n", b->len);
 		return AE_OK;
 	}
 
-	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n",
-		etwl->etw3, etwl->etw4,
-		buffer->len - 3, (char *)etwl->msg);
+	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n", etwl->etw3, etwl->etw4,
+		(unsigned int)(b->len - sizeof(struct gsb_data_etwl)),
+		(char *)etwl->msg);
 
 	// indicate success
-	buffer->status = 0x00;
-	buffer->len = 0x00;
+	b->status = 0x00;
+	b->len = 0x00;
 
 	return AE_OK;
 }
 
 static struct gsb_data_rqsx *san_validate_rqsx(struct device *dev,
-		const char *type, struct gsb_buffer *buffer)
+		const char *type, struct gsb_buffer *b)
 {
-	struct gsb_data_rqsx *rqsx = &buffer->data.rqsx;
+	struct gsb_data_rqsx *rqsx = &b->data.rqsx;
 
-	if (buffer->len < 8) {
-		dev_err(dev, "invalid %s package (len = %d)\n",
-			type, buffer->len);
+	if (b->len < sizeof(struct gsb_data_rqsx)) {
+		dev_err(dev, "invalid %s package (len = %d)\n", type, b->len);
 		return NULL;
 	}
 
-	if (get_unaligned(&rqsx->cdl) != buffer->len - sizeof(struct gsb_data_rqsx)) {
+	if (get_unaligned(&rqsx->cdl) != b->len - sizeof(struct gsb_data_rqsx)) {
 		dev_err(dev, "bogus %s package (len = %d, cdl = %d)\n",
-			type, buffer->len, get_unaligned(&rqsx->cdl));
+			type, b->len, get_unaligned(&rqsx->cdl));
 		return NULL;
 	}
 
