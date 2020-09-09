@@ -44,17 +44,17 @@ def _IOWR(ty, nr, size):
 
 class _RawRequestPayload(ctypes.Structure):
     _fields_ = [
-        ('__pad', ctypes.c_uint8 * 6),
-        ('length', ctypes.c_uint16),
         ('data', ctypes.POINTER(ctypes.c_uint8)),
+        ('length', ctypes.c_uint16),
+        ('__pad', ctypes.c_uint8 * 6),
     ]
 
 
 class _RawRequestResponse(ctypes.Structure):
     _fields_ = [
-        ('__pad', ctypes.c_uint8 * 6),
-        ('length', ctypes.c_uint16),
         ('data', ctypes.POINTER(ctypes.c_uint8)),
+        ('length', ctypes.c_uint16),
+        ('__pad', ctypes.c_uint8 * 6),
     ]
 
 
@@ -124,11 +124,11 @@ def _request(fd, rqst: Request):
         pld_ptr = ctypes.pointer(pld_buf)
         pld_ptr = ctypes.cast(pld_ptr, ctypes.POINTER(ctypes.c_uint8))
 
-        raw.payload.length = len(rqst.payload)
         raw.payload.data = pld_buf
+        raw.payload.length = len(rqst.payload)
     else:
-        raw.payload.length = 0
         raw.payload.data = None
+        raw.payload.length = 0
 
     # set up response
     if rqst.response_cap > 0:
@@ -141,11 +141,11 @@ def _request(fd, rqst: Request):
         rsp_ptr = ctypes.pointer(rsp_buf)
         rsp_ptr = ctypes.cast(rsp_ptr, ctypes.POINTER(ctypes.c_uint8))
 
-        raw.response.length = rsp_cap
         raw.response.data = rsp_ptr
+        raw.response.length = rsp_cap
     else:
-        raw.response.length = 0
         raw.response.data = None
+        raw.response.length = 0
 
     # perform actual IOCTL
     buf = bytearray(raw)

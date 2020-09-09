@@ -23,15 +23,15 @@ struct ssam_dbgdev_request {
 	__s16 status;
 
 	struct {
-		__u8 __pad[6];
-		__u16 length;
 		const __u8 __user *data;
+		__u16 length;
+		__u8 __pad[6];
 	} payload;
 
 	struct {
-		__u8 __pad[6];
-		__u16 length;
 		__u8 __user *data;
+		__u16 length;
+		__u8 __pad[6];
 	} response;
 };
 
