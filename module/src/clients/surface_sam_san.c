@@ -774,7 +774,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 			&san_opreg_handler, NULL, &data->info);
 
 	if (ACPI_FAILURE(status)) {
-		status = -ENODEV;
+		status = -ENXIO;
 		goto err_install_handler;
 	}
 
