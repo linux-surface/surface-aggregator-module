@@ -766,9 +766,11 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	data->ctrl = ctrl;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
-	status = san_consumers_link(pdev, cons);
-	if (status)
-		return status;
+	if (cons) {
+		status = san_consumers_link(pdev, cons);
+		if (status)
+			return status;
+	}
 
 	platform_set_drvdata(pdev, data);
 
