@@ -510,12 +510,6 @@ static struct gsb_data_rqsx *san_validate_rqsx(struct device *dev,
 		return NULL;
 	}
 
-	if (rqsx->tid != 0x01) {
-		dev_warn(dev, "unsupported %s package (tid = 0x%02x)\n",
-			 type, rqsx->tid);
-		return NULL;
-	}
-
 	return rqsx;
 }
 
