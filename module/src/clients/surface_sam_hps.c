@@ -16,7 +16,7 @@
 #include <linux/sysfs.h>
 
 #include "../../include/linux/surface_aggregator_module.h"
-#include "surface_sam_san.h"
+#include "../../include/linux/surface_acpi_notify.h"
 
 
 // TODO: vgaswitcheroo integration
