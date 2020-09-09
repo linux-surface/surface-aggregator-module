@@ -43,22 +43,11 @@ struct san_handler_data {
 	struct acpi_connection_info info;		// must be first
 };
 
-struct san_consumer_link {
-	const struct san_acpi_consumer *properties;
-	struct device_link *link;
-};
-
-struct san_consumers {
-	u32 num;
-	struct san_consumer_link *links;
-};
-
 struct san_data {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
 	struct san_handler_data context;
-	struct san_consumers consumers;
 
 	struct ssam_event_notifier nf_bat;
 	struct ssam_event_notifier nf_tmp;
@@ -726,79 +715,29 @@ static void san_events_unregister(struct platform_device *pdev)
 
 
 static int san_consumers_link(struct platform_device *pdev,
-			      const struct san_acpi_consumer *cons,
-			      struct san_consumers *out)
+			      const struct san_acpi_consumer *cons)
 {
-	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS;
-	const struct san_acpi_consumer *con;
-	struct san_consumer_link *links, *link;
-	struct acpi_device *adev;
-	acpi_handle handle;
-	u32 max_links = 0;
-	int status;
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_SUPPLIER;
+	const struct san_acpi_consumer *c;
 
-	if (!cons)
-		return 0;
+	for (c = cons; c && c->path; ++c) {
+		struct acpi_device *adev;
+		acpi_handle handle;
+		int status;
 
-	// count links
-	for (con = cons; con->path; ++con)
-		max_links += 1;
-
-	// allocate
-	links = kcalloc(max_links, sizeof(struct san_consumer_link), GFP_KERNEL);
-	link = &links[0];
-
-	if (!links)
-		return -ENOMEM;
-
-	// create links
-	for (con = cons; con->path; ++con) {
-		status = acpi_get_handle(NULL, (acpi_string)con->path, &handle);
-		if (status && status != AE_NOT_FOUND) {
-			status = -ENXIO;
-			goto cleanup;
-		}
+		status = acpi_get_handle(NULL, (acpi_string)c->path, &handle);
+		if (status && status != AE_NOT_FOUND)
+			return -ENXIO;
 
 		status = acpi_bus_get_device(handle, &adev);
 		if (status)
-			goto cleanup;
+			return status;
 
-		link->link = device_link_add(&adev->dev, &pdev->dev, flags);
-		if (!(link->link)) {
-			status = -EFAULT;
-			goto cleanup;
-		}
-		link->properties = con;
-
-		link += 1;
+		if (!device_link_add(&adev->dev, &pdev->dev, flags))
+			return -EFAULT;
 	}
 
-	out->num = link - links;
-	out->links = links;
-
 	return 0;
-
-cleanup:
-	for (link = link - 1; link >= links; --link)
-		device_link_del(link->link);
-
-	return status;
-}
-
-static void san_consumers_unlink(struct san_consumers *consumers)
-{
-	u32 i;
-
-	if (!consumers)
-		return;
-
-	for (i = 0; i < consumers->num; ++i)
-		device_link_del(consumers->links[i].link);
-
-	kfree(consumers->links);
-
-	consumers->num = 0;
-	consumers->links = NULL;
 }
 
 static int surface_sam_san_probe(struct platform_device *pdev)
@@ -821,7 +760,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	data->ctrl = ctrl;
 
 	cons = acpi_device_get_match_data(&pdev->dev);
-	status = san_consumers_link(pdev, cons, &data->consumers);
+	status = san_consumers_link(pdev, cons);
 	if (status)
 		goto err_consumers;
 
@@ -860,7 +799,6 @@ err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
 err_install_handler:
 	platform_set_drvdata(san, NULL);
-	san_consumers_unlink(&data->consumers);
 err_consumers:
 	kfree(data);
 	return status;
@@ -885,10 +823,9 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	 */
 	flush_scheduled_work();
 
-	san_consumers_unlink(&data->consumers);
+	platform_set_drvdata(pdev, NULL);
 	kfree(data);
 
-	platform_set_drvdata(pdev, NULL);
 	return status;
 }
 
