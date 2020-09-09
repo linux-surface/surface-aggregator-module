@@ -534,7 +534,7 @@ static void gsb_rqsx_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t le
 static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
 					    struct gsb_buffer *gsb)
 {
-	if (rqst->target_category == 0x11 && rqst->command_id == 0x0D) {
+	if (rqst->target_category == SSAM_SSH_TC_BAS && rqst->command_id == 0x0D) {
 		u8 base_state = 1;
 
 		/* Base state quirk:
