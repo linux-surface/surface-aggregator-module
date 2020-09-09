@@ -512,7 +512,7 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static void gsb_response_error(struct gsb_buffer *gsb, int status)
+static void gsb_rqsx_response_error(struct gsb_buffer *gsb, int status)
 {
 	gsb->status          = 0x00;
 	gsb->len             = 0x02;
@@ -520,7 +520,7 @@ static void gsb_response_error(struct gsb_buffer *gsb, int status)
 	gsb->data.out.len    = 0x00;
 }
 
-static void gsb_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t len)
+static void gsb_rqsx_response_success(struct gsb_buffer *gsb, u8 *ptr, size_t len)
 {
 	gsb->status          = 0x00;
 	gsb->len             = len + 2;
@@ -552,11 +552,11 @@ static acpi_status san_rqst_fixup_suspended(struct ssam_request *rqst,
 		 * delay.
 		 */
 
-		gsb_response_success(gsb, &base_state, sizeof(base_state));
+		gsb_rqsx_response_success(gsb, &base_state, sizeof(base_state));
 		return AE_OK;
 	}
 
-	gsb_response_error(gsb, -ENXIO);
+	gsb_rqsx_response_error(gsb, -ENXIO);
 	return AE_OK;
 }
 
@@ -601,10 +601,10 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	}
 
 	if (!status) {
-		gsb_response_success(buffer, rsp.pointer, rsp.length);
+		gsb_rqsx_response_success(buffer, rsp.pointer, rsp.length);
 	} else {
 		dev_err(d->dev, "rqst: failed with error %d\n", status);
-		gsb_response_error(buffer, status);
+		gsb_rqsx_response_error(buffer, status);
 	}
 
 	return AE_OK;
@@ -628,10 +628,10 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 
 	status = san_call_rqsg_handler(&rqsg);
 	if (!status) {
-		gsb_response_success(buffer, NULL, 0);
+		gsb_rqsx_response_success(buffer, NULL, 0);
 	} else {
 		dev_err(d->dev, "rqsg: failed with error %d\n", status);
-		gsb_response_error(buffer, status);
+		gsb_rqsx_response_error(buffer, status);
 	}
 
 	return AE_OK;
