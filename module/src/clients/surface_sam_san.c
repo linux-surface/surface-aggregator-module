@@ -651,7 +651,7 @@ static acpi_status san_opreg_handler(u32 function,
 {
 	struct san_data *d = to_san_data(opreg_context, context);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
-	int accessor_type = (0xFFFF0000 & function) >> 16;
+	int accessor_type = (function & 0xFFFF0000) >> 16;
 
 	if (command != SAN_GSB_COMMAND) {
 		dev_warn(d->dev, "unsupported command: 0x%02llx\n", command);
