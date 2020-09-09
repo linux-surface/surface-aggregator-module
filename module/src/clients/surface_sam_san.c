@@ -37,7 +37,6 @@ static const guid_t SAN_DSM_UUID =
 
 struct san_acpi_consumer {
 	const char *path;
-	bool required;
 	u32 flags;
 };
 
@@ -755,13 +754,9 @@ static int san_consumers_link(struct platform_device *pdev,
 	// create links
 	for (con = cons; con->path; ++con) {
 		status = acpi_get_handle(NULL, (acpi_string)con->path, &handle);
-		if (status) {
-			if (con->required || status != AE_NOT_FOUND) {
-				status = -ENXIO;
-				goto cleanup;
-			} else {
-				continue;
-			}
+		if (status && status != AE_NOT_FOUND) {
+			status = -ENXIO;
+			goto cleanup;
 		}
 
 		status = acpi_bus_get_device(handle, &adev);
@@ -903,10 +898,10 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 
 
 static const struct san_acpi_consumer san_mshw0091_consumers[] = {
-	{ "\\_SB.SRTC", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\ADP1",     true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\_SB.BAT1", true,  DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
-	{ "\\_SB.BAT2", false, DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.SRTC", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\ADP1",     DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.BAT1", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
+	{ "\\_SB.BAT2", DL_FLAG_PM_RUNTIME | DL_FLAG_STATELESS },
 	{ },
 };
 
