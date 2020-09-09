@@ -59,8 +59,6 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 	struct ssam_dbgdev_request rqst;
 	struct ssam_request spec;
 	struct ssam_response rsp;
-	u8 *pldbuf = NULL;
-	u8 *rspbuf = NULL;
 	int status = 0, ret = 0, tmp;
 
 	r = (struct ssam_dbgdev_request __user *)arg;
@@ -75,9 +73,11 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 	spec.instance_id = rqst.instance_id;
 	spec.flags = rqst.flags;
 	spec.length = rqst.payload.length;
+	spec.payload = NULL;
 
 	rsp.capacity = rqst.response.length;
 	rsp.length = 0;
+	rsp.pointer = NULL;
 
 	// get request payload from user-space
 	if (spec.length) {
@@ -86,19 +86,19 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 			goto out;
 		}
 
-		pldbuf = kzalloc(spec.length, GFP_KERNEL);
-		if (!pldbuf) {
+		spec.payload = kzalloc(spec.length, GFP_KERNEL);
+		if (!spec.payload) {
 			status = -ENOMEM;
 			ret = -EFAULT;
 			goto out;
 		}
 
-		if (copy_from_user(pldbuf, rqst.payload.data, spec.length)) {
+		if (copy_from_user((void *)spec.payload, rqst.payload.data,
+				   spec.length)) {
 			ret = -EFAULT;
 			goto out;
 		}
 	}
-	spec.payload = pldbuf;
 
 	// allocate response buffer
 	if (rsp.capacity) {
@@ -107,14 +107,13 @@ static long ssam_dbgdev_request(struct file *file, unsigned long arg)
 			goto out;
 		}
 
-		rspbuf = kzalloc(rsp.capacity, GFP_KERNEL);
-		if (!rspbuf) {
+		rsp.pointer = kzalloc(rsp.capacity, GFP_KERNEL);
+		if (!rsp.pointer) {
 			status = -ENOMEM;
 			ret = -EFAULT;
 			goto out;
 		}
 	}
-	rsp.pointer = rspbuf;
 
 	// perform request
 	status = ssam_request_sync(ddev->ctrl, &spec, &rsp);
@@ -140,8 +139,8 @@ out:
 		ret = tmp;
 
 	// cleanup
-	kfree(pldbuf);
-	kfree(rspbuf);
+	kfree(spec.payload);
+	kfree(rsp.pointer);
 
 	return ret;
 }
