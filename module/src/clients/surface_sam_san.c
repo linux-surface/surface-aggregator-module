@@ -108,7 +108,7 @@ enum san_gsb_request_cv {
 	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
 
 
-#define SAN_DSM_REVISION		0
+#define SAN_DSM_REVISION	0
 
 static const guid_t SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
