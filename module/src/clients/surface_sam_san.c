@@ -183,7 +183,7 @@ static int san_acpi_notify_event(struct device *dev, u64 func,
 	return status;
 }
 
-static int san_evt_power_adp(struct device *dev, const struct ssam_event *event)
+static int san_evt_bat_adp(struct device *dev, const struct ssam_event *event)
 {
 	int status;
 
@@ -205,7 +205,7 @@ static int san_evt_power_adp(struct device *dev, const struct ssam_event *event)
 	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_BAT2_STAT, NULL);
 }
 
-static int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
+static int san_evt_bat_bix(struct device *dev, const struct ssam_event *event)
 {
 	enum san_dsm_event_fn fn;
 
@@ -217,7 +217,7 @@ static int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
 	return san_acpi_notify_event(dev, fn, NULL);
 }
 
-static int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
+static int san_evt_bat_bst(struct device *dev, const struct ssam_event *event)
 {
 	enum san_dsm_event_fn fn;
 
@@ -229,7 +229,7 @@ static int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
 	return san_acpi_notify_event(dev, fn, NULL);
 }
 
-static int san_evt_power_dptf(struct device *dev, const struct ssam_event *event)
+static int san_evt_bat_dptf(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object payload;
 
@@ -245,7 +245,7 @@ static int san_evt_power_dptf(struct device *dev, const struct ssam_event *event
 	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_DPTF, &payload);
 }
 
-static unsigned long san_evt_power_delay(u8 cid)
+static unsigned long san_evt_bat_delay(u8 cid)
 {
 	switch (cid) {
 	case SAM_EVENT_CID_BAT_ADP:
@@ -264,21 +264,21 @@ static unsigned long san_evt_power_delay(u8 cid)
 	}
 }
 
-static bool san_evt_power(const struct ssam_event *event, struct device *dev)
+static bool san_evt_bat(const struct ssam_event *event, struct device *dev)
 {
 	int status;
 
 	switch (event->command_id) {
 	case SAM_EVENT_CID_BAT_BIX:
-		status = san_evt_power_bix(dev, event);
+		status = san_evt_bat_bix(dev, event);
 		break;
 
 	case SAM_EVENT_CID_BAT_BST:
-		status = san_evt_power_bst(dev, event);
+		status = san_evt_bat_bst(dev, event);
 		break;
 
 	case SAM_EVENT_CID_BAT_ADP:
-		status = san_evt_power_adp(dev, event);
+		status = san_evt_bat_adp(dev, event);
 		break;
 
 	case SAM_EVENT_CID_BAT_PROT:
@@ -289,7 +289,7 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 		return true;
 
 	case SAM_EVENT_CID_BAT_DPTF:
-		status = san_evt_power_dptf(dev, event);
+		status = san_evt_bat_dptf(dev, event);
 		break;
 
 	default:
@@ -303,24 +303,24 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 	return true;
 }
 
-static void san_evt_power_workfn(struct work_struct *work)
+static void san_evt_bat_workfn(struct work_struct *work)
 {
 	struct san_event_work *ev;
 
 	ev = container_of(work, struct san_event_work, work.work);
-	san_evt_power(&ev->event, ev->dev);
+	san_evt_bat(&ev->event, ev->dev);
 	kfree(ev);
 }
 
 
-static u32 san_evt_power_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
+static u32 san_evt_bat_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
 	struct san_data *d = to_san_data(nf, nf_bat);
 	struct san_event_work *work;
-	unsigned long delay = san_evt_power_delay(event->command_id);
+	unsigned long delay = san_evt_bat_delay(event->command_id);
 
 	if (delay == 0) {
-		if (san_evt_power(event, d->dev))
+		if (san_evt_bat(event, d->dev))
 			return SSAM_NOTIF_HANDLED;
 		else
 			return 0;
@@ -330,7 +330,7 @@ static u32 san_evt_power_nf(struct ssam_event_notifier *nf, const struct ssam_ev
 	if (!work)
 		return ssam_notifier_from_errno(-ENOMEM);
 
-	INIT_DELAYED_WORK(&work->work, san_evt_power_workfn);
+	INIT_DELAYED_WORK(&work->work, san_evt_bat_workfn);
 	work->dev = d->dev;
 
 	memcpy(&work->event, event, sizeof(struct ssam_event) + event->length);
@@ -340,7 +340,7 @@ static u32 san_evt_power_nf(struct ssam_event_notifier *nf, const struct ssam_ev
 }
 
 
-static inline int san_evt_thermal_notify(struct device *dev, const struct ssam_event *event)
+static inline int san_evt_tmp_trip(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object param;
 
@@ -355,13 +355,13 @@ static inline int san_evt_thermal_notify(struct device *dev, const struct ssam_e
 	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_THERMAL, &param);
 }
 
-static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
+static bool san_evt_tmp(const struct ssam_event *event, struct device *dev)
 {
 	int status;
 
 	switch (event->command_id) {
 	case SAM_EVENT_CID_TMP_TRIP:
-		status = san_evt_thermal_notify(dev, event);
+		status = san_evt_tmp_trip(dev, event);
 		break;
 
 	default:
@@ -376,9 +376,9 @@ static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
 	return true;
 }
 
-static u32 san_evt_thermal_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
+static u32 san_evt_tmp_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
-	if (san_evt_thermal(event, to_san_data(nf, nf_tmp)->dev))
+	if (san_evt_tmp(event, to_san_data(nf, nf_tmp)->dev))
 		return SSAM_NOTIF_HANDLED;
 	else
 		return 0;
@@ -659,7 +659,7 @@ static int san_events_register(struct platform_device *pdev)
 	int status;
 
 	d->nf_bat.base.priority = 1;
-	d->nf_bat.base.fn = san_evt_power_nf;
+	d->nf_bat.base.fn = san_evt_bat_nf;
 	d->nf_bat.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	d->nf_bat.event.id.target_category = SSAM_SSH_TC_BAT;
 	d->nf_bat.event.id.instance = 0;
@@ -667,7 +667,7 @@ static int san_events_register(struct platform_device *pdev)
 	d->nf_bat.event.flags = SSAM_EVENT_SEQUENCED;
 
 	d->nf_tmp.base.priority = 1;
-	d->nf_tmp.base.fn = san_evt_thermal_nf;
+	d->nf_tmp.base.fn = san_evt_tmp_nf;
 	d->nf_tmp.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	d->nf_tmp.event.id.target_category = SSAM_SSH_TC_TMP;
 	d->nf_tmp.event.id.instance = 0;
