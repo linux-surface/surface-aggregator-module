@@ -752,7 +752,8 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 err_install_dev:
 	san_events_unregister(pdev);
 err_enable_events:
-	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS, &san_opreg_handler);
+	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
+					  &san_opreg_handler);
 err_install_handler:
 	platform_set_drvdata(san, NULL);
 	return status;
