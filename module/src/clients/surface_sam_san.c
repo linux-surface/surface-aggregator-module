@@ -139,9 +139,6 @@ enum san_dsm_event_fn {
 	SAN_DSM_EVENT_FN_DPTF      = 0x0a,
 };
 
-#define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
-#define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
-
 enum sam_event_cid_bat {
 	SAM_EVENT_CID_BAT_BIX  = 0x15,
 	SAM_EVENT_CID_BAT_BST  = 0x16,
@@ -256,11 +253,11 @@ static unsigned long san_evt_power_delay(u8 cid)
 		 * Wait for battery state to update before signalling adapter
 		 * change.
 		 */
-		return SAM_EVENT_DELAY_PWR_ADAPTER;
+		return msecs_to_jiffies(5000);
 
 	case SAM_EVENT_CID_BAT_BST:
 		/* Ensure we do not miss anything important due to caching. */
-		return SAM_EVENT_DELAY_PWR_BST;
+		return msecs_to_jiffies(2000);
 
 	default:
 		return 0;
