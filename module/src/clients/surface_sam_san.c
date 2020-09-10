@@ -93,7 +93,7 @@ struct gsb_buffer {
 #define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
 #define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
 
-#define SAN_GSB_COMMAND		  0
+#define SAN_GSB_COMMAND		0
 
 enum san_gsb_request_cv {
 	SAN_GSB_REQUEST_CV_RQST = 0x01,
@@ -101,11 +101,7 @@ enum san_gsb_request_cv {
 	SAN_GSB_REQUEST_CV_RQSG = 0x03,
 };
 
-
-#define SAN_RQST_RETRY		5
-
-#define san_request_sync_onstack(ctrl, rqst, rsp) \
-	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
+#define SAN_REQUEST_NUM_TRIES	5
 
 
 #define SAN_DSM_REVISION	0
@@ -538,7 +534,6 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	struct ssam_request rqst;
 	struct ssam_response rsp;
 	int status = 0;
-	int try;
 
 	gsb_rqst = san_validate_rqsx(d->dev, "RQST", buffer);
 	if (!gsb_rqst)
@@ -562,14 +557,8 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 		return san_rqst_fixup_suspended(&rqst, buffer);
 	}
 
-	for (try = 0; try < SAN_RQST_RETRY; try++) {
-		if (try)
-			dev_warn(d->dev, "rqst: IO error, trying again\n");
-
-		status = san_request_sync_onstack(d->ctrl, &rqst, &rsp);
-		if (status != -ETIMEDOUT && status != -EREMOTEIO)
-			break;
-	}
+	status = ssam_retry(ssam_request_sync_onstack, SAN_REQUEST_NUM_TRIES,
+			    d->ctrl, &rqst, &rsp, SAN_GSB_MAX_RQSX_PAYLOAD);
 
 	if (!status) {
 		gsb_rqsx_response_success(buffer, rsp.pointer, rsp.length);
