@@ -18,13 +18,17 @@
 #define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
 #define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
-#define SAM_EVENT_PWR_CID_BIX		0x15
-#define SAM_EVENT_PWR_CID_BST		0x16
-#define SAM_EVENT_PWR_CID_ADAPTER	0x17
-#define SAM_EVENT_PWR_CID_PROTECT	0x18
-#define SAM_EVENT_PWR_CID_DPTF		0x4f
+enum sam_event_cid_bat {
+	SAM_EVENT_CID_BAT_BIX  = 0x15,
+	SAM_EVENT_CID_BAT_BST  = 0x16,
+	SAM_EVENT_CID_BAT_ADP  = 0x17,
+	SAM_EVENT_CID_BAT_PROT = 0x18,
+	SAM_EVENT_CID_BAT_DPTF = 0x4f,
+};
 
-#define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
+enum sam_event_cid_tmp {
+	SAM_EVENT_CID_TMP_TRIP = 0x0b,
+};
 
 
 struct san_acpi_consumer {
@@ -303,19 +307,17 @@ static int san_evt_power_dptf(struct device *dev, const struct ssam_event *event
 static unsigned long san_evt_power_delay(u8 cid)
 {
 	switch (cid) {
-	case SAM_EVENT_PWR_CID_ADAPTER:
+	case SAM_EVENT_CID_BAT_ADP:
 		/*
 		 * Wait for battery state to update before signalling adapter
 		 * change.
 		 */
 		return SAM_EVENT_DELAY_PWR_ADAPTER;
 
-	case SAM_EVENT_PWR_CID_BST:
+	case SAM_EVENT_CID_BAT_BST:
 		/* Ensure we do not miss anything important due to caching. */
 		return SAM_EVENT_DELAY_PWR_BST;
 
-	case SAM_EVENT_PWR_CID_BIX:
-	case SAM_EVENT_PWR_CID_DPTF:
 	default:
 		return 0;
 	}
@@ -326,26 +328,26 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 	int status;
 
 	switch (event->command_id) {
-	case SAM_EVENT_PWR_CID_BIX:
+	case SAM_EVENT_CID_BAT_BIX:
 		status = san_evt_power_bix(dev, event);
 		break;
 
-	case SAM_EVENT_PWR_CID_BST:
+	case SAM_EVENT_CID_BAT_BST:
 		status = san_evt_power_bst(dev, event);
 		break;
 
-	case SAM_EVENT_PWR_CID_ADAPTER:
+	case SAM_EVENT_CID_BAT_ADP:
 		status = san_evt_power_adp(dev, event);
 		break;
 
-	case SAM_EVENT_PWR_CID_PROTECT:
+	case SAM_EVENT_CID_BAT_PROT:
 		/*
 		 * TODO: Implement support for battery protection status change
 		 *       event.
 		 */
 		return true;
 
-	case SAM_EVENT_PWR_CID_DPTF:
+	case SAM_EVENT_CID_BAT_DPTF:
 		status = san_evt_power_dptf(dev, event);
 		break;
 
@@ -417,7 +419,7 @@ static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
 	int status;
 
 	switch (event->command_id) {
-	case SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT:
+	case SAM_EVENT_CID_TMP_TRIP:
 		status = san_evt_thermal_notify(dev, event);
 		break;
 
