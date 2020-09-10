@@ -21,6 +21,7 @@
 #define SAM_EVENT_PWR_CID_BIX		0x15
 #define SAM_EVENT_PWR_CID_BST		0x16
 #define SAM_EVENT_PWR_CID_ADAPTER	0x17
+#define SAM_EVENT_PWR_CID_PROTECT	0x18
 #define SAM_EVENT_PWR_CID_DPTF		0x4f
 
 #define SAM_EVENT_TEMP_CID_NOTIFY_SENSOR_TRIP_POINT	0x0b
@@ -336,6 +337,13 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 	case SAM_EVENT_PWR_CID_ADAPTER:
 		status = san_evt_power_adp(dev, event);
 		break;
+
+	case SAM_EVENT_PWR_CID_PROTECT:
+		/*
+		 * TODO: Implement support for battery protection status change
+		 *       event.
+		 */
+		return true;
 
 	case SAM_EVENT_PWR_CID_DPTF:
 		status = san_evt_power_dptf(dev, event);
