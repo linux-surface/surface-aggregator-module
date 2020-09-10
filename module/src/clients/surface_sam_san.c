@@ -240,7 +240,7 @@ static int san_acpi_notify_event(struct device *dev, u64 func,
 	return status;
 }
 
-static int san_evt_power_adapter(struct device *dev, const struct ssam_event *event)
+static int san_evt_power_adp(struct device *dev, const struct ssam_event *event)
 {
 	int status;
 
@@ -338,7 +338,7 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 		break;
 
 	case SAM_EVENT_PWR_CID_ADAPTER:
-		status = san_evt_power_adapter(dev, event);
+		status = san_evt_power_adp(dev, event);
 		break;
 
 	case SAM_EVENT_PWR_CID_DPTF:
