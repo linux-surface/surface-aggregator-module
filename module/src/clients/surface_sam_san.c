@@ -312,7 +312,6 @@ static void san_evt_bat_workfn(struct work_struct *work)
 	kfree(ev);
 }
 
-
 static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
 			  const struct ssam_event *event)
 {
@@ -335,7 +334,6 @@ static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
 	schedule_delayed_work(&work->work, delay);
 	return SSAM_NOTIF_HANDLED;
 }
-
 
 static int san_evt_tmp_trip(struct device *dev, const struct ssam_event *event)
 {
