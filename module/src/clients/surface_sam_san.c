@@ -341,7 +341,7 @@ static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
 }
 
 
-static inline int san_evt_tmp_trip(struct device *dev, const struct ssam_event *event)
+static int san_evt_tmp_trip(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object param;
 
