@@ -357,8 +357,9 @@ static bool san_evt_power(const struct ssam_event *event, struct device *dev)
 
 static void san_evt_power_workfn(struct work_struct *work)
 {
-	struct san_event_work *ev = container_of(work, struct san_event_work, work.work);
-
+	struct san_event_work *ev;
+	
+	ev = container_of(work, struct san_event_work, work.work);
 	san_evt_power(&ev->event, ev->dev);
 	kfree(ev);
 }
