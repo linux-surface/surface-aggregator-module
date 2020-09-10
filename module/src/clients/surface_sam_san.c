@@ -61,25 +61,33 @@ static int san_set_rqsg_interface_device(struct device *dev)
 	return status;
 }
 
-int ssam_anf_consumer_register(struct device *consumer, u32 flags)
+int ssam_anf_client_link(struct device *client)
 {
-	const u32 valid = DL_FLAG_PM_RUNTIME | DL_FLAG_RPM_ACTIVE;
-	int status;
-
-	if ((flags | valid) != valid)
-		return -EINVAL;
-
-	flags |= DL_FLAG_AUTOREMOVE_CONSUMER;
+	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
+	struct device_link *link;
 
 	mutex_lock(&san_rqsg_if.lock);
-	if (san_rqsg_if.san_dev)
-		status = device_link_add(consumer, san_rqsg_if.san_dev, flags) ? 0 : -EINVAL;
-	else
-		status = -ENXIO;
+
+	if (!san_rqsg_if.san_dev) {
+		mutex_unlock(&san_rqsg_if.lock);
+		return -ENXIO;
+	}
+
+	link = device_link_add(client, san_rqsg_if.san_dev, flags);
+	if (!link) {
+		mutex_unlock(&san_rqsg_if.lock);
+		return -ENOMEM;
+	}
+
+	if (READ_ONCE(link->status) == DL_STATE_SUPPLIER_UNBIND) {
+		mutex_unlock(&san_rqsg_if.lock);
+		return -ENXIO;
+	}
+
 	mutex_unlock(&san_rqsg_if.lock);
-	return status;
+	return 0;
 }
-EXPORT_SYMBOL_GPL(ssam_anf_consumer_register);
+EXPORT_SYMBOL_GPL(ssam_anf_client_link);
 
 int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data)
 {

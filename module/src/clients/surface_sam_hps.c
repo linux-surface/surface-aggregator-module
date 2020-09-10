@@ -1106,9 +1106,9 @@ static int shps_probe(struct platform_device *pdev)
 
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
 		// link to SAN
-		status = ssam_anf_consumer_register(&pdev->dev, 0);
+		status = ssam_anf_client_link(&pdev->dev);
 		if (status) {
-			dev_err(&pdev->dev, "failed to register with san consumer: %d\n", status);
+			dev_err(&pdev->dev, "failed to register as SAN client: %d\n", status);
 			return status == -ENXIO ? -EPROBE_DEFER : status;
 		}
 	}

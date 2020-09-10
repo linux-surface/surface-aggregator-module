@@ -23,9 +23,9 @@ struct ssam_anf_dgpu_event {
 	u8 *payload;			// pointer to payload of length cdl
 };
 
-typedef int (*ssam_anf_rqsg_handler_fn)(struct ssam_anf_dgpu_event *rqsg, void *data);
+int ssam_anf_client_link(struct device *client);
 
-int ssam_anf_consumer_register(struct device *consumer, u32 flags);
+typedef int (*ssam_anf_rqsg_handler_fn)(struct ssam_anf_dgpu_event *rqsg, void *data);
 int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data);
 
 #endif /* _SURFACE_SAM_SAN_H */
