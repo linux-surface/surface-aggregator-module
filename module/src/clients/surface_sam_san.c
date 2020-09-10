@@ -34,13 +34,13 @@ struct san_data {
 
 struct san_rqsg_if {
 	struct mutex lock;
-	struct device *san_dev;
+	struct device *dev;
 	struct blocking_notifier_head nh;
 };
 
 static struct san_rqsg_if san_rqsg_if = {
 	.lock = __MUTEX_INITIALIZER(san_rqsg_if.lock),
-	.san_dev = NULL,
+	.dev = NULL,
 	.nh = BLOCKING_NOTIFIER_INIT(san_rqsg_if.nh),
 };
 
@@ -49,8 +49,8 @@ static int san_set_rqsg_interface_device(struct device *dev)
 	int status = 0;
 
 	mutex_lock(&san_rqsg_if.lock);
-	if (!san_rqsg_if.san_dev && dev)
-		san_rqsg_if.san_dev = dev;
+	if (!san_rqsg_if.dev && dev)
+		san_rqsg_if.dev = dev;
 	else
 		status = -EBUSY;
 	mutex_unlock(&san_rqsg_if.lock);
@@ -65,12 +65,12 @@ int ssam_anf_client_link(struct device *client)
 
 	mutex_lock(&san_rqsg_if.lock);
 
-	if (!san_rqsg_if.san_dev) {
+	if (!san_rqsg_if.dev) {
 		mutex_unlock(&san_rqsg_if.lock);
 		return -ENXIO;
 	}
 
-	link = device_link_add(client, san_rqsg_if.san_dev, flags);
+	link = device_link_add(client, san_rqsg_if.dev, flags);
 	if (!link) {
 		mutex_unlock(&san_rqsg_if.lock);
 		return -ENOMEM;
