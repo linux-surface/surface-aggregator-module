@@ -127,15 +127,15 @@ enum san_pwr_event {
 
 static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data);
 
-struct sam_san_rqsg_if {
+struct san_rqsg_if {
 	struct mutex lock;
 	struct device *san_dev;
 	surface_sam_san_rqsg_handler_fn handler;
 	void *handler_data;
 };
 
-static struct sam_san_rqsg_if rqsg_if = {
-	.lock = __MUTEX_INITIALIZER(rqsg_if.lock),
+static struct san_rqsg_if san_rqsg_if = {
+	.lock = __MUTEX_INITIALIZER(san_rqsg_if.lock),
 	.san_dev = NULL,
 	.handler = sam_san_default_rqsg_handler,
 	.handler_data = NULL,
@@ -145,12 +145,12 @@ static int san_set_rqsg_interface_device(struct device *dev)
 {
 	int status = 0;
 
-	mutex_lock(&rqsg_if.lock);
-	if (!rqsg_if.san_dev && dev)
-		rqsg_if.san_dev = dev;
+	mutex_lock(&san_rqsg_if.lock);
+	if (!san_rqsg_if.san_dev && dev)
+		san_rqsg_if.san_dev = dev;
 	else
 		status = -EBUSY;
-	mutex_unlock(&rqsg_if.lock);
+	mutex_unlock(&san_rqsg_if.lock);
 
 	return status;
 }
@@ -165,12 +165,12 @@ int surface_sam_san_consumer_register(struct device *consumer, u32 flags)
 
 	flags |= DL_FLAG_AUTOREMOVE_CONSUMER;
 
-	mutex_lock(&rqsg_if.lock);
-	if (rqsg_if.san_dev)
-		status = device_link_add(consumer, rqsg_if.san_dev, flags) ? 0 : -EINVAL;
+	mutex_lock(&san_rqsg_if.lock);
+	if (san_rqsg_if.san_dev)
+		status = device_link_add(consumer, san_rqsg_if.san_dev, flags) ? 0 : -EINVAL;
 	else
 		status = -ENXIO;
-	mutex_unlock(&rqsg_if.lock);
+	mutex_unlock(&san_rqsg_if.lock);
 	return status;
 }
 EXPORT_SYMBOL_GPL(surface_sam_san_consumer_register);
@@ -179,15 +179,15 @@ int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *d
 {
 	int status = -EBUSY;
 
-	mutex_lock(&rqsg_if.lock);
+	mutex_lock(&san_rqsg_if.lock);
 
-	if (rqsg_if.handler == sam_san_default_rqsg_handler || !fn) {
-		rqsg_if.handler = fn ? fn : sam_san_default_rqsg_handler;
-		rqsg_if.handler_data = fn ? data : NULL;
+	if (san_rqsg_if.handler == sam_san_default_rqsg_handler || !fn) {
+		san_rqsg_if.handler = fn ? fn : sam_san_default_rqsg_handler;
+		san_rqsg_if.handler_data = fn ? data : NULL;
 		status = 0;
 	}
 
-	mutex_unlock(&rqsg_if.lock);
+	mutex_unlock(&san_rqsg_if.lock);
 	return status;
 }
 EXPORT_SYMBOL_GPL(surface_sam_san_set_rqsg_handler);
@@ -196,16 +196,16 @@ int san_call_rqsg_handler(struct surface_sam_san_rqsg *rqsg)
 {
 	int status;
 
-	mutex_lock(&rqsg_if.lock);
-	status = rqsg_if.handler(rqsg, rqsg_if.handler_data);
-	mutex_unlock(&rqsg_if.lock);
+	mutex_lock(&san_rqsg_if.lock);
+	status = san_rqsg_if.handler(rqsg, san_rqsg_if.handler_data);
+	mutex_unlock(&san_rqsg_if.lock);
 
 	return status;
 }
 
 static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data)
 {
-	struct device *dev = rqsg_if.san_dev;
+	struct device *dev = san_rqsg_if.san_dev;
 
 	dev_warn(dev, "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
 		 rqsg->tc, rqsg->cid, rqsg->iid);
