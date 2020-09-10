@@ -247,7 +247,7 @@ static int san_acpi_notify_event(struct device *dev, u64 func,
 	return status;
 }
 
-static inline int san_evt_power_adapter(struct device *dev, const struct ssam_event *event)
+static int san_evt_power_adapter(struct device *dev, const struct ssam_event *event)
 {
 	int status;
 
@@ -269,7 +269,7 @@ static inline int san_evt_power_adapter(struct device *dev, const struct ssam_ev
 	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_BAT2_STAT, NULL);
 }
 
-static inline int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
+static int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
 {
 	enum san_dsm_event_fn fn;
 
@@ -281,7 +281,7 @@ static inline int san_evt_power_bix(struct device *dev, const struct ssam_event 
 	return san_acpi_notify_event(dev, fn, NULL);
 }
 
-static inline int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
+static int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
 {
 	enum san_dsm_event_fn fn;
 
@@ -293,7 +293,7 @@ static inline int san_evt_power_bst(struct device *dev, const struct ssam_event 
 	return san_acpi_notify_event(dev, fn, NULL);
 }
 
-static inline int san_evt_power_dptf(struct device *dev, const struct ssam_event *event)
+static int san_evt_power_dptf(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object payload;
 
