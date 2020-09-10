@@ -17,13 +17,6 @@
 
 #define SAN_RQST_RETRY				5
 
-#define SAN_DSM_REVISION			0
-#define SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT	0x09
-
-static const guid_t SAN_DSM_UUID =
-	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
-		  0x48, 0x7c, 0x91, 0xab, 0x3c);
-
 #define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
 #define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
