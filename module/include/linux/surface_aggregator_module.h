@@ -1385,29 +1385,6 @@ struct ssam_device_uid {
 	u8 function;
 };
 
-/**
- * SSAM_DUID() - Define a &struct ssam_device_uid.
- * @cat: Target category of the device.
- * @tid: Target ID of the device.
- * @iid: Instance ID of the device.
- * @fun: Sub-function of the (virtual) device.
- *
- * Return: The &struct ssam_device_uid specified by the given parameters.
- */
-#define SSAM_DUID(cat, tid, iid, fun)		\
-	((struct ssam_device_uid) {		\
-		.category = SSAM_SSH_TC_##cat,	\
-		.target = (tid),		\
-		.instance = (iid),		\
-		.function = (fun)		\
-	})
-
-/*
- * SSAM_DUID_NULL - Null device UID.
- */
-#define SSAM_DUID_NULL		((struct ssam_device_uid) { 0 })
-
-
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
 
 // TODO: the following definitions and struct belongs into mod_devicetable with
