@@ -395,11 +395,11 @@ struct gsb_data_in {
 } __packed;
 
 struct gsb_data_rqsx {
-	u8 cv;				// command value (should be 0x01 or 0x03)
+	u8 cv;				// command value (san_gsb_request_cv)
 	u8 tc;				// target category
-	u8 tid;				// transport channnel ID
-	u8 iid;				// target instance
-	u8 snc;				// expect-response-flag
+	u8 tid;				// target ID
+	u8 iid;				// instance ID
+	u8 snc;				// expect-response-flag?
 	u8 cid;				// command ID
 	u16 cdl;			// payload length
 	u8 pld[0];			// payload
@@ -407,8 +407,8 @@ struct gsb_data_rqsx {
 
 struct gsb_data_etwl {
 	u8 cv;				// command value (should be 0x02)
-	u8 etw3;			// ?
-	u8 etw4;			// ?
+	u8 etw3;			// unknown
+	u8 etw4;			// unknown
 	u8 msg[0];			// error message (ASCIIZ)
 } __packed;
 
