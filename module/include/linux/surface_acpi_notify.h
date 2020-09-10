@@ -24,8 +24,7 @@ struct ssam_anf_dgpu_event {
 };
 
 int ssam_anf_client_link(struct device *client);
-
-typedef int (*ssam_anf_rqsg_handler_fn)(struct ssam_anf_dgpu_event *rqsg, void *data);
-int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data);
+int ssam_anf_dgpu_notifier_register(struct notifier_block *nb);
+int ssam_anf_dgpu_notifier_unregister(struct notifier_block *nb);
 
 #endif /* _SURFACE_SAM_SAN_H */

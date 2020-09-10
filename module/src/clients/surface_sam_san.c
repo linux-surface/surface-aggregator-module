@@ -10,6 +10,7 @@
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
+#include <linux/notifier.h>
 
 #include "../../include/linux/surface_aggregator_module.h"
 #include "../../include/linux/surface_acpi_notify.h"
@@ -31,20 +32,16 @@ struct san_data {
 
 /* -- dGPU Notifier Interface. ---------------------------------------------- */
 
-static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *data);
-
 struct san_rqsg_if {
 	struct mutex lock;
 	struct device *san_dev;
-	ssam_anf_rqsg_handler_fn handler;
-	void *handler_data;
+	struct blocking_notifier_head nh;
 };
 
 static struct san_rqsg_if san_rqsg_if = {
 	.lock = __MUTEX_INITIALIZER(san_rqsg_if.lock),
 	.san_dev = NULL,
-	.handler = sam_san_default_rqsg_handler,
-	.handler_data = NULL,
+	.nh = BLOCKING_NOTIFIER_INIT(san_rqsg_if.nh),
 };
 
 static int san_set_rqsg_interface_device(struct device *dev)
@@ -89,42 +86,24 @@ int ssam_anf_client_link(struct device *client)
 }
 EXPORT_SYMBOL_GPL(ssam_anf_client_link);
 
-int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data)
+int ssam_anf_dgpu_notifier_register(struct notifier_block *nb)
 {
-	int status = -EBUSY;
-
-	mutex_lock(&san_rqsg_if.lock);
-
-	if (san_rqsg_if.handler == sam_san_default_rqsg_handler || !fn) {
-		san_rqsg_if.handler = fn ? fn : sam_san_default_rqsg_handler;
-		san_rqsg_if.handler_data = fn ? data : NULL;
-		status = 0;
-	}
-
-	mutex_unlock(&san_rqsg_if.lock);
-	return status;
+	return blocking_notifier_chain_register(&san_rqsg_if.nh, nb);
 }
-EXPORT_SYMBOL_GPL(ssam_anf_set_rqsg_handler);
+EXPORT_SYMBOL_GPL(ssam_anf_dgpu_notifier_register);
 
-int san_call_rqsg_handler(struct ssam_anf_dgpu_event *rqsg)
+int ssam_anf_dgpu_notifier_unregister(struct notifier_block *nb)
 {
-	int status;
-
-	mutex_lock(&san_rqsg_if.lock);
-	status = san_rqsg_if.handler(rqsg, san_rqsg_if.handler_data);
-	mutex_unlock(&san_rqsg_if.lock);
-
-	return status;
+	return blocking_notifier_chain_unregister(&san_rqsg_if.nh, nb);
 }
+EXPORT_SYMBOL_GPL(ssam_anf_dgpu_notifier_unregister);
 
-static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *data)
+static int san_dgpu_notifier_call(struct ssam_anf_dgpu_event *evt)
 {
-	struct device *dev = san_rqsg_if.san_dev;
+	int ret;
 
-	dev_warn(dev, "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
-		 rqsg->category, rqsg->command, rqsg->instance);
-
-	return 0;
+	ret = blocking_notifier_call_chain(&san_rqsg_if.nh, evt->command, evt);
+	return notifier_to_errno(ret);
 }
 
 
@@ -597,7 +576,7 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	evt.length = get_unaligned(&gsb_rqsg->cdl);
 	evt.payload = &gsb_rqsg->pld[0];
 
-	status = san_call_rqsg_handler(&evt);
+	status = san_dgpu_notifier_call(&evt);
 	if (!status) {
 		gsb_rqsx_response_success(buffer, NULL, 0);
 	} else {
