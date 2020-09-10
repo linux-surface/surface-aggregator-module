@@ -313,7 +313,8 @@ static void san_evt_bat_workfn(struct work_struct *work)
 }
 
 
-static u32 san_evt_bat_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
+static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
+			  const struct ssam_event *event)
 {
 	struct san_data *d = to_san_data(nf, nf_bat);
 	struct san_event_work *work;
@@ -376,9 +377,12 @@ static bool san_evt_tmp(const struct ssam_event *event, struct device *dev)
 	return true;
 }
 
-static u32 san_evt_tmp_nf(struct ssam_event_notifier *nf, const struct ssam_event *event)
+static u32 san_evt_tmp_nf(struct ssam_event_notifier *nf,
+			  const struct ssam_event *event)
 {
-	if (san_evt_tmp(event, to_san_data(nf, nf_tmp)->dev))
+	struct san_data *d = to_san_data(nf, nf_bat);
+
+	if (san_evt_tmp(event, d->dev))
 		return SSAM_NOTIF_HANDLED;
 	else
 		return 0;
