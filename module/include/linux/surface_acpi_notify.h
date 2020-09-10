@@ -16,6 +16,7 @@
 
 struct ssam_anf_dgpu_event {
 	u8 category;			// target category
+	u8 target;			// target ID
 	u8 command;			// command ID
 	u8 instance;			// instance ID
 	u16 length;			// command data length (length of payload)

@@ -632,6 +632,7 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 		return AE_OK;
 
 	evt.category = gsb_rqsg->tc;
+	evt.target = gsb_rqsg->tid;
 	evt.command = gsb_rqsg->cid;
 	evt.instance = gsb_rqsg->iid;
 	evt.length = get_unaligned(&gsb_rqsg->cdl);
