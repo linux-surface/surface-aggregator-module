@@ -230,7 +230,7 @@ static struct platform_device ssam_dbgdev_device = {
 };
 
 static struct platform_driver ssam_dbgdev_driver = {
-	.probe  = ssam_dbgdev_probe,
+	.probe = ssam_dbgdev_probe,
 	.remove = ssam_dbgdev_remove,
 	.driver = {
 		.name = SSAM_DBGDEV_NAME,
