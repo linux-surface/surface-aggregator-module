@@ -851,15 +851,15 @@ static int shps_dgpu_powered_on(struct platform_device *pdev)
 	return 0;
 }
 
-static int shps_dgpu_handle_rqsg(struct surface_sam_san_rqsg *rqsg, void *data)
+static int shps_dgpu_handle_rqsg(struct ssam_anf_dgpu_event *rqsg, void *data)
 {
 	struct platform_device *pdev = data;
 
-	if (rqsg->tc == SAM_DGPU_TC && rqsg->cid == SAM_DGPU_CID_POWERON)
+	if (rqsg->category == SAM_DGPU_TC && rqsg->command == SAM_DGPU_CID_POWERON)
 		return shps_dgpu_powered_on(pdev);
 
 	dev_warn(&pdev->dev, "unimplemented dGPU request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
-		 rqsg->tc, rqsg->cid, rqsg->iid);
+		 rqsg->category, rqsg->command, rqsg->instance);
 	return 0;
 }
 
@@ -1106,7 +1106,7 @@ static int shps_probe(struct platform_device *pdev)
 
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
 		// link to SAN
-		status = surface_sam_san_consumer_register(&pdev->dev, 0);
+		status = ssam_anf_consumer_register(&pdev->dev, 0);
 		if (status) {
 			dev_err(&pdev->dev, "failed to register with san consumer: %d\n", status);
 			return status == -ENXIO ? -EPROBE_DEFER : status;
@@ -1159,7 +1159,7 @@ static int shps_probe(struct platform_device *pdev)
 		goto err_devlink;
 
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
-		status = surface_sam_san_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
+		status = ssam_anf_set_rqsg_handler(shps_dgpu_handle_rqsg, pdev);
 		if (status) {
 			dev_err(&pdev->dev, "unable to set SAN notification handler (%d)\n", status);
 			goto err_devlink;
@@ -1207,7 +1207,7 @@ err_post_notification:
 	if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
 		shps_remove_sgcp_notification(pdev);
 	} else if (detected_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
-		surface_sam_san_set_rqsg_handler(NULL, NULL);
+		ssam_anf_set_rqsg_handler(NULL, NULL);
 	}
 err_devlink:
 	device_remove_groups(&pdev->dev, shps_power_groups);
@@ -1242,7 +1242,7 @@ static int shps_remove(struct platform_device *pdev)
 	if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SGCP) {
 		shps_remove_sgcp_notification(pdev);
 	} else if (drvdata->hardware_traits.notification_method == SHPS_NOTIFICATION_METHOD_SAN) {
-		surface_sam_san_set_rqsg_handler(NULL, NULL);
+		ssam_anf_set_rqsg_handler(NULL, NULL);
 	}
 	device_remove_groups(&pdev->dev, shps_power_groups);
 	shps_gpios_remove_irq(pdev);

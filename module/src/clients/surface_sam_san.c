@@ -125,12 +125,12 @@ enum san_pwr_event {
 };
 
 
-static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data);
+static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *data);
 
 struct san_rqsg_if {
 	struct mutex lock;
 	struct device *san_dev;
-	surface_sam_san_rqsg_handler_fn handler;
+	ssam_anf_rqsg_handler_fn handler;
 	void *handler_data;
 };
 
@@ -155,7 +155,7 @@ static int san_set_rqsg_interface_device(struct device *dev)
 	return status;
 }
 
-int surface_sam_san_consumer_register(struct device *consumer, u32 flags)
+int ssam_anf_consumer_register(struct device *consumer, u32 flags)
 {
 	const u32 valid = DL_FLAG_PM_RUNTIME | DL_FLAG_RPM_ACTIVE;
 	int status;
@@ -173,9 +173,9 @@ int surface_sam_san_consumer_register(struct device *consumer, u32 flags)
 	mutex_unlock(&san_rqsg_if.lock);
 	return status;
 }
-EXPORT_SYMBOL_GPL(surface_sam_san_consumer_register);
+EXPORT_SYMBOL_GPL(ssam_anf_consumer_register);
 
-int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *data)
+int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data)
 {
 	int status = -EBUSY;
 
@@ -190,9 +190,9 @@ int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *d
 	mutex_unlock(&san_rqsg_if.lock);
 	return status;
 }
-EXPORT_SYMBOL_GPL(surface_sam_san_set_rqsg_handler);
+EXPORT_SYMBOL_GPL(ssam_anf_set_rqsg_handler);
 
-int san_call_rqsg_handler(struct surface_sam_san_rqsg *rqsg)
+int san_call_rqsg_handler(struct ssam_anf_dgpu_event *rqsg)
 {
 	int status;
 
@@ -203,12 +203,12 @@ int san_call_rqsg_handler(struct surface_sam_san_rqsg *rqsg)
 	return status;
 }
 
-static int sam_san_default_rqsg_handler(struct surface_sam_san_rqsg *rqsg, void *data)
+static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *data)
 {
 	struct device *dev = san_rqsg_if.san_dev;
 
 	dev_warn(dev, "unhandled request: RQSG(0x%02x, 0x%02x, 0x%02x)\n",
-		 rqsg->tc, rqsg->cid, rqsg->iid);
+		 rqsg->category, rqsg->command, rqsg->instance);
 
 	return 0;
 }
@@ -624,20 +624,20 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 {
 	struct gsb_data_rqsx *gsb_rqsg;
-	struct surface_sam_san_rqsg rqsg;
+	struct ssam_anf_dgpu_event evt;
 	int status;
 
 	gsb_rqsg = san_validate_rqsx(d->dev, "RQSG", buffer);
 	if (!gsb_rqsg)
 		return AE_OK;
 
-	rqsg.tc = gsb_rqsg->tc;
-	rqsg.cid = gsb_rqsg->cid;
-	rqsg.iid = gsb_rqsg->iid;
-	rqsg.cdl = get_unaligned(&gsb_rqsg->cdl);
-	rqsg.pld = &gsb_rqsg->pld[0];
+	evt.category = gsb_rqsg->tc;
+	evt.command = gsb_rqsg->cid;
+	evt.instance = gsb_rqsg->iid;
+	evt.length = get_unaligned(&gsb_rqsg->cdl);
+	evt.payload = &gsb_rqsg->pld[0];
 
-	status = san_call_rqsg_handler(&rqsg);
+	status = san_call_rqsg_handler(&evt);
 	if (!status) {
 		gsb_rqsx_response_success(buffer, NULL, 0);
 	} else {

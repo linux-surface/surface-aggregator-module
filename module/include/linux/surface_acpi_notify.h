@@ -14,17 +14,17 @@
 #include <linux/types.h>
 
 
-struct surface_sam_san_rqsg {
-	u8 tc;				// target category
-	u8 cid;				// command ID
-	u8 iid;				// instance ID
-	u16 cdl;			// command data length (length of payload)
-	u8 *pld;			// pointer to payload of length cdl
+struct ssam_anf_dgpu_event {
+	u8 category;			// target category
+	u8 command;			// command ID
+	u8 instance;			// instance ID
+	u16 length;			// command data length (length of payload)
+	u8 *payload;			// pointer to payload of length cdl
 };
 
-typedef int (*surface_sam_san_rqsg_handler_fn)(struct surface_sam_san_rqsg *rqsg, void *data);
+typedef int (*ssam_anf_rqsg_handler_fn)(struct ssam_anf_dgpu_event *rqsg, void *data);
 
-int surface_sam_san_consumer_register(struct device *consumer, u32 flags);
-int surface_sam_san_set_rqsg_handler(surface_sam_san_rqsg_handler_fn fn, void *data);
+int ssam_anf_consumer_register(struct device *consumer, u32 flags);
+int ssam_anf_set_rqsg_handler(ssam_anf_rqsg_handler_fn fn, void *data);
 
 #endif /* _SURFACE_SAM_SAN_H */
