@@ -320,12 +320,8 @@ static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
 	struct san_event_work *work;
 	unsigned long delay = san_evt_bat_delay(event->command_id);
 
-	if (delay == 0) {
-		if (san_evt_bat(event, d->dev))
-			return SSAM_NOTIF_HANDLED;
-		else
-			return 0;
-	}
+	if (delay == 0)
+		return san_evt_bat(event, d->dev) ? SSAM_NOTIF_HANDLED : 0;
 
 	work = kzalloc(sizeof(struct san_event_work) + event->length, GFP_KERNEL);
 	if (!work)
@@ -382,10 +378,7 @@ static u32 san_evt_tmp_nf(struct ssam_event_notifier *nf,
 {
 	struct san_data *d = to_san_data(nf, nf_bat);
 
-	if (san_evt_tmp(event, d->dev))
-		return SSAM_NOTIF_HANDLED;
-	else
-		return 0;
+	return san_evt_tmp(event, d->dev) ? SSAM_NOTIF_HANDLED : 0;
 }
 
 
