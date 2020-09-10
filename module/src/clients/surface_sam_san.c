@@ -114,14 +114,21 @@ enum san_gsb_request_cv {
 	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
 
 
-enum san_pwr_event {
-	SAN_PWR_EVENT_BAT1_STAT	= 0x03,
-	SAN_PWR_EVENT_BAT1_INFO	= 0x04,
-	SAN_PWR_EVENT_ADP1_STAT	= 0x05,
-	SAN_PWR_EVENT_ADP1_INFO	= 0x06,
-	SAN_PWR_EVENT_BAT2_STAT	= 0x07,
-	SAN_PWR_EVENT_BAT2_INFO	= 0x08,
-	SAN_PWR_EVENT_DPTF      = 0x0A,
+#define SAN_DSM_REVISION		0
+
+static const guid_t SAN_DSM_UUID =
+	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
+		  0x48, 0x7c, 0x91, 0xab, 0x3c);
+
+enum san_dsm_event_fn {
+	SAN_DSM_EVENT_FN_BAT1_STAT	= 0x03,
+	SAN_DSM_EVENT_FN_BAT1_INFO	= 0x04,
+	SAN_DSM_EVENT_FN_ADP1_STAT	= 0x05,
+	SAN_DSM_EVENT_FN_ADP1_INFO	= 0x06,
+	SAN_DSM_EVENT_FN_BAT2_STAT	= 0x07,
+	SAN_DSM_EVENT_FN_BAT2_INFO	= 0x08,
+	SAN_DSM_EVENT_FN_THERMAL	= 0x09,
+	SAN_DSM_EVENT_FN_DPTF		= 0x0a,
 };
 
 
@@ -214,69 +221,37 @@ static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *
 }
 
 
-static bool san_acpi_can_notify(acpi_handle san, u64 func)
-{
-	return acpi_check_dsm(san, &SAN_DSM_UUID, SAN_DSM_REVISION, 1 << func);
-}
-
-static int san_acpi_notify_power_event(struct device *dev, enum san_pwr_event event)
+static int san_acpi_notify_event(struct device *dev, u64 func,
+				 union acpi_object *param)
 {
 	acpi_handle san = ACPI_HANDLE(dev);
 	union acpi_object *obj;
+	int status = 0;
 
-	if (!san_acpi_can_notify(san, event))
+	if (!acpi_check_dsm(san, &SAN_DSM_UUID, SAN_DSM_REVISION, 1 << func))
 		return 0;
 
-	dev_dbg(dev, "notify power event 0x%02x\n", event);
-	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
-				      event, NULL, ACPI_TYPE_BUFFER);
+	dev_dbg(dev, "notify event 0x%02llx\n", func);
 
+	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
+				      func, param, ACPI_TYPE_BUFFER);
 	if (IS_ERR_OR_NULL(obj))
 		return obj ? PTR_ERR(obj) : -ENXIO;
 
 	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
 		dev_err(dev, "got unexpected result from _DSM\n");
-		return -EFAULT;
+		status = -EFAULT;
 	}
 
 	ACPI_FREE(obj);
-	return 0;
+	return status;
 }
-
-static int san_acpi_notify_sensor_trip_point(struct device *dev, u8 iid)
-{
-	acpi_handle san = ACPI_HANDLE(dev);
-	union acpi_object *obj;
-	union acpi_object param;
-
-	if (!san_acpi_can_notify(san, SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT))
-		return 0;
-
-	param.type = ACPI_TYPE_INTEGER;
-	param.integer.value = iid;
-
-	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
-				      SAN_DSM_FN_NOTIFY_SENSOR_TRIP_POINT,
-				      &param, ACPI_TYPE_BUFFER);
-
-	if (IS_ERR_OR_NULL(obj))
-		return obj ? PTR_ERR(obj) : -ENXIO;
-
-	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
-		dev_err(dev, "got unexpected result from _DSM\n");
-		return -EFAULT;
-	}
-
-	ACPI_FREE(obj);
-	return 0;
-}
-
 
 static inline int san_evt_power_adapter(struct device *dev, const struct ssam_event *event)
 {
 	int status;
 
-	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_ADP1_STAT);
+	status = san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_ADP1_STAT, NULL);
 	if (status)
 		return status;
 
@@ -287,70 +262,51 @@ static inline int san_evt_power_adapter(struct device *dev, const struct ssam_ev
 	 * Explicitly trigger battery updates to fix this.
 	 */
 
-	status = san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT1_STAT);
+	status = san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_BAT1_STAT, NULL);
 	if (status)
 		return status;
 
-	return san_acpi_notify_power_event(dev, SAN_PWR_EVENT_BAT2_STAT);
+	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_BAT2_STAT, NULL);
 }
 
 static inline int san_evt_power_bix(struct device *dev, const struct ssam_event *event)
 {
-	enum san_pwr_event evcode;
+	enum san_dsm_event_fn fn;
 
 	if (event->instance_id == 0x02)
-		evcode = SAN_PWR_EVENT_BAT2_INFO;
+		fn = SAN_DSM_EVENT_FN_BAT2_INFO;
 	else
-		evcode = SAN_PWR_EVENT_BAT1_INFO;
+		fn = SAN_DSM_EVENT_FN_BAT1_INFO;
 
-	return san_acpi_notify_power_event(dev, evcode);
+	return san_acpi_notify_event(dev, fn, NULL);
 }
 
 static inline int san_evt_power_bst(struct device *dev, const struct ssam_event *event)
 {
-	enum san_pwr_event evcode;
+	enum san_dsm_event_fn fn;
 
 	if (event->instance_id == 0x02)
-		evcode = SAN_PWR_EVENT_BAT2_STAT;
+		fn = SAN_DSM_EVENT_FN_BAT2_STAT;
 	else
-		evcode = SAN_PWR_EVENT_BAT1_STAT;
+		fn = SAN_DSM_EVENT_FN_BAT1_STAT;
 
-	return san_acpi_notify_power_event(dev, evcode);
+	return san_acpi_notify_event(dev, fn, NULL);
 }
 
 static inline int san_evt_power_dptf(struct device *dev, const struct ssam_event *event)
 {
 	union acpi_object payload;
-	acpi_handle san = ACPI_HANDLE(dev);
-	union acpi_object *obj;
-
-	if (!san_acpi_can_notify(san, SAN_PWR_EVENT_DPTF))
-		return 0;
 
 	/*
 	 * The Surface ACPI expects a buffer and not a package. It specifically
 	 * checks for ObjectType (Arg3) == 0x03. This will cause a warning in
-	 * acpica/nsarguments.c, but this can safely be ignored.
+	 * acpica/nsarguments.c, but that warning can be safely ignored.
 	 */
 	payload.type = ACPI_TYPE_BUFFER;
 	payload.buffer.length = event->length;
 	payload.buffer.pointer = (u8 *)&event->data[0];
 
-	dev_dbg(dev, "notify power event 0x%02x\n", event->command_id);
-	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
-				      SAN_PWR_EVENT_DPTF, &payload,
-				      ACPI_TYPE_BUFFER);
-
-	if (IS_ERR_OR_NULL(obj))
-		return obj ? PTR_ERR(obj) : -ENXIO;
-
-	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
-		dev_err(dev, "got unexpected result from _DSM\n");
-		return -EFAULT;
-	}
-
-	ACPI_FREE(obj);
-	return 0;
+	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_DPTF, &payload);
 }
 
 static unsigned long san_evt_power_delay(u8 cid)
@@ -445,7 +401,17 @@ static u32 san_evt_power_nf(struct ssam_event_notifier *nf, const struct ssam_ev
 
 static inline int san_evt_thermal_notify(struct device *dev, const struct ssam_event *event)
 {
-	return san_acpi_notify_sensor_trip_point(dev, event->instance_id);
+	union acpi_object param;
+
+	/*
+	 * The Surface ACPI expects an integer and not a package. This will
+	 * cause a warning in acpica/nsarguments.c, but that warning can be
+	 * safely ignored.
+	 */
+	param.type = ACPI_TYPE_INTEGER;
+	param.integer.value = event->instance_id;
+
+	return san_acpi_notify_event(dev, SAN_DSM_EVENT_FN_THERMAL, &param);
 }
 
 static bool san_evt_thermal(const struct ssam_event *event, struct device *dev)
