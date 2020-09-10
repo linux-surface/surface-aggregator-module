@@ -15,26 +15,6 @@
 #include "../../include/linux/surface_acpi_notify.h"
 
 
-#define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
-#define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
-
-enum sam_event_cid_bat {
-	SAM_EVENT_CID_BAT_BIX  = 0x15,
-	SAM_EVENT_CID_BAT_BST  = 0x16,
-	SAM_EVENT_CID_BAT_ADP  = 0x17,
-	SAM_EVENT_CID_BAT_PROT = 0x18,
-	SAM_EVENT_CID_BAT_DPTF = 0x4f,
-};
-
-enum sam_event_cid_tmp {
-	SAM_EVENT_CID_TMP_TRIP = 0x0b,
-};
-
-
-struct san_acpi_consumer {
-	const char *path;
-};
-
 struct san_data {
 	struct device *dev;
 	struct ssam_controller *ctrl;
@@ -48,84 +28,8 @@ struct san_data {
 #define to_san_data(ptr, member) \
 	container_of(ptr, struct san_data, member)
 
-struct san_event_work {
-	struct delayed_work work;
-	struct device *dev;
-	struct ssam_event event;		// must be last
-};
 
-struct gsb_data_in {
-	u8 cv;
-} __packed;
-
-struct gsb_data_rqsx {
-	u8 cv;				// command value (should be 0x01 or 0x03)
-	u8 tc;				// target category
-	u8 tid;				// transport channnel ID
-	u8 iid;				// target instance
-	u8 snc;				// expect-response-flag
-	u8 cid;				// command ID
-	u16 cdl;			// payload length
-	u8 pld[0];			// payload
-} __packed;
-
-struct gsb_data_etwl {
-	u8 cv;				// command value (should be 0x02)
-	u8 etw3;			// ?
-	u8 etw4;			// ?
-	u8 msg[0];			// error message (ASCIIZ)
-} __packed;
-
-struct gsb_data_out {
-	u8 status;			// _SSH communication status
-	u8 len;				// _SSH payload length
-	u8 pld[0];			// _SSH payload
-} __packed;
-
-union gsb_buffer_data {
-	struct gsb_data_in   in;	// common input
-	struct gsb_data_rqsx rqsx;	// RQSX input
-	struct gsb_data_etwl etwl;	// ETWL input
-	struct gsb_data_out  out;	// output
-};
-
-struct gsb_buffer {
-	u8 status;			// GSB AttribRawProcess status
-	u8 len;				// GSB AttribRawProcess length
-	union gsb_buffer_data data;
-} __packed;
-
-#define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
-#define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
-
-#define SAN_GSB_COMMAND		0
-
-enum san_gsb_request_cv {
-	SAN_GSB_REQUEST_CV_RQST = 0x01,
-	SAN_GSB_REQUEST_CV_ETWL = 0x02,
-	SAN_GSB_REQUEST_CV_RQSG = 0x03,
-};
-
-#define SAN_REQUEST_NUM_TRIES	5
-
-
-#define SAN_DSM_REVISION	0
-
-static const guid_t SAN_DSM_UUID =
-	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
-		  0x48, 0x7c, 0x91, 0xab, 0x3c);
-
-enum san_dsm_event_fn {
-	SAN_DSM_EVENT_FN_BAT1_STAT = 0x03,
-	SAN_DSM_EVENT_FN_BAT1_INFO = 0x04,
-	SAN_DSM_EVENT_FN_ADP1_STAT = 0x05,
-	SAN_DSM_EVENT_FN_ADP1_INFO = 0x06,
-	SAN_DSM_EVENT_FN_BAT2_STAT = 0x07,
-	SAN_DSM_EVENT_FN_BAT2_INFO = 0x08,
-	SAN_DSM_EVENT_FN_THERMAL   = 0x09,
-	SAN_DSM_EVENT_FN_DPTF      = 0x0a,
-};
-
+/* -- dGPU Notifier Interface. ---------------------------------------------- */
 
 static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *data);
 
@@ -215,6 +119,46 @@ static int sam_san_default_rqsg_handler(struct ssam_anf_dgpu_event *rqsg, void *
 	return 0;
 }
 
+
+/* -- ACPI _DSM event relay. ------------------------------------------------ */
+
+#define SAN_DSM_REVISION	0
+
+static const guid_t SAN_DSM_UUID =
+	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
+		  0x48, 0x7c, 0x91, 0xab, 0x3c);
+
+enum san_dsm_event_fn {
+	SAN_DSM_EVENT_FN_BAT1_STAT = 0x03,
+	SAN_DSM_EVENT_FN_BAT1_INFO = 0x04,
+	SAN_DSM_EVENT_FN_ADP1_STAT = 0x05,
+	SAN_DSM_EVENT_FN_ADP1_INFO = 0x06,
+	SAN_DSM_EVENT_FN_BAT2_STAT = 0x07,
+	SAN_DSM_EVENT_FN_BAT2_INFO = 0x08,
+	SAN_DSM_EVENT_FN_THERMAL   = 0x09,
+	SAN_DSM_EVENT_FN_DPTF      = 0x0a,
+};
+
+#define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
+#define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
+
+enum sam_event_cid_bat {
+	SAM_EVENT_CID_BAT_BIX  = 0x15,
+	SAM_EVENT_CID_BAT_BST  = 0x16,
+	SAM_EVENT_CID_BAT_ADP  = 0x17,
+	SAM_EVENT_CID_BAT_PROT = 0x18,
+	SAM_EVENT_CID_BAT_DPTF = 0x4f,
+};
+
+enum sam_event_cid_tmp {
+	SAM_EVENT_CID_TMP_TRIP = 0x0b,
+};
+
+struct san_event_work {
+	struct delayed_work work;
+	struct device *dev;
+	struct ssam_event event;	// must be last
+};
 
 static int san_acpi_notify_event(struct device *dev, u64 func,
 				 union acpi_object *param)
@@ -444,6 +388,62 @@ static u32 san_evt_thermal_nf(struct ssam_event_notifier *nf, const struct ssam_
 }
 
 
+/* -- ACPI GSB OperationRegion Handler -------------------------------------- */
+
+struct gsb_data_in {
+	u8 cv;
+} __packed;
+
+struct gsb_data_rqsx {
+	u8 cv;				// command value (should be 0x01 or 0x03)
+	u8 tc;				// target category
+	u8 tid;				// transport channnel ID
+	u8 iid;				// target instance
+	u8 snc;				// expect-response-flag
+	u8 cid;				// command ID
+	u16 cdl;			// payload length
+	u8 pld[0];			// payload
+} __packed;
+
+struct gsb_data_etwl {
+	u8 cv;				// command value (should be 0x02)
+	u8 etw3;			// ?
+	u8 etw4;			// ?
+	u8 msg[0];			// error message (ASCIIZ)
+} __packed;
+
+struct gsb_data_out {
+	u8 status;			// _SSH communication status
+	u8 len;				// _SSH payload length
+	u8 pld[0];			// _SSH payload
+} __packed;
+
+union gsb_buffer_data {
+	struct gsb_data_in   in;	// common input
+	struct gsb_data_rqsx rqsx;	// RQSX input
+	struct gsb_data_etwl etwl;	// ETWL input
+	struct gsb_data_out  out;	// output
+};
+
+struct gsb_buffer {
+	u8 status;			// GSB AttribRawProcess status
+	u8 len;				// GSB AttribRawProcess length
+	union gsb_buffer_data data;
+} __packed;
+
+#define SAN_GSB_MAX_RQSX_PAYLOAD  (U8_MAX - 2 - sizeof(struct gsb_data_rqsx))
+#define SAN_GSB_MAX_RESPONSE	  (U8_MAX - 2 - sizeof(struct gsb_data_out))
+
+#define SAN_GSB_COMMAND		0
+
+enum san_gsb_request_cv {
+	SAN_GSB_REQUEST_CV_RQST = 0x01,
+	SAN_GSB_REQUEST_CV_ETWL = 0x02,
+	SAN_GSB_REQUEST_CV_RQSG = 0x03,
+};
+
+#define SAN_REQUEST_NUM_TRIES	5
+
 static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *b)
 {
 	struct gsb_data_etwl *etwl = &b->data.etwl;
@@ -650,6 +650,12 @@ static acpi_status san_opreg_handler(u32 function,
 }
 
 
+/* -- Driver setup. --------------------------------------------------------- */
+
+struct san_acpi_consumer {
+	const char *path;
+};
+
 static int san_events_register(struct platform_device *pdev)
 {
 	struct san_data *d = platform_get_drvdata(pdev);
@@ -791,7 +797,6 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	platform_set_drvdata(pdev, NULL);
 	return status;
 }
-
 
 /*
  * ACPI devices that make use of the SAM EC via the SAN interface. Link them
