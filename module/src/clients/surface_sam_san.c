@@ -141,6 +141,20 @@ static struct sam_san_rqsg_if rqsg_if = {
 	.handler_data = NULL,
 };
 
+static int san_set_rqsg_interface_device(struct device *dev)
+{
+	int status = 0;
+
+	mutex_lock(&rqsg_if.lock);
+	if (!rqsg_if.san_dev && dev)
+		rqsg_if.san_dev = dev;
+	else
+		status = -EBUSY;
+	mutex_unlock(&rqsg_if.lock);
+
+	return status;
+}
+
 int surface_sam_san_consumer_register(struct device *consumer, u32 flags)
 {
 	const u32 valid = DL_FLAG_PM_RUNTIME | DL_FLAG_RPM_ACTIVE;
@@ -782,13 +796,7 @@ static int surface_sam_san_probe(struct platform_device *pdev)
 	if (status)
 		goto err_enable_events;
 
-	mutex_lock(&rqsg_if.lock);
-	if (!rqsg_if.san_dev)
-		rqsg_if.san_dev = &pdev->dev;
-	else
-		status = -EBUSY;
-	mutex_unlock(&rqsg_if.lock);
-
+	status = san_set_rqsg_interface_device(&pdev->dev);
 	if (status)
 		goto err_install_dev;
 
@@ -809,10 +817,7 @@ static int surface_sam_san_remove(struct platform_device *pdev)
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
 
-	mutex_lock(&rqsg_if.lock);
-	rqsg_if.san_dev = NULL;
-	mutex_unlock(&rqsg_if.lock);
-
+	san_set_rqsg_interface_device(NULL);
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
 					  &san_opreg_handler);
 	san_events_unregister(pdev);
