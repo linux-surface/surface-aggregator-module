@@ -15,8 +15,6 @@
 #include "../../include/linux/surface_acpi_notify.h"
 
 
-#define SAN_RQST_RETRY				5
-
 #define SAM_EVENT_DELAY_PWR_ADAPTER	msecs_to_jiffies(5000)
 #define SAM_EVENT_DELAY_PWR_BST		msecs_to_jiffies(2500)
 
@@ -102,6 +100,9 @@ enum san_gsb_request_cv {
 	SAN_GSB_REQUEST_CV_ETWL = 0x02,
 	SAN_GSB_REQUEST_CV_RQSG = 0x03,
 };
+
+
+#define SAN_RQST_RETRY		5
 
 #define san_request_sync_onstack(ctrl, rqst, rsp) \
 	ssam_request_sync_onstack(ctrl, rqst, rsp, SAN_GSB_MAX_RQSX_PAYLOAD)
