@@ -11,6 +11,7 @@
 #include <linux/kernel.h>
 #include <linux/platform_device.h>
 #include <linux/notifier.h>
+#include <linux/rwsem.h>
 
 #include "../../include/linux/surface_aggregator_module.h"
 #include "../../include/linux/surface_acpi_notify.h"
@@ -33,13 +34,13 @@ struct san_data {
 /* -- dGPU Notifier Interface. ---------------------------------------------- */
 
 struct san_rqsg_if {
-	struct mutex lock;
+	struct rw_semaphore lock;
 	struct device *dev;
 	struct blocking_notifier_head nh;
 };
 
 static struct san_rqsg_if san_rqsg_if = {
-	.lock = __MUTEX_INITIALIZER(san_rqsg_if.lock),
+	.lock = __RWSEM_INITIALIZER(san_rqsg_if.lock),
 	.dev = NULL,
 	.nh = BLOCKING_NOTIFIER_INIT(san_rqsg_if.nh),
 };
@@ -48,12 +49,12 @@ static int san_set_rqsg_interface_device(struct device *dev)
 {
 	int status = 0;
 
-	mutex_lock(&san_rqsg_if.lock);
+	down_write(&san_rqsg_if.lock);
 	if (!san_rqsg_if.dev && dev)
 		san_rqsg_if.dev = dev;
 	else
 		status = -EBUSY;
-	mutex_unlock(&san_rqsg_if.lock);
+	up_write(&san_rqsg_if.lock);
 
 	return status;
 }
@@ -63,25 +64,25 @@ int ssam_anf_client_link(struct device *client)
 	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
 	struct device_link *link;
 
-	mutex_lock(&san_rqsg_if.lock);
+	down_read(&san_rqsg_if.lock);
 
 	if (!san_rqsg_if.dev) {
-		mutex_unlock(&san_rqsg_if.lock);
+		up_read(&san_rqsg_if.lock);
 		return -ENXIO;
 	}
 
 	link = device_link_add(client, san_rqsg_if.dev, flags);
 	if (!link) {
-		mutex_unlock(&san_rqsg_if.lock);
+		up_read(&san_rqsg_if.lock);
 		return -ENOMEM;
 	}
 
 	if (READ_ONCE(link->status) == DL_STATE_SUPPLIER_UNBIND) {
-		mutex_unlock(&san_rqsg_if.lock);
+		up_read(&san_rqsg_if.lock);
 		return -ENXIO;
 	}
 
-	mutex_unlock(&san_rqsg_if.lock);
+	up_read(&san_rqsg_if.lock);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(ssam_anf_client_link);
