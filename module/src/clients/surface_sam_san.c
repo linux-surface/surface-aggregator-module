@@ -307,14 +307,13 @@ static unsigned long san_evt_power_delay(u8 cid)
 	switch (cid) {
 	case SAM_EVENT_PWR_CID_ADAPTER:
 		/*
-		 * Wait for battery state to update before signalling adapter change.
+		 * Wait for battery state to update before signalling adapter
+		 * change.
 		 */
 		return SAM_EVENT_DELAY_PWR_ADAPTER;
 
 	case SAM_EVENT_PWR_CID_BST:
-		/*
-		 * Ensure we do not miss anything important due to caching.
-		 */
+		/* Ensure we do not miss anything important due to caching. */
 		return SAM_EVENT_DELAY_PWR_BST;
 
 	case SAM_EVENT_PWR_CID_BIX:
