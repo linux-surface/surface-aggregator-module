@@ -14,6 +14,23 @@
 #define SSAM_DBGDEV_VERS	0x010000
 
 
+/**
+ * struct ssam_dbgdev_request - Controller request IOCTL argument.
+ * @target_category: Target category of the SAM request.
+ * @target_id:       Target ID of the SAM request.
+ * @command_id:      Command ID of the SAM request.
+ * @instance_id:     Instance ID of the SAM request.
+ * @flags:           SAM Request flags.
+ * @status:          Request status (output).
+ * @payload:         Request payload (input data).
+ * @payload.data:    Pointer to request payload data.
+ * @payload.length:  Length of request payload data (in bytes).
+ * @response:        Request response (output data).
+ * @response.data:   Pointer to response buffer.
+ * @response.length: On input: Capacity of response buffer (in bytes).
+ *                   On output: Length of request response (number of bytes
+ *                   in the buffer that are actually used).
+ */
 struct ssam_dbgdev_request {
 	__u8 target_category;
 	__u8 target_id;
