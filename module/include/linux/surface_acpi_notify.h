@@ -15,7 +15,7 @@
 #include <linux/notifier.h>
 
 
-struct ssam_anf_dgpu_event {
+struct san_dgpu_event {
 	u8 category;			// target category
 	u8 target;			// target ID
 	u8 command;			// command ID
@@ -24,8 +24,8 @@ struct ssam_anf_dgpu_event {
 	u8 *payload;			// pointer to payload of length cdl
 };
 
-int ssam_anf_client_link(struct device *client);
-int ssam_anf_dgpu_notifier_register(struct notifier_block *nb);
-int ssam_anf_dgpu_notifier_unregister(struct notifier_block *nb);
+int san_client_link(struct device *client);
+int san_dgpu_notifier_register(struct notifier_block *nb);
+int san_dgpu_notifier_unregister(struct notifier_block *nb);
 
 #endif /* _SURFACE_SAM_SAN_H */
