@@ -190,7 +190,7 @@ static int ssam_dbgdev_probe(struct platform_device *pdev)
 
 	ddev->ctrl = ctrl;
 
-	ddev->dentry_dir = debugfs_create_dir("surface_sam", NULL);
+	ddev->dentry_dir = debugfs_create_dir("ssam", NULL);
 	if (IS_ERR(ddev->dentry_dir))
 		return PTR_ERR(ddev->dentry_dir);
 
