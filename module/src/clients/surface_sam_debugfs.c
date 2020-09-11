@@ -11,7 +11,7 @@
 #include "../../include/linux/surface_aggregator_module.h"
 
 #define SSAM_DBGDEV_NAME	"surface_sam_dbgdev"
-#define SSAM_DBGDEV_VERS	0x0100
+#define SSAM_DBGDEV_VERS	0x010000
 
 
 struct ssam_dbgdev_request {
