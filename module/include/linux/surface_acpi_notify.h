@@ -14,14 +14,22 @@
 #include <linux/types.h>
 #include <linux/notifier.h>
 
-
+/**
+ * struct san_dgpu_event - Discrete GPU ACPI event.
+ * @category: Category of the event.
+ * @target:   Target ID of the event source.
+ * @command:  Command ID of the event.
+ * @instance: Instance ID of the event source.
+ * @length:   Length of the event's payload data (in bytes).
+ * @payload:  Pointer to the event's payload data.
+ */
 struct san_dgpu_event {
-	u8 category;			// target category
-	u8 target;			// target ID
-	u8 command;			// command ID
-	u8 instance;			// instance ID
-	u16 length;			// command data length (length of payload)
-	u8 *payload;			// pointer to payload of length cdl
+	u8 category;
+	u8 target;
+	u8 command;
+	u8 instance;
+	u16 length;
+	u8 *payload;
 };
 
 int san_client_link(struct device *client);

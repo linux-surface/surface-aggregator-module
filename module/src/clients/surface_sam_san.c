@@ -59,6 +59,22 @@ static int san_set_rqsg_interface_device(struct device *dev)
 	return status;
 }
 
+/**
+ * san_client_link() - Link client as consumer to SAN device.
+ * @client: The client to link.
+ *
+ * Sets up a device link between the provided client device as consumer and
+ * the SAN device as provider. This function can be used to ensure that the
+ * SAN interface has been set up and will be set up for as long as the driver
+ * of the client device is bound. This guarantees that, during that time, all
+ * dGPU events will be received by any registered notifier.
+ *
+ * The link will be automatically removed once the client device's driver is
+ * unbound.
+ *
+ * Return: Returns zero on succes, %-ENXIO if the SAN interface has not been
+ * set up yet, and %-ENOMEM if device link creation failed.
+ */
 int san_client_link(struct device *client)
 {
 	const u32 flags = DL_FLAG_PM_RUNTIME | DL_FLAG_AUTOREMOVE_CONSUMER;
@@ -87,12 +103,24 @@ int san_client_link(struct device *client)
 }
 EXPORT_SYMBOL_GPL(san_client_link);
 
+/**
+ * san_dgpu_notifier_register() - Register a SAN dGPU notifier.
+ * @nb: The notifier-block to register.
+ *
+ * Registers a SAN dGPU notifier, receiving any new SAN dGPU events sent from
+ * ACPI. The registered notifier will be called with &struct san_dgpu_event
+ * as notifier data and the command ID of that event as notifier action.
+ */
 int san_dgpu_notifier_register(struct notifier_block *nb)
 {
 	return blocking_notifier_chain_register(&san_rqsg_if.nh, nb);
 }
 EXPORT_SYMBOL_GPL(san_dgpu_notifier_register);
 
+/**
+ * san_dgpu_notifier_unregister() - Unregister a SAN dGPU notifier.
+ * @nb: The notifier-block to unregister.
+ */
 int san_dgpu_notifier_unregister(struct notifier_block *nb)
 {
 	return blocking_notifier_chain_unregister(&san_rqsg_if.nh, nb);
