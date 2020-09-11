@@ -12,6 +12,7 @@
 #define _SURFACE_SAM_SAN_H
 
 #include <linux/types.h>
+#include <linux/notifier.h>
 
 
 struct ssam_anf_dgpu_event {
