@@ -730,7 +730,7 @@ static int san_consumers_link(struct platform_device *pdev,
 	return 0;
 }
 
-static int surface_sam_san_probe(struct platform_device *pdev)
+static int san_probe(struct platform_device *pdev)
 {
 	const struct san_acpi_consumer *cons;
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);
@@ -787,7 +787,7 @@ err_install_handler:
 	return status;
 }
 
-static int surface_sam_san_remove(struct platform_device *pdev)
+static int san_remove(struct platform_device *pdev)
 {
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
 	acpi_status status = AE_OK;
@@ -819,22 +819,22 @@ static const struct san_acpi_consumer san_mshw0091_consumers[] = {
 	{ },
 };
 
-static const struct acpi_device_id surface_sam_san_match[] = {
+static const struct acpi_device_id san_match[] = {
 	{ "MSHW0091", (unsigned long) san_mshw0091_consumers },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surface_sam_san_match);
+MODULE_DEVICE_TABLE(acpi, san_match);
 
-static struct platform_driver surface_sam_san = {
-	.probe = surface_sam_san_probe,
-	.remove = surface_sam_san_remove,
+static struct platform_driver surface_acpi_notify = {
+	.probe = san_probe,
+	.remove = san_remove,
 	.driver = {
 		.name = "surface_sam_san",
-		.acpi_match_table = surface_sam_san_match,
+		.acpi_match_table = san_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_sam_san);
+module_platform_driver(surface_acpi_notify);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Surface ACPI Notify Driver for 5th Generation Surface Devices");
