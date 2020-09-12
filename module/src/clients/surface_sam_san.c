@@ -829,7 +829,7 @@ static struct platform_driver surface_acpi_notify = {
 	.probe = san_probe,
 	.remove = san_remove,
 	.driver = {
-		.name = "surface_sam_san",
+		.name = "surface_acpi_notify",
 		.acpi_match_table = san_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
