@@ -2358,7 +2358,7 @@ int ssam_irq_setup(struct ssam_controller *ctrl)
 		return irq;
 
 	status = request_threaded_irq(irq, NULL, ssam_irq_handle, irqf,
-				      "surface_sam_wakeup", ctrl);
+				      "ssam_wakeup", ctrl);
 	if (status)
 		return status;
 
