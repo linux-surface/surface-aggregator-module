@@ -179,7 +179,7 @@ static struct ssam_device_driver surface_sam_sid_perfmode = {
 	.remove = surface_sam_sid_perfmode_remove,
 	.match_table = ssam_perfmode_match,
 	.driver = {
-		.name = "surface_sam_sid_perfmode",
+		.name = "surface_performance_mode",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

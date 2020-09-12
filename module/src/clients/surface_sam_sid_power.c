@@ -1016,7 +1016,7 @@ static struct ssam_device_driver surface_sam_sid_battery = {
 	.remove = surface_sam_sid_battery_remove,
 	.match_table = surface_sam_sid_battery_match,
 	.driver = {
-		.name = "surface_sam_sid_battery",
+		.name = "surface_battery",
 		.pm = &surface_sam_sid_battery_pm,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
@@ -1077,7 +1077,7 @@ static struct ssam_device_driver surface_sam_sid_ac = {
 	.remove = surface_sam_sid_ac_remove,
 	.match_table = surface_sam_sid_ac_match,
 	.driver = {
-		.name = "surface_sam_sid_ac",
+		.name = "surface_ac",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };

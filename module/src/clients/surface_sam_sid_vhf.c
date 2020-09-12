@@ -486,7 +486,7 @@ static struct ssam_device_driver surface_sam_sid_vhf = {
 	.remove = surface_sam_sid_vhf_remove,
 	.match_table = surface_sam_sid_vhf_match,
 	.driver = {
-		.name = "surface_sam_sid_vhf",
+		.name = "surface_hid",
 		.pm = &surface_sam_sid_vhf_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},

@@ -51,8 +51,8 @@
 
 #define DTX_CONNECT_OPMODE_DELAY			1000
 
-#define DTX_ERR		KERN_ERR "surface_sam_dtx: "
-#define DTX_WARN	KERN_WARNING "surface_sam_dtx: "
+#define DTX_ERR		KERN_ERR "surface_dtx: "
+#define DTX_WARN	KERN_WARNING "surface_dtx: "
 
 
 struct surface_dtx_event {
@@ -571,7 +571,7 @@ static struct platform_driver surface_sam_dtx = {
 	.probe = surface_sam_dtx_probe,
 	.remove = surface_sam_dtx_remove,
 	.driver = {
-		.name = "surface_sam_dtx",
+		.name = "surface_dtx",
 		.acpi_match_table = surface_sam_dtx_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
