@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
+#include <asm/unaligned.h>
 #include <linux/compiler.h>
 
 #include "ssh_parser.h"
-#include "ssh_protocol.h"
 
 
 /**
