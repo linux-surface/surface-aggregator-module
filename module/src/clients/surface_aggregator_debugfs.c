@@ -204,7 +204,7 @@ static int ssam_dbg_device_probe(struct platform_device *pdev)
 
 	data->ctrl = ctrl;
 
-	data->dentry_dir = debugfs_create_dir("ssam", NULL);
+	data->dentry_dir = debugfs_create_dir("surface_aggregator", NULL);
 	if (IS_ERR(data->dentry_dir))
 		return PTR_ERR(data->dentry_dir);
 
