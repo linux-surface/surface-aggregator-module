@@ -323,7 +323,7 @@ static int ssam_bus_remove(struct device *dev)
 }
 
 struct bus_type ssam_bus_type = {
-	.name   = "ssam",
+	.name   = "surface_aggregator",
 	.match  = ssam_bus_match,
 	.probe  = ssam_bus_probe,
 	.remove = ssam_bus_remove,
