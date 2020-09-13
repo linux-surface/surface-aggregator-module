@@ -4,9 +4,10 @@
  * Used for keyboard input events on the 7th generation Surface Laptops.
  */
 
-#include <linux/acpi.h>
 #include <linux/hid.h>
 #include <linux/input.h>
+#include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
 

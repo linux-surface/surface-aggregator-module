@@ -15,13 +15,12 @@
 
 #include <linux/completion.h>
 #include <linux/crc-ccitt.h>
-#include <linux/types.h>
 #include <linux/device.h>
 #include <linux/kref.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
 #include <linux/mod_devicetable.h>
-#include <linux/uuid.h>
+#include <linux/types.h>
 
 
 /* -- Data structures for SAM-over-SSH communication. ----------------------- */

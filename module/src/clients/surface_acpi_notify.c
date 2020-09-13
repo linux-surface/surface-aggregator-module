@@ -9,8 +9,9 @@
 #include <linux/delay.h>
 #include <linux/jiffies.h>
 #include <linux/kernel.h>
-#include <linux/platform_device.h>
+#include <linux/module.h>
 #include <linux/notifier.h>
+#include <linux/platform_device.h>
 #include <linux/rwsem.h>
 
 #include "../../include/linux/surface_aggregator_module.h"

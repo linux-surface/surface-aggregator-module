@@ -6,6 +6,7 @@
 #include <linux/device.h>
 #include <linux/kfifo.h>
 #include <linux/slab.h>
+#include <linux/types.h>
 
 #include "../include/linux/surface_aggregator_module.h"
 

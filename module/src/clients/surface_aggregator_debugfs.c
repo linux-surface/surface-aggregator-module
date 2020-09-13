@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <linux/debugfs.h>
-#include <linux/fs.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>

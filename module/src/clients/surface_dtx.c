@@ -11,11 +11,11 @@
 #include <linux/kernel.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
+#include <linux/platform_device.h>
 #include <linux/poll.h>
 #include <linux/rculist.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
-#include <linux/platform_device.h>
 
 #include "../../include/linux/surface_aggregator_module.h"
 

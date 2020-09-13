@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <linux/device.h>
-#include <linux/uuid.h>
 
 #include "bus.h"
 #include "controller.h"

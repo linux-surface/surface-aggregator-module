@@ -7,6 +7,7 @@
 #include <asm/unaligned.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/sysfs.h>
 #include <linux/types.h>
 
 #include "../../include/linux/surface_aggregator_module.h"

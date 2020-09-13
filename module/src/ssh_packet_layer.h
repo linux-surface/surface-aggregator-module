@@ -7,7 +7,6 @@
 #include <linux/kfifo.h>
 #include <linux/ktime.h>
 #include <linux/list.h>
-#include <linux/sched.h>
 #include <linux/serdev.h>
 #include <linux/spinlock.h>
 #include <linux/types.h>

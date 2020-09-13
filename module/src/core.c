@@ -10,6 +10,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/kernel.h>
 #include <linux/kref.h>
+#include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/serdev.h>
 
