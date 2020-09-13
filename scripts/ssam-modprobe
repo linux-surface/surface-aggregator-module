@@ -11,6 +11,7 @@ unload() {
         systemctl stop surface-dtx-daemon.service
     fi
 
+    systemctl stop upower.service
     modprobe -r battery
     modprobe -r ac
 
@@ -24,9 +25,6 @@ unload() {
     ${cmd} surface_aggregator_registry
     ${cmd} surface_aggregator_debugfs
     ${cmd} surface_aggregator
-
-    modprobe battery
-    modprobe ac
 }
 
 load() {
@@ -50,6 +48,8 @@ load() {
         systemctl start surface-dtx-daemon.service
     fi
 
+    modprobe battery
+    modprobe ac
     systemctl restart upower.service
 }
 
