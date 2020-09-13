@@ -262,7 +262,7 @@ static struct ssam_device_driver ssam_hub_driver = {
 	.remove = ssam_hub_remove,
 	.match_table = ssam_hub_match,
 	.driver = {
-		.name = "surface_device_hub",
+		.name = "surface_aggregator_device_hub",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
@@ -496,7 +496,7 @@ static struct ssam_device_driver ssam_base_hub_driver = {
 	.remove = ssam_base_hub_remove,
 	.match_table = ssam_base_hub_match,
 	.driver = {
-		.name = "surface_base_hub",
+		.name = "surface_aggregator_base_hub",
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 		.pm = &ssam_base_hub_pm_ops,
 	},
@@ -593,7 +593,7 @@ static struct platform_driver ssam_platform_hub_driver = {
 	.probe = ssam_platform_hub_probe,
 	.remove = ssam_platform_hub_remove,
 	.driver = {
-		.name = "surface_platform_hub",
+		.name = "surface_aggregator_platform_hub",
 		.acpi_match_table = ssam_platform_hub_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
