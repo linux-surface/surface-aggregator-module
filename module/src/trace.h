@@ -614,6 +614,6 @@ DEFINE_SSAM_FREE_EVENT(event_item_free);
 #undef TRACE_INCLUDE_FILE
 
 #define TRACE_INCLUDE_PATH .
-#define TRACE_INCLUDE_FILE ssam_trace
+#define TRACE_INCLUDE_FILE trace
 
 #include <trace/define_trace.h>

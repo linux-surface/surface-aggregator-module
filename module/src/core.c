@@ -19,7 +19,7 @@
 #include "controller.h"
 
 #define CREATE_TRACE_POINTS
-#include "ssam_trace.h"
+#include "trace.h"
 
 
 /* -- Static controller reference. ------------------------------------------ */

@@ -23,7 +23,7 @@
 #include "ssh_msgb.h"
 #include "ssh_request_layer.h"
 
-#include "ssam_trace.h"
+#include "trace.h"
 
 
 /* -- Safe counters. -------------------------------------------------------- */

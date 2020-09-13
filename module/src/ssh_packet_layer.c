@@ -17,7 +17,7 @@
 #include "../include/linux/surface_aggregator_module.h"
 #include "ssh_packet_layer.h"
 
-#include "ssam_trace.h"
+#include "trace.h"
 
 
 /*
