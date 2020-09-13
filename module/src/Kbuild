@@ -1,14 +1,14 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
-obj-m += surface_sam_ssh.o
+obj-m += surface_aggregator.o
 obj-m += clients/
 
-surface_sam_ssh-objs := core.o
-surface_sam_ssh-objs += ssh_parser.o
-surface_sam_ssh-objs += ssh_packet_layer.o
-surface_sam_ssh-objs += ssh_request_layer.o
-surface_sam_ssh-objs += controller.o
-surface_sam_ssh-objs += bus.o
+surface_aggregator-objs := core.o
+surface_aggregator-objs += ssh_parser.o
+surface_aggregator-objs += ssh_packet_layer.o
+surface_aggregator-objs += ssh_request_layer.o
+surface_aggregator-objs += controller.o
+surface_aggregator-objs += bus.o
 
 #ccflags-y += -DDEBUG
 #ccflags-y += -DCONFIG_SURFACE_SAM_SSH_ERROR_INJECTION

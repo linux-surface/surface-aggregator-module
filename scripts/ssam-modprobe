@@ -14,16 +14,16 @@ unload() {
     modprobe -r battery
     modprobe -r ac
 
-    ${cmd} surface_sam_debugfs
-    ${cmd} surface_sam_sid_vhf
-    ${cmd} surface_sam_sid_power
-    ${cmd} surface_sam_sid_perfmode
-    ${cmd} surface_sam_device_hub
-    ${cmd} surface_sam_hps
-    ${cmd} surface_sam_dtx
-    ${cmd} surface_sam_vhf
-    ${cmd} surface_sam_san
-    ${cmd} surface_sam_ssh
+    ${cmd} surface_perfmode
+    ${cmd} surface_keyboard
+    ${cmd} surface_hotplug
+    ${cmd} surface_hid
+    ${cmd} surface_dtx
+    ${cmd} surface_battery
+    ${cmd} surface_acpi_notify
+    ${cmd} surface_aggregator_registry
+    ${cmd} surface_aggregator_debugfs
+    ${cmd} surface_aggregator
 
     modprobe battery
     modprobe ac
@@ -34,16 +34,16 @@ load() {
     ext=${2}
     client_pfx=${3}
 
-    ${cmd} surface_sam_ssh"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_san"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_vhf"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_dtx"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_hps"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_sid_perfmode"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_sid_power"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_sid_vhf"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_device_hub"${ext}"
-    ${cmd} "${client_pfx}"surface_sam_debugfs"${ext}"
+    ${cmd} surface_aggregator"${ext}"
+    ${cmd} "${client_pfx}"surface_aggregator_debugfs"${ext}"
+    ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
+    ${cmd} "${client_pfx}"surface_acpi_notify"${ext}"
+    ${cmd} "${client_pfx}"surface_battery"${ext}"
+    ${cmd} "${client_pfx}"surface_dtx"${ext}"
+    ${cmd} "${client_pfx}"surface_hid"${ext}"
+    ${cmd} "${client_pfx}"surface_hotplug"${ext}"
+    ${cmd} "${client_pfx}"surface_keyboard"${ext}"
+    ${cmd} "${client_pfx}"surface_perfmode"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
     then
