@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef _SSAM_SSH_MSGB_H
-#define _SSAM_SSH_MSGB_H
+#ifndef _SURFACE_AGGREGATOR_SSH_MSGB_H
+#define _SURFACE_AGGREGATOR_SSH_MSGB_H
 
 #include <asm/unaligned.h>
 #include <linux/types.h>
@@ -192,4 +192,4 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq, u16 rqid,
 	msgb_push_crc(msgb, cmd_begin, msgb->ptr - cmd_begin);
 }
 
-#endif /* _SSAM_SSH_MSGB_H */
+#endif /* _SURFACE_AGGREGATOR_SSH_MSGB_H */

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef _SSAM_SSH_REQUEST_LAYER_H
-#define _SSAM_SSH_REQUEST_LAYER_H
+#ifndef _SURFACE_AGGREGATOR_SSH_REQUEST_LAYER_H
+#define _SURFACE_AGGREGATOR_SSH_REQUEST_LAYER_H
 
 #include <linux/atomic.h>
 #include <linux/ktime.h>
@@ -133,4 +133,4 @@ void ssh_rtl_destroy(struct ssh_rtl *rtl);
 void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
 		      const struct ssh_request_ops *ops);
 
-#endif /* _SSAM_SSH_REQUEST_LAYER_H */
+#endif /* _SURFACE_AGGREGATOR_SSH_REQUEST_LAYER_H */

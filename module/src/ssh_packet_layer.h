@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef _SSAM_SSH_PACKET_LAYER_H
-#define _SSAM_SSH_PACKET_LAYER_H
+#ifndef _SURFACE_AGGREGATOR_SSH_PACKET_LAYER_H
+#define _SURFACE_AGGREGATOR_SSH_PACKET_LAYER_H
 
 #include <linux/atomic.h>
 #include <linux/kfifo.h>
@@ -170,4 +170,4 @@ void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 int ssh_ctrl_packet_cache_init(void);
 void ssh_ctrl_packet_cache_destroy(void);
 
-#endif /* _SSAM_SSH_PACKET_LAYER_H */
+#endif /* _SURFACE_AGGREGATOR_SSH_PACKET_LAYER_H */

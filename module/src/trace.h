@@ -3,8 +3,8 @@
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM surface_aggregator
 
-#if !defined(_SURFACE_SAM_SSH_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
-#define _SURFACE_SAM_SSH_TRACE_H
+#if !defined(_SURFACE_AGGREGATOR_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
+#define _SURFACE_AGGREGATOR_TRACE_H
 
 #include "../include/linux/surface_aggregator_module.h"
 #include <linux/tracepoint.h>
@@ -88,8 +88,8 @@ TRACE_DEFINE_ENUM(SSAM_SSH_TC_REG);
 #define SSAM_SSH_TC_NOT_APPLICABLE	0
 
 
-#ifndef _SURFACE_SAM_SSH_TRACE_HELPERS
-#define _SURFACE_SAM_SSH_TRACE_HELPERS
+#ifndef _SURFACE_AGGREGATOR_TRACE_HELPERS
+#define _SURFACE_AGGREGATOR_TRACE_HELPERS
 
 /**
  * ssam_trace_ptr_uid() - Convert the pointer to a non-pointer UID string.
@@ -155,7 +155,7 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 	return get_unaligned_le16(&p->data.ptr[SSH_MSGOFFSET_COMMAND(tc)]);
 }
 
-#endif /* _SURFACE_SAM_SSH_TRACE_HELPERS */
+#endif /* _SURFACE_AGGREGATOR_TRACE_HELPERS */
 
 #define ssam_trace_get_command_field_u8(packet, field) \
 	((!packet || packet->data.len < SSH_COMMAND_MESSAGE_LENGTH(0)) \
@@ -607,7 +607,7 @@ DEFINE_SSAM_FREE_EVENT(ctrl_packet_free);
 DEFINE_SSAM_ALLOC_EVENT(event_item_alloc);
 DEFINE_SSAM_FREE_EVENT(event_item_free);
 
-#endif /* _SURFACE_SAM_SSH_TRACE_H */
+#endif /* _SURFACE_AGGREGATOR_TRACE_H */
 
 /* This part must be outside protection */
 #undef TRACE_INCLUDE_PATH

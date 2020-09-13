@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 
-#ifndef _SSAM_CONTROLLER_H
-#define _SSAM_CONTROLLER_H
+#ifndef _SURFACE_AGGREGATOR_CONTROLLER_H
+#define _SURFACE_AGGREGATOR_CONTROLLER_H
 
 #include <linux/kref.h>
 #include <linux/list.h>
@@ -270,4 +270,4 @@ int ssam_controller_resume(struct ssam_controller *ctrl);
 int ssam_event_item_cache_init(void);
 void ssam_event_item_cache_destroy(void);
 
-#endif /* _SSAM_CONTROLLER_H */
+#endif /* _SURFACE_AGGREGATOR_CONTROLLER_H */

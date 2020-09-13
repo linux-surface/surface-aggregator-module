@@ -8,8 +8,8 @@
  * driver.
  */
 
-#ifndef _SURFACE_SAM_SAN_H
-#define _SURFACE_SAM_SAN_H
+#ifndef _LINUX_SURFACE_ACPI_NOTIFY_H
+#define _LINUX_SURFACE_ACPI_NOTIFY_H
 
 #include <linux/types.h>
 #include <linux/notifier.h>
@@ -36,4 +36,4 @@ int san_client_link(struct device *client);
 int san_dgpu_notifier_register(struct notifier_block *nb);
 int san_dgpu_notifier_unregister(struct notifier_block *nb);
 
-#endif /* _SURFACE_SAM_SAN_H */
+#endif /* _LINUX_SURFACE_ACPI_NOTIFY_H */

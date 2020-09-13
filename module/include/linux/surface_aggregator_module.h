@@ -10,8 +10,8 @@
  * 1, Pro 4) use SAM-over-HID (via I2C), which this driver does not support.
  */
 
-#ifndef _SURFACE_AGGREGATOR_MODULE_H
-#define _SURFACE_AGGREGATOR_MODULE_H
+#ifndef _LINUX_SURFACE_AGGREGATOR_MODULE_H
+#define _LINUX_SURFACE_AGGREGATOR_MODULE_H
 
 #include <linux/completion.h>
 #include <linux/crc-ccitt.h>
@@ -1833,4 +1833,4 @@ void ssam_device_driver_unregister(struct ssam_device_driver *d);
 				    sdev->uid.instance, ret);		\
 	}
 
-#endif /* _SURFACE_AGGREGATOR_MODULE_H */
+#endif /* _LINUX_SURFACE_AGGREGATOR_MODULE_H */
