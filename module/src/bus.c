@@ -42,7 +42,7 @@ static void ssam_device_release(struct device *dev)
 }
 
 const struct device_type ssam_device_type = {
-	.name    = "ssam_client",
+	.name    = "surface_aggregator_device",
 	.groups  = ssam_device_groups,
 	.uevent  = ssam_device_uevent,
 	.release = ssam_device_release,
