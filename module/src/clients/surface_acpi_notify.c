@@ -410,20 +410,20 @@ struct gsb_data_rqsx {
 	u8 snc;				// expect-response-flag?
 	u8 cid;				// command ID
 	u16 cdl;			// payload length
-	u8 pld[0];			// payload
+	u8 pld[];			// payload
 } __packed;
 
 struct gsb_data_etwl {
 	u8 cv;				// command value (should be 0x02)
 	u8 etw3;			// unknown
 	u8 etw4;			// unknown
-	u8 msg[0];			// error message (ASCIIZ)
+	u8 msg[];			// error message (ASCIIZ)
 } __packed;
 
 struct gsb_data_out {
 	u8 status;			// _SSH communication status
 	u8 len;				// _SSH payload length
-	u8 pld[0];			// _SSH payload
+	u8 pld[];			// _SSH payload
 } __packed;
 
 union gsb_buffer_data {

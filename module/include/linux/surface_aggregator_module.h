@@ -692,7 +692,7 @@ struct ssam_event {
 	u8 command_id;
 	u8 instance_id;
 	u16 length;
-	u8 data[0];
+	u8 data[];
 };
 
 /**
