@@ -1005,8 +1005,8 @@ static const struct spwr_psy_properties spwr_psy_props_bat2_sb3 = {
 };
 
 static const struct ssam_device_id surface_sam_sid_battery_match[] = {
-	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat1     },
-	{ SSAM_DEVICE(BAT, 0x02, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat2_sb3 },
+	{ SSAM_SDEV(BAT, 0x01, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat1     },
+	{ SSAM_SDEV(BAT, 0x02, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat2_sb3 },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, surface_sam_sid_battery_match);
@@ -1067,7 +1067,7 @@ static const struct spwr_psy_properties spwr_psy_props_adp1 = {
 };
 
 static const struct ssam_device_id surface_sam_sid_ac_match[] = {
-	{ SSAM_DEVICE(BAT, 0x01, 0x01, 0x01), (unsigned long)&spwr_psy_props_adp1 },
+	{ SSAM_SDEV(BAT, 0x01, 0x01, 0x01), (unsigned long)&spwr_psy_props_adp1 },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, surface_sam_sid_ac_match);
@@ -1114,7 +1114,7 @@ MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:c02t02i01f00");
-MODULE_ALIAS("ssam:c02t01i01f00");
-MODULE_ALIAS("ssam:c02t01i01f01");
+MODULE_ALIAS("ssam:d00c02t02i01f00");
+MODULE_ALIAS("ssam:d00c02t01i01f00");
+MODULE_ALIAS("ssam:d00c02t01i01f01");
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

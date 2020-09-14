@@ -282,6 +282,44 @@ struct ssam_span {
 	size_t len;
 };
 
+enum ssam_ssh_tc {
+	/* Known SSH/EC target categories. */
+				// category 0x00 is invalid for EC use
+	SSAM_SSH_TC_SAM = 0x01,	// generic system functionality, real-time clock
+	SSAM_SSH_TC_BAT = 0x02,	// battery/power subsystem
+	SSAM_SSH_TC_TMP = 0x03,	// thermal subsystem
+	SSAM_SSH_TC_PMC = 0x04,
+	SSAM_SSH_TC_FAN = 0x05,
+	SSAM_SSH_TC_PoM = 0x06,
+	SSAM_SSH_TC_DBG = 0x07,
+	SSAM_SSH_TC_KBD = 0x08,	// legacy keyboard (Laptop 1/2)
+	SSAM_SSH_TC_FWU = 0x09,
+	SSAM_SSH_TC_UNI = 0x0a,
+	SSAM_SSH_TC_LPC = 0x0b,
+	SSAM_SSH_TC_TCL = 0x0c,
+	SSAM_SSH_TC_SFL = 0x0d,
+	SSAM_SSH_TC_KIP = 0x0e,
+	SSAM_SSH_TC_EXT = 0x0f,
+	SSAM_SSH_TC_BLD = 0x10,
+	SSAM_SSH_TC_BAS = 0x11,	// detachment system (Surface Book 2/3)
+	SSAM_SSH_TC_SEN = 0x12,
+	SSAM_SSH_TC_SRQ = 0x13,
+	SSAM_SSH_TC_MCU = 0x14,
+	SSAM_SSH_TC_HID = 0x15,	// generic HID input subsystem
+	SSAM_SSH_TC_TCH = 0x16,
+	SSAM_SSH_TC_BKL = 0x17,
+	SSAM_SSH_TC_TAM = 0x18,
+	SSAM_SSH_TC_ACC = 0x19,
+	SSAM_SSH_TC_UFI = 0x1a,
+	SSAM_SSH_TC_USC = 0x1b,
+	SSAM_SSH_TC_PEN = 0x1c,
+	SSAM_SSH_TC_VID = 0x1d,
+	SSAM_SSH_TC_AUD = 0x1e,
+	SSAM_SSH_TC_SMC = 0x1f,
+	SSAM_SSH_TC_KPD = 0x20,
+	SSAM_SSH_TC_REG = 0x21,
+};
+
 
 /* -- Packet transport layer (ptl). ----------------------------------------- */
 
@@ -625,49 +663,6 @@ static inline void ssh_request_set_data(struct ssh_request *r, u8 *ptr, size_t l
 
 /* -- Main data types and definitions --------------------------------------- */
 
-enum ssam_ssh_tc {
-	/* Known SSH/EC target categories. */
-				// category 0x00 is invalid for EC use
-	SSAM_SSH_TC_SAM = 0x01,	// generic system functionality, real-time clock
-	SSAM_SSH_TC_BAT = 0x02,	// battery/power subsystem
-	SSAM_SSH_TC_TMP = 0x03,	// thermal subsystem
-	SSAM_SSH_TC_PMC = 0x04,
-	SSAM_SSH_TC_FAN = 0x05,
-	SSAM_SSH_TC_PoM = 0x06,
-	SSAM_SSH_TC_DBG = 0x07,
-	SSAM_SSH_TC_KBD = 0x08,	// legacy keyboard (Laptop 1/2)
-	SSAM_SSH_TC_FWU = 0x09,
-	SSAM_SSH_TC_UNI = 0x0a,
-	SSAM_SSH_TC_LPC = 0x0b,
-	SSAM_SSH_TC_TCL = 0x0c,
-	SSAM_SSH_TC_SFL = 0x0d,
-	SSAM_SSH_TC_KIP = 0x0e,
-	SSAM_SSH_TC_EXT = 0x0f,
-	SSAM_SSH_TC_BLD = 0x10,
-	SSAM_SSH_TC_BAS = 0x11,	// detachment system (Surface Book 2/3)
-	SSAM_SSH_TC_SEN = 0x12,
-	SSAM_SSH_TC_SRQ = 0x13,
-	SSAM_SSH_TC_MCU = 0x14,
-	SSAM_SSH_TC_HID = 0x15,	// generic HID input subsystem
-	SSAM_SSH_TC_TCH = 0x16,
-	SSAM_SSH_TC_BKL = 0x17,
-	SSAM_SSH_TC_TAM = 0x18,
-	SSAM_SSH_TC_ACC = 0x19,
-	SSAM_SSH_TC_UFI = 0x1a,
-	SSAM_SSH_TC_USC = 0x1b,
-	SSAM_SSH_TC_PEN = 0x1c,
-	SSAM_SSH_TC_VID = 0x1d,
-	SSAM_SSH_TC_AUD = 0x1e,
-	SSAM_SSH_TC_SMC = 0x1f,
-	SSAM_SSH_TC_KPD = 0x20,
-	SSAM_SSH_TC_REG = 0x21,
-
-	/* Special values. For driver use only, do not use with EC. */
-	SSAM_SSH_TC__HUB = 0x00, // not an actual category, used in for hubs
-};
-
-struct ssam_controller;
-
 /**
  * enum ssam_event_flags - Flags for enabling/disabling SAM events
  * @SSAM_EVENT_SEQUENCED: The event will be sent via a sequenced data frame.
@@ -749,6 +744,8 @@ struct ssam_response {
 	size_t length;
 	u8 *pointer;
 };
+
+struct ssam_controller;
 
 
 struct ssam_controller *ssam_get_controller(void);
@@ -1460,7 +1457,26 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 /* -- Surface System Aggregator Module Bus. --------------------------------- */
 
 /**
+ * enum ssam_device_domain - SAM device domain.
+ * @SSAM_DOMAIN_VIRTUAL:   Virtual device.
+ * @SSAM_DOMAIN_SERIALHUB: Physical dovice connected via Surface Serial Hub.
+ */
+enum ssam_device_domain {
+	SSAM_DOMAIN_VIRTUAL   = 0x00,
+	SSAM_DOMAIN_SERIALHUB = 0x01,
+};
+
+/**
+ * enum ssam_virtual_tc - Target categories for the virtual SAM domain.
+ * @SSAM_VIRTUAL_TC_HUB: Device hub category.
+ */
+enum ssam_virtual_tc {
+	SSAM_VIRTUAL_TC_HUB = 0x00,
+};
+
+/**
  * struct ssam_device_uid - Unique identifier for SSAM device.
+ * @domain:   Domain of the device.
  * @category: Target category of the device.
  * @target:   Target ID of the device.
  * @instance: Instance ID of the device.
@@ -1470,6 +1486,7 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
  *            such functionality.
  */
 struct ssam_device_uid {
+	u8 domain;
 	u8 category;
 	u8 target;
 	u8 instance;
@@ -1488,6 +1505,7 @@ struct ssam_device_uid {
 struct ssam_device_id {
 	u8 match_flags;		/* which fields to match against */
 
+	u8 domain;		/* device domain          */
 	u8 category;		/* device target category */
 	u8 target;		/* device target ID       */
 	u8 instance;		/* device instance ID     */
@@ -1508,6 +1526,7 @@ struct ssam_device_id {
 /**
  * SSAM_DEVICE() - Initialize a &struct ssam_device_id with the given
  * parameters.
+ * @d:   Domain of the device.
  * @cat: Target category of the device.
  * @tid: Target ID of the device.
  * @iid: Instance ID of the device.
@@ -1520,15 +1539,52 @@ struct ssam_device_id {
  * respectively. This macro initializes the ``match_flags`` field based on the
  * given parameters.
  */
-#define SSAM_DEVICE(cat, tid, iid, fun)						\
+#define SSAM_DEVICE(d, cat, tid, iid, fun)					\
 	.match_flags = (((tid) != SSAM_ANY_TID) ? SSAM_MATCH_TARGET : 0)	\
 		     | (((iid) != SSAM_ANY_IID) ? SSAM_MATCH_INSTANCE : 0)	\
 		     | (((fun) != SSAM_ANY_FUN) ? SSAM_MATCH_FUNCTION : 0),	\
-	.category = SSAM_SSH_TC_##cat,						\
+	.domain   = d,								\
+	.category = cat,							\
 	.target   = ((tid) != SSAM_ANY_TID) ? (tid) : 0,			\
 	.instance = ((iid) != SSAM_ANY_IID) ? (iid) : 0,			\
 	.function = ((fun) != SSAM_ANY_FUN) ? (fun) : 0				\
 
+/**
+ * SSAM_VDEV() - Initialize a &struct ssam_device_id as virtual device with
+ * the given parameters.
+ * @cat: Target category of the device.
+ * @tid: Target ID of the device.
+ * @iid: Instance ID of the device.
+ * @fun: Sub-function of the device.
+ *
+ * Initializes a &struct ssam_device_id with the given parameters in the
+ * virtual domain. See &struct ssam_device_uid for details regarding the
+ * parameters. The special values %SSAM_ANY_TID, %SSAM_ANY_IID, and
+ * %SSAM_ANY_FUN can be used to specify that matching should ignore target ID,
+ * instance ID, and/or sub-function, respectively. This macro initializes the
+ * ``match_flags`` field based on the given parameters.
+ */
+#define SSAM_VDEV(cat, tid, iid, fun) \
+	SSAM_DEVICE(SSAM_DOMAIN_VIRTUAL, SSAM_VIRTUAL_TC_##cat, tid, iid, fun)
+
+
+/**
+ * SSAM_SDEV() - Initialize a &struct ssam_device_id as physical SSH device
+ * with the given parameters.
+ * @cat: Target category of the device.
+ * @tid: Target ID of the device.
+ * @iid: Instance ID of the device.
+ * @fun: Sub-function of the device.
+ *
+ * Initializes a &struct ssam_device_id with the given parameters in the SSH
+ * domain. See &struct ssam_device_uid for details regarding the parameters.
+ * The special values %SSAM_ANY_TID, %SSAM_ANY_IID, and %SSAM_ANY_FUN can be
+ * used to specify that matching should ignore target ID, instance ID, and/or
+ * sub-function, respectively. This macro initializes the ``match_flags``
+ * field based on the given parameters.
+ */
+#define SSAM_SDEV(cat, tid, iid, fun) \
+	SSAM_DEVICE(SSAM_DOMAIN_SERIALHUB, SSAM_SSH_TC_##cat, tid, iid, fun)
 
 /**
  * ssam_device_uid_equal() - Compare SSAM device UIDs for equality.

@@ -21,67 +21,67 @@ static const struct software_node ssam_node_root = {
 };
 
 static const struct software_node ssam_node_hub_main = {
-	.name = "ssam:00:01:00:00",
+	.name = "ssam:00:00:01:00:00",
 	.parent = &ssam_node_root,
 };
 
 static const struct software_node ssam_node_hub_base = {
-	.name = "ssam:00:02:00:00",
+	.name = "ssam:00:00:02:00:00",
 	.parent = &ssam_node_root,
 };
 
 static const struct software_node ssam_node_bat_ac = {
-	.name = "ssam:02:01:01:01",
+	.name = "ssam:01:02:01:01:01",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_bat_main = {
-	.name = "ssam:02:01:01:00",
+	.name = "ssam:01:02:01:01:00",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_bat_sb3base = {
-	.name = "ssam:02:02:01:00",
+	.name = "ssam:01:02:02:01:00",
 	.parent = &ssam_node_hub_base,
 };
 
 static const struct software_node ssam_node_tmp_perf = {
-	.name = "ssam:03:01:00:02",
+	.name = "ssam:01:03:01:00:02",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_hid_main_keyboard = {
-	.name = "ssam:15:02:01:00",
+	.name = "ssam:01:15:02:01:00",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_hid_main_touchpad = {
-	.name = "ssam:15:02:03:00",
+	.name = "ssam:01:15:02:03:00",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_hid_main_iid5 = {
-	.name = "ssam:15:02:05:00",
+	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_main,
 };
 
 static const struct software_node ssam_node_hid_base_keyboard = {
-	.name = "ssam:15:02:01:00",
+	.name = "ssam:01:15:02:01:00",
 	.parent = &ssam_node_hub_base,
 };
 
 static const struct software_node ssam_node_hid_base_touchpad = {
-	.name = "ssam:15:02:03:00",
+	.name = "ssam:01:15:02:03:00",
 	.parent = &ssam_node_hub_base,
 };
 
 static const struct software_node ssam_node_hid_base_iid5 = {
-	.name = "ssam:15:02:05:00",
+	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_base,
 };
 
 static const struct software_node ssam_node_hid_base_iid6 = {
-	.name = "ssam:15:02:05:00",
+	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_base,
 };
 
@@ -162,11 +162,14 @@ static const struct software_node *ssam_node_group_sp7[] = {
 
 static int ssam_uid_from_string(const char *str, struct ssam_device_uid *uid)
 {
-	u8 tc, tid, iid, fn;
+	u8 d, tc, tid, iid, fn;
+	int n;
 
-	if (sscanf(str, "ssam:%hhx:%hhx:%hhx:%hhx", &tc, &tid, &iid, &fn) != 4)
+	n = sscanf(str, "ssam:%hhx:%hhx:%hhx:%hhx:%hhx", &d, &tc, &tid, &iid, &fn);
+	if (n != 5)
 		return -EINVAL;
 
+	uid->domain = d;
 	uid->category = tc;
 	uid->target = tid;
 	uid->instance = iid;
@@ -253,7 +256,7 @@ static void ssam_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_hub_match[] = {
-	{ SSAM_DEVICE(_HUB, 0x01, 0x00, 0x00) },
+	{ SSAM_VDEV(HUB, 0x01, 0x00, 0x00) },
 	{ },
 };
 
@@ -487,7 +490,7 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
-	{ SSAM_DEVICE(_HUB, 0x02, 0x00, 0x00) },
+	{ SSAM_VDEV(HUB, 0x02, 0x00, 0x00) },
 	{ },
 };
 

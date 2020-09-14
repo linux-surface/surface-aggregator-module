@@ -475,7 +475,7 @@ static const struct sid_vhf_properties sid_vhf_default_props = {
 
 static const struct ssam_device_id surface_sam_sid_vhf_match[] = {
 	{
-		SSAM_DEVICE(HID, SSAM_ANY_TID, SSAM_ANY_IID, 0x00),
+		SSAM_SDEV(HID, SSAM_ANY_TID, SSAM_ANY_IID, 0x00),
 		.driver_data = (unsigned long)&sid_vhf_default_props
 	},
 	{ },
@@ -499,5 +499,5 @@ MODULE_DESCRIPTION("Driver for HID devices connected via Surface SAM");
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:c15t*i*f00");
+MODULE_ALIAS("ssam:d00c15t*i*f00");
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

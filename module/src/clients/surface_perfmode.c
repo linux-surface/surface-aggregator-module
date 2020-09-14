@@ -170,7 +170,7 @@ static void surface_sam_sid_perfmode_remove(struct ssam_device *sdev)
 
 
 static const struct ssam_device_id ssam_perfmode_match[] = {
-	{ SSAM_DEVICE(TMP, 0x01, 0x00, 0x02) },
+	{ SSAM_SDEV(TMP, 0x01, 0x00, 0x02) },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, ssam_perfmode_match);
@@ -191,5 +191,5 @@ MODULE_DESCRIPTION("Surface Performance Mode Driver for 5th Generation Surface D
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:c03t01i00f02");
+MODULE_ALIAS("ssam:d00c03t01i00f02");
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

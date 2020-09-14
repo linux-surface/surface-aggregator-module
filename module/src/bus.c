@@ -14,8 +14,8 @@ static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 
-	return snprintf(buf, PAGE_SIZE - 1, "ssam:c%02Xt%02Xi%02xf%02X\n",
-			sdev->uid.category, sdev->uid.target,
+	return snprintf(buf, PAGE_SIZE - 1, "ssam:d%02Xc%02Xt%02Xi%02xf%02X\n",
+			sdev->uid.domain, sdev->uid.category, sdev->uid.target,
 			sdev->uid.instance, sdev->uid.function);
 }
 static DEVICE_ATTR_RO(modalias);
@@ -30,9 +30,10 @@ static int ssam_device_uevent(struct device *dev, struct kobj_uevent_env *env)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 
-	return add_uevent_var(env, "MODALIAS=ssam:c%02Xt%02Xi%02xf%02X",
-			      sdev->uid.category, sdev->uid.target,
-			      sdev->uid.instance, sdev->uid.function);
+	return add_uevent_var(env, "MODALIAS=ssam:d%02Xc%02Xt%02Xi%02xf%02X",
+			      sdev->uid.domain, sdev->uid.category,
+			      sdev->uid.target, sdev->uid.instance,
+			      sdev->uid.function);
 }
 
 static void ssam_device_release(struct device *dev)
@@ -81,9 +82,9 @@ struct ssam_device *ssam_device_alloc(struct ssam_controller *ctrl,
 	sdev->ctrl = ssam_controller_get(ctrl);
 	sdev->uid = uid;
 
-	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x",
-		     sdev->uid.category, sdev->uid.target, sdev->uid.instance,
-		     sdev->uid.function);
+	dev_set_name(&sdev->dev, "%02x:%02x:%02x:%02x:%02x",
+		     sdev->uid.domain, sdev->uid.category, sdev->uid.target,
+		     sdev->uid.instance, sdev->uid.function);
 
 	return sdev;
 }
@@ -177,7 +178,7 @@ EXPORT_SYMBOL_GPL(ssam_device_remove);
 static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
 					     struct ssam_device_uid uid)
 {
-	if (id->category != uid.category)
+	if (id->domain != uid.domain || id->category != uid.category)
 		return false;
 
 	if ((id->match_flags & SSAM_MATCH_TARGET) && id->target != uid.target)
@@ -205,6 +206,7 @@ static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
 static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
 {
 	return id->match_flags == 0
+		&& id->domain == 0
 		&& id->category == 0
 		&& id->target == 0
 		&& id->instance == 0
