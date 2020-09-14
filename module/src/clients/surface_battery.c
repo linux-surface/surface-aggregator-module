@@ -1098,14 +1098,13 @@ static int __init surface_sam_sid_power_init(void)
 
 	return 0;
 }
+module_init(surface_sam_sid_power_init);
 
 static void __exit surface_sam_sid_power_exit(void)
 {
 	ssam_device_driver_unregister(&surface_sam_sid_battery);
 	ssam_device_driver_unregister(&surface_sam_sid_ac);
 }
-
-module_init(surface_sam_sid_power_init);
 module_exit(surface_sam_sid_power_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");

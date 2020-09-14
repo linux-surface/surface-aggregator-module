@@ -1288,7 +1288,6 @@ static struct platform_driver surface_sam_hps = {
 		.pm = &shps_pm_ops,
 	},
 };
-
 module_platform_driver(surface_sam_hps);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
