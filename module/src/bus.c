@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 
 #include <linux/device.h>
+#include <linux/slab.h>
+
+#include "../include/linux/surface_aggregator_module.h"
 
 #include "bus.h"
 #include "controller.h"

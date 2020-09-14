@@ -2,7 +2,10 @@
 
 #include <asm/unaligned.h>
 #include <linux/compiler.h>
+#include <linux/device.h>
+#include <linux/types.h>
 
+#include "../include/linux/surface_aggregator_module.h"
 #include "ssh_parser.h"
 
 
