@@ -14,7 +14,7 @@
 #include <linux/spinlock.h>
 #include <linux/workqueue.h>
 
-#include "../include/linux/surface_aggregator_module.h"
+#include "../include/linux/surface_aggregator/serial_hub.h"
 #include "ssh_packet_layer.h"
 
 #include "trace.h"

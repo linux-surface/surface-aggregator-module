@@ -14,7 +14,7 @@
 #include <linux/platform_device.h>
 #include <linux/rwsem.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_acpi_notify.h"
 
 

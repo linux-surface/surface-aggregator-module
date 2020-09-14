@@ -11,7 +11,8 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/controller.h"
+#include "../../include/linux/surface_aggregator/device.h"
 
 
 /* -- Device registry. ------------------------------------------------------ */

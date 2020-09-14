@@ -7,7 +7,7 @@
 #include <linux/slab.h>
 #include <linux/uaccess.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/controller.h"
 
 #define SSAM_DBG_DEVICE_NAME		"surface_aggregator_dbg"
 #define SSAM_DBG_IF_VERSION		0x010000

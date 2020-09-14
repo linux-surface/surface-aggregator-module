@@ -14,7 +14,7 @@
 #include <linux/pm.h>
 #include <linux/serdev.h>
 
-#include "../include/linux/surface_aggregator_module.h"
+#include "../include/linux/surface_aggregator/controller.h"
 
 #include "bus.h"
 #include "controller.h"

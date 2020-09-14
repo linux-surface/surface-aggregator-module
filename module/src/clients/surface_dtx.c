@@ -17,7 +17,7 @@
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/controller.h"
 
 
 #define USB_VENDOR_ID_MICROSOFT				0x045e

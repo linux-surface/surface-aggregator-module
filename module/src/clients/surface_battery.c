@@ -13,7 +13,7 @@
 #include <linux/types.h>
 #include <linux/workqueue.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/device.h"
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries

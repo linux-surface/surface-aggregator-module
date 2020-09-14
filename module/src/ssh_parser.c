@@ -5,7 +5,7 @@
 #include <linux/device.h>
 #include <linux/types.h>
 
-#include "../include/linux/surface_aggregator_module.h"
+#include "../include/linux/surface_aggregator/serial_hub.h"
 #include "ssh_parser.h"
 
 

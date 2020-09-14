@@ -3,7 +3,8 @@
 #include <linux/device.h>
 #include <linux/slab.h>
 
-#include "../include/linux/surface_aggregator_module.h"
+#include "../include/linux/surface_aggregator/controller.h"
+#include "../include/linux/surface_aggregator/device.h"
 
 #include "bus.h"
 #include "controller.h"

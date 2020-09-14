@@ -8,7 +8,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
-#include "../include/linux/surface_aggregator_module.h"
+#include "../include/linux/surface_aggregator/serial_hub.h"
 
 
 /**

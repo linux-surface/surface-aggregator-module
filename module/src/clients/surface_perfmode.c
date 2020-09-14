@@ -10,7 +10,7 @@
 #include <linux/sysfs.h>
 #include <linux/types.h>
 
-#include "../../include/linux/surface_aggregator_module.h"
+#include "../../include/linux/surface_aggregator/device.h"
 
 
 #define SID_PARAM_PERM		0644
