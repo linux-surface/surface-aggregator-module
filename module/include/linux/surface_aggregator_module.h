@@ -1586,30 +1586,6 @@ struct ssam_device_id {
 #define SSAM_SDEV(cat, tid, iid, fun) \
 	SSAM_DEVICE(SSAM_DOMAIN_SERIALHUB, SSAM_SSH_TC_##cat, tid, iid, fun)
 
-/**
- * ssam_device_uid_equal() - Compare SSAM device UIDs for equality.
- * @u1: The first UID.
- * @u2: The second UID.
- *
- * Return: Returns %true iff both UIDs are equal, %false otherwise.
- */
-static inline bool ssam_device_uid_equal(const struct ssam_device_uid u1,
-					 const struct ssam_device_uid u2)
-{
-	return memcmp(&u1, &u2, sizeof(struct ssam_device_uid)) == 0;
-}
-
-/**
- * ssam_device_uid_is_null() - Check if a SSAM device UID is null.
- * @uid: The UID to check.
- *
- * Return: Returns %true iff the given UID is null, %false otherwise.
- */
-static inline bool ssam_device_uid_is_null(const struct ssam_device_uid uid)
-{
-	return ssam_device_uid_equal(uid, (struct ssam_device_uid){});
-}
-
 
 /**
  * struct ssam_device - SSAM client device.
