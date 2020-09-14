@@ -32,7 +32,7 @@
  * ssh_seq_reset() - Reset/initialize sequence ID counter.
  * @c: The counter to reset.
  */
-static inline void ssh_seq_reset(struct ssh_seq_counter *c)
+static void ssh_seq_reset(struct ssh_seq_counter *c)
 {
 	WRITE_ONCE(c->value, 0);
 }
@@ -43,7 +43,7 @@ static inline void ssh_seq_reset(struct ssh_seq_counter *c)
  *
  * Return: Retunrs the next sequence ID of the counter.
  */
-static inline u8 ssh_seq_next(struct ssh_seq_counter *c)
+static u8 ssh_seq_next(struct ssh_seq_counter *c)
 {
 	u8 old = READ_ONCE(c->value);
 	u8 new = old + 1;
@@ -61,7 +61,7 @@ static inline u8 ssh_seq_next(struct ssh_seq_counter *c)
  * ssh_rqid_reset() - Reset/initialize request ID counter.
  * @c: The counter to reset.
  */
-static inline void ssh_rqid_reset(struct ssh_rqid_counter *c)
+static void ssh_rqid_reset(struct ssh_rqid_counter *c)
 {
 	WRITE_ONCE(c->value, 0);
 }
@@ -73,7 +73,7 @@ static inline void ssh_rqid_reset(struct ssh_rqid_counter *c)
  * Return: Returns the next request ID of the counter, skipping any reserved
  * request IDs.
  */
-static inline u16 ssh_rqid_next(struct ssh_rqid_counter *c)
+static u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 {
 	u16 old = READ_ONCE(c->value);
 	u16 new = ssh_rqid_next_valid(old);
@@ -583,7 +583,7 @@ static void __ssam_event_item_free_generic(struct ssam_event_item *item)
  * ssam_event_item_free() - Free the provided event item.
  * @item: The event item to free.
  */
-static inline void ssam_event_item_free(struct ssam_event_item *item)
+static void ssam_event_item_free(struct ssam_event_item *item)
 {
 	trace_ssam_event_item_free(item);
 	item->ops.free(item);
@@ -712,8 +712,7 @@ static struct ssam_event_queue *ssam_cplt_get_event_queue(
  * @cplt: The completion system.
  * @work: The work item to submit.
  */
-static inline bool ssam_cplt_submit(struct ssam_cplt *cplt,
-				    struct work_struct *work)
+static bool ssam_cplt_submit(struct ssam_cplt *cplt, struct work_struct *work)
 {
 	return queue_work(cplt->wq, work);
 }

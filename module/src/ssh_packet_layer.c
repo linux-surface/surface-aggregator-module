@@ -305,7 +305,7 @@ static noinline bool ssh_ptl_should_corrupt_rx_data(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_rx_data, TRUE);
 
 
-static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
+static bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_ack_packet()))
 		return false;
@@ -317,7 +317,7 @@ static inline bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 	return true;
 }
 
-static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_packet *packet)
+static bool __ssh_ptl_should_drop_nak_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_nak_packet()))
 		return false;
@@ -329,7 +329,7 @@ static inline bool __ssh_ptl_should_drop_nak_packet(struct ssh_packet *packet)
 	return true;
 }
 
-static inline bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
+static bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 {
 	if (likely(!ssh_ptl_should_drop_dsq_packet()))
 		return false;
@@ -529,7 +529,7 @@ void ssh_packet_put(struct ssh_packet *packet)
 }
 EXPORT_SYMBOL_GPL(ssh_packet_put);
 
-static inline u8 ssh_packet_get_seq(struct ssh_packet *packet)
+static u8 ssh_packet_get_seq(struct ssh_packet *packet)
 {
 	return packet->data.ptr[SSH_MSGOFFSET_FRAME(seq)];
 }
@@ -1741,7 +1741,7 @@ static int ssh_ptl_rx_threadfn(void *data)
 	return 0;
 }
 
-static inline void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
+static void ssh_ptl_rx_wakeup(struct ssh_ptl *ptl)
 {
 	wake_up(&ptl->rx.wq);
 }

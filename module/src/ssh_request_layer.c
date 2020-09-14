@@ -70,13 +70,13 @@ static inline bool ssh_rtl_should_drop_response(void)
 #endif
 
 
-static inline u16 ssh_request_get_rqid(struct ssh_request *rqst)
+static u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
 	return get_unaligned_le16(rqst->packet.data.ptr
 				  + SSH_MSGOFFSET_COMMAND(rqid));
 }
 
-static inline u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
+static u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 {
 	if (!rqst->packet.data.ptr)
 		return (u32)-1;

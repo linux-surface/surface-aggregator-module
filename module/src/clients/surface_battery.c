@@ -236,18 +236,18 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
 
-static inline bool spwr_battery_present(struct spwr_battery_device *bat)
+static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
 	return le32_to_cpu(bat->sta) & SAM_BATTERY_STA_PRESENT;
 }
 
 
-static inline int spwr_battery_load_sta(struct spwr_battery_device *bat)
+static int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
 	return ssam_bat_get_sta(bat->sdev, &bat->sta);
 }
 
-static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
+static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 {
 	if (!spwr_battery_present(bat))
 		return 0;
@@ -255,7 +255,7 @@ static inline int spwr_battery_load_bix(struct spwr_battery_device *bat)
 	return ssam_bat_get_bix(bat->sdev, &bat->bix);
 }
 
-static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
+static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 {
 	if (!spwr_battery_present(bat))
 		return 0;
@@ -264,8 +264,8 @@ static inline int spwr_battery_load_bst(struct spwr_battery_device *bat)
 }
 
 
-static inline int spwr_battery_set_alarm_unlocked(
-		struct spwr_battery_device *bat, u32 value)
+static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat,
+					   u32 value)
 {
 	__le32 alarm = cpu_to_le32(value);
 
@@ -273,8 +273,7 @@ static inline int spwr_battery_set_alarm_unlocked(
 	return ssam_bat_set_btp(bat->sdev, &alarm);
 }
 
-static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat,
-					 u32 value)
+static int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
 {
 	int status;
 
@@ -285,8 +284,8 @@ static inline int spwr_battery_set_alarm(struct spwr_battery_device *bat,
 	return status;
 }
 
-static inline int spwr_battery_update_bst_unlocked(
-		struct spwr_battery_device *bat, bool cached)
+static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat,
+					    bool cached)
 {
 	unsigned long cache_deadline;
 	int status;
@@ -319,7 +318,7 @@ static int spwr_battery_update_bst(struct spwr_battery_device *bat, bool cached)
 	return status;
 }
 
-static inline int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
+static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
 {
 	int status;
 
@@ -350,7 +349,7 @@ static int spwr_battery_update_bix(struct spwr_battery_device *bat)
 	return status;
 }
 
-static inline int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
+static int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
 	int status;
 	u32 old = ac->state;
@@ -403,7 +402,7 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 }
 
 
-static inline int spwr_notify_bix(struct spwr_battery_device *bat)
+static int spwr_notify_bix(struct spwr_battery_device *bat)
 {
 	int status;
 
@@ -414,7 +413,7 @@ static inline int spwr_notify_bix(struct spwr_battery_device *bat)
 	return status;
 }
 
-static inline int spwr_notify_bst(struct spwr_battery_device *bat)
+static int spwr_notify_bst(struct spwr_battery_device *bat)
 {
 	int status;
 
@@ -425,7 +424,7 @@ static inline int spwr_notify_bst(struct spwr_battery_device *bat)
 	return status;
 }
 
-static inline int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
+static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 {
 	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
@@ -444,7 +443,7 @@ static inline int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 	return 0;
 }
 
-static inline int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
+static int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
 {
 	int status;
 
@@ -543,7 +542,7 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 }
 
 
-static inline int spwr_battery_prop_status(struct spwr_battery_device *bat)
+static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
 	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
@@ -565,7 +564,7 @@ static inline int spwr_battery_prop_status(struct spwr_battery_device *bat)
 	return POWER_SUPPLY_STATUS_UNKNOWN;
 }
 
-static inline int spwr_battery_prop_technology(struct spwr_battery_device *bat)
+static int spwr_battery_prop_technology(struct spwr_battery_device *bat)
 {
 	if (!strcasecmp("NiCd", bat->bix.type))
 		return POWER_SUPPLY_TECHNOLOGY_NiCd;
@@ -585,7 +584,7 @@ static inline int spwr_battery_prop_technology(struct spwr_battery_device *bat)
 	return POWER_SUPPLY_TECHNOLOGY_UNKNOWN;
 }
 
-static inline int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
+static int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
 {
 	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
@@ -596,7 +595,7 @@ static inline int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
 		return 0;
 }
 
-static inline int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
+static int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
 	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);

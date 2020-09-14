@@ -22,7 +22,7 @@
  * Return: Returns %true iff the computed CRC matches the stored CRC, %false
  * otherwise.
  */
-static inline bool sshp_validate_crc(const struct ssam_span *src, const u8 *crc)
+static bool sshp_validate_crc(const struct ssam_span *src, const u8 *crc)
 {
 	u16 actual = ssh_crc(src->ptr, src->len);
 	u16 expected = get_unaligned_le16(crc);
@@ -34,7 +34,7 @@ static inline bool sshp_validate_crc(const struct ssam_span *src, const u8 *crc)
  * sshp_starts_with_syn() - Check if the given data starts with SSH SYN bytes.
  * @src: The data span to check the start of.
  */
-static inline bool sshp_starts_with_syn(const struct ssam_span *src)
+static bool sshp_starts_with_syn(const struct ssam_span *src)
 {
 	return src->len >= 2 && get_unaligned_le16(src->ptr) == SSH_MSG_SYN;
 }

@@ -175,8 +175,8 @@ EXPORT_SYMBOL_GPL(ssam_device_remove);
  * Return: Returns %true iff the given UID is compatible to the match rule
  * described by the given ID, %false otherwise.
  */
-static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
-					     struct ssam_device_uid uid)
+static bool ssam_device_id_compatible(const struct ssam_device_id *id,
+				      struct ssam_device_uid uid)
 {
 	if (id->domain != uid.domain || id->category != uid.category)
 		return false;
@@ -203,7 +203,7 @@ static inline bool ssam_device_id_compatible(const struct ssam_device_id *id,
  * Return: Returns %true if the given ID represents a null ID, %false
  * otherwise.
  */
-static inline bool ssam_device_id_is_null(const struct ssam_device_id *id)
+static bool ssam_device_id_is_null(const struct ssam_device_id *id)
 {
 	return id->match_flags == 0
 		&& id->domain == 0
