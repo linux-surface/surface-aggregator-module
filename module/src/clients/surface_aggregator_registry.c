@@ -46,7 +46,7 @@ static const struct software_node ssam_node_bat_sb3base = {
 };
 
 static const struct software_node ssam_node_tmp_perf = {
-	.name = "ssam:01:03:01:00:02",
+	.name = "ssam:01:03:01:00:01",
 	.parent = &ssam_node_hub_main,
 };
 

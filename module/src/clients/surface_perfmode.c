@@ -170,7 +170,7 @@ static void surface_sam_sid_perfmode_remove(struct ssam_device *sdev)
 
 
 static const struct ssam_device_id ssam_perfmode_match[] = {
-	{ SSAM_SDEV(TMP, 0x01, 0x00, 0x02) },
+	{ SSAM_SDEV(TMP, 0x01, 0x00, 0x01) },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, ssam_perfmode_match);
