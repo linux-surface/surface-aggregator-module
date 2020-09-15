@@ -497,7 +497,7 @@ static struct ssam_device_driver surface_sam_sid_vhf = {
 module_ssam_device_driver(surface_sam_sid_vhf);
 
 MODULE_AUTHOR("Blaž Hrastnik <blaz@mxxn.io>");
-MODULE_DESCRIPTION("Driver for HID devices connected via Surface SAM");
+MODULE_DESCRIPTION("HID transport-/device-driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__

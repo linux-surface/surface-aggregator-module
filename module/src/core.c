@@ -768,5 +768,5 @@ late_initcall(ssam_core_init);
 module_exit(ssam_core_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Serial Hub Driver for 5th Generation Surface Devices");
+MODULE_DESCRIPTION("Subsystem and Surface Serial Hub driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");

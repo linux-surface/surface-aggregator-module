@@ -1110,7 +1110,7 @@ static void __exit surface_sam_sid_power_exit(void)
 module_exit(surface_sam_sid_power_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Battery/AC Driver for 7th Generation Surface Devices");
+MODULE_DESCRIPTION("Battery/AC driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__

@@ -277,5 +277,5 @@ static void __exit ssam_debug_exit(void)
 module_exit(ssam_debug_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("DebugFS entries for Surface Aggregator Module");
+MODULE_DESCRIPTION("DebugFS interface for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");

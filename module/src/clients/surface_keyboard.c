@@ -334,5 +334,5 @@ static struct platform_driver surface_sam_vhf = {
 module_platform_driver(surface_sam_vhf);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Virtual HID Framework Driver for 5th Generation Surface Devices");
+MODULE_DESCRIPTION("Legacy HID keyboard driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");

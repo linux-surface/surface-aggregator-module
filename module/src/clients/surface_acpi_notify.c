@@ -843,5 +843,5 @@ static struct platform_driver surface_acpi_notify = {
 module_platform_driver(surface_acpi_notify);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface ACPI Notify Driver for 5th Generation Surface Devices");
+MODULE_DESCRIPTION("Surface ACPI Notify driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");

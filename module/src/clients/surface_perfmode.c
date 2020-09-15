@@ -190,7 +190,7 @@ static struct ssam_device_driver surface_sam_sid_perfmode = {
 module_ssam_device_driver(surface_sam_sid_perfmode);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Performance Mode Driver for 5th Generation Surface Devices");
+MODULE_DESCRIPTION("Performance mode interface for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__

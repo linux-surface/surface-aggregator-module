@@ -1293,5 +1293,5 @@ static struct platform_driver surface_sam_hps = {
 module_platform_driver(surface_sam_hps);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Hot-Plug System (HPS) and dGPU power-state Driver for Surface Book 2");
+MODULE_DESCRIPTION("DGPU hot-plug system driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");

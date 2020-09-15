@@ -645,5 +645,5 @@ static void __exit ssam_device_hub_exit(void)
 module_exit(ssam_device_hub_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface SAM Device Hub Driver for 5th Generation Surface Devices");
+MODULE_DESCRIPTION("Device-registry for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
