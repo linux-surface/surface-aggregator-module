@@ -343,7 +343,7 @@ static void ssam_serial_hub_shutdown(struct device *dev)
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 }
 
-static int ssam_serial_hub_suspend(struct device *dev)
+static int ssam_serial_hub_pm_suspend(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -383,7 +383,7 @@ err_notif:
 	return status;
 }
 
-static int ssam_serial_hub_resume(struct device *dev)
+static int ssam_serial_hub_pm_resume(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -413,7 +413,7 @@ static int ssam_serial_hub_resume(struct device *dev)
 	return 0;
 }
 
-static int ssam_serial_hub_freeze(struct device *dev)
+static int ssam_serial_hub_pm_freeze(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -446,7 +446,7 @@ static int ssam_serial_hub_freeze(struct device *dev)
 	return 0;
 }
 
-static int ssam_serial_hub_thaw(struct device *dev)
+static int ssam_serial_hub_pm_thaw(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -469,7 +469,7 @@ static int ssam_serial_hub_thaw(struct device *dev)
 	return status;
 }
 
-static int ssam_serial_hub_poweroff(struct device *dev)
+static int ssam_serial_hub_pm_poweroff(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -519,7 +519,7 @@ err_dpnf:
 	return status;
 }
 
-static int ssam_serial_hub_restore(struct device *dev)
+static int ssam_serial_hub_pm_restore(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
@@ -545,12 +545,12 @@ static int ssam_serial_hub_restore(struct device *dev)
 }
 
 static const struct dev_pm_ops ssam_serial_hub_pm_ops = {
-	.suspend  = ssam_serial_hub_suspend,
-	.resume   = ssam_serial_hub_resume,
-	.freeze   = ssam_serial_hub_freeze,
-	.thaw     = ssam_serial_hub_thaw,
-	.poweroff = ssam_serial_hub_poweroff,
-	.restore  = ssam_serial_hub_restore,
+	.suspend  = ssam_serial_hub_pm_suspend,
+	.resume   = ssam_serial_hub_pm_resume,
+	.freeze   = ssam_serial_hub_pm_freeze,
+	.thaw     = ssam_serial_hub_pm_thaw,
+	.poweroff = ssam_serial_hub_pm_poweroff,
+	.restore  = ssam_serial_hub_pm_restore,
 };
 
 
