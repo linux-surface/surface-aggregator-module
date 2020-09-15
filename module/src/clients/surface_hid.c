@@ -501,5 +501,5 @@ MODULE_DESCRIPTION("Driver for HID devices connected via Surface SAM");
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:d00c15t*i*f00");
+MODULE_ALIAS("ssam:d01c15t*i*f00");
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

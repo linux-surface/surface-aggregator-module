@@ -194,5 +194,5 @@ MODULE_DESCRIPTION("Surface Performance Mode Driver for 5th Generation Surface D
 MODULE_LICENSE("GPL");
 
 #ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:d00c03t01i00f02");
+MODULE_ALIAS("ssam:d01c03t01i00f01");
 #endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
