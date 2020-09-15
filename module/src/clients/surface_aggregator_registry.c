@@ -85,7 +85,7 @@ static const struct software_node ssam_node_hid_base_iid5 = {
 };
 
 static const struct software_node ssam_node_hid_base_iid6 = {
-	.name = "ssam:01:15:02:05:00",
+	.name = "ssam:01:15:02:06:00",
 	.parent = &ssam_node_hub_base,
 };
 
