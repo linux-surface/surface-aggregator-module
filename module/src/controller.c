@@ -997,9 +997,67 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
 
 
 #define SSAM_SSH_DSM_REVISION	0
-#define SSAM_SSH_DSM_NOTIF_D0	8
-static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
+static const guid_t SSAM_SSH_DSM_GUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
 		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
+
+enum ssh_dsm_fn {
+	SSH_DSM_FN_SSH_POWER_PROFILE             = 0x05,
+	SSH_DSM_FN_SCREEN_ON_SLEEP_IDLE_TIMEOUT  = 0x06,
+	SSH_DSM_FN_SCREEN_OFF_SLEEP_IDLE_TIMEOUT = 0x07,
+	SSH_DSM_FN_D3_CLOSES_HANDLE              = 0x08,
+	SSH_DSM_FN_SSH_BUFFER_SIZE               = 0x09,
+};
+
+static int ssam_dsm_get_functions(acpi_handle handle, u64 *funcs)
+{
+	union acpi_object *obj;
+	u64 mask = 0;
+	int i;
+
+	*funcs = 0;
+
+	if (!acpi_has_method(handle, "_DSM"))
+		return 0;
+
+	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_GUID,
+				      SSAM_SSH_DSM_REVISION, 0, NULL,
+				      ACPI_TYPE_BUFFER);
+	if (!obj)
+		return -EFAULT;
+
+	for (i = 0; i < obj->buffer.length && i < 8; i++)
+		mask |= (((u64)obj->buffer.pointer[i]) << (i * 8));
+
+	if (mask & 0x01)
+		*funcs = mask;
+
+	ACPI_FREE(obj);
+	return 0;
+}
+
+static int ssam_dsm_load_u32(acpi_handle handle, u64 funcs, u64 func, u32 *ret)
+{
+	union acpi_object *obj;
+	u64 val;
+
+	if (!(funcs & BIT(func)))
+		return 0;
+
+	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_GUID,
+				      SSAM_SSH_DSM_REVISION, func, NULL,
+				      ACPI_TYPE_INTEGER);
+	if (!obj)
+		return -EFAULT;
+
+	val = obj->integer.value;
+	ACPI_FREE(obj);
+
+	if (val > U32_MAX)
+		return -ERANGE;
+
+	*ret = val;
+	return 0;
+}
 
 /**
  * ssam_controller_caps_load_from_acpi() - Load controller capabilities from
@@ -1011,44 +1069,54 @@ static const guid_t SSAM_SSH_DSM_UUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
  * checks and, if the respective _DSM functions are available, loads the
  * actual capabilities from the _DSM.
  *
- * Return: Returns zero on success, %-EFAULT on failure.
+ * Return: Returns zero on success, a negative error code on failure.
  */
 static int ssam_controller_caps_load_from_acpi(
 		acpi_handle handle, struct ssam_controller_caps *caps)
 {
-	union acpi_object *obj;
-	u64 funcs = 0;
-	int i;
+	u32 d3_closes_handle;
+	u64 funcs;
+	int status;
 
 	// set defaults
-	caps->notif_display = true;
-	caps->notif_d0exit = false;
+	caps->ssh_power_profile = (u32)-1;
+	caps->screen_on_sleep_idle_timeout = (u32)-1;
+	caps->screen_off_sleep_idle_timeout = (u32)-1;
+	caps->d3_closes_handle = false;
+	caps->ssh_buffer_size = (u32)-1;
 
-	if (!acpi_has_method(handle, "_DSM"))
-		return 0;
+	status = ssam_dsm_get_functions(handle, &funcs);
+	if (status)
+		return status;
 
-	// get function availability bitfield
-	obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID, 0, 0, NULL,
-			ACPI_TYPE_BUFFER);
-	if (!obj)
-		return -EFAULT;
+	status = ssam_dsm_load_u32(handle, funcs, SSH_DSM_FN_SSH_POWER_PROFILE,
+				   &caps->ssh_power_profile);
+	if (status)
+		return status;
 
-	for (i = 0; i < obj->buffer.length && i < 8; i++)
-		funcs |= (((u64)obj->buffer.pointer[i]) << (i * 8));
+	status = ssam_dsm_load_u32(handle, funcs,
+				   SSH_DSM_FN_SCREEN_ON_SLEEP_IDLE_TIMEOUT,
+				   &caps->screen_on_sleep_idle_timeout);
+	if (status)
+		return status;
 
-	ACPI_FREE(obj);
+	status = ssam_dsm_load_u32(handle, funcs,
+				   SSH_DSM_FN_SCREEN_OFF_SLEEP_IDLE_TIMEOUT,
+				   &caps->screen_off_sleep_idle_timeout);
+	if (status)
+		return status;
 
-	// D0 exit/entry notification
-	if (funcs & BIT(SSAM_SSH_DSM_NOTIF_D0)) {
-		obj = acpi_evaluate_dsm_typed(handle, &SSAM_SSH_DSM_UUID,
-				SSAM_SSH_DSM_REVISION, SSAM_SSH_DSM_NOTIF_D0,
-				NULL, ACPI_TYPE_INTEGER);
-		if (!obj)
-			return -EFAULT;
+	status = ssam_dsm_load_u32(handle, funcs, SSH_DSM_FN_D3_CLOSES_HANDLE,
+				   &d3_closes_handle);
+	if (status)
+		return status;
 
-		caps->notif_d0exit = !!obj->integer.value;
-		ACPI_FREE(obj);
-	}
+	caps->d3_closes_handle = !!d3_closes_handle;
+
+	status = ssam_dsm_load_u32(handle, funcs, SSH_DSM_FN_SSH_BUFFER_SIZE,
+				   &caps->ssh_buffer_size);
+	if (status)
+		return status;
 
 	return 0;
 }
@@ -1079,9 +1147,18 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	if (status)
 		return status;
 
-	dev_dbg(&serdev->dev, "device capabilities:\n");
-	dev_dbg(&serdev->dev, "  notif_display: %u\n", ctrl->caps.notif_display);
-	dev_dbg(&serdev->dev, "  notif_d0exit:  %u\n", ctrl->caps.notif_d0exit);
+	dev_dbg(&serdev->dev,
+		"device capabilities:\n"
+		"  ssh_power_profile:             %u\n"
+		"  ssh_buffer_size:               %u\n"
+		"  screen_on_sleep_idle_timeout:  %u\n"
+		"  screen_off_sleep_idle_timeout: %u\n"
+		"  d3_closes_handle:              %u\n",
+		ctrl->caps.ssh_power_profile,
+		ctrl->caps.ssh_buffer_size,
+		ctrl->caps.screen_on_sleep_idle_timeout,
+		ctrl->caps.screen_off_sleep_idle_timeout,
+		ctrl->caps.d3_closes_handle);
 
 	ssh_seq_reset(&ctrl->counter.seq);
 	ssh_rqid_reset(&ctrl->counter.rqid);
@@ -1838,9 +1915,6 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 	int status;
 	u8 response;
 
-	if (!ctrl->caps.notif_display)
-		return 0;
-
 	ssam_dbg(ctrl, "pm: notifying display off\n");
 
 	status = ssam_ssh_notif_display_off(ctrl, &response);
@@ -1879,9 +1953,6 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 {
 	int status;
 	u8 response;
-
-	if (!ctrl->caps.notif_display)
-		return 0;
 
 	ssam_dbg(ctrl, "pm: notifying display on\n");
 
@@ -1922,7 +1993,7 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 	int status;
 	u8 response;
 
-	if (!ctrl->caps.notif_d0exit)
+	if (!ctrl->caps.d3_closes_handle)
 		return 0;
 
 	ssam_dbg(ctrl, "pm: notifying D0 exit\n");
@@ -1964,7 +2035,7 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 	int status;
 	u8 response;
 
-	if (!ctrl->caps.notif_d0exit)
+	if (!ctrl->caps.d3_closes_handle)
 		return 0;
 
 	ssam_dbg(ctrl, "pm: notifying D0 entry\n");
