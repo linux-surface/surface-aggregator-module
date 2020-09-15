@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Virtual HID Framework (VHF) driver for input events via SAM.
- * Used for keyboard input events on the Surface Laptops.
+ * Surface System Aggregator Module (SSAM) legacy HID input device driver.
+ *
+ * Provides support for the legacy HID keyboard device found on the Surface
+ * Laptop 1 and 2.
  */
 
 #include <linux/acpi.h>

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Surface Performance Mode Driver.
- * Allows to change cooling capabilities based on user preference.
+ * Surface performance-mode driver.
+ *
+ * Proides a user-space interface for the performance mode control provided by
+ * the Surface System Aggregator Module (SSAM), influencing cooling behavior
+ * of the device and potentially managing power limits.
  */
 
 #include <asm/unaligned.h>

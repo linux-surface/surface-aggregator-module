@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Surface SID Battery/AC Driver.
- * Provides support for the battery and AC on 7th generation Surface devices.
+ * Surface battery and AC device driver.
+ *
+ * Provides support for battery and AC devices connected via the Surface
+ * System Aggregator Module.
  */
 
 #include <asm/unaligned.h>

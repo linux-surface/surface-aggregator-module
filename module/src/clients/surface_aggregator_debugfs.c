@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
+/*
+ * DebugFS interface for Surface System Aggregator Module (SSAM) controller
+ * access from user-space. Intended for debugging and development.
+ */
 
 #include <linux/debugfs.h>
 #include <linux/kernel.h>

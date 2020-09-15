@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
  * Surface Serial Hub (SSH) driver for communication with the Surface/System
- * Aggregator Module.
+ * Aggregator Module (SSAM/SAM).
+ *
+ * Provides access to a SAM-over-SSH connected EC via a controller device.
+ * Handles communication via requests as well as enabling, disabling, and
+ * relaying of events.
  */
 
 #include <linux/acpi.h>

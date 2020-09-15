@@ -1,4 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * Surface System Aggregator Module (SSAM) bus and client-device subsystem.
+ *
+ * Main interface for the surface-aggregator bus, surface-aggregator client
+ * devices, and respective drivers building on top of the SSAM controller.
+ * Provides support for non-platform/non-ACPI SSAM clients via dedicated
+ * subsystem.
+ */
 
 #ifndef _LINUX_SURFACE_AGGREGATOR_DEVICE_H
 #define _LINUX_SURFACE_AGGREGATOR_DEVICE_H

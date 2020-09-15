@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Microsofs Surface HID (VHF) driver for HID input events via SAM.
- * Used for keyboard input events on the 7th generation Surface Laptops.
+ * Surface System Aggregator Module (SSAM) HID device driver.
+ *
+ * Provides support for HID input devices connected via the Surface System
+ * Aggregator Module.
  */
 
 #include <linux/hid.h>

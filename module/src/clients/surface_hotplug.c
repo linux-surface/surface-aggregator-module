@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Surface dGPU hot-plug system driver.
- * Supports explicit setting of the dGPU power-state on the Surface Book 2 and
- * properly handles hot-plugging by detaching the base.
+ * Surface Book (gen. 2 and later) discrete GPU (dGPU) hot-plug system driver.
+ *
+ * Supports explicit setting of the dGPU power-state on the Surface Books via
+ * a user-space interface. Properly handles dGPU hot-plugging by detaching the
+ * base of the device.
  */
 
 #include <linux/acpi.h>

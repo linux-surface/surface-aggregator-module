@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Surface ACPI Notify (SAN) and ACPI integration driver for SAM.
- * Translates communication from ACPI to SSH and back.
+ * Driver for the Surface ACPI Notify (SAN) interface/shim.
+ *
+ * Translates communication from ACPI to Surface System Aggregator Module
+ * (SSAM/SAM) requests and back, specifically SAM-over-SSH. Translates SSAM
+ * events back to ACPI notifications. Allows handling of discrete GPU
+ * notifications sent from ACPI via the SAN interface by providing them to any
+ * registered external driver.
  */
 
 #include <asm/unaligned.h>

@@ -1,6 +1,12 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Detachment system (DTX) driver for Microsoft Surface Book 2.
+ * Surface Book (gen. 2 and later) detachment system (DTX) driver.
+ *
+ * Provides a user-space interface to properly handle clipboard/tablet
+ * (containing screen and processor) detachment from the base of the device
+ * (containing the keyboard and optionally a discrete GPU). Allows to
+ * acknowledge (to speed things up), abort (e.g. in case the dGPU is stil in
+ * use), or request detachment via user-space.
  */
 
 #include <linux/acpi.h>

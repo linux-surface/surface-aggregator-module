@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Surface Device Registry.
+ * Surface System Aggregator Module (SSAM) client device registry.
+ *
+ * Registry for non-platform/non-ACPI SSAM client devices, i.e. devices that
+ * cannot be auto-detected. Provides device-hubs for these devices.
  */
 
 #include <linux/acpi.h>

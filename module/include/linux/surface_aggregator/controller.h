@@ -1,4 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * Surface System Aggregator Module (SSAM) controller interface.
+ *
+ * Main communication interface for the SSAM EC. Provides a controller
+ * managing access and communication to and from the SSAM EC, as well as main
+ * communication structures and definitions.
+ */
 
 #ifndef _LINUX_SURFACE_AGGREGATOR_CONTROLLER_H
 #define _LINUX_SURFACE_AGGREGATOR_CONTROLLER_H

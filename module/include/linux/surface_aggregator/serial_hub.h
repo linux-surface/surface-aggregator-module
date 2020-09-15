@@ -1,4 +1,11 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * Surface Serial Hub (SSH) protocol and communication interface.
+ *
+ * Lower-level communication layers and SSH protocol definitions for the
+ * Surface System Aggregator Module (SSAM). Provides the interface for basic
+ * packet- and request-based communication with the SSAM EC via SSH.
+ */
 
 #ifndef _LINUX_SURFACE_AGGREGATOR_SERIAL_HUB_H
 #define _LINUX_SURFACE_AGGREGATOR_SERIAL_HUB_H
