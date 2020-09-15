@@ -1,10 +1,10 @@
 # Maintainer: Blaž Hrastnik <blaz@mxxn.io>
 
 pkgname=surface-aggregator-module-dkms
-_modname=surface_sam
+_modname=surface_aggregator_module
 _modver=0.1
 pkgver=0.1
-pkgrel=5
+pkgrel=6
 pkgdesc="ACPI/Platform Drivers for Surface gen5+ products, dkms version"
 arch=(any)
 url="http://github.com/linux-surface/surface-aggregator-module"
