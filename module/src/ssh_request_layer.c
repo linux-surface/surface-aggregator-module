@@ -46,7 +46,7 @@
 #define SSH_RTL_MAX_PENDING		3
 
 
-#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
+#ifdef CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION
 
 /**
  * ssh_rtl_should_drop_response() - Error injection hook to drop request

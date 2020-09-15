@@ -208,7 +208,7 @@
 #define SSH_PTL_RX_FIFO_LEN			4096
 
 
-#ifdef CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION
+#ifdef CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION
 
 /**
  * ssh_ptl_should_drop_ack_packet() - Error injection hook to drop ACK packets.
@@ -458,7 +458,7 @@ static void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 	frame->ptr[frame->len - 2] = ~frame->ptr[frame->len - 2];
 }
 
-#else /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
+#else /* CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION */
 
 static inline bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
@@ -487,7 +487,7 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 {
 }
 
-#endif /* CONFIG_SURFACE_SAM_SSH_ERROR_INJECTION */
+#endif /* CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION */
 
 
 static void __ssh_ptl_packet_release(struct kref *kref)
