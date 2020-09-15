@@ -343,14 +343,13 @@ static void ssam_serial_hub_shutdown(struct device *dev)
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 }
 
-static int ssam_serial_hub_pm_suspend(struct device *dev)
+static int ssam_serial_hub_pm_prepare(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
 	int status;
 
 	/*
-	 * Try to signal display-off and D0-exit, enable IRQ wakeup if
-	 * specified. Abort on error.
+	 * Try to signal display-off, This will quiesce events.
 	 *
 	 * Note: Signalling display-off/display-on should normally be done from
 	 * some sort of display state notifier. As that is not available, signal
@@ -358,10 +357,39 @@ static int ssam_serial_hub_pm_suspend(struct device *dev)
 	 */
 
 	status = ssam_ctrl_notif_display_off(c);
-	if (status) {
+	if (status)
 		ssam_err(c, "pm: display-off notification failed: %d\n", status);
-		return status;
-	}
+
+	return status;
+}
+
+static void ssam_serial_hub_pm_complete(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	/*
+	 * Try to signal display-on. This will restore events.
+	 *
+	 * Note: Signalling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available, signal
+	 * it here.
+	 */
+
+	status = ssam_ctrl_notif_display_on(c);
+	if (status)
+		ssam_err(c, "pm: display-on notification failed: %d\n", status);
+}
+
+static int ssam_serial_hub_pm_suspend(struct device *dev)
+{
+	struct ssam_controller *c = dev_get_drvdata(dev);
+	int status;
+
+	/*
+	 * Try to signal D0-exit, enable IRQ wakeup if specified. Abort on
+	 * error.
+	 */
 
 	status = ssam_ctrl_notif_d0_exit(c);
 	if (status) {
@@ -391,9 +419,9 @@ static int ssam_serial_hub_pm_resume(struct device *dev)
 	WARN_ON(ssam_controller_resume(c));
 
 	/*
-	 * Try to disable IRQ wakeup (if specified), signal display-on and
-	 * D0-entry. In case of errors, log them and try to restore normal
-	 * operation state as far as possible.
+	 * Try to disable IRQ wakeup (if specified) and signal D0-entry. In
+	 * case of errors, log them and try to restore normal operation state
+	 * as far as possible.
 	 *
 	 * Note: Signalling display-off/display-on should normally be done from
 	 * some sort of display state notifier. As that is not available, signal
@@ -405,10 +433,6 @@ static int ssam_serial_hub_pm_resume(struct device *dev)
 	status = ssam_ctrl_notif_d0_entry(c);
 	if (status)
 		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
-
-	status = ssam_ctrl_notif_display_on(c);
-	if (status)
-		ssam_err(c, "pm: display-on notification failed: %d\n", status);
 
 	return 0;
 }
@@ -429,12 +453,6 @@ static int ssam_serial_hub_pm_freeze(struct device *dev)
 	 * process.
 	 */
 
-	status = ssam_ctrl_notif_display_off(c);
-	if (status) {
-		ssam_err(c, "pm: display-off notification failed: %d\n", status);
-		return status;
-	}
-
 	status = ssam_ctrl_notif_d0_exit(c);
 	if (status) {
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
@@ -454,17 +472,8 @@ static int ssam_serial_hub_pm_thaw(struct device *dev)
 	WARN_ON(ssam_controller_resume(c));
 
 	status = ssam_ctrl_notif_d0_entry(c);
-	if (status) {
-		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
-
-		// try to restore as much as possible in case of failure
-		ssam_ctrl_notif_display_on(c);
-		return status;
-	}
-
-	status = ssam_ctrl_notif_display_on(c);
 	if (status)
-		ssam_err(c, "pm: display-on notification failed: %d\n", status);
+		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 
 	return status;
 }
@@ -497,26 +506,15 @@ static int ssam_serial_hub_pm_poweroff(struct device *dev)
 		return status;
 	}
 
-	status = ssam_ctrl_notif_display_off(c);
-	if (status) {
-		ssam_err(c, "pm: display-off notification failed: %d\n", status);
-		goto err_dpnf;
-	}
-
 	status = ssam_ctrl_notif_d0_exit(c);
 	if (status) {
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
-		goto err_d0nf;
+		ssam_notifier_restore_registered(c);
+		return status;
 	}
 
 	WARN_ON(ssam_controller_suspend(c));
 	return 0;
-
-err_d0nf:
-	ssam_ctrl_notif_display_on(c);
-err_dpnf:
-	ssam_notifier_restore_registered(c);
-	return status;
 }
 
 static int ssam_serial_hub_pm_restore(struct device *dev)
@@ -536,15 +534,13 @@ static int ssam_serial_hub_pm_restore(struct device *dev)
 	if (status)
 		ssam_err(c, "pm: D0-entry notification failed: %d\n", status);
 
-	status = ssam_ctrl_notif_display_on(c);
-	if (status)
-		ssam_err(c, "pm: display-on notification failed: %d\n", status);
-
 	ssam_notifier_restore_registered(c);
 	return 0;
 }
 
 static const struct dev_pm_ops ssam_serial_hub_pm_ops = {
+	.prepare  = ssam_serial_hub_pm_prepare,
+	.complete = ssam_serial_hub_pm_complete,
 	.suspend  = ssam_serial_hub_pm_suspend,
 	.resume   = ssam_serial_hub_pm_resume,
 	.freeze   = ssam_serial_hub_pm_freeze,
