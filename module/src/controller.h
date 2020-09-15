@@ -165,7 +165,7 @@ enum ssam_controller_state {
  * @screen_on_sleep_idle_timeout:  SAM UART screen-on sleep idle timeout.
  * @screen_off_sleep_idle_timeout: SAM UART screen-off sleep idle timeout.
  * @d3_closes_handle:              SAM closes UART handle in D3.
- * 
+ *
  * Controller and SSH device capabilities found in ACPI.
  */
 struct ssam_controller_caps {
