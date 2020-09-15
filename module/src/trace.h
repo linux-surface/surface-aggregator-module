@@ -7,6 +7,8 @@
 #define _SURFACE_AGGREGATOR_TRACE_H
 
 #include "../include/linux/surface_aggregator/serial_hub.h"
+
+#include <asm/unaligned.h>
 #include <linux/tracepoint.h>
 
 
