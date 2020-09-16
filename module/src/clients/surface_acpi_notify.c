@@ -344,7 +344,7 @@ static u32 san_evt_bat_nf(struct ssam_event_notifier *nf,
 	if (delay == 0)
 		return san_evt_bat(event, d->dev) ? SSAM_NOTIF_HANDLED : 0;
 
-	work = kzalloc(sizeof(struct san_event_work) + event->length, GFP_KERNEL);
+	work = kzalloc(sizeof(*work) + event->length, GFP_KERNEL);
 	if (!work)
 		return ssam_notifier_from_errno(-ENOMEM);
 
@@ -755,7 +755,7 @@ static int san_probe(struct platform_device *pdev)
 			return status;
 	}
 
-	data = devm_kzalloc(&pdev->dev, sizeof(struct san_data), GFP_KERNEL);
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 

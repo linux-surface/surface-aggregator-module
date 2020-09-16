@@ -155,7 +155,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	struct surface_dtx_client *client;
 
 	// initialize client
-	client = kzalloc(sizeof(struct surface_dtx_client), GFP_KERNEL);
+	client = kzalloc(sizeof(*client), GFP_KERNEL);
 	if (!client)
 		return -ENOMEM;
 

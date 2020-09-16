@@ -201,7 +201,7 @@ static int ssam_dbg_device_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	data = devm_kzalloc(&pdev->dev, sizeof(struct ssam_dbg_data), GFP_KERNEL);
+	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
 	if (!data)
 		return -ENOMEM;
 

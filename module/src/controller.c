@@ -614,9 +614,7 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 
 		item->ops.free = __ssam_event_item_free_cached;
 	} else {
-		const size_t n = sizeof(struct ssam_event_item) + len;
-
-		item = kzalloc(n, GFP_KERNEL);
+		item = kzalloc(sizeof(*item) + len, GFP_KERNEL);
 		if (!item)
 			return NULL;
 
@@ -1469,7 +1467,7 @@ int ssam_request_sync_alloc(size_t payload_len, gfp_t flags,
 {
 	size_t msglen = SSH_COMMAND_MESSAGE_LENGTH(payload_len);
 
-	*rqst = kzalloc(sizeof(struct ssam_request_sync) + msglen, flags);
+	*rqst = kzalloc(sizeof(*rqst) + msglen, flags);
 	if (!*rqst)
 		return -ENOMEM;
 
