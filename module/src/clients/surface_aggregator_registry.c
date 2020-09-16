@@ -474,7 +474,6 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	if (status) {
 		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
 		ssam_hub_remove_devices(&sdev->dev);
-		return status;
 	}
 
 	return status;
