@@ -490,7 +490,6 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 	ssam_hub_remove_devices(&sdev->dev);
 
 	ssam_device_set_drvdata(sdev, NULL);
-	kfree(hub);
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
