@@ -1126,7 +1126,7 @@ static int shps_probe(struct platform_device *pdev)
 		return status;
 	}
 
-	drvdata = kzalloc(sizeof(struct shps_driver_data), GFP_KERNEL);
+	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata) {
 		status = -ENOMEM;
 		goto err_drvdata;
@@ -1142,7 +1142,7 @@ static int shps_probe(struct platform_device *pdev)
 	if (IS_ERR(drvdata->dgpu_root_port)) {
 		status = PTR_ERR(drvdata->dgpu_root_port);
 		dev_err(&pdev->dev, "failed to get pci dev: %d\n", status);
-		goto err_rp_lookup;
+		goto err_drvdata;
 	}
 
 	status = shps_gpios_setup(pdev);
@@ -1228,8 +1228,6 @@ err_gpio_irqs:
 	shps_gpios_remove(pdev);
 err_gpio:
 	pci_dev_put(drvdata->dgpu_root_port);
-err_rp_lookup:
-	kfree(drvdata);
 err_drvdata:
 	acpi_dev_remove_driver_gpios(shps_dev);
 	return status;
@@ -1258,7 +1256,6 @@ static int shps_remove(struct platform_device *pdev)
 	shps_gpios_remove_irq(pdev);
 	shps_gpios_remove(pdev);
 	pci_dev_put(drvdata->dgpu_root_port);
-	kfree(drvdata);
 
 	acpi_dev_remove_driver_gpios(shps_dev);
 	return 0;

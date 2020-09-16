@@ -260,15 +260,13 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	drvdata = kzalloc(sizeof(struct vhf_drvdata), GFP_KERNEL);
+	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata)
 		return -ENOMEM;
 
 	hid = vhf_create_hid_device(pdev);
-	if (IS_ERR(hid)) {
-		status = PTR_ERR(hid);
-		goto err_probe_hid;
-	}
+	if (IS_ERR(hid))
+		return PTR_ERR(hid);
 
 	status = hid_add_device(hid);
 	if (status)
@@ -296,8 +294,6 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 
 err_add_hid:
 	hid_destroy_device(hid);
-err_probe_hid:
-	kfree(drvdata);
 	return status;
 }
 
@@ -307,7 +303,6 @@ static int surface_sam_vhf_remove(struct platform_device *pdev)
 
 	ssam_notifier_unregister(drvdata->ctrl, &drvdata->notif);
 	hid_destroy_device(drvdata->hid);
-	kfree(drvdata);
 
 	return 0;
 }

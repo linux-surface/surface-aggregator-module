@@ -413,19 +413,17 @@ static int surface_sam_sid_vhf_probe(struct ssam_device *sdev)
 	if (!p)
 		return -ENODEV;
 
-	vhf = kzalloc(sizeof(*vhf), GFP_KERNEL);
+	vhf = devm_kzalloc(&sdev->dev, sizeof(*vhf), GFP_KERNEL);
 	if (!vhf)
 		return -ENOMEM;
 
 	status = vhf_get_metadata(sdev, &meta);
 	if (status)
-		goto err_create_hid;
+		return status;
 
 	hid = sid_vhf_create_hid_device(sdev, &meta);
-	if (IS_ERR(hid)) {
-		status = PTR_ERR(hid);
-		goto err_create_hid;
-	}
+	if (IS_ERR(hid))
+		return PTR_ERR(hid);
 
 	vhf->sdev = sdev;
 	vhf->hid = hid;
@@ -454,8 +452,6 @@ err_add_hid:
 	ssam_notifier_unregister(sdev->ctrl, &vhf->notif);
 err_notif:
 	hid_destroy_device(hid);
-err_create_hid:
-	kfree(vhf);
 	return status;
 }
 
@@ -465,7 +461,6 @@ static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
 
 	ssam_notifier_unregister(sdev->ctrl, &vhf->notif);
 	hid_destroy_device(vhf->hid);
-	kfree(vhf);
 }
 
 static const struct sid_vhf_properties sid_vhf_default_props = {
