@@ -193,12 +193,12 @@ static int san_acpi_notify_event(struct device *dev, u64 func,
 
 	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
 				      func, param, ACPI_TYPE_BUFFER);
-	if (IS_ERR_OR_NULL(obj))
-		return obj ? PTR_ERR(obj) : -ENXIO;
+	if (!obj)
+		return -EFAULT;
 
 	if (obj->buffer.length != 1 || obj->buffer.pointer[0] != 0) {
 		dev_err(dev, "got unexpected result from _DSM\n");
-		status = -EFAULT;
+		status = -EPROTO;
 	}
 
 	ACPI_FREE(obj);
