@@ -719,15 +719,18 @@ static int san_consumers_link(struct platform_device *pdev,
 	for (c = cons; c && c->path; ++c) {
 		struct acpi_device *adev;
 		acpi_handle handle;
-		int status;
+		acpi_status status;
+		int ret;
 
 		status = acpi_get_handle(NULL, (acpi_string)c->path, &handle);
-		if (status && status != AE_NOT_FOUND)
+		if (status == AE_NOT_FOUND)
+			continue;
+		else if (ACPI_FAILURE(status))
 			return -ENXIO;
 
-		status = acpi_bus_get_device(handle, &adev);
-		if (status)
-			return status;
+		ret = acpi_bus_get_device(handle, &adev);
+		if (ret)
+			return ret;
 
 		if (!device_link_add(&adev->dev, &pdev->dev, flags))
 			return -EFAULT;
@@ -742,6 +745,7 @@ static int san_probe(struct platform_device *pdev)
 	acpi_handle san = ACPI_HANDLE(&pdev->dev);
 	struct ssam_controller *ctrl;
 	struct san_data *data;
+	acpi_status astatus;
 	int status;
 
 	status = ssam_client_bind(&pdev->dev, &ctrl);
@@ -764,12 +768,10 @@ static int san_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, data);
 
-	status = acpi_install_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
+	astatus = acpi_install_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
 			&san_opreg_handler, NULL, &data->info);
-
-	if (ACPI_FAILURE(status)) {
+	if (ACPI_FAILURE(astatus))
 		return -ENXIO;
-	}
 
 	status = san_events_register(pdev);
 	if (status)
@@ -792,8 +794,7 @@ err_enable_events:
 
 static int san_remove(struct platform_device *pdev)
 {
-	acpi_handle san = ACPI_HANDLE(&pdev->dev);	// _SAN device node
-	acpi_status status = AE_OK;
+	acpi_handle san = ACPI_HANDLE(&pdev->dev);
 
 	san_set_rqsg_interface_device(NULL);
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
@@ -806,7 +807,7 @@ static int san_remove(struct platform_device *pdev)
 	 */
 	flush_scheduled_work();
 
-	return status;
+	return 0;
 }
 
 /*

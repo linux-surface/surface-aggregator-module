@@ -198,7 +198,7 @@ static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_unlock, {
 
 static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, const char *entry) {
 	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
-	int status;
+	acpi_status status;
 	struct acpi_object_list input;
 	union acpi_object input_args[0];
 	u64 device_addr;
@@ -209,9 +209,8 @@ static int shps_dgpu_dsm_get_pci_addr_from_adr(struct platform_device *pdev, con
 
 
 	status = acpi_evaluate_integer(handle, (acpi_string)entry, &input, &device_addr);
-	if (status) {
+	if (ACPI_FAILURE(status))
 		return -ENODEV;
-	}
 
 	bus = 0;
 	dev = (device_addr & 0xFF0000) >> 16;
@@ -237,9 +236,8 @@ static int shps_dgpu_dsm_get_pci_addr_from_dsm(struct platform_device *pdev, con
 
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
 					 SHPS_DSM_GPU_ADDRS, NULL, ACPI_TYPE_PACKAGE);
-
-	if (IS_ERR_OR_NULL(result))
-		return result ? PTR_ERR(result) : -EIO;
+	if (!result)
+		return -EFAULT;
 
 	// three entries per device: name, address, <integer>
 	for (i = 0; i + 2 < result->package.count; i += 3) {
@@ -338,9 +336,8 @@ static int __shps_dgpu_dsm_set_power_unlocked(struct platform_device *pdev, enum
 
 	result = acpi_evaluate_dsm_typed(handle, &SHPS_DSM_UUID, SHPS_DSM_REVISION,
 					 SHPS_DSM_GPU_POWER, &param, ACPI_TYPE_BUFFER);
-
-	if (IS_ERR_OR_NULL(result))
-		return result ? PTR_ERR(result) : -EIO;
+	if (!result)
+		return -EFAULT;
 
 	// check for the expected result
 	if (result->buffer.length != 1 || result->buffer.pointer[0] != 0) {
@@ -1040,19 +1037,19 @@ static void shps_sgcp_notify(acpi_handle device, u32 value, void *context) {
 
 static int shps_start_sgcp_notification(struct platform_device *pdev, acpi_handle *sgpc_handle) {
 	acpi_handle handle;
-	int status;
+	acpi_status status;
 
 	status = acpi_get_handle(NULL, "\\_SB.SGPC", &handle);
-	if (status) {
-		dev_err(&pdev->dev, "error in get_handle %d\n", status);
-		return status;
+	if (ACPI_FAILURE(status)) {
+		dev_err(&pdev->dev, "error in get_handle %x\n", status);
+		return -ENXIO;
 	}
 
 	status = acpi_install_notify_handler(handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify, pdev);
-	if (status) {
-		dev_err(&pdev->dev, "error in install notify %d\n", status);
+	if (ACPI_FAILURE(status)) {
+		dev_err(&pdev->dev, "error in install notify %x\n", status);
 		*sgpc_handle = NULL;
-		return status;
+		return -EFAULT;
 	}
 
 	*sgpc_handle = handle;
@@ -1060,14 +1057,13 @@ static int shps_start_sgcp_notification(struct platform_device *pdev, acpi_handl
 }
 
 static void shps_remove_sgcp_notification(struct platform_device *pdev) {
-	int status;
+	acpi_status status;
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 
 	if (drvdata->sgpc_handle) {
 		status = acpi_remove_notify_handler(drvdata->sgpc_handle, ACPI_DEVICE_NOTIFY, shps_sgcp_notify);
-		if (status) {
-			dev_err(&pdev->dev, "failed to remove notify handler: %d\n", status);
-		}
+		if (ACPI_FAILURE(status))
+			dev_err(&pdev->dev, "failed to remove notify handler: %x\n", status);
 	}
 }
 

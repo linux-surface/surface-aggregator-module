@@ -297,9 +297,9 @@ static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 	}
 
 	if (status) {
-		dev_err(&serdev->dev, "setup: failed to set parity (value: 0x%02x)\n",
-			uart->parity);
-		return status;
+		dev_err(&serdev->dev, "setup: failed to set parity (value: 0x%02x,"
+			" error: %d)\n", uart->parity, status);
+		return AE_ERROR;
 	}
 
 	return AE_CTRL_TERMINATE;       // we've found the resource and are done
@@ -565,6 +565,7 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 {
 	struct ssam_controller *ctrl;
 	acpi_handle *ssh = ACPI_HANDLE(&serdev->dev);
+	acpi_status astatus;
 	int status;
 
 	if (gpiod_count(&serdev->dev, NULL) < 0)
@@ -591,9 +592,11 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_devopen;
 
-	status = ssam_serdev_setup_via_acpi(ssh, serdev);
-	if (ACPI_FAILURE(status))
+	astatus = ssam_serdev_setup_via_acpi(ssh, serdev);
+	if (ACPI_FAILURE(astatus)) {
+		status = -ENXIO;
 		goto err_devinit;
+	}
 
 	// start controller
 	status = ssam_controller_start(ctrl);
