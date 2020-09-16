@@ -1090,7 +1090,6 @@ static struct shps_hardware_traits shps_detect_hardware_traits(struct platform_d
 
 static int shps_probe(struct platform_device *pdev)
 {
-	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata;
 	struct ssam_controller *ctrl;
 	struct device_link *link;
@@ -1120,17 +1119,16 @@ static int shps_probe(struct platform_device *pdev)
 		}
 	}
 
-	status = acpi_dev_add_driver_gpios(shps_dev, shps_acpi_gpios);
+	status = devm_acpi_dev_add_driver_gpios(&pdev->dev, shps_acpi_gpios);
 	if (status) {
 		dev_err(&pdev->dev, "failed to add gpios: %d\n", status);
 		return status;
 	}
 
 	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
-	if (!drvdata) {
-		status = -ENOMEM;
-		goto err_drvdata;
-	}
+	if (!drvdata)
+		return -ENOMEM;
+
 	mutex_init(&drvdata->lock);
 	platform_set_drvdata(pdev, drvdata);
 
@@ -1142,7 +1140,7 @@ static int shps_probe(struct platform_device *pdev)
 	if (IS_ERR(drvdata->dgpu_root_port)) {
 		status = PTR_ERR(drvdata->dgpu_root_port);
 		dev_err(&pdev->dev, "failed to get pci dev: %d\n", status);
-		goto err_drvdata;
+		return status;
 	}
 
 	status = shps_gpios_setup(pdev);
@@ -1228,14 +1226,11 @@ err_gpio_irqs:
 	shps_gpios_remove(pdev);
 err_gpio:
 	pci_dev_put(drvdata->dgpu_root_port);
-err_drvdata:
-	acpi_dev_remove_driver_gpios(shps_dev);
 	return status;
 }
 
 static int shps_remove(struct platform_device *pdev)
 {
-	struct acpi_device *shps_dev = ACPI_COMPANION(&pdev->dev);
 	struct shps_driver_data *drvdata = platform_get_drvdata(pdev);
 	int status;
 
@@ -1257,7 +1252,6 @@ static int shps_remove(struct platform_device *pdev)
 	shps_gpios_remove(pdev);
 	pci_dev_put(drvdata->dgpu_root_port);
 
-	acpi_dev_remove_driver_gpios(shps_dev);
 	return 0;
 }
 
