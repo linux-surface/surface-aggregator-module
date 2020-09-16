@@ -965,7 +965,6 @@ static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
 {
 	const struct spwr_psy_properties *p;
 	struct spwr_battery_device *bat;
-	int status;
 
 	p = ssam_device_get_match_data(sdev);
 	if (!p)
@@ -978,21 +977,12 @@ static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
 	spwr_battery_set_name(bat, p->name);
 	ssam_device_set_drvdata(sdev, bat);
 
-	status = spwr_battery_register(bat, sdev, p->registry);
-	if (status)
-		ssam_device_set_drvdata(sdev, NULL);
-
-	return status;
+	return spwr_battery_register(bat, sdev, p->registry);
 }
 
 static void surface_sam_sid_battery_remove(struct ssam_device *sdev)
 {
-	struct spwr_battery_device *bat;
-
-	bat = ssam_device_get_drvdata(sdev);
-	spwr_battery_unregister(bat);
-
-	ssam_device_set_drvdata(sdev, NULL);
+	spwr_battery_unregister(ssam_device_get_drvdata(sdev));
 }
 
 static const struct spwr_psy_properties spwr_psy_props_bat1 = {
@@ -1034,7 +1024,6 @@ static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 {
 	const struct spwr_psy_properties *p;
 	struct spwr_ac_device *ac;
-	int status;
 
 	p = ssam_device_get_match_data(sdev);
 	if (!p)
@@ -1047,19 +1036,12 @@ static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 	spwr_ac_set_name(ac, p->name);
 	ssam_device_set_drvdata(sdev, ac);
 
-	status = spwr_ac_register(ac, sdev, p->registry);
-	if (status)
-		ssam_device_set_drvdata(sdev, NULL);
-
-	return status;
+	return spwr_ac_register(ac, sdev, p->registry);
 }
 
 static void surface_sam_sid_ac_remove(struct ssam_device *sdev)
 {
-	struct spwr_ac_device *ac = ssam_device_get_drvdata(sdev);
-
-	spwr_ac_unregister(ac);
-	ssam_device_set_drvdata(sdev, NULL);
+	spwr_ac_unregister(ssam_device_get_drvdata(sdev));
 }
 
 static const struct spwr_psy_properties spwr_psy_props_adp1 = {

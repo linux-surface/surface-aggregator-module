@@ -230,7 +230,6 @@ static int ssam_dbg_device_remove(struct platform_device *pdev)
 	debugfs_remove(data->dentry_dev);
 	debugfs_remove(data->dentry_dir);
 
-	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 

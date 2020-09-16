@@ -1229,7 +1229,6 @@ err_gpio_irqs:
 err_gpio:
 	pci_dev_put(drvdata->dgpu_root_port);
 err_rp_lookup:
-	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
 err_drvdata:
 	acpi_dev_remove_driver_gpios(shps_dev);
@@ -1259,7 +1258,6 @@ static int shps_remove(struct platform_device *pdev)
 	shps_gpios_remove_irq(pdev);
 	shps_gpios_remove(pdev);
 	pci_dev_put(drvdata->dgpu_root_port);
-	platform_set_drvdata(pdev, NULL);
 	kfree(drvdata);
 
 	acpi_dev_remove_driver_gpios(shps_dev);

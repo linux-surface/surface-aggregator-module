@@ -296,7 +296,6 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 
 err_add_hid:
 	hid_destroy_device(hid);
-	platform_set_drvdata(pdev, NULL);
 err_probe_hid:
 	kfree(drvdata);
 	return status;
@@ -310,7 +309,6 @@ static int surface_sam_vhf_remove(struct platform_device *pdev)
 	hid_destroy_device(drvdata->hid);
 	kfree(drvdata);
 
-	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
 

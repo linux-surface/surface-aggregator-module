@@ -454,7 +454,6 @@ err_add_hid:
 	ssam_notifier_unregister(sdev->ctrl, &vhf->notif);
 err_notif:
 	hid_destroy_device(hid);
-	ssam_device_set_drvdata(sdev, NULL);
 err_create_hid:
 	kfree(vhf);
 	return status;
@@ -467,8 +466,6 @@ static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
 	ssam_notifier_unregister(sdev->ctrl, &vhf->notif);
 	hid_destroy_device(vhf->hid);
 	kfree(vhf);
-
-	ssam_device_set_drvdata(sdev, NULL);
 }
 
 static const struct sid_vhf_properties sid_vhf_default_props = {

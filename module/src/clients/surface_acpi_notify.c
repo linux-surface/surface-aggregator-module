@@ -768,8 +768,7 @@ static int san_probe(struct platform_device *pdev)
 			&san_opreg_handler, NULL, &data->info);
 
 	if (ACPI_FAILURE(status)) {
-		status = -ENXIO;
-		goto err_install_handler;
+		return -ENXIO;
 	}
 
 	status = san_events_register(pdev);
@@ -788,8 +787,6 @@ err_install_dev:
 err_enable_events:
 	acpi_remove_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
 					  &san_opreg_handler);
-err_install_handler:
-	platform_set_drvdata(san, NULL);
 	return status;
 }
 
@@ -809,7 +806,6 @@ static int san_remove(struct platform_device *pdev)
 	 */
 	flush_scheduled_work();
 
-	platform_set_drvdata(pdev, NULL);
 	return status;
 }
 

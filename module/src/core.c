@@ -644,7 +644,6 @@ err_devinit:
 	serdev_device_close(serdev);
 err_devopen:
 	ssam_controller_destroy(ctrl);
-	serdev_device_set_drvdata(serdev, NULL);
 err_ctrl_init:
 	kfree(ctrl);
 	return status;
@@ -689,7 +688,6 @@ static void ssam_serial_hub_remove(struct serdev_device *serdev)
 	ssam_controller_put(ctrl);
 
 	device_set_wakeup_capable(&serdev->dev, false);
-	serdev_device_set_drvdata(serdev, NULL);
 }
 
 
