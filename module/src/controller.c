@@ -536,8 +536,9 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
  * SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN - Maximum payload length for a cached
  * &struct ssam_event_item.
  *
- * This length has been chosen to be accomodate standard touchpad and keyboard
- * input events. Events with larger payloads will be allocated separately.
+ * This length has been chosen to be accommodate standard touchpad and
+ * keyboard input events. Events with larger payloads will be allocated
+ * separately.
  */
 #define SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN	32
 
@@ -694,7 +695,7 @@ static struct ssam_event_queue *ssam_cplt_get_event_queue(
 	u16 tidx = ssh_tid_to_index(tid);
 
 	if (!ssh_rqid_is_event(rqid)) {
-		dev_err(cplt->dev, "event: unsupported rquest ID: 0x%04x\n", rqid);
+		dev_err(cplt->dev, "event: unsupported request ID: 0x%04x\n", rqid);
 		return NULL;
 	}
 
@@ -2215,7 +2216,7 @@ EXPORT_SYMBOL_GPL(ssam_notifier_unregister);
  *
  * This function is intended to disable all events prior to hibenration entry.
  * See ssam_notifier_restore_registered() to restore/re-enable all events
- * disabled with this fucntion.
+ * disabled with this function.
  *
  * Note that this function will not disable events for notifiers registered
  * after calling this function. It should thus be made sure that no new
@@ -2408,8 +2409,8 @@ int ssam_irq_setup(struct ssam_controller *ctrl)
 	 * command to SAM (or alternatively the display-on notification). As
 	 * proper handling for this interrupt is not implemented yet, leaving
 	 * the IRQ at TRIGGER_HIGH would cause an IRQ storm (as the callback
-	 * never gets sent and thus the line line never gets reset). To avoid
-	 * this, mark the IRQ as TRIGGER_RISING for now, only creating a single
+	 * never gets sent and thus the line never gets reset). To avoid this,
+	 * mark the IRQ as TRIGGER_RISING for now, only creating a single
 	 * interrupt, and let the SAM resume callback during the controller
 	 * resume process clear it.
 	 */
