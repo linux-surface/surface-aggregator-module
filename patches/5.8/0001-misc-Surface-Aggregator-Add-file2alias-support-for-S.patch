@@ -1,23 +1,23 @@
-From 781d4338677954855806fcd7c1e1ed1361aca682 Mon Sep 17 00:00:00 2001
+From 6adf4848f81fb2e9edcc6f66cfabf57ec4326faa Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Sun, 23 Aug 2020 20:24:57 +0200
-Subject: [PATCH] misc: surface_sam: Add file2alias support for Surface SAM
- devices
+Date: Sun, 20 Sep 2020 04:12:58 +0200
+Subject: [PATCH] misc: Surface Aggregator: Add file2alias support for Surface
+ Aggregator client devices
 
 Implement file2alias support for Surface System Aggregator Module (SSAM)
-devices. This allows modules to be auto-loaded for specific devices via
-their respective module alias.
+client devices. This allows modules to be auto-loaded for specific
+devices via their respective module alias.
 ---
- include/linux/mod_devicetable.h   | 17 +++++++++++++++++
- scripts/mod/devicetable-offsets.c |  7 +++++++
- scripts/mod/file2alias.c          | 22 ++++++++++++++++++++++
- 3 files changed, 46 insertions(+)
+ include/linux/mod_devicetable.h   | 18 ++++++++++++++++++
+ scripts/mod/devicetable-offsets.c |  8 ++++++++
+ scripts/mod/file2alias.c          | 23 +++++++++++++++++++++++
+ 3 files changed, 49 insertions(+)
 
 diff --git a/include/linux/mod_devicetable.h b/include/linux/mod_devicetable.h
-index 610cdf8082f2e..d3b51c3488cba 100644
+index e14cbe444afc..9932a610bda0 100644
 --- a/include/linux/mod_devicetable.h
 +++ b/include/linux/mod_devicetable.h
-@@ -768,4 +768,21 @@ struct typec_device_id {
+@@ -836,4 +836,22 @@ struct mhi_device_id {
  	kernel_ulong_t driver_data;
  };
  
@@ -30,6 +30,7 @@ index 610cdf8082f2e..d3b51c3488cba 100644
 +struct ssam_device_id {
 +	__u8 match_flags;
 +
++	__u8 domain;
 +	__u8 category;
 +	__u8 target;
 +	__u8 instance;
@@ -40,15 +41,16 @@ index 610cdf8082f2e..d3b51c3488cba 100644
 +
  #endif /* LINUX_MOD_DEVICETABLE_H */
 diff --git a/scripts/mod/devicetable-offsets.c b/scripts/mod/devicetable-offsets.c
-index 293004499b4db..a15dabffe273f 100644
+index 010be8ba2116..6b761c5b3ddd 100644
 --- a/scripts/mod/devicetable-offsets.c
 +++ b/scripts/mod/devicetable-offsets.c
-@@ -225,5 +225,12 @@ int main(void)
- 	DEVID_FIELD(typec_device_id, svid);
- 	DEVID_FIELD(typec_device_id, mode);
+@@ -241,5 +241,13 @@ int main(void)
+ 	DEVID(mhi_device_id);
+ 	DEVID_FIELD(mhi_device_id, chan);
  
 +	DEVID(ssam_device_id);
 +	DEVID_FIELD(ssam_device_id, match_flags);
++	DEVID_FIELD(ssam_device_id, domain);
 +	DEVID_FIELD(ssam_device_id, category);
 +	DEVID_FIELD(ssam_device_id, target);
 +	DEVID_FIELD(ssam_device_id, instance);
@@ -57,27 +59,28 @@ index 293004499b4db..a15dabffe273f 100644
  	return 0;
  }
 diff --git a/scripts/mod/file2alias.c b/scripts/mod/file2alias.c
-index 7f40b6aab689b..3ae63c7a8c03a 100644
+index 9599e2a3f1e6..23d9d368fde9 100644
 --- a/scripts/mod/file2alias.c
 +++ b/scripts/mod/file2alias.c
-@@ -1276,6 +1276,27 @@ static int do_typec_entry(const char *filename, void *symval, char *alias)
+@@ -1364,6 +1364,28 @@ static int do_mhi_entry(const char *filename, void *symval, char *alias)
  	return 1;
  }
  
 +/*
-+ * Looks like: ssam:cNtNiNfN
++ * Looks like: ssam:dNcNtNiNfN
 + *
 + * N is exactly 2 digits, where each is an upper-case hex digit.
 + */
 +static int do_ssam_entry(const char *filename, void *symval, char *alias)
 +{
 +	DEF_FIELD(symval, ssam_device_id, match_flags);
++	DEF_FIELD(symval, ssam_device_id, domain);
 +	DEF_FIELD(symval, ssam_device_id, category);
 +	DEF_FIELD(symval, ssam_device_id, target);
 +	DEF_FIELD(symval, ssam_device_id, instance);
 +	DEF_FIELD(symval, ssam_device_id, function);
 +
-+	sprintf(alias, "ssam:c%02X", category);
++	sprintf(alias, "ssam:d%02Xc%02X", domain, category);
 +	ADD(alias, "t", match_flags & SSAM_MATCH_TARGET, target);
 +	ADD(alias, "i", match_flags & SSAM_MATCH_INSTANCE, instance);
 +	ADD(alias, "f", match_flags & SSAM_MATCH_FUNCTION, function);
@@ -88,10 +91,10 @@ index 7f40b6aab689b..3ae63c7a8c03a 100644
  /* Does namelen bytes of name exactly match the symbol? */
  static bool sym_is(const char *name, unsigned namelen, const char *symbol)
  {
-@@ -1346,6 +1367,7 @@ static const struct devtable devtable[] = {
- 	{"fslmc", SIZE_fsl_mc_device_id, do_fsl_mc_entry},
- 	{"tbsvc", SIZE_tb_service_id, do_tbsvc_entry},
- 	{"typec", SIZE_typec_device_id, do_typec_entry},
+@@ -1438,6 +1460,7 @@ static const struct devtable devtable[] = {
+ 	{"tee", SIZE_tee_client_device_id, do_tee_entry},
+ 	{"wmi", SIZE_wmi_device_id, do_wmi_entry},
+ 	{"mhi", SIZE_mhi_device_id, do_mhi_entry},
 +	{"ssam", SIZE_ssam_device_id, do_ssam_entry},
  };
  

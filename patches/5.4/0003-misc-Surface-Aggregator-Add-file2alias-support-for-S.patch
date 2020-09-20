@@ -1,23 +1,23 @@
-From 8f591f53f3f926912e644c66e1b4794d3b7555b8 Mon Sep 17 00:00:00 2001
+From b4f4e6eeccddd163be767f0d1fc6527376af7d97 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
-Date: Sun, 23 Aug 2020 20:24:57 +0200
-Subject: [PATCH] misc: surface_sam: Add file2alias support for Surface SAM
- devices
+Date: Sun, 20 Sep 2020 04:12:58 +0200
+Subject: [PATCH] misc: Surface Aggregator: Add file2alias support for Surface
+ Aggregator client devices
 
 Implement file2alias support for Surface System Aggregator Module (SSAM)
-devices. This allows modules to be auto-loaded for specific devices via
-their respective module alias.
+client devices. This allows modules to be auto-loaded for specific
+devices via their respective module alias.
 ---
- include/linux/mod_devicetable.h   | 17 +++++++++++++++++
- scripts/mod/devicetable-offsets.c |  7 +++++++
- scripts/mod/file2alias.c          | 22 ++++++++++++++++++++++
- 3 files changed, 46 insertions(+)
+ include/linux/mod_devicetable.h   | 18 ++++++++++++++++++
+ scripts/mod/devicetable-offsets.c |  8 ++++++++
+ scripts/mod/file2alias.c          | 23 +++++++++++++++++++++++
+ 3 files changed, 49 insertions(+)
 
 diff --git a/include/linux/mod_devicetable.h b/include/linux/mod_devicetable.h
-index 4c56404e53a76..1ef76f488a580 100644
+index 5714fd35a83c..181449473304 100644
 --- a/include/linux/mod_devicetable.h
 +++ b/include/linux/mod_devicetable.h
-@@ -827,4 +827,21 @@ struct wmi_device_id {
+@@ -821,4 +821,22 @@ struct wmi_device_id {
  	const void *context;
  };
  
@@ -30,6 +30,7 @@ index 4c56404e53a76..1ef76f488a580 100644
 +struct ssam_device_id {
 +	__u8 match_flags;
 +
++	__u8 domain;
 +	__u8 category;
 +	__u8 target;
 +	__u8 instance;
@@ -40,15 +41,16 @@ index 4c56404e53a76..1ef76f488a580 100644
 +
  #endif /* LINUX_MOD_DEVICETABLE_H */
 diff --git a/scripts/mod/devicetable-offsets.c b/scripts/mod/devicetable-offsets.c
-index 054405b90ba42..74d6395bbe919 100644
+index 054405b90ba4..0d66f07989c4 100644
 --- a/scripts/mod/devicetable-offsets.c
 +++ b/scripts/mod/devicetable-offsets.c
-@@ -231,5 +231,12 @@ int main(void)
+@@ -231,5 +231,13 @@ int main(void)
  	DEVID(wmi_device_id);
  	DEVID_FIELD(wmi_device_id, guid_string);
  
 +	DEVID(ssam_device_id);
 +	DEVID_FIELD(ssam_device_id, match_flags);
++	DEVID_FIELD(ssam_device_id, domain);
 +	DEVID_FIELD(ssam_device_id, category);
 +	DEVID_FIELD(ssam_device_id, target);
 +	DEVID_FIELD(ssam_device_id, instance);
@@ -57,27 +59,28 @@ index 054405b90ba42..74d6395bbe919 100644
  	return 0;
  }
 diff --git a/scripts/mod/file2alias.c b/scripts/mod/file2alias.c
-index c91eba751804b..5406ad2f4fabd 100644
+index c91eba751804..c86de633d7ea 100644
 --- a/scripts/mod/file2alias.c
 +++ b/scripts/mod/file2alias.c
-@@ -1335,6 +1335,27 @@ static int do_wmi_entry(const char *filename, void *symval, char *alias)
+@@ -1335,6 +1335,28 @@ static int do_wmi_entry(const char *filename, void *symval, char *alias)
  	return 1;
  }
  
 +/*
-+ * Looks like: ssam:cNtNiNfN
++ * Looks like: ssam:dNcNtNiNfN
 + *
 + * N is exactly 2 digits, where each is an upper-case hex digit.
 + */
 +static int do_ssam_entry(const char *filename, void *symval, char *alias)
 +{
 +	DEF_FIELD(symval, ssam_device_id, match_flags);
++	DEF_FIELD(symval, ssam_device_id, domain);
 +	DEF_FIELD(symval, ssam_device_id, category);
 +	DEF_FIELD(symval, ssam_device_id, target);
 +	DEF_FIELD(symval, ssam_device_id, instance);
 +	DEF_FIELD(symval, ssam_device_id, function);
 +
-+	sprintf(alias, "ssam:c%02X", category);
++	sprintf(alias, "ssam:d%02Xc%02X", domain, category);
 +	ADD(alias, "t", match_flags & SSAM_MATCH_TARGET, target);
 +	ADD(alias, "i", match_flags & SSAM_MATCH_INSTANCE, instance);
 +	ADD(alias, "f", match_flags & SSAM_MATCH_FUNCTION, function);
@@ -88,7 +91,7 @@ index c91eba751804b..5406ad2f4fabd 100644
  /* Does namelen bytes of name exactly match the symbol? */
  static bool sym_is(const char *name, unsigned namelen, const char *symbol)
  {
-@@ -1407,6 +1428,7 @@ static const struct devtable devtable[] = {
+@@ -1407,6 +1429,7 @@ static const struct devtable devtable[] = {
  	{"typec", SIZE_typec_device_id, do_typec_entry},
  	{"tee", SIZE_tee_client_device_id, do_tee_entry},
  	{"wmi", SIZE_wmi_device_id, do_wmi_entry},
