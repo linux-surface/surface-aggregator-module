@@ -34,7 +34,6 @@ load() {
 
     ${cmd} surface_aggregator"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_debugfs"${ext}"
-    ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
     ${cmd} "${client_pfx}"surface_acpi_notify"${ext}"
     ${cmd} "${client_pfx}"surface_battery"${ext}"
     ${cmd} "${client_pfx}"surface_dtx"${ext}"
@@ -42,6 +41,7 @@ load() {
     ${cmd} "${client_pfx}"surface_hotplug"${ext}"
     ${cmd} "${client_pfx}"surface_keyboard"${ext}"
     ${cmd} "${client_pfx}"surface_perfmode"${ext}"
+    ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
     then
