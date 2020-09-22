@@ -290,7 +290,7 @@ static struct attribute *ssam_ssh_attrs[] = {
 	NULL,
 };
 
-const struct attribute_group ssam_ssh_group = {
+static const struct attribute_group ssam_ssh_group = {
 	.attrs = ssam_ssh_attrs,
 };
 
