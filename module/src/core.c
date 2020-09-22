@@ -644,7 +644,7 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 	// finally, set main controller reference
 	status = ssam_try_set_controller(ctrl);
 	if (WARN_ON(status))	// currently, we're the only provider
-		goto err_initrq;
+		goto err_mainref;
 
 	/*
 	 * TODO: The EC can wake up the system via the associated GPIO interrupt
@@ -661,6 +661,8 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 
 	return 0;
 
+err_mainref:
+	ssam_irq_free(ctrl);
 err_initrq:
 	ssam_controller_shutdown(ctrl);
 err_devinit:
