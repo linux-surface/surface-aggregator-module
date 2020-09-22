@@ -1857,28 +1857,23 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 /* -- Wrappers for internal SAM requests. ----------------------------------- */
 
 /**
- * ssam_log_firmware_version() - Log SAM/EC firmware version to kernel log.
- * @ctrl: The controller.
+ * ssam_get_firmware_version() - Get the SAM/EC firmware version.
+ * @ctrl:    The controller.
+ * @version: Where to store the version number.
  *
  * Return: Returns zero on success or the status of the executed SAM request
  * if that request failed.
  */
-int ssam_log_firmware_version(struct ssam_controller *ctrl)
+int ssam_get_firmware_version(struct ssam_controller *ctrl, u32 *version)
 {
 	__le32 __version;
-	u32 version, a, b, c;
 	int status;
 
 	status = ssam_ssh_get_firmware_version(ctrl, &__version);
 	if (status)
 		return status;
 
-	version = le32_to_cpu(__version);
-	a = (version >> 24) & 0xff;
-	b = ((version >> 8) & 0xffff);
-	c = version & 0xff;
-
-	ssam_info(ctrl, "SAM controller version: %u.%u.%u\n", a, b, c);
+	*version = le32_to_cpu(__version);
 	return 0;
 }
 

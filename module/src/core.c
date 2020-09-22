@@ -246,6 +246,26 @@ static const struct serdev_device_ops ssam_serdev_ops = {
 };
 
 
+/* -- Misc. ----------------------------------------------------------------- */
+
+static int ssam_log_firmware_version(struct ssam_controller *ctrl)
+{
+	u32 version, a, b, c;
+	int status;
+
+	status = ssam_get_firmware_version(ctrl, &version);
+	if (status)
+		return status;
+
+	a = (version >> 24) & 0xff;
+	b = ((version >> 8) & 0xffff);
+	c = version & 0xff;
+
+	ssam_info(ctrl, "SAM firmware version: %u.%u.%u\n", a, b, c);
+	return 0;
+}
+
+
 /* -- ACPI based device setup. ---------------------------------------------- */
 
 static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
