@@ -246,7 +246,7 @@ static const struct serdev_device_ops ssam_serdev_ops = {
 };
 
 
-/* -- Misc. ----------------------------------------------------------------- */
+/* -- SysFS and misc. ------------------------------------------------------- */
 
 static int ssam_log_firmware_version(struct ssam_controller *ctrl)
 {
@@ -264,6 +264,34 @@ static int ssam_log_firmware_version(struct ssam_controller *ctrl)
 	ssam_info(ctrl, "SAM firmware version: %u.%u.%u\n", a, b, c);
 	return 0;
 }
+
+static ssize_t firmware_version_show(struct device *dev,
+				     struct device_attribute *attr, char *buf)
+{
+	struct ssam_controller *ctrl = dev_get_drvdata(dev);
+	u32 version, a, b, c;
+	int status;
+
+	status = ssam_get_firmware_version(ctrl, &version);
+	if (status < 0)
+		return status;
+
+	a = (version >> 24) & 0xff;
+	b = ((version >> 8) & 0xffff);
+	c = version & 0xff;
+
+	return snprintf(buf, PAGE_SIZE - 1, "%u.%u.%u\n", a, b, c);
+}
+static DEVICE_ATTR_RO(firmware_version);
+
+static struct attribute *ssam_ssh_attrs[] = {
+	&dev_attr_firmware_version.attr,
+	NULL,
+};
+
+const struct attribute_group ssam_ssh_group = {
+	.attrs = ssam_ssh_attrs,
+};
 
 
 /* -- ACPI based device setup. ---------------------------------------------- */
@@ -636,10 +664,14 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_initrq;
 
+	status = sysfs_create_group(&serdev->dev.kobj, &ssam_ssh_group);
+	if (status)
+		goto err_initrq;
+
 	// setup IRQ
 	status = ssam_irq_setup(ctrl);
 	if (status)
-		goto err_initrq;
+		goto err_irq;
 
 	// finally, set main controller reference
 	status = ssam_try_set_controller(ctrl);
@@ -663,6 +695,8 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 
 err_mainref:
 	ssam_irq_free(ctrl);
+err_irq:
+	sysfs_remove_group(&serdev->dev.kobj, &ssam_ssh_group);
 err_initrq:
 	ssam_controller_shutdown(ctrl);
 err_devinit:
@@ -683,6 +717,7 @@ static void ssam_serial_hub_remove(struct serdev_device *serdev)
 	ssam_clear_controller();
 
 	ssam_irq_free(ctrl);
+	sysfs_remove_group(&serdev->dev.kobj, &ssam_ssh_group);
 	ssam_controller_lock(ctrl);
 
 	// remove all client devices
