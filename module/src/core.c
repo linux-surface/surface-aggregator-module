@@ -291,6 +291,7 @@ static struct attribute *ssam_ssh_attrs[] = {
 };
 
 static const struct attribute_group ssam_ssh_group = {
+	.name = "sam",
 	.attrs = ssam_ssh_attrs,
 };
 
