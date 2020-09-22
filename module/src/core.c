@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <linux/pm.h>
 #include <linux/serdev.h>
+#include <linux/sysfs.h>
 
 #include "../include/linux/surface_aggregator/controller.h"
 
