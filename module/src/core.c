@@ -805,6 +805,7 @@ err_cpkg:
 err_bus:
 	return status;
 }
+module_init(ssam_core_init);
 
 static void __exit ssam_core_exit(void)
 {
@@ -813,18 +814,6 @@ static void __exit ssam_core_exit(void)
 	ssh_ctrl_packet_cache_destroy();
 	ssam_bus_unregister();
 }
-
-/*
- * Ensure that the driver is loaded late due to some issues with the UART
- * communication. Specifically, we want to ensure that DMA is ready and being
- * used. Not using DMA can result in spurious communication failures,
- * especially during boot, which among other things will result in wrong
- * battery information (via ACPI _BIX) being displayed. Using a late init_call
- * instead of the normal module_init gives the DMA subsystem time to
- * initialize and via that results in a more stable communication, avoiding
- * such failures.
- */
-late_initcall(ssam_core_init);
 module_exit(ssam_core_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
