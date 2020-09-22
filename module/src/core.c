@@ -285,14 +285,14 @@ static ssize_t firmware_version_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(firmware_version);
 
-static struct attribute *ssam_ssh_attrs[] = {
+static struct attribute *ssam_sam_attrs[] = {
 	&dev_attr_firmware_version.attr,
 	NULL,
 };
 
-static const struct attribute_group ssam_ssh_group = {
+static const struct attribute_group ssam_sam_group = {
 	.name = "sam",
-	.attrs = ssam_ssh_attrs,
+	.attrs = ssam_sam_attrs,
 };
 
 
@@ -666,7 +666,7 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 	if (status)
 		goto err_initrq;
 
-	status = sysfs_create_group(&serdev->dev.kobj, &ssam_ssh_group);
+	status = sysfs_create_group(&serdev->dev.kobj, &ssam_sam_group);
 	if (status)
 		goto err_initrq;
 
@@ -698,7 +698,7 @@ static int ssam_serial_hub_probe(struct serdev_device *serdev)
 err_mainref:
 	ssam_irq_free(ctrl);
 err_irq:
-	sysfs_remove_group(&serdev->dev.kobj, &ssam_ssh_group);
+	sysfs_remove_group(&serdev->dev.kobj, &ssam_sam_group);
 err_initrq:
 	ssam_controller_shutdown(ctrl);
 err_devinit:
@@ -719,7 +719,7 @@ static void ssam_serial_hub_remove(struct serdev_device *serdev)
 	ssam_clear_controller();
 
 	ssam_irq_free(ctrl);
-	sysfs_remove_group(&serdev->dev.kobj, &ssam_ssh_group);
+	sysfs_remove_group(&serdev->dev.kobj, &ssam_sam_group);
 	ssam_controller_lock(ctrl);
 
 	// remove all client devices
