@@ -1,4 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
+/*
+ * Trace points for SSAM/SSH.
+ *
+ * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
+ */
 
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM surface_aggregator

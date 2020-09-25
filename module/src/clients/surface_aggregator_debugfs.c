@@ -2,6 +2,8 @@
 /*
  * DebugFS interface for Surface System Aggregator Module (SSAM) controller
  * access from user-space. Intended for debugging and development.
+ *
+ * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <linux/debugfs.h>

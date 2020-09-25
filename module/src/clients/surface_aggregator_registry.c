@@ -4,6 +4,8 @@
  *
  * Registry for non-platform/non-ACPI SSAM client devices, i.e. devices that
  * cannot be auto-detected. Provides device-hubs for these devices.
+ *
+ * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <linux/acpi.h>

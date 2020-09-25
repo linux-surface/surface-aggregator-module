@@ -1,4 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
+# Copyright (C) 2019-2020 Maximilian Luz <luzmaximilian@gmail.com>
+
 MODULE_NAME := "surface_aggregator_module"
 MODULE_VERSION := "0.1"
 

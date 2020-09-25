@@ -6,6 +6,8 @@
  * Provides access to a SAM-over-SSH connected EC via a controller device.
  * Handles communication via requests as well as enabling, disabling, and
  * relaying of events.
+ *
+ * Copyright (C) 2019-2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <linux/acpi.h>

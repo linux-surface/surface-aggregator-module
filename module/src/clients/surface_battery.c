@@ -4,6 +4,8 @@
  *
  * Provides support for battery and AC devices connected via the Surface
  * System Aggregator Module.
+ *
+ * Copyright (C) 2019-2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <asm/unaligned.h>
