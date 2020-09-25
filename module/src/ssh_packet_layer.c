@@ -762,7 +762,7 @@ static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 
 	head = __ssh_ptl_queue_find_entrypoint(packet);
 
-	list_add_tail(&ssh_packet_get(packet)->queue_node, &ptl->queue.head);
+	list_add_tail(&ssh_packet_get(packet)->queue_node, head);
 	return 0;
 }
 
