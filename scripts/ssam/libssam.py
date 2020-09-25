@@ -95,7 +95,7 @@ REQUEST_HAS_RESPONSE = 1
 REQUEST_UNSEQUENCED = 2
 
 
-_PATH_SSAM_DBGDEV = '/sys/kernel/debug/surface_sam/controller'
+_PATH_SSAM_DBGDEV = '/sys/kernel/debug/surface_aggregator/controller'
 
 _IOCTL_GETVERS = _IOR(0xA5, 0, ctypes.sizeof(ctypes.c_uint32))
 _IOCTL_REQUEST = _IOWR(0xA5, 1, ctypes.sizeof(_RawRequest))
