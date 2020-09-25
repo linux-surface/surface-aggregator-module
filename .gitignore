@@ -1,7 +1,8 @@
 # misc
 logs/
-Notes.md
 scripts/tmp/
+submission/
+todo/
 
 # kernel modules
 *.o
