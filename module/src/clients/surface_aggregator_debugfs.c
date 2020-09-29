@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * DebugFS interface for Surface System Aggregator Module (SSAM) controller
- * access from user-space. Intended for debugging and development.
+ * Provides user-space access to the SSAM EC via the /dev/surface/aggregator
+ * misc device. Intended for debugging and development.
  *
  * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
@@ -16,10 +16,10 @@
 
 #include "../../include/linux/surface_aggregator/controller.h"
 
-#define SSAM_DBG_DEVICE_NAME		"surface_aggregator_dbg"
+#define SSAM_CDEV_DEVICE_NAME	"surface_aggregator_cdev"
 
 /**
- * struct ssam_debug_request - Controller request IOCTL argument.
+ * struct ssam_cdev_request - Controller request IOCTL argument.
  * @target_category: Target category of the SAM request.
  * @target_id:       Target ID of the SAM request.
  * @command_id:      Command ID of the SAM request.
@@ -35,7 +35,7 @@
  *                   On output: Length of request response (number of bytes
  *                   in the buffer that are actually used).
  */
-struct ssam_dbg_request {
+struct ssam_cdev_request {
 	__u8 target_category;
 	__u8 target_id;
 	__u8 command_id;
@@ -56,33 +56,33 @@ struct ssam_dbg_request {
 	} response;
 };
 
-#define SSAM_DBG_IOCTL_REQUEST     _IOWR(0xA5, 0, struct ssam_dbg_request)
+#define SSAM_CDEV_REQUEST	_IOWR(0xA5, 1, struct ssam_cdev_request)
 
-struct ssam_dbg_device {
+struct ssam_cdev {
 	struct ssam_controller *ctrl;
 	struct miscdevice mdev;
 };
 
-static int ssam_dbg_device_open(struct inode *inode, struct file *filp)
+static int ssam_cdev_device_open(struct inode *inode, struct file *filp)
 {
 	struct miscdevice *mdev = filp->private_data;
 
-	filp->private_data = container_of(mdev, struct ssam_dbg_device, mdev);
+	filp->private_data = container_of(mdev, struct ssam_cdev, mdev);
 	return nonseekable_open(inode, filp);
 }
 
-static long ssam_dbg_if_request(struct file *file, unsigned long arg)
+static long ssam_cdev_request(struct file *file, unsigned long arg)
 {
-	struct ssam_dbg_device *ddev = file->private_data;
-	struct ssam_dbg_request __user *r;
-	struct ssam_dbg_request rqst;
+	struct ssam_cdev *cdev = file->private_data;
+	struct ssam_cdev_request __user *r;
+	struct ssam_cdev_request rqst;
 	struct ssam_request spec;
 	struct ssam_response rsp;
 	const void __user *plddata;
 	void __user *rspdata;
 	int status = 0, ret = 0, tmp;
 
-	r = (struct ssam_dbg_request __user *)arg;
+	r = (struct ssam_cdev_request __user *)arg;
 	ret = copy_struct_from_user(&rqst, sizeof(rqst), r, sizeof(*r));
 	if (ret)
 		goto out;
@@ -139,7 +139,7 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 	}
 
 	// perform request
-	status = ssam_request_sync(ddev->ctrl, &spec, &rsp);
+	status = ssam_request_sync(cdev->ctrl, &spec, &rsp);
 	if (status)
 		goto out;
 
@@ -164,12 +164,12 @@ out:
 	return ret;
 }
 
-static long ssam_dbg_device_ioctl(struct file *file, unsigned int cmd,
-				  unsigned long arg)
+static long ssam_cdev_device_ioctl(struct file *file, unsigned int cmd,
+				   unsigned long arg)
 {
 	switch (cmd) {
-	case SSAM_DBG_IOCTL_REQUEST:
-		return ssam_dbg_if_request(file, arg);
+	case SSAM_CDEV_REQUEST:
+		return ssam_cdev_request(file, arg);
 
 	default:
 		return -ENOTTY;
@@ -178,52 +178,52 @@ static long ssam_dbg_device_ioctl(struct file *file, unsigned int cmd,
 
 static const struct file_operations ssam_controller_fops = {
 	.owner          = THIS_MODULE,
-	.open           = ssam_dbg_device_open,
-	.unlocked_ioctl = ssam_dbg_device_ioctl,
-	.compat_ioctl   = ssam_dbg_device_ioctl,
+	.open           = ssam_cdev_device_open,
+	.unlocked_ioctl = ssam_cdev_device_ioctl,
+	.compat_ioctl   = ssam_cdev_device_ioctl,
 	.llseek         = noop_llseek,
 };
 
 static int ssam_dbg_device_probe(struct platform_device *pdev)
 {
-	struct ssam_dbg_device *ddev;
 	struct ssam_controller *ctrl;
+	struct ssam_cdev *cdev;
 	int status;
 
 	status = ssam_client_bind(&pdev->dev, &ctrl);
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	ddev = devm_kzalloc(&pdev->dev, sizeof(*ddev), GFP_KERNEL);
-	if (!ddev)
+	cdev = devm_kzalloc(&pdev->dev, sizeof(*cdev), GFP_KERNEL);
+	if (!cdev)
 		return -ENOMEM;
 
-	ddev->ctrl = ctrl;
-	ddev->mdev.parent   = &pdev->dev;
-	ddev->mdev.minor    = MISC_DYNAMIC_MINOR;
-	ddev->mdev.name     = "surface_aggregator";
-	ddev->mdev.nodename = "surface/aggregator";
-	ddev->mdev.fops     = &ssam_controller_fops;
+	cdev->ctrl = ctrl;
+	cdev->mdev.parent   = &pdev->dev;
+	cdev->mdev.minor    = MISC_DYNAMIC_MINOR;
+	cdev->mdev.name     = "surface_aggregator";
+	cdev->mdev.nodename = "surface/aggregator";
+	cdev->mdev.fops     = &ssam_controller_fops;
 
-	platform_set_drvdata(pdev, ddev);
-	return misc_register(&ddev->mdev);
+	platform_set_drvdata(pdev, cdev);
+	return misc_register(&cdev->mdev);
 }
 
 static int ssam_dbg_device_remove(struct platform_device *pdev)
 {
-	struct ssam_dbg_device *ddev = platform_get_drvdata(pdev);
+	struct ssam_cdev *cdev = platform_get_drvdata(pdev);
 
-	misc_deregister(&ddev->mdev);
+	misc_deregister(&cdev->mdev);
 	return 0;
 }
 
-static struct platform_device *ssam_dbg_device;
+static struct platform_device *ssam_cdev_device;
 
-static struct platform_driver ssam_dbg_driver = {
+static struct platform_driver ssam_cdev_driver = {
 	.probe = ssam_dbg_device_probe,
 	.remove = ssam_dbg_device_remove,
 	.driver = {
-		.name = SSAM_DBG_DEVICE_NAME,
+		.name = SSAM_CDEV_DEVICE_NAME,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
@@ -232,33 +232,33 @@ static int __init ssam_debug_init(void)
 {
 	int status;
 
-	ssam_dbg_device = platform_device_alloc(SSAM_DBG_DEVICE_NAME,
-						PLATFORM_DEVID_NONE);
-	if (!ssam_dbg_device)
+	ssam_cdev_device = platform_device_alloc(SSAM_CDEV_DEVICE_NAME,
+						 PLATFORM_DEVID_NONE);
+	if (!ssam_cdev_device)
 		return -ENOMEM;
 
-	status = platform_device_add(ssam_dbg_device);
+	status = platform_device_add(ssam_cdev_device);
 	if (status)
 		goto err_device;
 
-	status = platform_driver_register(&ssam_dbg_driver);
+	status = platform_driver_register(&ssam_cdev_driver);
 	if (status)
 		goto err_driver;
 
 	return 0;
 
 err_driver:
-	platform_device_del(ssam_dbg_device);
+	platform_device_del(ssam_cdev_device);
 err_device:
-	platform_device_put(ssam_dbg_device);
+	platform_device_put(ssam_cdev_device);
 	return status;
 }
 module_init(ssam_debug_init);
 
 static void __exit ssam_debug_exit(void)
 {
-	platform_driver_unregister(&ssam_dbg_driver);
-	platform_device_unregister(ssam_dbg_device);
+	platform_driver_unregister(&ssam_cdev_driver);
+	platform_device_unregister(ssam_cdev_device);
 }
 module_exit(ssam_debug_exit);
 
