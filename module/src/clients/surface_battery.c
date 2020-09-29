@@ -120,6 +120,11 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
 	.command_id      = 0x0d,
 });
 
+/*
+ * The following requests are currently unused. They are nevertheless included
+ * for documentation of the SAM interface.
+ */
+
 /* Get maximum platform power for battery (DPTF PMAX) */
 __always_unused
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_pmax, __le32, {
