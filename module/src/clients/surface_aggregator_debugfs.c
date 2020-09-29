@@ -181,7 +181,7 @@ static long ssam_dbg_device_ioctl(struct file *file, unsigned int cmd,
 		return ssam_dbg_if_request(file, arg);
 
 	default:
-		return -ENOIOCTLCMD;
+		return -ENOTTY;
 	}
 }
 
