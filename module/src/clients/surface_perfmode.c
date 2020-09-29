@@ -17,9 +17,6 @@
 
 #include "../../include/linux/surface_aggregator/device.h"
 
-
-#define SID_PARAM_PERM		0644
-
 enum sam_perf_mode {
 	SAM_PERF_MODE_NORMAL   = 1,
 	SAM_PERF_MODE_BATTERY  = 2,
@@ -29,18 +26,6 @@ enum sam_perf_mode {
 	__SAM_PERF_MODE__START = 1,
 	__SAM_PERF_MODE__END   = 4,
 };
-
-enum sid_param_perf_mode {
-	SID_PARAM_PERF_MODE_AS_IS    = 0,
-	SID_PARAM_PERF_MODE_NORMAL   = SAM_PERF_MODE_NORMAL,
-	SID_PARAM_PERF_MODE_BATTERY  = SAM_PERF_MODE_BATTERY,
-	SID_PARAM_PERF_MODE_PERF1    = SAM_PERF_MODE_PERF1,
-	SID_PARAM_PERF_MODE_PERF2    = SAM_PERF_MODE_PERF2,
-
-	__SID_PARAM_PERF_MODE__START = 0,
-	__SID_PARAM_PERF_MODE__END   = 4,
-};
-
 
 struct ssam_perf_info {
 	__le32 mode;
@@ -67,37 +52,6 @@ static int ssam_tmp_perf_mode_set(struct ssam_device *sdev, u32 mode)
 
 	return __ssam_tmp_perf_mode_set(sdev, &mode_le);
 }
-
-
-static int param_perf_mode_set(const char *val, const struct kernel_param *kp)
-{
-	int perf_mode;
-	int status;
-
-	status = kstrtoint(val, 0, &perf_mode);
-	if (status)
-		return status;
-
-	if (perf_mode < __SID_PARAM_PERF_MODE__START || perf_mode > __SID_PARAM_PERF_MODE__END)
-		return -EINVAL;
-
-	return param_set_int(val, kp);
-}
-
-static const struct kernel_param_ops param_perf_mode_ops = {
-	.set = param_perf_mode_set,
-	.get = param_get_int,
-};
-
-static int param_perf_mode_init = SID_PARAM_PERF_MODE_AS_IS;
-static int param_perf_mode_exit = SID_PARAM_PERF_MODE_AS_IS;
-
-module_param_cb(perf_mode_init, &param_perf_mode_ops, &param_perf_mode_init, SID_PARAM_PERM);
-module_param_cb(perf_mode_exit, &param_perf_mode_ops, &param_perf_mode_exit, SID_PARAM_PERM);
-
-MODULE_PARM_DESC(perf_mode_init, "Performance-mode to be set on module initialization");
-MODULE_PARM_DESC(perf_mode_exit, "Performance-mode to be set on module exit");
-
 
 static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr, char *data)
 {
@@ -147,32 +101,15 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 
 static const DEVICE_ATTR_RW(perf_mode);
 
-
 static int surface_sam_sid_perfmode_probe(struct ssam_device *sdev)
 {
-	int status;
-
-	// set initial perf_mode
-	if (param_perf_mode_init != SID_PARAM_PERF_MODE_AS_IS) {
-		status = ssam_tmp_perf_mode_set(sdev, param_perf_mode_init);
-		if (status)
-			return status;
-	}
-
-	// register perf_mode attribute
-	status = sysfs_create_file(&sdev->dev.kobj, &dev_attr_perf_mode.attr);
-	if (status)
-		ssam_tmp_perf_mode_set(sdev, param_perf_mode_exit);
-
-	return status;
+	return sysfs_create_file(&sdev->dev.kobj, &dev_attr_perf_mode.attr);
 }
 
 static void surface_sam_sid_perfmode_remove(struct ssam_device *sdev)
 {
 	sysfs_remove_file(&sdev->dev.kobj, &dev_attr_perf_mode.attr);
-	ssam_tmp_perf_mode_set(sdev, param_perf_mode_exit);
 }
-
 
 static const struct ssam_device_id ssam_perfmode_match[] = {
 	{ SSAM_SDEV(TMP, 0x01, 0x00, 0x01) },
