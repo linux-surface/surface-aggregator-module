@@ -18,13 +18,13 @@
 #include "../../include/linux/surface_aggregator/device.h"
 
 enum sam_perf_mode {
-	SAM_PERF_MODE_NORMAL   = 1,
-	SAM_PERF_MODE_BATTERY  = 2,
-	SAM_PERF_MODE_PERF1    = 3,
-	SAM_PERF_MODE_PERF2    = 4,
+	SAM_PERF_MODE_NORMAL  = 1,
+	SAM_PERF_MODE_BATTERY = 2,
+	SAM_PERF_MODE_PERF1   = 3,
+	SAM_PERF_MODE_PERF2   = 4,
 
-	__SAM_PERF_MODE__START = 1,
-	__SAM_PERF_MODE__END   = 4,
+	__SAM_PERF_MODE__MIN  = 1,
+	__SAM_PERF_MODE__MAX  = 4,
 };
 
 struct ssam_perf_info {
@@ -47,7 +47,7 @@ static int ssam_tmp_perf_mode_set(struct ssam_device *sdev, u32 mode)
 {
 	__le32 mode_le = cpu_to_le32(mode);
 
-	if (mode < __SAM_PERF_MODE__START || mode > __SAM_PERF_MODE__END)
+	if (mode < __SAM_PERF_MODE__MIN || mode > __SAM_PERF_MODE__MAX)
 		return -EINVAL;
 
 	return __ssam_tmp_perf_mode_set(sdev, &mode_le);
