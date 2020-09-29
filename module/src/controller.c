@@ -892,7 +892,8 @@ static void __ssam_controller_release(struct kref *kref)
  */
 struct ssam_controller *ssam_controller_get(struct ssam_controller *c)
 {
-	kref_get(&c->kref);
+	if (c)
+		kref_get(&c->kref);
 	return c;
 }
 EXPORT_SYMBOL_GPL(ssam_controller_get);
@@ -903,7 +904,8 @@ EXPORT_SYMBOL_GPL(ssam_controller_get);
  */
 void ssam_controller_put(struct ssam_controller *c)
 {
-	kref_put(&c->kref, __ssam_controller_release);
+	if (c)
+		kref_put(&c->kref, __ssam_controller_release);
 }
 EXPORT_SYMBOL_GPL(ssam_controller_put);
 

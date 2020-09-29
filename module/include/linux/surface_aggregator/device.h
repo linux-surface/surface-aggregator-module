@@ -283,8 +283,7 @@ void ssam_device_remove(struct ssam_device *sdev);
  */
 static inline struct ssam_device *ssam_device_get(struct ssam_device *sdev)
 {
-	get_device(&sdev->dev);
-	return sdev;
+	return sdev ? to_ssam_device(get_device(&sdev->dev)) : NULL;
 }
 
 /**
@@ -299,7 +298,8 @@ static inline struct ssam_device *ssam_device_get(struct ssam_device *sdev)
  */
 static inline void ssam_device_put(struct ssam_device *sdev)
 {
-	put_device(&sdev->dev);
+	if (sdev)
+		put_device(&sdev->dev);
 }
 
 /**

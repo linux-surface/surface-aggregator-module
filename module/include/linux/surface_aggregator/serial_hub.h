@@ -620,8 +620,7 @@ static inline struct ssh_request *to_ssh_request(struct ssh_packet *p)
  */
 static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
 {
-	ssh_packet_get(&r->packet);
-	return r;
+	return r ? to_ssh_request(ssh_packet_get(&r->packet)) : NULL;
 }
 
 /**
@@ -638,7 +637,8 @@ static inline struct ssh_request *ssh_request_get(struct ssh_request *r)
  */
 static inline void ssh_request_put(struct ssh_request *r)
 {
-	ssh_packet_put(&r->packet);
+	if (r)
+		ssh_packet_put(&r->packet);
 }
 
 /**
