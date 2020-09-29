@@ -150,11 +150,11 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 out:
 	// always try to set response-length and status
 	tmp = put_user(rsp.length, &r->response.length);
-	if (!ret)
+	if (tmp)
 		ret = tmp;
 
 	tmp = put_user(status, &r->status);
-	if (!ret)
+	if (tmp)
 		ret = tmp;
 
 	// cleanup
