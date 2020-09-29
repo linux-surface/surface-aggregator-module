@@ -199,9 +199,10 @@ static int ssam_dbg_device_probe(struct platform_device *pdev)
 		return -ENOMEM;
 
 	ddev->ctrl = ctrl;
-	ddev->mdev.minor = MISC_DYNAMIC_MINOR;
-	ddev->mdev.name  = "surface_aggregator";
-	ddev->mdev.fops  = &ssam_controller_fops;
+	ddev->mdev.parent = &pdev->dev;
+	ddev->mdev.minor  = MISC_DYNAMIC_MINOR;
+	ddev->mdev.name   = "surface_aggregator";
+	ddev->mdev.fops   = &ssam_controller_fops;
 
 	platform_set_drvdata(pdev, ddev);
 	return misc_register(&ddev->mdev);
