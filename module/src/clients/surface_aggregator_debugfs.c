@@ -16,7 +16,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 #define SSAM_DBG_DEVICE_NAME		"surface_aggregator_dbg"
-#define SSAM_DBG_IF_VERSION		0x010000
 
 /**
  * struct ssam_debug_request - Controller request IOCTL argument.
@@ -56,8 +55,7 @@ struct ssam_dbg_request {
 	} response;
 };
 
-#define SSAM_DBG_IOCTL_GETVERSION  _IOR(0xA5, 0, __u32)
-#define SSAM_DBG_IOCTL_REQUEST     _IOWR(0xA5, 1, struct ssam_dbg_request)
+#define SSAM_DBG_IOCTL_REQUEST     _IOWR(0xA5, 0, struct ssam_dbg_request)
 
 struct ssam_dbg_data {
 	struct ssam_controller *ctrl;
@@ -164,19 +162,10 @@ out:
 	return ret;
 }
 
-static long ssam_dbg_if_getversion(struct file *file, unsigned long arg)
-{
-	put_user(SSAM_DBG_IF_VERSION, (u32 __user *)arg);
-	return 0;
-}
-
 static long ssam_dbg_device_ioctl(struct file *file, unsigned int cmd,
-				    unsigned long arg)
+				  unsigned long arg)
 {
 	switch (cmd) {
-	case SSAM_DBG_IOCTL_GETVERSION:
-		return ssam_dbg_if_getversion(file, arg);
-
 	case SSAM_DBG_IOCTL_REQUEST:
 		return ssam_dbg_if_request(file, arg);
 
