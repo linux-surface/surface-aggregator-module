@@ -44,7 +44,7 @@ def _IOWR(ty, nr, size):
 
 class _RawRequestPayload(ctypes.Structure):
     _fields_ = [
-        ('data', ctypes.POINTER(ctypes.c_uint8)),
+        ('data', ctypes.c_uint64),
         ('length', ctypes.c_uint16),
         ('__pad', ctypes.c_uint8 * 6),
     ]
@@ -52,7 +52,7 @@ class _RawRequestPayload(ctypes.Structure):
 
 class _RawRequestResponse(ctypes.Structure):
     _fields_ = [
-        ('data', ctypes.POINTER(ctypes.c_uint8)),
+        ('data', ctypes.c_uint64),
         ('length', ctypes.c_uint16),
         ('__pad', ctypes.c_uint8 * 6),
     ]
@@ -95,16 +95,9 @@ REQUEST_HAS_RESPONSE = 1
 REQUEST_UNSEQUENCED = 2
 
 
-_PATH_SSAM_DBGDEV = '/sys/kernel/debug/surface_aggregator/controller'
+_PATH_SSAM_DBGDEV = '/dev/surface/aggregator'
 
-_IOCTL_GETVERS = _IOR(0xA5, 0, ctypes.sizeof(ctypes.c_uint32))
 _IOCTL_REQUEST = _IOWR(0xA5, 1, ctypes.sizeof(_RawRequest))
-
-
-def _get_version(fd):
-    buf = bytearray(ctypes.sizeof(ctypes.c_uint32))
-    fcntl.ioctl(fd, _IOCTL_GETVERS, buf, True)
-    return ctypes.c_uint32.from_buffer_copy(buf).value
 
 
 def _request(fd, rqst: Request):
@@ -122,12 +115,12 @@ def _request(fd, rqst: Request):
         pld_type = ctypes.c_uint8 * len(rqst.payload)
         pld_buf = pld_type(*rqst.payload)
         pld_ptr = ctypes.pointer(pld_buf)
-        pld_ptr = ctypes.cast(pld_ptr, ctypes.POINTER(ctypes.c_uint8))
+        pld_ptr = ctypes.cast(pld_ptr, ctypes.c_void_p)
 
-        raw.payload.data = pld_buf
+        raw.payload.data = pld_ptr.value
         raw.payload.length = len(rqst.payload)
     else:
-        raw.payload.data = None
+        raw.payload.data = 0
         raw.payload.length = 0
 
     # set up response
@@ -139,12 +132,12 @@ def _request(fd, rqst: Request):
         rsp_type = ctypes.c_uint8 * rsp_cap
         rsp_buf = rsp_type()
         rsp_ptr = ctypes.pointer(rsp_buf)
-        rsp_ptr = ctypes.cast(rsp_ptr, ctypes.POINTER(ctypes.c_uint8))
+        rsp_ptr = ctypes.cast(rsp_ptr, ctypes.c_void_p)
 
-        raw.response.data = rsp_ptr
+        raw.response.data = rsp_ptr.value
         raw.response.length = rsp_cap
     else:
-        raw.response.data = None
+        raw.response.data = 0
         raw.response.length = 0
 
     # perform actual IOCTL
@@ -179,12 +172,6 @@ class Controller:
 
     def __exit__(self, type, value, traceback):
         self.close()
-
-    def version(self):
-        if self.fd is None:
-            raise RuntimeError("controller is not open")
-
-        return _get_version(self.fd)
 
     def request(self, request: Request):
         if self.fd is None:
