@@ -445,7 +445,6 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	hub->sdev = sdev;
 	hub->state = SSAM_BASE_HUB_UNINITIALIZED;
 
-	// TODO: still need to verify registry
 	hub->notif.base.priority = 1000;  // this notifier should run first
 	hub->notif.base.fn = ssam_base_hub_notif;
 	hub->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
