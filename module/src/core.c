@@ -395,6 +395,8 @@ static void ssam_serial_hub_shutdown(struct device *dev)
 		ssam_err(c, "pm: D0-exit notification failed: %d\n", status);
 }
 
+#ifdef CONFIG_PM_SLEEP
+
 static int ssam_serial_hub_pm_prepare(struct device *dev)
 {
 	struct ssam_controller *c = dev_get_drvdata(dev);
@@ -600,6 +602,12 @@ static const struct dev_pm_ops ssam_serial_hub_pm_ops = {
 	.poweroff = ssam_serial_hub_pm_poweroff,
 	.restore  = ssam_serial_hub_pm_restore,
 };
+
+#else /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops ssam_serial_hub_pm_ops = { };
+
+#endif /* CONFIG_PM_SLEEP */
 
 
 /* -- Device/driver setup. -------------------------------------------------- */
