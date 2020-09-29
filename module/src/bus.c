@@ -144,7 +144,7 @@ int ssam_device_add(struct ssam_device *sdev)
 	 */
 	ssam_controller_statelock(sdev->ctrl);
 
-	if (READ_ONCE(sdev->ctrl->state) != SSAM_CONTROLLER_STARTED) {
+	if (sdev->ctrl->state != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_stateunlock(sdev->ctrl);
 		return -ENXIO;
 	}

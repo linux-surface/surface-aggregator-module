@@ -132,7 +132,7 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 
 	ssam_controller_statelock(c);
 
-	if (READ_ONCE(c->state) != SSAM_CONTROLLER_STARTED) {
+	if (c->state != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_stateunlock(c);
 		return -ENXIO;
 	}
