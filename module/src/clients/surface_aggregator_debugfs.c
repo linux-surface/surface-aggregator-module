@@ -44,13 +44,13 @@ struct ssam_dbg_request {
 	__s16 status;
 
 	struct {
-		const __u8 __user *data;
+		__u64 data;
 		__u16 length;
 		__u8 __pad[6];
 	} payload;
 
 	struct {
-		__u8 __user *data;
+		__u64 data;
 		__u16 length;
 		__u8 __pad[6];
 	} response;
@@ -78,12 +78,17 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 	struct ssam_dbg_request rqst;
 	struct ssam_request spec;
 	struct ssam_response rsp;
+	const void __user *plddata;
+	void __user *rspdata;
 	int status = 0, ret = 0, tmp;
 
 	r = (struct ssam_dbg_request __user *)arg;
 	ret = copy_struct_from_user(&rqst, sizeof(rqst), r, sizeof(*r));
 	if (ret)
 		goto out;
+
+	plddata = u64_to_user_ptr(rqst.payload.data);
+	rspdata = u64_to_user_ptr(rqst.response.data);
 
 	// setup basic request fields
 	spec.target_category = rqst.target_category;
@@ -100,7 +105,7 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 
 	// get request payload from user-space
 	if (spec.length) {
-		if (!rqst.payload.data) {
+		if (!plddata) {
 			ret = -EINVAL;
 			goto out;
 		}
@@ -112,8 +117,7 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 			goto out;
 		}
 
-		if (copy_from_user((void *)spec.payload, rqst.payload.data,
-				   spec.length)) {
+		if (copy_from_user((void *)spec.payload, plddata, spec.length)) {
 			ret = -EFAULT;
 			goto out;
 		}
@@ -121,7 +125,7 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 
 	// allocate response buffer
 	if (rsp.capacity) {
-		if (!rqst.response.data) {
+		if (!rspdata) {
 			ret = -EINVAL;
 			goto out;
 		}
@@ -140,12 +144,8 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 		goto out;
 
 	// copy response to user-space
-	if (rsp.length) {
-		if (copy_to_user(rqst.response.data, rsp.pointer, rsp.length)) {
-			ret = -EFAULT;
-			goto out;
-		}
-	}
+	if (rsp.length && copy_to_user(rspdata, rsp.pointer, rsp.length))
+		ret = -EFAULT;
 
 out:
 	// always try to set response-length and status
