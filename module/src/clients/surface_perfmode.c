@@ -53,7 +53,8 @@ static int ssam_tmp_perf_mode_set(struct ssam_device *sdev, u32 mode)
 	return __ssam_tmp_perf_mode_set(sdev, &mode_le);
 }
 
-static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr, char *data)
+static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr,
+			      char *data)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 	struct ssam_perf_info info;
@@ -61,7 +62,8 @@ static ssize_t perf_mode_show(struct device *dev, struct device_attribute *attr,
 
 	status = ssam_tmp_perf_mode_get(sdev, &info);
 	if (status) {
-		dev_err(dev, "failed to get current performance mode: %d\n", status);
+		dev_err(dev, "failed to get current performance mode: %d\n",
+			status);
 		return -EIO;
 	}
 
