@@ -224,16 +224,7 @@ static int ssam_dbg_device_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static void ssam_dbg_device_release(struct device *dev)
-{
-	// nothing to do
-}
-
-static struct platform_device ssam_dbg_device = {
-	.name = SSAM_DBG_DEVICE_NAME,
-	.id = PLATFORM_DEVID_NONE,
-	.dev.release = ssam_dbg_device_release,
-};
+static struct platform_device *ssam_dbg_device;
 
 static struct platform_driver ssam_dbg_driver = {
 	.probe = ssam_dbg_device_probe,
@@ -248,14 +239,25 @@ static int __init ssam_debug_init(void)
 {
 	int status;
 
-	status = platform_device_register(&ssam_dbg_device);
+	ssam_dbg_device = platform_device_alloc(SSAM_DBG_DEVICE_NAME,
+						PLATFORM_DEVID_NONE);
+	if (!ssam_dbg_device)
+		return -ENOMEM;
+
+	status = platform_device_add(ssam_dbg_device);
 	if (status)
-		return status;
+		goto err_device;
 
 	status = platform_driver_register(&ssam_dbg_driver);
 	if (status)
-		platform_device_unregister(&ssam_dbg_device);
+		goto err_driver;
 
+	return 0;
+
+err_driver:
+	platform_device_del(ssam_dbg_device);
+err_device:
+	platform_device_put(ssam_dbg_device);
 	return status;
 }
 module_init(ssam_debug_init);
@@ -263,7 +265,7 @@ module_init(ssam_debug_init);
 static void __exit ssam_debug_exit(void)
 {
 	platform_driver_unregister(&ssam_dbg_driver);
-	platform_device_unregister(&ssam_dbg_device);
+	platform_device_unregister(ssam_dbg_device);
 }
 module_exit(ssam_debug_exit);
 
