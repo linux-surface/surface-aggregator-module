@@ -6,8 +6,9 @@
  * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
-#include <linux/debugfs.h>
+#include <linux/fs.h>
 #include <linux/kernel.h>
+#include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -57,21 +58,22 @@ struct ssam_dbg_request {
 
 #define SSAM_DBG_IOCTL_REQUEST     _IOWR(0xA5, 0, struct ssam_dbg_request)
 
-struct ssam_dbg_data {
+struct ssam_dbg_device {
 	struct ssam_controller *ctrl;
-	struct dentry *dentry_dir;
-	struct dentry *dentry_dev;
+	struct miscdevice mdev;
 };
 
 static int ssam_dbg_device_open(struct inode *inode, struct file *filp)
 {
-	filp->private_data = inode->i_private;
+	struct miscdevice *mdev = filp->private_data;
+
+	filp->private_data = container_of(mdev, struct ssam_dbg_device, mdev);
 	return nonseekable_open(inode, filp);
 }
 
 static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 {
-	struct ssam_dbg_data *data = file->private_data;
+	struct ssam_dbg_device *ddev = file->private_data;
 	struct ssam_dbg_request __user *r;
 	struct ssam_dbg_request rqst;
 	struct ssam_request spec;
@@ -133,7 +135,7 @@ static long ssam_dbg_if_request(struct file *file, unsigned long arg)
 	}
 
 	// perform request
-	status = ssam_request_sync(data->ctrl, &spec, &rsp);
+	status = ssam_request_sync(ddev->ctrl, &spec, &rsp);
 	if (status)
 		goto out;
 
@@ -174,7 +176,7 @@ static long ssam_dbg_device_ioctl(struct file *file, unsigned int cmd,
 	}
 }
 
-const struct file_operations ssam_dbg_device_fops = {
+static const struct file_operations ssam_controller_fops = {
 	.owner          = THIS_MODULE,
 	.open           = ssam_dbg_device_open,
 	.unlocked_ioctl = ssam_dbg_device_ioctl,
@@ -184,7 +186,7 @@ const struct file_operations ssam_dbg_device_fops = {
 
 static int ssam_dbg_device_probe(struct platform_device *pdev)
 {
-	struct ssam_dbg_data *data;
+	struct ssam_dbg_device *ddev;
 	struct ssam_controller *ctrl;
 	int status;
 
@@ -192,35 +194,24 @@ static int ssam_dbg_device_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	data = devm_kzalloc(&pdev->dev, sizeof(*data), GFP_KERNEL);
-	if (!data)
+	ddev = devm_kzalloc(&pdev->dev, sizeof(*ddev), GFP_KERNEL);
+	if (!ddev)
 		return -ENOMEM;
 
-	data->ctrl = ctrl;
+	ddev->ctrl = ctrl;
+	ddev->mdev.minor = MISC_DYNAMIC_MINOR;
+	ddev->mdev.name  = "surface_aggregator";
+	ddev->mdev.fops  = &ssam_controller_fops;
 
-	data->dentry_dir = debugfs_create_dir("surface_aggregator", NULL);
-	if (IS_ERR(data->dentry_dir))
-		return PTR_ERR(data->dentry_dir);
-
-	data->dentry_dev = debugfs_create_file("controller", 0600,
-					       data->dentry_dir, data,
-					       &ssam_dbg_device_fops);
-	if (IS_ERR(data->dentry_dev)) {
-		debugfs_remove(data->dentry_dir);
-		return PTR_ERR(data->dentry_dev);
-	}
-
-	platform_set_drvdata(pdev, data);
-	return 0;
+	platform_set_drvdata(pdev, ddev);
+	return misc_register(&ddev->mdev);
 }
 
 static int ssam_dbg_device_remove(struct platform_device *pdev)
 {
-	struct ssam_dbg_data *data = platform_get_drvdata(pdev);
+	struct ssam_dbg_device *ddev = platform_get_drvdata(pdev);
 
-	debugfs_remove(data->dentry_dev);
-	debugfs_remove(data->dentry_dir);
-
+	misc_deregister(&ddev->mdev);
 	return 0;
 }
 
