@@ -78,11 +78,11 @@ static ssize_t perf_mode_store(struct device *dev, struct device_attribute *attr
 	int status;
 
 	status = kstrtoint(data, 0, &perf_mode);
-	if (status)
+	if (status < 0)
 		return status;
 
 	status = ssam_tmp_perf_mode_set(sdev, perf_mode);
-	if (status)
+	if (status < 0)
 		return status;
 
 	// TODO: Should we notify ACPI here?
