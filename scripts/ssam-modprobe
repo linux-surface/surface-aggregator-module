@@ -23,7 +23,7 @@ unload() {
     ${cmd} surface_battery
     ${cmd} surface_acpi_notify
     ${cmd} surface_aggregator_registry
-    ${cmd} surface_aggregator_debugfs
+    ${cmd} surface_aggregator_cdev
     ${cmd} surface_aggregator
 }
 
@@ -33,7 +33,7 @@ load() {
     client_pfx=${3}
 
     ${cmd} surface_aggregator"${ext}"
-    ${cmd} "${client_pfx}"surface_aggregator_debugfs"${ext}"
+    ${cmd} "${client_pfx}"surface_aggregator_cdev"${ext}"
     ${cmd} "${client_pfx}"surface_acpi_notify"${ext}"
     ${cmd} "${client_pfx}"surface_battery"${ext}"
     ${cmd} "${client_pfx}"surface_dtx"${ext}"
