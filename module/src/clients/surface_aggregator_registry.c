@@ -569,7 +569,7 @@ static int ssam_platform_hub_probe(struct platform_device *pdev)
 
 	root = software_node_fwnode(&ssam_node_root);
 	if (!root)
-		return -EFAULT;
+		return -ENOENT;
 
 	set_secondary_fwnode(&pdev->dev, root);
 
