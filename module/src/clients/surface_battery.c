@@ -903,12 +903,19 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
-	if (get_unaligned_le32(&bat->bix.power_unit) == SAM_BATTERY_POWER_UNIT_mA) {
-		bat->psy_desc.properties = spwr_battery_props_chg;
-		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
-	} else {
+	switch (get_unaligned_le32(&bat->bix.power_unit)) {
+	case SAM_BATTERY_POWER_UNIT_mW:
 		bat->psy_desc.properties = spwr_battery_props_eng;
 		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_eng);
+		break;
+
+	case SAM_BATTERY_POWER_UNIT_mA:
+		bat->psy_desc.properties = spwr_battery_props_chg;
+		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
+		break;
+
+	default:
+		return -ENOTSUPP;
 	}
 
 	bat->psy_desc.get_property = spwr_battery_get_property;
