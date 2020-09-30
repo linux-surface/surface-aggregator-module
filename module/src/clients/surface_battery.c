@@ -243,9 +243,6 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-static int spwr_battery_register(struct spwr_battery_device *bat);
-static void spwr_battery_unregister(struct spwr_battery_device *bat);
-
 static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
 	return le32_to_cpu(bat->sta) & SAM_BATTERY_STA_PRESENT;
@@ -418,11 +415,12 @@ static int spwr_battery_recheck_full(struct spwr_battery_device *bat)
 			goto out;
 	}
 
-	// if the unit has changed, re-add the battery
-	if (unit != get_unaligned_le32(&bat->bix.power_unit)) {
-		spwr_battery_unregister(bat);
-		status = spwr_battery_register(bat);
-	}
+	/*
+	 * Warn if the unit has changed. This is something we genuinely don't
+	 * expect to happen, so make this a big warning. If it does, we'll
+	 * need to add support for it.
+	 */
+	WARN_ON(unit != get_unaligned_le32(&bat->bix.power_unit));
 
 out:
 	mutex_unlock(&bat->lock);
