@@ -83,7 +83,7 @@ struct spwr_bix {
 	u8 oem_info[21];
 } __packed;
 
-#define SPWR_BIX_REVISION	0
+#define SPWR_BIX_REVISION		0
 
 /* Equivalent to data returned in ACPI _BST method */
 struct spwr_bst {
@@ -92,6 +92,8 @@ struct spwr_bst {
 	__le32 remaining_cap;
 	__le32 present_voltage;
 } __packed;
+
+#define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
 /* DPTF event payload */
 struct spwr_event_dptf {
@@ -396,6 +398,28 @@ static int spwr_ac_update(struct spwr_ac_device *ac)
 }
 
 
+static u32 sprw_battery_get_full_cap_safe(struct spwr_battery_device *bat)
+{
+	u32 full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+
+	if (full_cap == 0 || full_cap == SPWR_BATTERY_VALUE_UNKNOWN)
+		full_cap = get_unaligned_le32(&bat->bix.design_cap);
+
+	return full_cap;
+}
+
+static bool spwr_battery_is_full(struct spwr_battery_device *bat)
+{
+	u32 state = get_unaligned_le32(&bat->bst.state);
+	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
+	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	return full_cap != SPWR_BATTERY_VALUE_UNKNOWN && full_cap != 0
+		&& remaining_cap != SPWR_BATTERY_VALUE_UNKNOWN
+		&& remaining_cap >= full_cap
+		&& state == 0;
+}
+
 static int spwr_battery_recheck(struct spwr_battery_device *bat)
 {
 	bool present = spwr_battery_present(bat);
@@ -449,8 +473,14 @@ static int spwr_notify_bst(struct spwr_battery_device *bat)
 
 static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 {
-	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	if (full_cap == 0 || full_cap == SPWR_BATTERY_VALUE_UNKNOWN)
+		return 0;
+
+	if (remaining_cap == SPWR_BATTERY_VALUE_UNKNOWN)
+		return 0;
 
 	/*
 	 * Handle battery update quirk:
@@ -460,7 +490,7 @@ static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 	 * the state is updated on the battery. Schedule an update to solve this.
 	 */
 
-	if (remaining_cap >= last_full_cap)
+	if (remaining_cap >= full_cap)
 		schedule_delayed_work(&bat->update_work, SPWR_AC_BAT_UPDATE_DELAY);
 
 	return 0;
@@ -583,8 +613,6 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
-	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
-	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
 	u32 present_rate = get_unaligned_le32(&bat->bst.present_rate);
 
 	if (state & SAM_BATTERY_STATE_DISCHARGING)
@@ -593,7 +621,7 @@ static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 	if (state & SAM_BATTERY_STATE_CHARGING)
 		return POWER_SUPPLY_STATUS_CHARGING;
 
-	if (last_full_cap == remaining_cap)
+	if (spwr_battery_is_full(bat))
 		return POWER_SUPPLY_STATUS_FULL;
 
 	if (present_rate == 0)
@@ -624,25 +652,27 @@ static int spwr_battery_prop_technology(struct spwr_battery_device *bat)
 
 static int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
 {
-	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
 
-	if (remaining_cap && last_full_cap)
-		return remaining_cap * 100 / last_full_cap;
-	else
-		return 0;
+	if (full_cap == 0 || full_cap == SPWR_BATTERY_VALUE_UNKNOWN)
+		return -ENODEV;
+
+	if (remaining_cap == SPWR_BATTERY_VALUE_UNKNOWN)
+		return -ENODEV;
+
+	return remaining_cap * 100 / full_cap;
 }
 
 static int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
-	u32 last_full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
 
 	if (state & SAM_BATTERY_STATE_CRITICAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
 
-	if (remaining_cap >= last_full_cap)
+	if (spwr_battery_is_full(bat))
 		return POWER_SUPPLY_CAPACITY_LEVEL_FULL;
 
 	if (remaining_cap <= bat->alarm)
@@ -684,6 +714,7 @@ static int spwr_battery_get_property(struct power_supply *psy,
 				     union power_supply_propval *val)
 {
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
+	u32 value;
 	int status;
 
 	mutex_lock(&bat->lock);
@@ -712,39 +743,63 @@ static int spwr_battery_get_property(struct power_supply *psy,
 		break;
 
 	case POWER_SUPPLY_PROP_CYCLE_COUNT:
-		val->intval = get_unaligned_le32(&bat->bix.cycle_count);
+		value = get_unaligned_le32(&bat->bix.cycle_count);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_MIN_DESIGN:
-		val->intval = get_unaligned_le32(&bat->bix.design_voltage)
-			      * 1000;
+		value = get_unaligned_le32(&bat->bix.design_voltage);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_VOLTAGE_NOW:
-		val->intval = get_unaligned_le32(&bat->bst.present_voltage)
-			      * 1000;
+		value = get_unaligned_le32(&bat->bst.present_voltage);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_CURRENT_NOW:
 	case POWER_SUPPLY_PROP_POWER_NOW:
-		val->intval = get_unaligned_le32(&bat->bst.present_rate) * 1000;
+		value = get_unaligned_le32(&bat->bst.present_rate);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL_DESIGN:
 	case POWER_SUPPLY_PROP_ENERGY_FULL_DESIGN:
-		val->intval = get_unaligned_le32(&bat->bix.design_cap) * 1000;
+		value = get_unaligned_le32(&bat->bix.design_cap);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_FULL:
 	case POWER_SUPPLY_PROP_ENERGY_FULL:
-		val->intval = get_unaligned_le32(&bat->bix.last_full_charge_cap)
-			      * 1000;
+		value = get_unaligned_le32(&bat->bix.last_full_charge_cap);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_CHARGE_NOW:
 	case POWER_SUPPLY_PROP_ENERGY_NOW:
-		val->intval = get_unaligned_le32(&bat->bst.remaining_cap)
-			      * 1000;
+		value = get_unaligned_le32(&bat->bst.remaining_cap);
+		if (value != SPWR_BATTERY_VALUE_UNKNOWN)
+			val->intval = value * 1000;
+		else
+			status = -ENODEV;
 		break;
 
 	case POWER_SUPPLY_PROP_CAPACITY:
