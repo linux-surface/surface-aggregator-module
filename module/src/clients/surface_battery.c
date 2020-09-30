@@ -255,10 +255,20 @@ static int spwr_battery_load_sta(struct spwr_battery_device *bat)
 
 static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 {
+	int status;
+
 	if (!spwr_battery_present(bat))
 		return 0;
 
-	return spwr_retry(ssam_bat_get_bix, bat->sdev, &bat->bix);
+	status = spwr_retry(ssam_bat_get_bix, bat->sdev, &bat->bix);
+
+	// enforce NULL terminated strings in case anything goes wrong...
+	bat->bix.model[ARRAY_SIZE(bat->bix.model) - 1] = 0;
+	bat->bix.serial[ARRAY_SIZE(bat->bix.serial) - 1] = 0;
+	bat->bix.type[ARRAY_SIZE(bat->bix.type) - 1] = 0;
+	bat->bix.oem_info[ARRAY_SIZE(bat->bix.oem_info) - 1] = 0;
+
+	return status;
 }
 
 static int spwr_battery_load_bst(struct spwr_battery_device *bat)
