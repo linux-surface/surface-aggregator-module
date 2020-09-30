@@ -98,7 +98,6 @@ static_assert(sizeof(struct spwr_bst) == 16);
 
 #define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
-
 /* Get battery status (_STA) */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_sta, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
@@ -244,19 +243,16 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-
 static int spwr_battery_register(struct spwr_battery_device *bat,
 				 struct ssam_device *sdev,
 				 struct ssam_event_registry registry);
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
-
 static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
 	return le32_to_cpu(bat->sta) & SAM_BATTERY_STA_PRESENT;
 }
-
 
 static int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
@@ -279,14 +275,13 @@ static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 	return spwr_retry(ssam_bat_get_bst, bat->sdev, &bat->bst);
 }
 
-
 static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat,
 					   u32 value)
 {
-	__le32 alarm = cpu_to_le32(value);
+	__le32 value_le = cpu_to_le32(value);
 
 	bat->alarm = value;
-	return spwr_retry(ssam_bat_set_btp, bat->sdev, &alarm);
+	return spwr_retry(ssam_bat_set_btp, bat->sdev, &value_le);
 }
 
 static int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
@@ -307,7 +302,6 @@ static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat,
 	int status;
 
 	cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
-
 	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
 		return 0;
 
@@ -382,7 +376,6 @@ static int spwr_ac_update(struct spwr_ac_device *ac)
 	return status;
 }
 
-
 static u32 sprw_battery_get_full_cap_safe(struct spwr_battery_device *bat)
 {
 	u32 full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
@@ -405,14 +398,14 @@ static bool spwr_battery_is_full(struct spwr_battery_device *bat)
 		&& state == 0;
 }
 
-
 static int spwr_battery_recheck(struct spwr_battery_device *bat)
 {
 	bool present;
-	u32 unit = get_unaligned_le32(&bat->bix.power_unit);
+	u32 unit;
 	int status;
 
 	mutex_lock(&bat->lock);
+	unit = get_unaligned_le32(&bat->bix.power_unit);
  	present = spwr_battery_present(bat);
 
 	status = spwr_battery_update_bix_unlocked(bat);
@@ -422,6 +415,7 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 	// if battery has been attached, (re-)initialize alarm
 	if (!present && spwr_battery_present(bat)) {
 		u32 cap_warn = get_unaligned_le32(&bat->bix.design_cap_warn);
+
 		status = spwr_battery_set_alarm_unlocked(bat, cap_warn);
 		if (status)
 			goto out;
@@ -449,7 +443,6 @@ static int spwr_ac_recheck(struct spwr_ac_device *ac)
 
 	return status >= 0 ? 0 : status;
 }
-
 
 static int spwr_notify_bix(struct spwr_battery_device *bat)
 {
