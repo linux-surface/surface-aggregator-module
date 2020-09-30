@@ -55,8 +55,8 @@ enum sam_battery_state {
 };
 
 enum sam_battery_power_unit {
-	SAM_BATTERY_POWER_UNIT_mW = 0,
-	SAM_BATTERY_POWER_UNIT_mA = 1,
+	SAM_BATTERY_POWER_UNIT_mW     = 0,
+	SAM_BATTERY_POWER_UNIT_mA     = 1,
 };
 
 /* Equivalent to data returned in ACPI _BIX method, revision 0 */
