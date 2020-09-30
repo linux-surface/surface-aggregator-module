@@ -82,6 +82,8 @@ struct spwr_bix {
 	u8 oem_info[21];
 } __packed;
 
+static_assert(sizeof(struct spwr_bix) == 119);
+
 #define SPWR_BIX_REVISION		0
 
 /* Equivalent to data returned in ACPI _BST method */
@@ -91,6 +93,8 @@ struct spwr_bst {
 	__le32 remaining_cap;
 	__le32 present_voltage;
 } __packed;
+
+static_assert(sizeof(struct spwr_bst) == 16);
 
 #define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
