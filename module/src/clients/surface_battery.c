@@ -57,8 +57,8 @@ enum sam_battery_state {
 };
 
 enum sam_battery_power_unit {
-	SAM_BATTERY_POWER_UNIT_MW = 0,
-	SAM_BATTERY_POWER_UNIT_MA = 1,
+	SAM_BATTERY_POWER_UNIT_mW = 0,
+	SAM_BATTERY_POWER_UNIT_mA = 1,
 };
 
 /* Equivalent to data returned in ACPI _BIX method */
@@ -903,7 +903,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	bat->psy_desc.name = bat->name;
 	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
 
-	if (get_unaligned_le32(&bat->bix.power_unit) == SAM_BATTERY_POWER_UNIT_MA) {
+	if (get_unaligned_le32(&bat->bix.power_unit) == SAM_BATTERY_POWER_UNIT_mA) {
 		bat->psy_desc.properties = spwr_battery_props_chg;
 		bat->psy_desc.num_properties = ARRAY_SIZE(spwr_battery_props_chg);
 	} else {
