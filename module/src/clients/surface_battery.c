@@ -23,9 +23,6 @@
 #define spwr_retry(fn, args...)	ssam_retry(fn, SPWR_RETRY, args)
 
 
-// TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
-
-
 static unsigned int cache_time = 1000;
 module_param(cache_time, uint, 0644);
 MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [default: 1000]");
@@ -1037,11 +1034,8 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 
 static int surface_sam_sid_battery_resume(struct device *dev)
 {
-	struct spwr_battery_device *bat;
+	struct spwr_battery_device *bat = dev_get_drvdata(dev);
 
-	// TODO: run this on workqueue
-
-	bat = dev_get_drvdata(dev);
 	return spwr_battery_recheck(bat);
 }
 SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm,
