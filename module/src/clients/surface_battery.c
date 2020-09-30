@@ -660,7 +660,7 @@ static int spwr_ac_get_property(struct power_supply *psy,
 
 	switch (psp) {
 	case POWER_SUPPLY_PROP_ONLINE:
-		val->intval = le32_to_cpu(ac->state) == 1;
+		val->intval = !!le32_to_cpu(ac->state);
 		break;
 
 	default:
