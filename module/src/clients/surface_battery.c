@@ -35,9 +35,7 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
 #define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
 
 
-/*
- * SAM Interface.
- */
+/* -- SAM Interface. -------------------------------------------------------- */
 
 #define SAM_EVENT_CID_BAT_BIX		0x15
 #define SAM_EVENT_CID_BAT_BST		0x16
@@ -159,9 +157,7 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
 });
 
 
-/*
- * Common Power-Subsystem Interface.
- */
+/* -- Common Power-Subsystem Interface. ------------------------------------- */
 
 struct spwr_psy_properties {
 	const char *name;
@@ -957,9 +953,7 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 }
 
 
-/*
- * Battery Driver.
- */
+/* -- Battery Driver. ------------------------------------------------------- */
 
 static int surface_sam_sid_battery_resume(struct device *dev)
 {
@@ -1026,9 +1020,7 @@ static struct ssam_device_driver surface_sam_sid_battery = {
 };
 
 
-/*
- * AC Driver.
- */
+/* -- AC Driver. ------------------------------------------------------------ */
 
 // TODO: check/update on resume, call power_supply_changed?
 
@@ -1077,6 +1069,8 @@ static struct ssam_device_driver surface_sam_sid_ac = {
 	},
 };
 
+
+/* -- Module Setup. --------------------------------------------------------- */
 
 static int __init surface_sam_sid_power_init(void)
 {
