@@ -1067,7 +1067,7 @@ static int surface_battery_probe(struct ssam_device *sdev)
 	status = spwr_battery_register(bat);
 	if (status)
 		spwr_battery_destroy(bat);
-	
+
 	return status;
 }
 
@@ -1130,7 +1130,7 @@ static int surface_ac_probe(struct ssam_device *sdev)
 	status = spwr_ac_register(ac);
 	if (status)
 		spwr_ac_destroy(ac);
-	
+
 	return status;
 }
 
