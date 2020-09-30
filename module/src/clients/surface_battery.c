@@ -77,10 +77,10 @@ struct spwr_bix {
 	__le32 min_avg_interval;
 	__le32 bat_cap_granularity_1;
 	__le32 bat_cap_granularity_2;
-	u8  model[21];
-	u8  serial[11];
-	u8  type[5];
-	u8  oem_info[21];
+	u8 model[21];
+	u8 serial[11];
+	u8 type[5];
+	u8 oem_info[21];
 } __packed;
 
 #define SPWR_BIX_REVISION	1
