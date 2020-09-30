@@ -1032,12 +1032,21 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 
 /* -- Battery Driver. ------------------------------------------------------- */
 
+#ifdef CONFIG_PM_SLEEP
+
 static int surface_sam_sid_battery_resume(struct device *dev)
 {
 	struct spwr_battery_device *bat = dev_get_drvdata(dev);
 
 	return spwr_battery_recheck(bat);
 }
+
+#else /* CONFIG_PM_SLEEP */
+
+#define surface_sam_sid_battery_resume NULL
+
+#endif /* CONFIG_PM_SLEEP */
+
 SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm,
 		  NULL, surface_sam_sid_battery_resume);
 
