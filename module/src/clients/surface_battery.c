@@ -433,7 +433,7 @@ out:
 	return status;
 }
 
-static int spwr_battery_recheck_bst(struct spwr_battery_device *bat)
+static int spwr_battery_recheck_status(struct spwr_battery_device *bat)
 {
 	int status;
 
@@ -444,7 +444,7 @@ static int spwr_battery_recheck_bst(struct spwr_battery_device *bat)
 	return status;
 }
 
-static int spwr_battery_recheck_adp(struct spwr_battery_device *bat)
+static int spwr_battery_recheck_adapter(struct spwr_battery_device *bat)
 {
 	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
@@ -493,7 +493,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 
 	// handled here, needs to be handled for all targets/instances
 	if (event->command_id == SAM_EVENT_CID_BAT_ADP) {
-		status = spwr_battery_recheck_adp(bat);
+		status = spwr_battery_recheck_adapter(bat);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
@@ -509,7 +509,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 		break;
 
 	case SAM_EVENT_CID_BAT_BST:
-		status = spwr_battery_recheck_bst(bat);
+		status = spwr_battery_recheck_status(bat);
 		break;
 
 	case SAM_EVENT_CID_BAT_PROT:
