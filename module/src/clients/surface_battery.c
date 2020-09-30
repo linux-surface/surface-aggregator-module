@@ -24,7 +24,6 @@
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
-// TODO: DPTF and other properties?
 
 
 static unsigned int cache_time = 1000;
