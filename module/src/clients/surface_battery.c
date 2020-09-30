@@ -20,7 +20,7 @@
 #include "../../include/linux/surface_aggregator/device.h"
 
 #define SPWR_RETRY		3
-#define spwr_retry(fn, args...) ssam_retry(fn, SPWR_RETRY, args)
+#define spwr_retry(fn, args...)	ssam_retry(fn, SPWR_RETRY, args)
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
