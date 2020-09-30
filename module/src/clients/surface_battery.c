@@ -1062,7 +1062,7 @@ SIMPLE_DEV_PM_OPS(surface_ac_pm_ops, NULL, surface_ac_resume);
 
 /* -- Battery Driver. ------------------------------------------------------- */
 
-static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
+static int surface_battery_probe(struct ssam_device *sdev)
 {
 	const struct spwr_psy_properties *p;
 	struct spwr_battery_device *bat;
@@ -1081,7 +1081,7 @@ static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
 	return spwr_battery_register(bat, sdev, p->registry);
 }
 
-static void surface_sam_sid_battery_remove(struct ssam_device *sdev)
+static void surface_battery_remove(struct ssam_device *sdev)
 {
 	struct spwr_battery_device *bat = ssam_device_get_drvdata(sdev);
 
@@ -1099,17 +1099,17 @@ static const struct spwr_psy_properties spwr_psy_props_bat2_sb3 = {
 	.registry = SSAM_EVENT_REGISTRY_KIP,
 };
 
-static const struct ssam_device_id surface_sam_sid_battery_match[] = {
+static const struct ssam_device_id surface_battery_match[] = {
 	{ SSAM_SDEV(BAT, 0x01, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat1     },
 	{ SSAM_SDEV(BAT, 0x02, 0x01, 0x00), (unsigned long)&spwr_psy_props_bat2_sb3 },
 	{ },
 };
-MODULE_DEVICE_TABLE(ssam, surface_sam_sid_battery_match);
+MODULE_DEVICE_TABLE(ssam, surface_battery_match);
 
-static struct ssam_device_driver surface_sam_sid_battery = {
-	.probe = surface_sam_sid_battery_probe,
-	.remove = surface_sam_sid_battery_remove,
-	.match_table = surface_sam_sid_battery_match,
+static struct ssam_device_driver surface_battery_driver = {
+	.probe = surface_battery_probe,
+	.remove = surface_battery_remove,
+	.match_table = surface_battery_match,
 	.driver = {
 		.name = "surface_battery",
 		.pm = &surface_battery_pm_ops,
@@ -1120,7 +1120,7 @@ static struct ssam_device_driver surface_sam_sid_battery = {
 
 /* -- AC Driver. ------------------------------------------------------------ */
 
-static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
+static int surface_ac_probe(struct ssam_device *sdev)
 {
 	const struct spwr_psy_properties *p;
 	struct spwr_ac_device *ac;
@@ -1139,7 +1139,7 @@ static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 	return spwr_ac_register(ac, sdev, p->registry);
 }
 
-static void surface_sam_sid_ac_remove(struct ssam_device *sdev)
+static void surface_ac_remove(struct ssam_device *sdev)
 {
 	struct spwr_ac_device *ac = ssam_device_get_drvdata(sdev);
 
@@ -1152,16 +1152,16 @@ static const struct spwr_psy_properties spwr_psy_props_adp1 = {
 	.registry = SSAM_EVENT_REGISTRY_SAM,
 };
 
-static const struct ssam_device_id surface_sam_sid_ac_match[] = {
+static const struct ssam_device_id surface_ac_match[] = {
 	{ SSAM_SDEV(BAT, 0x01, 0x01, 0x01), (unsigned long)&spwr_psy_props_adp1 },
 	{ },
 };
-MODULE_DEVICE_TABLE(ssam, surface_sam_sid_ac_match);
+MODULE_DEVICE_TABLE(ssam, surface_ac_match);
 
-static struct ssam_device_driver surface_sam_sid_ac = {
-	.probe = surface_sam_sid_ac_probe,
-	.remove = surface_sam_sid_ac_remove,
-	.match_table = surface_sam_sid_ac_match,
+static struct ssam_device_driver surface_ac_driver = {
+	.probe = surface_ac_probe,
+	.remove = surface_ac_remove,
+	.match_table = surface_ac_match,
 	.driver = {
 		.name = "surface_ac",
 		.pm = &surface_ac_pm_ops,
@@ -1172,30 +1172,30 @@ static struct ssam_device_driver surface_sam_sid_ac = {
 
 /* -- Module Setup. --------------------------------------------------------- */
 
-static int __init surface_sam_sid_power_init(void)
+static int __init surface_battery_init(void)
 {
 	int status;
 
-	status = ssam_device_driver_register(&surface_sam_sid_battery);
+	status = ssam_device_driver_register(&surface_battery_driver);
 	if (status)
 		return status;
 
-	status = ssam_device_driver_register(&surface_sam_sid_ac);
+	status = ssam_device_driver_register(&surface_ac_driver);
 	if (status) {
-		ssam_device_driver_unregister(&surface_sam_sid_battery);
+		ssam_device_driver_unregister(&surface_battery_driver);
 		return status;
 	}
 
 	return 0;
 }
-module_init(surface_sam_sid_power_init);
+module_init(surface_battery_init);
 
-static void __exit surface_sam_sid_power_exit(void)
+static void __exit surface_battery_exit(void)
 {
-	ssam_device_driver_unregister(&surface_sam_sid_battery);
-	ssam_device_driver_unregister(&surface_sam_sid_ac);
+	ssam_device_driver_unregister(&surface_battery_driver);
+	ssam_device_driver_unregister(&surface_ac_driver);
 }
-module_exit(surface_sam_sid_power_exit);
+module_exit(surface_battery_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Battery/AC driver for Surface System Aggregator Module");
