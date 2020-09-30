@@ -24,8 +24,7 @@
 
 
 // TODO: check BIX/BST for unknown/unsupported 0xffffffff entries
-// TODO: DPTF (/SAN notifications)?
-// TODO: other properties?
+// TODO: DPTF and other properties?
 
 
 static unsigned int cache_time = 1000;
@@ -42,7 +41,7 @@ enum sam_event_cid_bat {
 	SAM_EVENT_CID_BAT_BST         = 0x16,
 	SAM_EVENT_CID_BAT_ADP         = 0x17,
 	SAM_EVENT_CID_BAT_PROT        = 0x18,
-	SAM_EVENT_CID_BAT_DPTF        = 0x4f,
+	SAM_EVENT_CID_BAT_DPTF        = 0x53,
 };
 
 enum sam_battery_sta {
@@ -502,6 +501,21 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 
 	case SAM_EVENT_CID_BAT_BST:
 		status = spwr_notify_bst(bat);
+		break;
+
+	case SAM_EVENT_CID_BAT_PROT:
+		/*
+		 * TODO: Implement support for battery protection status change
+		 *       event.
+		 */
+		status = 0;
+		break;
+
+	case SAM_EVENT_CID_BAT_DPTF:
+		/*
+		 * TODO: Implement support for DPTF event.
+		 */
+		status = 0;
 		break;
 
 	default:
