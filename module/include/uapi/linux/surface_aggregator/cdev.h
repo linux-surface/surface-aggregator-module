@@ -51,7 +51,7 @@ struct ssam_cdev_request {
 		__u16 length;
 		__u8 __pad[6];
 	} response;
-};
+} __attribute__((__packed__));
 
 #define SSAM_CDEV_REQUEST	_IOWR(0xA5, 1, struct ssam_cdev_request)
 
