@@ -39,9 +39,11 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
  * SAM Interface.
  */
 
-#define SAM_EVENT_PWR_CID_BIX		0x15
-#define SAM_EVENT_PWR_CID_BST		0x16
-#define SAM_EVENT_PWR_CID_ADAPTER	0x17
+#define SAM_EVENT_CID_BAT_BIX		0x15
+#define SAM_EVENT_CID_BAT_BST		0x16
+#define SAM_EVENT_CID_BAT_ADP		0x17
+#define SAM_EVENT_CID_BAT_PROT		0x18
+#define SAM_EVENT_CID_BAT_DPTF		0x4f
 
 #define SAM_BATTERY_STA_OK		0x0f
 #define SAM_BATTERY_STA_PRESENT		0x10
@@ -478,7 +480,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 		event->command_id, event->instance_id, event->target_id);
 
 	// handled here, needs to be handled for all targets/instances
-	if (event->command_id == SAM_EVENT_PWR_CID_ADAPTER) {
+	if (event->command_id == SAM_EVENT_CID_BAT_ADP) {
 		status = spwr_notify_adapter_bat(bat);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
@@ -490,11 +492,11 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 		return 0;
 
 	switch (event->command_id) {
-	case SAM_EVENT_PWR_CID_BIX:
+	case SAM_EVENT_CID_BAT_BIX:
 		status = spwr_notify_bix(bat);
 		break;
 
-	case SAM_EVENT_PWR_CID_BST:
+	case SAM_EVENT_CID_BAT_BST:
 		status = spwr_notify_bst(bat);
 		break;
 
@@ -526,7 +528,7 @@ static u32 spwr_notify_ac(struct ssam_event_notifier *nf,
 	 */
 
 	switch (event->command_id) {
-	case SAM_EVENT_PWR_CID_ADAPTER:
+	case SAM_EVENT_CID_BAT_ADP:
 		status = spwr_notify_adapter_ac(ac);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 
