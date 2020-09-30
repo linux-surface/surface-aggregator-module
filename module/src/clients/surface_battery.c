@@ -928,6 +928,8 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 		break;
 
 	default:
+		dev_err(&sdev->dev, "unsupported battery power unit: %u\n",
+			get_unaligned_le32(&bat->bix.power_unit));
 		return -ENOTSUPP;
 	}
 
