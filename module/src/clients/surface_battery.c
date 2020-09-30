@@ -1166,12 +1166,10 @@ static int __init surface_battery_init(void)
 		return status;
 
 	status = ssam_device_driver_register(&surface_ac_driver);
-	if (status) {
+	if (status)
 		ssam_device_driver_unregister(&surface_battery_driver);
-		return status;
-	}
 
-	return 0;
+	return status;
 }
 module_init(surface_battery_init);
 
