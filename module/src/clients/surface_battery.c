@@ -37,21 +37,29 @@ MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [defau
 
 /* -- SAM Interface. -------------------------------------------------------- */
 
-#define SAM_EVENT_CID_BAT_BIX		0x15
-#define SAM_EVENT_CID_BAT_BST		0x16
-#define SAM_EVENT_CID_BAT_ADP		0x17
-#define SAM_EVENT_CID_BAT_PROT		0x18
-#define SAM_EVENT_CID_BAT_DPTF		0x4f
+enum sam_event_cid_bat {
+	SAM_EVENT_CID_BAT_BIX         = 0x15,
+	SAM_EVENT_CID_BAT_BST         = 0x16,
+	SAM_EVENT_CID_BAT_ADP         = 0x17,
+	SAM_EVENT_CID_BAT_PROT        = 0x18,
+	SAM_EVENT_CID_BAT_DPTF        = 0x4f,
+};
 
-#define SAM_BATTERY_STA_OK		0x0f
-#define SAM_BATTERY_STA_PRESENT		0x10
+enum sam_battery_sta {
+	SAM_BATTERY_STA_OK            = 0x0f,
+	SAM_BATTERY_STA_PRESENT	      = 0x10,
+};
 
-#define SAM_BATTERY_STATE_DISCHARGING	BIT(0)
-#define SAM_BATTERY_STATE_CHARGING	BIT(1)
-#define SAM_BATTERY_STATE_CRITICAL	BIT(2)
+enum sam_battery_state {
+	SAM_BATTERY_STATE_DISCHARGING = BIT(0),
+	SAM_BATTERY_STATE_CHARGING    = BIT(1),
+	SAM_BATTERY_STATE_CRITICAL    = BIT(2),
+};
 
-#define SAM_BATTERY_POWER_UNIT_MA	1
-
+enum sam_battery_power_unit {
+	SAM_BATTERY_POWER_UNIT_MW = 0,
+	SAM_BATTERY_POWER_UNIT_MA = 1,
+};
 
 /* Equivalent to data returned in ACPI _BIX method */
 struct spwr_bix {
