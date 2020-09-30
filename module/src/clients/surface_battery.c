@@ -582,7 +582,6 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 	}
 }
 
-
 static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
@@ -797,7 +796,7 @@ static int spwr_battery_get_property(struct power_supply *psy,
 
 	default:
 		status = -EINVAL;
-		goto out;
+		break;
 	}
 
 out:
