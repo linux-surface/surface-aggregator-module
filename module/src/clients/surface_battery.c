@@ -59,7 +59,7 @@ enum sam_battery_power_unit {
 	SAM_BATTERY_POWER_UNIT_mA = 1,
 };
 
-/* Equivalent to data returned in ACPI _BIX method */
+/* Equivalent to data returned in ACPI _BIX method, revision 0 */
 struct spwr_bix {
 	u8  revision;
 	__le32 power_unit;
