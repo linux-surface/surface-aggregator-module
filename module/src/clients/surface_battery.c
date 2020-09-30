@@ -83,7 +83,7 @@ struct spwr_bix {
 	u8 oem_info[21];
 } __packed;
 
-#define SPWR_BIX_REVISION	1
+#define SPWR_BIX_REVISION	0
 
 /* Equivalent to data returned in ACPI _BST method */
 struct spwr_bst {
