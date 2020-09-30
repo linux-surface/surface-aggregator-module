@@ -406,6 +406,7 @@ static bool spwr_battery_is_full(struct spwr_battery_device *bat)
 		&& state == 0;
 }
 
+
 static int spwr_battery_recheck(struct spwr_battery_device *bat)
 {
 	bool present;
@@ -437,6 +438,17 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 out:
 	mutex_unlock(&bat->lock);
 	return status;
+}
+
+static int spwr_ac_recheck(struct spwr_ac_device *ac)
+{
+	int status;
+
+	status = spwr_ac_update(ac);
+	if (status > 0)
+		power_supply_changed(ac->psy);
+
+	return status >= 0 ? 0 : status;
 }
 
 
@@ -485,17 +497,6 @@ static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 		schedule_delayed_work(&bat->update_work, SPWR_AC_BAT_UPDATE_DELAY);
 
 	return 0;
-}
-
-static int spwr_notify_adapter_ac(struct spwr_ac_device *ac)
-{
-	int status;
-
-	status = spwr_ac_update(ac);
-	if (status > 0)
-		power_supply_changed(ac->psy);
-
-	return status >= 0 ? 0 : status;
 }
 
 static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
@@ -574,7 +575,7 @@ static u32 spwr_notify_ac(struct ssam_event_notifier *nf,
 
 	switch (event->command_id) {
 	case SAM_EVENT_CID_BAT_ADP:
-		status = spwr_notify_adapter_ac(ac);
+		status = spwr_ac_recheck(ac);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 
 	default:
@@ -1030,25 +1031,36 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 }
 
 
-/* -- Battery Driver. ------------------------------------------------------- */
+/* -- Power Management. ----------------------------------------------------- */
 
 #ifdef CONFIG_PM_SLEEP
 
-static int surface_sam_sid_battery_resume(struct device *dev)
+static int surface_battery_resume(struct device *dev)
 {
 	struct spwr_battery_device *bat = dev_get_drvdata(dev);
 
 	return spwr_battery_recheck(bat);
 }
 
+static int surface_ac_resume(struct device *dev)
+{
+	struct spwr_ac_device *ac = dev_get_drvdata(dev);
+
+	return spwr_ac_recheck(ac);
+}
+
 #else /* CONFIG_PM_SLEEP */
 
-#define surface_sam_sid_battery_resume NULL
+#define surface_battery_resume	NULL
+#define surface_ac_resume	NULL
 
 #endif /* CONFIG_PM_SLEEP */
 
-SIMPLE_DEV_PM_OPS(surface_sam_sid_battery_pm,
-		  NULL, surface_sam_sid_battery_resume);
+SIMPLE_DEV_PM_OPS(surface_battery_pm_ops, NULL, surface_battery_resume);
+SIMPLE_DEV_PM_OPS(surface_ac_pm_ops, NULL, surface_ac_resume);
+
+
+/* -- Battery Driver. ------------------------------------------------------- */
 
 static int surface_sam_sid_battery_probe(struct ssam_device *sdev)
 {
@@ -1100,15 +1112,13 @@ static struct ssam_device_driver surface_sam_sid_battery = {
 	.match_table = surface_sam_sid_battery_match,
 	.driver = {
 		.name = "surface_battery",
-		.pm = &surface_sam_sid_battery_pm,
+		.pm = &surface_battery_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
 
 
 /* -- AC Driver. ------------------------------------------------------------ */
-
-// TODO: check/update on resume, call power_supply_changed?
 
 static int surface_sam_sid_ac_probe(struct ssam_device *sdev)
 {
@@ -1154,6 +1164,7 @@ static struct ssam_device_driver surface_sam_sid_ac = {
 	.match_table = surface_sam_sid_ac_match,
 	.driver = {
 		.name = "surface_ac",
+		.pm = &surface_ac_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
