@@ -243,10 +243,7 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-static int spwr_battery_register(struct spwr_battery_device *bat,
-				 struct ssam_device *sdev,
-				 struct ssam_event_registry registry);
-
+static int spwr_battery_register(struct spwr_battery_device *bat);
 static void spwr_battery_unregister(struct spwr_battery_device *bat);
 
 static bool spwr_battery_present(struct spwr_battery_device *bat)
@@ -398,7 +395,7 @@ static bool spwr_battery_is_full(struct spwr_battery_device *bat)
 		&& state == 0;
 }
 
-static int spwr_battery_recheck(struct spwr_battery_device *bat)
+static int spwr_battery_recheck_full(struct spwr_battery_device *bat)
 {
 	bool present;
 	u32 unit;
@@ -424,38 +421,19 @@ static int spwr_battery_recheck(struct spwr_battery_device *bat)
 	// if the unit has changed, re-add the battery
 	if (unit != get_unaligned_le32(&bat->bix.power_unit)) {
 		spwr_battery_unregister(bat);
-		status = spwr_battery_register(bat, bat->sdev,
-					       bat->notif.event.reg);
+		status = spwr_battery_register(bat);
 	}
 
 out:
 	mutex_unlock(&bat->lock);
-	return status;
-}
 
-static int spwr_ac_recheck(struct spwr_ac_device *ac)
-{
-	int status;
-
-	status = spwr_ac_update(ac);
-	if (status > 0)
-		power_supply_changed(ac->psy);
-
-	return status >= 0 ? 0 : status;
-}
-
-static int spwr_notify_bix(struct spwr_battery_device *bat)
-{
-	int status;
-
-	status = spwr_battery_recheck(bat);
 	if (!status)
 		power_supply_changed(bat->psy);
 
 	return status;
 }
 
-static int spwr_notify_bst(struct spwr_battery_device *bat)
+static int spwr_battery_recheck_bst(struct spwr_battery_device *bat)
 {
 	int status;
 
@@ -466,7 +444,7 @@ static int spwr_notify_bst(struct spwr_battery_device *bat)
 	return status;
 }
 
-static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
+static int spwr_battery_recheck_adp(struct spwr_battery_device *bat)
 {
 	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
@@ -491,6 +469,17 @@ static int spwr_notify_adapter_bat(struct spwr_battery_device *bat)
 	return 0;
 }
 
+static int spwr_ac_recheck(struct spwr_ac_device *ac)
+{
+	int status;
+
+	status = spwr_ac_update(ac);
+	if (status > 0)
+		power_supply_changed(ac->psy);
+
+	return status >= 0 ? 0 : status;
+}
+
 static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 			   const struct ssam_event *event)
 {
@@ -504,7 +493,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 
 	// handled here, needs to be handled for all targets/instances
 	if (event->command_id == SAM_EVENT_CID_BAT_ADP) {
-		status = spwr_notify_adapter_bat(bat);
+		status = spwr_battery_recheck_adp(bat);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
@@ -516,11 +505,11 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 
 	switch (event->command_id) {
 	case SAM_EVENT_CID_BAT_BIX:
-		status = spwr_notify_bix(bat);
+		status = spwr_battery_recheck_full(bat);
 		break;
 
 	case SAM_EVENT_CID_BAT_BST:
-		status = spwr_notify_bst(bat);
+		status = spwr_battery_recheck_bst(bat);
 		break;
 
 	case SAM_EVENT_CID_BAT_PROT:
@@ -857,45 +846,15 @@ static const struct device_attribute alarm_attr = {
 };
 
 
-static void spwr_ac_init(struct spwr_ac_device *ac, const char *name)
+static void spwr_ac_init(struct spwr_ac_device *ac,
+			    struct ssam_device *sdev,
+			    struct ssam_event_registry registry,
+			    const char *name)
 {
 	mutex_init(&ac->lock);
 	strncpy(ac->name, name, ARRAY_SIZE(ac->name) - 1);
-}
-
-static void spwr_ac_deinit(struct spwr_ac_device *ac)
-{
-	mutex_destroy(&ac->lock);
-}
-
-static int spwr_ac_register(struct spwr_ac_device *ac,
-			    struct ssam_device *sdev,
-			    struct ssam_event_registry registry)
-{
-	struct power_supply_config psy_cfg = {};
-	__le32 sta;
-	int status;
-
-	// make sure the device is there and functioning properly
-	status = spwr_retry(ssam_bat_get_sta, sdev, &sta);
-	if (status)
-		return status;
-
-	if ((le32_to_cpu(sta) & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
-		return -ENODEV;
-
-	psy_cfg.drv_data = ac;
 
 	ac->sdev = sdev;
-	ac->psy_desc.name = ac->name;
-	ac->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
-	ac->psy_desc.properties = spwr_ac_props;
-	ac->psy_desc.num_properties = ARRAY_SIZE(spwr_ac_props);
-	ac->psy_desc.get_property = spwr_ac_get_property;
-
-	ac->psy = power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
-	if (IS_ERR(ac->psy))
-		return PTR_ERR(ac->psy);
 
 	ac->notif.base.priority = 1;
 	ac->notif.base.fn = spwr_notify_ac;
@@ -905,7 +864,38 @@ static int spwr_ac_register(struct spwr_ac_device *ac,
 	ac->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	ac->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = ssam_notifier_register(sdev->ctrl, &ac->notif);
+	ac->psy_desc.name = ac->name;
+	ac->psy_desc.type = POWER_SUPPLY_TYPE_MAINS;
+	ac->psy_desc.properties = spwr_ac_props;
+	ac->psy_desc.num_properties = ARRAY_SIZE(spwr_ac_props);
+	ac->psy_desc.get_property = spwr_ac_get_property;
+}
+
+static void spwr_ac_deinit(struct spwr_ac_device *ac)
+{
+	mutex_destroy(&ac->lock);
+}
+
+static int spwr_ac_register(struct spwr_ac_device *ac)
+{
+	struct power_supply_config psy_cfg = {};
+	__le32 sta;
+	int status;
+
+	// make sure the device is there and functioning properly
+	status = spwr_retry(ssam_bat_get_sta, ac->sdev, &sta);
+	if (status)
+		return status;
+
+	if ((le32_to_cpu(sta) & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
+		return -ENODEV;
+
+	psy_cfg.drv_data = ac;
+	ac->psy = power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
+	if (IS_ERR(ac->psy))
+		return PTR_ERR(ac->psy);
+
+	status = ssam_notifier_register(ac->sdev->ctrl, &ac->notif);
 	if (status)
 		power_supply_unregister(ac->psy);
 
@@ -919,10 +909,29 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 	return 0;
 }
 
-static void spwr_battery_init(struct spwr_battery_device *bat, const char *name)
+static void spwr_battery_init(struct spwr_battery_device *bat,
+			      struct ssam_device *sdev,
+			      struct ssam_event_registry registry,
+			      const char *name)
 {
 	mutex_init(&bat->lock);
 	strncpy(bat->name, name, ARRAY_SIZE(bat->name) - 1);
+
+	bat->sdev = sdev;
+
+	bat->notif.base.priority = 1;
+	bat->notif.base.fn = spwr_notify_bat;
+	bat->notif.event.reg = registry;
+	bat->notif.event.id.target_category = sdev->uid.category;
+	bat->notif.event.id.instance = 0;
+	bat->notif.event.mask = SSAM_EVENT_MASK_NONE;
+	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
+
+	bat->psy_desc.name = bat->name;
+	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
+	bat->psy_desc.get_property = spwr_battery_get_property;
+
+	INIT_DELAYED_WORK(&bat->update_work, spwr_battery_update_bst_workfn);
 }
 
 static void spwr_battery_deinit(struct spwr_battery_device *bat)
@@ -930,18 +939,14 @@ static void spwr_battery_deinit(struct spwr_battery_device *bat)
 	mutex_destroy(&bat->lock);
 }
 
-static int spwr_battery_register(struct spwr_battery_device *bat,
-				 struct ssam_device *sdev,
-				 struct ssam_event_registry registry)
+static int spwr_battery_register(struct spwr_battery_device *bat)
 {
 	struct power_supply_config psy_cfg = {};
 	__le32 sta;
 	int status;
 
-	bat->sdev = sdev;
-
 	// make sure the device is there and functioning properly
-	status = spwr_retry(ssam_bat_get_sta, sdev, &sta);
+	status = spwr_retry(ssam_bat_get_sta, bat->sdev, &sta);
 	if (status)
 		return status;
 
@@ -959,9 +964,6 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 			return status;
 	}
 
-	bat->psy_desc.name = bat->name;
-	bat->psy_desc.type = POWER_SUPPLY_TYPE_BATTERY;
-
 	switch (get_unaligned_le32(&bat->bix.power_unit)) {
 	case SAM_BATTERY_POWER_UNIT_mW:
 		bat->psy_desc.properties = spwr_battery_props_eng;
@@ -974,29 +976,17 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 		break;
 
 	default:
-		dev_err(&sdev->dev, "unsupported battery power unit: %u\n",
+		dev_err(&bat->sdev->dev, "unsupported battery power unit: %u\n",
 			get_unaligned_le32(&bat->bix.power_unit));
 		return -ENOTSUPP;
 	}
 
-	bat->psy_desc.get_property = spwr_battery_get_property;
 	psy_cfg.drv_data = bat;
-
-	INIT_DELAYED_WORK(&bat->update_work, spwr_battery_update_bst_workfn);
-
 	bat->psy = power_supply_register(&bat->sdev->dev, &bat->psy_desc, &psy_cfg);
 	if (IS_ERR(bat->psy))
 		return PTR_ERR(bat->psy);
 
-	bat->notif.base.priority = 1;
-	bat->notif.base.fn = spwr_notify_bat;
-	bat->notif.event.reg = registry;
-	bat->notif.event.id.target_category = sdev->uid.category;
-	bat->notif.event.id.instance = 0;
-	bat->notif.event.mask = SSAM_EVENT_MASK_NONE;
-	bat->notif.event.flags = SSAM_EVENT_SEQUENCED;
-
-	status = ssam_notifier_register(sdev->ctrl, &bat->notif);
+	status = ssam_notifier_register(bat->sdev->ctrl, &bat->notif);
 	if (status)
 		goto err_notif;
 
@@ -1007,7 +997,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat,
 	return 0;
 
 err_file:
-	ssam_notifier_unregister(sdev->ctrl, &bat->notif);
+	ssam_notifier_unregister(bat->sdev->ctrl, &bat->notif);
 err_notif:
 	power_supply_unregister(bat->psy);
 	return status;
@@ -1029,16 +1019,12 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 
 static int surface_battery_resume(struct device *dev)
 {
-	struct spwr_battery_device *bat = dev_get_drvdata(dev);
-
-	return spwr_battery_recheck(bat);
+	return spwr_battery_recheck_full(dev_get_drvdata(dev));
 }
 
 static int surface_ac_resume(struct device *dev)
 {
-	struct spwr_ac_device *ac = dev_get_drvdata(dev);
-
-	return spwr_ac_recheck(ac);
+	return spwr_ac_recheck(dev_get_drvdata(dev));
 }
 
 #else /* CONFIG_PM_SLEEP */
@@ -1067,10 +1053,10 @@ static int surface_battery_probe(struct ssam_device *sdev)
 	if (!bat)
 		return -ENOMEM;
 
-	spwr_battery_init(bat, p->name);
+	spwr_battery_init(bat, sdev, p->registry, p->name);
 	ssam_device_set_drvdata(sdev, bat);
 
-	return spwr_battery_register(bat, sdev, p->registry);
+	return spwr_battery_register(bat);
 }
 
 static void surface_battery_remove(struct ssam_device *sdev)
@@ -1125,10 +1111,10 @@ static int surface_ac_probe(struct ssam_device *sdev)
 	if (!ac)
 		return -ENOMEM;
 
-	spwr_ac_init(ac, p->name);
+	spwr_ac_init(ac, sdev, p->registry, p->name);
 	ssam_device_set_drvdata(sdev, ac);
 
-	return spwr_ac_register(ac, sdev, p->registry);
+	return spwr_ac_register(ac);
 }
 
 static void surface_ac_remove(struct ssam_device *sdev)
