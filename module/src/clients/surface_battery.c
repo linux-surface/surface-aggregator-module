@@ -83,6 +83,8 @@ struct spwr_bix {
 	u8  oem_info[21];
 } __packed;
 
+#define SPWR_BIX_REVISION	1
+
 /* Equivalent to data returned in ACPI _BST method */
 struct spwr_bst {
 	__le32 state;
@@ -349,6 +351,11 @@ static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
 	status = spwr_battery_load_bst(bat);
 	if (status)
 		return status;
+
+	if (bat->bix.revision != SPWR_BIX_REVISION) {
+		dev_warn(&bat->sdev->dev, "unsupported battery revision: %u\n",
+			 bat->bix.revision);
+	}
 
 	bat->timestamp = jiffies;
 	return 0;
