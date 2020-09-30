@@ -19,15 +19,17 @@
 
 #include "../../include/linux/surface_aggregator/device.h"
 
-#define SPWR_RETRY		3
-#define spwr_retry(fn, args...)	ssam_retry(fn, SPWR_RETRY, args)
+#define SPWR_RETRY			3
+#define spwr_retry(fn, args...)		ssam_retry(fn, SPWR_RETRY, args)
 
+#define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
+
+
+/* -- Module parameters. ---------------------------------------------------- */
 
 static unsigned int cache_time = 1000;
 module_param(cache_time, uint, 0644);
 MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [default: 1000]");
-
-#define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
 
 
 /* -- SAM Interface. -------------------------------------------------------- */
