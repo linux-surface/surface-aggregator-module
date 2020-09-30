@@ -94,13 +94,6 @@ struct spwr_bst {
 
 #define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
-/* DPTF event payload */
-struct spwr_event_dptf {
-	__le32 pmax;
-	__le32 _1;		/* currently unknown */
-	__le32 _2;		/* currently unknown */
-} __packed;
-
 
 /* Get battery status (_STA) */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_sta, __le32, {
