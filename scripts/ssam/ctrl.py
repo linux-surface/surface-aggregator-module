@@ -21,9 +21,6 @@ def main():
         print(f'  request <tc> <tid> <cid> <iid> <flags> [payload...]')
         print(f'    basic command with optional payload')
         print(f'')
-        print(f'  version')
-        print(f'    get debugfs driver version')
-        print(f'')
         print(f'Arguments:')
         print(f'  <tc>:          command target category')
         print(f'  <tid>:         command target ID')
@@ -46,10 +43,6 @@ def main():
             rsp = ctrl.request(rqst)
             if rsp:
                 print(' '.join(['{:02x}'.format(x) for x in rsp]))
-
-    elif cmd_name == 'version':
-        with Controller() as ctrl:
-            print(f"0x{ctrl.version():04x}")
 
 
 if __name__ == '__main__':
