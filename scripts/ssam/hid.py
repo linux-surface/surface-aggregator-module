@@ -113,7 +113,7 @@ def main():
 
         with Controller() as ctrl:
             dev = SurfaceLegacyKeyboard(ctrl)
-            dump_raw_data(dev.set_capslock_led(state))
+            dev.set_capslock_led(state)
 
     elif cmd_name == 'hid-get-descriptor':
         iid = int(sys.argv[2], 0)
