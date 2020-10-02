@@ -89,6 +89,10 @@ def main():
         print(f'  hid-get-descriptor <iid> <entry>')
         print(f'    get the HID device descriptor identified by <entry>')
         print(f'    for device instance with ID <iid>')
+        print(f'')
+        print(f'    <entry>:  0  HID descriptor')
+        print(f'              1  HID report descriptor')
+        print(f'              2  device attributes')
 
     elif cmd_name == 'legacy-get-descriptor':
         entry = int(sys.argv[2], 0)
