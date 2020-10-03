@@ -200,6 +200,8 @@ static int surface_hid_device_add(struct surface_hid_device *hdev)
 
 	hid->ll_driver = &surface_hid_ll_driver;
 
+	hdev->dev_hid = hid;
+
 	status = hid_add_device(hid);
 	if (status)
 		hid_destroy_device(hid);
