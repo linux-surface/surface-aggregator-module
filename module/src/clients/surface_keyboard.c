@@ -197,6 +197,7 @@ static struct hid_device *vhf_create_hid_device(struct device *parent)
 	hid->ll_driver = &surface_hid_ll_driver;
 
 	sprintf(hid->name, "%s", VHF_INPUT_NAME);
+	strlcpy(hid->phys, dev_name(parent), sizeof(hid->phys));
 
 	return hid;
 }
