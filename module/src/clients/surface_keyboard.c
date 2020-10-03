@@ -160,20 +160,22 @@ static struct hid_device *vhf_create_hid_device(struct device *parent)
 	return hid;
 }
 
-static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
+static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
+				     const struct ssam_event *event)
 {
-	struct surface_hid_device *dev;
+	struct surface_hid_device *hdev;
 	int status;
 
-	dev = container_of(nf, struct surface_hid_device, notif);
+	hdev = container_of(nf, struct surface_hid_device, notif);
 
 	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
-	if (event->command_id == 0x03 || event->command_id == 0x04) {
-		status = hid_input_report(dev->dev_hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
-		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
-	}
+	if (event->command_id != 0x03 && event->command_id != 0x04)
+		return 0;
 
-	return 0;
+	status = hid_input_report(hdev->dev_hid, HID_INPUT_REPORT,
+				  (u8 *)&event->data[0], event->length, 0);
+
+	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
@@ -306,7 +308,7 @@ static int surface_hid_probe(struct platform_device *pdev)
 	hdev->uid.function = 0;
 
 	hdev->notif.base.priority = 1;
-	hdev->notif.base.fn = vhf_event_handler;
+	hdev->notif.base.fn = surface_keyboard_event_fn;
 	hdev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	hdev->notif.event.id.target_category = hdev->uid.category;
 	hdev->notif.event.id.instance = hdev->uid.instance;
