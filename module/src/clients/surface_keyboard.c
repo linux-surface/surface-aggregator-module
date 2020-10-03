@@ -26,7 +26,7 @@
 
 
 struct vhf_drvdata {
-	struct platform_device *dev;
+	struct device *dev;
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
@@ -274,7 +274,7 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	if (status)
 		goto err_add_hid;
 
-	drvdata->dev = pdev;
+	drvdata->dev = &pdev->dev;
 	drvdata->ctrl = ctrl;
 	drvdata->hid = hid;
 
