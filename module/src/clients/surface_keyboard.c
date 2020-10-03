@@ -16,6 +16,7 @@
 #include <linux/platform_device.h>
 #include <linux/types.h>
 
+#include "../../include/linux/surface_aggregator/device.h"
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
@@ -28,6 +29,7 @@
 struct surface_hid_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
+	struct ssam_device_uid uid;
 
 	struct ssam_event_notifier notif;
 	struct hid_device *dev_hid;
@@ -292,11 +294,17 @@ static int surface_hid_probe(struct platform_device *pdev)
 	hdev->dev = &pdev->dev;
 	hdev->ctrl = ctrl;
 
+	hdev->uid.domain = SSAM_DOMAIN_SERIALHUB;
+	hdev->uid.category = SSAM_SSH_TC_KBD;
+	hdev->uid.target = 2;
+	hdev->uid.instance = 0;
+	hdev->uid.function = 0;
+
 	hdev->notif.base.priority = 1;
 	hdev->notif.base.fn = vhf_event_handler;
 	hdev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
-	hdev->notif.event.id.target_category = SSAM_SSH_TC_KBD;
-	hdev->notif.event.id.instance = 0;
+	hdev->notif.event.id.target_category = hdev->uid.category;
+	hdev->notif.event.id.instance = hdev->uid.instance;
 	hdev->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	hdev->notif.event.flags = 0;
 
