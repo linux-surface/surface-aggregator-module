@@ -30,7 +30,7 @@ struct surface_hid_device {
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
-	struct hid_device *hid;
+	struct hid_device *dev_hid;
 };
 
 
@@ -167,7 +167,7 @@ static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_e
 
 	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
 	if (event->command_id == 0x03 || event->command_id == 0x04) {
-		status = hid_input_report(dev->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
+		status = hid_input_report(dev->dev_hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
@@ -181,8 +181,8 @@ static int surface_hid_suspend(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hid->driver && d->hid->driver->suspend)
-		return d->hid->driver->suspend(d->hid, PMSG_SUSPEND);
+	if (d->dev_hid->driver && d->dev_hid->driver->suspend)
+		return d->dev_hid->driver->suspend(d->dev_hid, PMSG_SUSPEND);
 
 	return 0;
 }
@@ -191,8 +191,8 @@ static int surface_hid_resume(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hid->driver && d->hid->driver->resume)
-		return d->hid->driver->resume(d->hid);
+	if (d->dev_hid->driver && d->dev_hid->driver->resume)
+		return d->dev_hid->driver->resume(d->dev_hid);
 
 	return 0;
 }
@@ -201,8 +201,8 @@ static int surface_hid_freeze(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hid->driver && d->hid->driver->suspend)
-		return d->hid->driver->suspend(d->hid, PMSG_FREEZE);
+	if (d->dev_hid->driver && d->dev_hid->driver->suspend)
+		return d->dev_hid->driver->suspend(d->dev_hid, PMSG_FREEZE);
 
 	return 0;
 }
@@ -211,8 +211,8 @@ static int surface_hid_poweroff(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hid->driver && d->hid->driver->suspend)
-		return d->hid->driver->suspend(d->hid, PMSG_HIBERNATE);
+	if (d->dev_hid->driver && d->dev_hid->driver->suspend)
+		return d->dev_hid->driver->suspend(d->dev_hid, PMSG_HIBERNATE);
 
 	return 0;
 }
@@ -221,8 +221,8 @@ static int surface_hid_restore(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hid->driver && d->hid->driver->reset_resume)
-		return d->hid->driver->reset_resume(d->hid);
+	if (d->dev_hid->driver && d->dev_hid->driver->reset_resume)
+		return d->dev_hid->driver->reset_resume(d->dev_hid);
 
 	return 0;
 }
@@ -269,7 +269,7 @@ static int surface_hid_probe(struct platform_device *pdev)
 
 	dev->dev = &pdev->dev;
 	dev->ctrl = ctrl;
-	dev->hid = hid;
+	dev->dev_hid = hid;
 
 	dev->notif.base.priority = 1;
 	dev->notif.base.fn = vhf_event_handler;
@@ -297,7 +297,7 @@ static int surface_hid_remove(struct platform_device *pdev)
 	struct surface_hid_device *dev = platform_get_drvdata(pdev);
 
 	ssam_notifier_unregister(dev->ctrl, &dev->notif);
-	hid_destroy_device(dev->hid);
+	hid_destroy_device(dev->dev_hid);
 
 	return 0;
 }
