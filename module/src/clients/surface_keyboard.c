@@ -173,6 +173,7 @@ static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_e
 	struct vhf_drvdata *drvdata = container_of(nf, struct vhf_drvdata, notif);
 	int status;
 
+	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
 	if (event->command_id == 0x03 || event->command_id == 0x04) {
 		status = hid_input_report(drvdata->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
