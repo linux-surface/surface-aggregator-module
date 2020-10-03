@@ -138,7 +138,8 @@ static void surface_hid_stop(struct hid_device *hid)
 {
 	struct surface_hid_device *hdev = dev_get_drvdata(hid->dev.parent);
 
-	return ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
+	// Note: This call will log errors for us, so ignore them here.
+	ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
 }
 
 static int surface_hid_open(struct hid_device *hid)
