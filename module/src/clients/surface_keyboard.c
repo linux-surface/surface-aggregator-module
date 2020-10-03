@@ -137,7 +137,7 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 };
 
 
-static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
+static struct hid_device *vhf_create_hid_device(struct device *parent)
 {
 	struct hid_device *hid;
 
@@ -145,7 +145,7 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 	if (IS_ERR(hid))
 		return hid;
 
-	hid->dev.parent = &pdev->dev;
+	hid->dev.parent = parent;
 
 	hid->bus     = BUS_VIRTUAL;
 	hid->vendor  = USB_VENDOR_ID_MICROSOFT;
@@ -172,6 +172,38 @@ static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_e
 	}
 
 	return 0;
+}
+
+
+static int surface_hid_device_add(struct surface_hid_device *hdev)
+{
+	struct hid_device *hid;
+	int status;
+
+	hid = vhf_create_hid_device(hdev->dev);
+	if (IS_ERR(hid))
+		return PTR_ERR(hid);
+
+	status = hid_add_device(hid);
+	if (status)
+		goto err_add_hid;
+
+	status = ssam_notifier_register(hdev->ctrl, &hdev->notif);
+	if (status)
+		goto err_add_hid;
+
+	return 0;
+
+err_add_hid:
+	hid_destroy_device(hid);
+	return status;
+
+}
+
+static void surface_hid_device_destroy(struct surface_hid_device *hdev)
+{
+	ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
+	hid_destroy_device(hdev->dev_hid);
 }
 
 
@@ -242,12 +274,10 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
 
-
 static int surface_hid_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
-	struct surface_hid_device *dev;
-	struct hid_device *hid;
+	struct surface_hid_device *hdev;
 	int status;
 
 	// add device link to EC
@@ -255,50 +285,32 @@ static int surface_hid_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
-	if (!dev)
+	hdev = devm_kzalloc(&pdev->dev, sizeof(*hdev), GFP_KERNEL);
+	if (!hdev)
 		return -ENOMEM;
 
-	hid = vhf_create_hid_device(pdev);
-	if (IS_ERR(hid))
-		return PTR_ERR(hid);
+	hdev->dev = &pdev->dev;
+	hdev->ctrl = ctrl;
 
-	status = hid_add_device(hid);
+	hdev->notif.base.priority = 1;
+	hdev->notif.base.fn = vhf_event_handler;
+	hdev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	hdev->notif.event.id.target_category = SSAM_SSH_TC_KBD;
+	hdev->notif.event.id.instance = 0;
+	hdev->notif.event.mask = SSAM_EVENT_MASK_NONE;
+	hdev->notif.event.flags = 0;
+
+	status = surface_hid_device_add(hdev);
 	if (status)
-		goto err_add_hid;
+		return status;
 
-	dev->dev = &pdev->dev;
-	dev->ctrl = ctrl;
-	dev->dev_hid = hid;
-
-	dev->notif.base.priority = 1;
-	dev->notif.base.fn = vhf_event_handler;
-	dev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
-	dev->notif.event.id.target_category = SSAM_SSH_TC_KBD;
-	dev->notif.event.id.instance = 0;
-	dev->notif.event.mask = SSAM_EVENT_MASK_NONE;
-	dev->notif.event.flags = 0;
-
-	platform_set_drvdata(pdev, dev);
-
-	status = ssam_notifier_register(ctrl, &dev->notif);
-	if (status)
-		goto err_add_hid;
-
+	platform_set_drvdata(pdev, hdev);
 	return 0;
-
-err_add_hid:
-	hid_destroy_device(hid);
-	return status;
 }
 
 static int surface_hid_remove(struct platform_device *pdev)
 {
-	struct surface_hid_device *dev = platform_get_drvdata(pdev);
-
-	ssam_notifier_unregister(dev->ctrl, &dev->notif);
-	hid_destroy_device(dev->dev_hid);
-
+	surface_hid_device_destroy(platform_get_drvdata(pdev));
 	return 0;
 }
 
