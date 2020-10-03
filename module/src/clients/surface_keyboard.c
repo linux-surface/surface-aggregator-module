@@ -129,13 +129,18 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 
 static int surface_hid_start(struct hid_device *hid)
 {
+	struct surface_hid_device *hdev = dev_get_drvdata(hid->dev.parent);
+
 	hid_dbg(hid, "%s\n", __func__);
-	return 0;
+	return ssam_notifier_register(hdev->ctrl, &hdev->notif);
 }
 
 static void surface_hid_stop(struct hid_device *hid)
 {
+	struct surface_hid_device *hdev = dev_get_drvdata(hid->dev.parent);
+
 	hid_dbg(hid, "%s\n", __func__);
+	return ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
 }
 
 static int surface_hid_open(struct hid_device *hid)
@@ -204,23 +209,14 @@ static int surface_hid_device_add(struct surface_hid_device *hdev)
 
 	status = hid_add_device(hid);
 	if (status)
-		goto err_add_hid;
+		hid_destroy_device(hid);
 
-	status = ssam_notifier_register(hdev->ctrl, &hdev->notif);
-	if (status)
-		goto err_add_hid;
-
-	return 0;
-
-err_add_hid:
-	hid_destroy_device(hid);
 	return status;
 
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *hdev)
 {
-	ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
 	hid_destroy_device(hdev->dev_hid);
 }
 
@@ -312,6 +308,8 @@ static int surface_hid_probe(struct platform_device *pdev)
 	if (!hdev)
 		return -ENOMEM;
 
+	platform_set_drvdata(pdev, hdev);
+
 	hdev->dev = &pdev->dev;
 	hdev->ctrl = ctrl;
 
@@ -333,7 +331,6 @@ static int surface_hid_probe(struct platform_device *pdev)
 	if (status)
 		return status;
 
-	platform_set_drvdata(pdev, hdev);
 	return 0;
 }
 
