@@ -131,7 +131,6 @@ static int surface_hid_start(struct hid_device *hid)
 {
 	struct surface_hid_device *hdev = dev_get_drvdata(hid->dev.parent);
 
-	hid_dbg(hid, "%s\n", __func__);
 	return ssam_notifier_register(hdev->ctrl, &hdev->notif);
 }
 
@@ -139,19 +138,16 @@ static void surface_hid_stop(struct hid_device *hid)
 {
 	struct surface_hid_device *hdev = dev_get_drvdata(hid->dev.parent);
 
-	hid_dbg(hid, "%s\n", __func__);
 	return ssam_notifier_unregister(hdev->ctrl, &hdev->notif);
 }
 
 static int surface_hid_open(struct hid_device *hid)
 {
-	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
 static void surface_hid_close(struct hid_device *hid)
 {
-	hid_dbg(hid, "%s\n", __func__);
 }
 
 static int surface_hid_parse(struct hid_device *hid)
@@ -163,7 +159,6 @@ static int surface_hid_raw_request(struct hid_device *hid,
 		unsigned char reportnum, u8 *buf, size_t len,
 		unsigned char rtype, int reqtype)
 {
-	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
