@@ -159,6 +159,14 @@ static int surface_hid_raw_request(struct hid_device *hid,
 		unsigned char reportnum, u8 *buf, size_t len,
 		unsigned char rtype, int reqtype)
 {
+	// TODO: implement feature + output reports
+
+	hid_info(hid, "%s: reportnum=%d, rtype=%d, reqtype=%d\n",
+		 __func__, reportnum, rtype, reqtype);
+
+	print_hex_dump(KERN_INFO, "report: ", DUMP_PREFIX_OFFSET, 16, 1,
+		       buf, len, false);
+
 	return 0;
 }
 
