@@ -168,6 +168,20 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 
 	hdev = container_of(nf, struct surface_hid_device, notif);
 
+	/*
+	 * Check against device UID manually, as registry and device target
+	 * category doesn't line up.
+	 */
+
+	if (hdev->uid.category != event->target_category)
+		return 0;
+
+	if (hdev->uid.target != event->target_id)
+		return 0;
+
+	if (hdev->uid.instance != event->instance_id)
+		return 0;
+
 	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
 	if (event->command_id != 0x03 && event->command_id != 0x04)
 		return 0;
