@@ -92,42 +92,42 @@ static const u8 vhf_hid_desc[] = {
 };
 
 
-static int vhf_hid_start(struct hid_device *hid)
+static int surface_hid_start(struct hid_device *hid)
 {
 	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
-static void vhf_hid_stop(struct hid_device *hid)
+static void surface_hid_stop(struct hid_device *hid)
 {
 	hid_dbg(hid, "%s\n", __func__);
 }
 
-static int vhf_hid_open(struct hid_device *hid)
+static int surface_hid_open(struct hid_device *hid)
 {
 	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
-static void vhf_hid_close(struct hid_device *hid)
+static void surface_hid_close(struct hid_device *hid)
 {
 	hid_dbg(hid, "%s\n", __func__);
 }
 
-static int vhf_hid_parse(struct hid_device *hid)
+static int surface_hid_parse(struct hid_device *hid)
 {
 	return hid_parse_report(hid, (u8 *)vhf_hid_desc, ARRAY_SIZE(vhf_hid_desc));
 }
 
-static int vhf_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
-			       u8 *buf, size_t len, unsigned char rtype,
-			       int reqtype)
+static int surface_hid_raw_request(struct hid_device *hid,
+		unsigned char reportnum, u8 *buf, size_t len,
+		unsigned char rtype, int reqtype)
 {
 	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
-static int vhf_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
+static int surface_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
 {
 	hid_dbg(hid, "%s\n", __func__);
 	print_hex_dump_debug("report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
@@ -135,14 +135,14 @@ static int vhf_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
 	return len;
 }
 
-static struct hid_ll_driver vhf_hid_ll_driver = {
-	.start         = vhf_hid_start,
-	.stop          = vhf_hid_stop,
-	.open          = vhf_hid_open,
-	.close         = vhf_hid_close,
-	.parse         = vhf_hid_parse,
-	.raw_request   = vhf_hid_raw_request,
-	.output_report = vhf_hid_output_report,
+static struct hid_ll_driver surface_hid_ll_driver = {
+	.start         = surface_hid_start,
+	.stop          = surface_hid_stop,
+	.open          = surface_hid_open,
+	.close         = surface_hid_close,
+	.parse         = surface_hid_parse,
+	.raw_request   = surface_hid_raw_request,
+	.output_report = surface_hid_output_report,
 };
 
 
@@ -160,7 +160,7 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 	hid->vendor  = USB_VENDOR_ID_MICROSOFT;
 	hid->product = USB_DEVICE_ID_MS_VHF;
 
-	hid->ll_driver = &vhf_hid_ll_driver;
+	hid->ll_driver = &surface_hid_ll_driver;
 
 	sprintf(hid->name, "%s", VHF_INPUT_NAME);
 
@@ -186,7 +186,7 @@ static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_e
 
 #ifdef CONFIG_PM
 
-static int surface_sam_vhf_suspend(struct device *dev)
+static int surface_hid_suspend(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -196,7 +196,7 @@ static int surface_sam_vhf_suspend(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_vhf_resume(struct device *dev)
+static int surface_hid_resume(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -206,7 +206,7 @@ static int surface_sam_vhf_resume(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_vhf_freeze(struct device *dev)
+static int surface_hid_freeze(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -216,7 +216,7 @@ static int surface_sam_vhf_freeze(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_vhf_poweroff(struct device *dev)
+static int surface_hid_poweroff(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -226,7 +226,7 @@ static int surface_sam_vhf_poweroff(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_vhf_restore(struct device *dev)
+static int surface_hid_restore(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -236,23 +236,23 @@ static int surface_sam_vhf_restore(struct device *dev)
 	return 0;
 }
 
-struct dev_pm_ops surface_sam_vhf_pm_ops = {
-	.freeze   = surface_sam_vhf_freeze,
-	.thaw     = surface_sam_vhf_resume,
-	.suspend  = surface_sam_vhf_suspend,
-	.resume   = surface_sam_vhf_resume,
-	.poweroff = surface_sam_vhf_poweroff,
-	.restore  = surface_sam_vhf_restore,
+struct dev_pm_ops surface_hid_pm_ops = {
+	.freeze   = surface_hid_freeze,
+	.thaw     = surface_hid_resume,
+	.suspend  = surface_hid_suspend,
+	.resume   = surface_hid_resume,
+	.poweroff = surface_hid_poweroff,
+	.restore  = surface_hid_restore,
 };
 
 #else /* CONFIG_PM */
 
-struct dev_pm_ops surface_sam_vhf_pm_ops = { };
+struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
 
 
-static int surface_sam_vhf_probe(struct platform_device *pdev)
+static int surface_hid_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
 	struct surface_hid_device *dev;
@@ -301,7 +301,7 @@ err_add_hid:
 	return status;
 }
 
-static int surface_sam_vhf_remove(struct platform_device *pdev)
+static int surface_hid_remove(struct platform_device *pdev)
 {
 	struct surface_hid_device *dev = platform_get_drvdata(pdev);
 
@@ -318,17 +318,17 @@ static const struct acpi_device_id surface_sam_vhf_match[] = {
 };
 MODULE_DEVICE_TABLE(acpi, surface_sam_vhf_match);
 
-static struct platform_driver surface_sam_vhf = {
-	.probe = surface_sam_vhf_probe,
-	.remove = surface_sam_vhf_remove,
+static struct platform_driver surface_keyboard_driver = {
+	.probe = surface_hid_probe,
+	.remove = surface_hid_remove,
 	.driver = {
 		.name = "surface_keyboard",
 		.acpi_match_table = surface_sam_vhf_match,
-		.pm = &surface_sam_vhf_pm_ops,
+		.pm = &surface_hid_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_sam_vhf);
+module_platform_driver(surface_keyboard_driver);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Legacy HID keyboard driver for Surface System Aggregator Module");
