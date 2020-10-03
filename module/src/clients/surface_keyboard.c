@@ -30,7 +30,6 @@ struct vhf_drvdata {
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
-
 	struct hid_device *hid;
 };
 
