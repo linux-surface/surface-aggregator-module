@@ -127,14 +127,6 @@ static int surface_hid_raw_request(struct hid_device *hid,
 	return 0;
 }
 
-static int surface_hid_output_report(struct hid_device *hid, u8 *buf, size_t len)
-{
-	hid_dbg(hid, "%s\n", __func__);
-	print_hex_dump_debug("report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
-
-	return len;
-}
-
 static struct hid_ll_driver surface_hid_ll_driver = {
 	.start         = surface_hid_start,
 	.stop          = surface_hid_stop,
@@ -142,7 +134,6 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 	.close         = surface_hid_close,
 	.parse         = surface_hid_parse,
 	.raw_request   = surface_hid_raw_request,
-	.output_report = surface_hid_output_report,
 };
 
 
