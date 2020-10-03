@@ -23,7 +23,7 @@
 #define USB_VENDOR_ID_MICROSOFT		0x045e
 #define USB_DEVICE_ID_MS_VHF		0xf001
 
-#define VHF_INPUT_NAME			"Microsoft Virtual HID Framework Device"
+#define SURFACE_HID_DEVICE_NAME		"Microsoft Surface Aggregator HID"
 
 
 struct surface_hid_device {
@@ -195,7 +195,7 @@ static int surface_hid_device_add(struct surface_hid_device *hdev)
 	hid->vendor = USB_VENDOR_ID_MICROSOFT;
 	hid->product = USB_DEVICE_ID_MS_VHF;
 
-	strlcpy(hid->name, VHF_INPUT_NAME, sizeof(hid->name));
+	strlcpy(hid->name, SURFACE_HID_DEVICE_NAME, sizeof(hid->name));
 	strlcpy(hid->phys, dev_name(hdev->dev), sizeof(hid->phys));
 
 	hid->ll_driver = &surface_hid_ll_driver;
