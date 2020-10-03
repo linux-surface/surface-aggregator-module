@@ -331,11 +331,7 @@ static int surface_hid_probe(struct platform_device *pdev)
 	hdev->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	hdev->notif.event.flags = 0;
 
-	status = surface_hid_device_add(hdev);
-	if (status)
-		return status;
-
-	return 0;
+	return surface_hid_device_add(hdev);
 }
 
 static int surface_hid_remove(struct platform_device *pdev)
