@@ -25,7 +25,7 @@
 #define VHF_INPUT_NAME			"Microsoft Virtual HID Framework Device"
 
 
-struct vhf_drvdata {
+struct surface_hid_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
@@ -169,12 +169,14 @@ static struct hid_device *vhf_create_hid_device(struct platform_device *pdev)
 
 static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
-	struct vhf_drvdata *drvdata = container_of(nf, struct vhf_drvdata, notif);
+	struct surface_hid_device *dev;
 	int status;
+
+	dev = container_of(nf, struct surface_hid_device, notif);
 
 	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
 	if (event->command_id == 0x03 || event->command_id == 0x04) {
-		status = hid_input_report(drvdata->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
+		status = hid_input_report(dev->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 1);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 	}
 
@@ -186,7 +188,7 @@ static u32 vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_e
 
 static int surface_sam_vhf_suspend(struct device *dev)
 {
-	struct vhf_drvdata *d = dev_get_drvdata(dev);
+	struct surface_hid_device *d = dev_get_drvdata(dev);
 
 	if (d->hid->driver && d->hid->driver->suspend)
 		return d->hid->driver->suspend(d->hid, PMSG_SUSPEND);
@@ -196,7 +198,7 @@ static int surface_sam_vhf_suspend(struct device *dev)
 
 static int surface_sam_vhf_resume(struct device *dev)
 {
-	struct vhf_drvdata *d = dev_get_drvdata(dev);
+	struct surface_hid_device *d = dev_get_drvdata(dev);
 
 	if (d->hid->driver && d->hid->driver->resume)
 		return d->hid->driver->resume(d->hid);
@@ -206,7 +208,7 @@ static int surface_sam_vhf_resume(struct device *dev)
 
 static int surface_sam_vhf_freeze(struct device *dev)
 {
-	struct vhf_drvdata *d = dev_get_drvdata(dev);
+	struct surface_hid_device *d = dev_get_drvdata(dev);
 
 	if (d->hid->driver && d->hid->driver->suspend)
 		return d->hid->driver->suspend(d->hid, PMSG_FREEZE);
@@ -216,7 +218,7 @@ static int surface_sam_vhf_freeze(struct device *dev)
 
 static int surface_sam_vhf_poweroff(struct device *dev)
 {
-	struct vhf_drvdata *d = dev_get_drvdata(dev);
+	struct surface_hid_device *d = dev_get_drvdata(dev);
 
 	if (d->hid->driver && d->hid->driver->suspend)
 		return d->hid->driver->suspend(d->hid, PMSG_HIBERNATE);
@@ -226,7 +228,7 @@ static int surface_sam_vhf_poweroff(struct device *dev)
 
 static int surface_sam_vhf_restore(struct device *dev)
 {
-	struct vhf_drvdata *d = dev_get_drvdata(dev);
+	struct surface_hid_device *d = dev_get_drvdata(dev);
 
 	if (d->hid->driver && d->hid->driver->reset_resume)
 		return d->hid->driver->reset_resume(d->hid);
@@ -253,7 +255,7 @@ struct dev_pm_ops surface_sam_vhf_pm_ops = { };
 static int surface_sam_vhf_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
-	struct vhf_drvdata *drvdata;
+	struct surface_hid_device *dev;
 	struct hid_device *hid;
 	int status;
 
@@ -262,8 +264,8 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	drvdata = devm_kzalloc(&pdev->dev, sizeof(*drvdata), GFP_KERNEL);
-	if (!drvdata)
+	dev = devm_kzalloc(&pdev->dev, sizeof(*dev), GFP_KERNEL);
+	if (!dev)
 		return -ENOMEM;
 
 	hid = vhf_create_hid_device(pdev);
@@ -274,21 +276,21 @@ static int surface_sam_vhf_probe(struct platform_device *pdev)
 	if (status)
 		goto err_add_hid;
 
-	drvdata->dev = &pdev->dev;
-	drvdata->ctrl = ctrl;
-	drvdata->hid = hid;
+	dev->dev = &pdev->dev;
+	dev->ctrl = ctrl;
+	dev->hid = hid;
 
-	drvdata->notif.base.priority = 1;
-	drvdata->notif.base.fn = vhf_event_handler;
-	drvdata->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
-	drvdata->notif.event.id.target_category = SSAM_SSH_TC_KBD;
-	drvdata->notif.event.id.instance = 0;
-	drvdata->notif.event.mask = SSAM_EVENT_MASK_NONE;
-	drvdata->notif.event.flags = 0;
+	dev->notif.base.priority = 1;
+	dev->notif.base.fn = vhf_event_handler;
+	dev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
+	dev->notif.event.id.target_category = SSAM_SSH_TC_KBD;
+	dev->notif.event.id.instance = 0;
+	dev->notif.event.mask = SSAM_EVENT_MASK_NONE;
+	dev->notif.event.flags = 0;
 
-	platform_set_drvdata(pdev, drvdata);
+	platform_set_drvdata(pdev, dev);
 
-	status = ssam_notifier_register(ctrl, &drvdata->notif);
+	status = ssam_notifier_register(ctrl, &dev->notif);
 	if (status)
 		goto err_add_hid;
 
@@ -301,10 +303,10 @@ err_add_hid:
 
 static int surface_sam_vhf_remove(struct platform_device *pdev)
 {
-	struct vhf_drvdata *drvdata = platform_get_drvdata(pdev);
+	struct surface_hid_device *dev = platform_get_drvdata(pdev);
 
-	ssam_notifier_unregister(drvdata->ctrl, &drvdata->notif);
-	hid_destroy_device(drvdata->hid);
+	ssam_notifier_unregister(dev->ctrl, &dev->notif);
+	hid_destroy_device(dev->hid);
 
 	return 0;
 }
