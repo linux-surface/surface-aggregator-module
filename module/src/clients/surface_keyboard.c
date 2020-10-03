@@ -181,36 +181,24 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 };
 
 
-static struct hid_device *vhf_create_hid_device(struct device *parent)
-{
-	struct hid_device *hid;
-
-	hid = hid_allocate_device();
-	if (IS_ERR(hid))
-		return hid;
-
-	hid->dev.parent = parent;
-
-	hid->bus     = BUS_VIRTUAL;
-	hid->vendor  = USB_VENDOR_ID_MICROSOFT;
-	hid->product = USB_DEVICE_ID_MS_VHF;
-
-	hid->ll_driver = &surface_hid_ll_driver;
-
-	sprintf(hid->name, "%s", VHF_INPUT_NAME);
-	strlcpy(hid->phys, dev_name(parent), sizeof(hid->phys));
-
-	return hid;
-}
-
 static int surface_hid_device_add(struct surface_hid_device *hdev)
 {
 	struct hid_device *hid;
 	int status;
 
-	hid = vhf_create_hid_device(hdev->dev);
+	hid = hid_allocate_device();
 	if (IS_ERR(hid))
 		return PTR_ERR(hid);
+
+	hid->dev.parent = hdev->dev;
+	hid->bus = BUS_VIRTUAL;
+	hid->vendor = USB_VENDOR_ID_MICROSOFT;
+	hid->product = USB_DEVICE_ID_MS_VHF;
+
+	strlcpy(hid->name, VHF_INPUT_NAME, sizeof(hid->name));
+	strlcpy(hid->phys, dev_name(hdev->dev), sizeof(hid->phys));
+
+	hid->ll_driver = &surface_hid_ll_driver;
 
 	status = hid_add_device(hid);
 	if (status)
