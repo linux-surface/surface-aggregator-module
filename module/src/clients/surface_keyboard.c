@@ -322,19 +322,18 @@ static int surface_hid_remove(struct platform_device *pdev)
 	return 0;
 }
 
-
-static const struct acpi_device_id surface_sam_vhf_match[] = {
+static const struct acpi_device_id surface_keyboard_match[] = {
 	{ "MSHW0096" },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surface_sam_vhf_match);
+MODULE_DEVICE_TABLE(acpi, surface_keyboard_match);
 
 static struct platform_driver surface_keyboard_driver = {
 	.probe = surface_hid_probe,
 	.remove = surface_hid_remove,
 	.driver = {
 		.name = "surface_keyboard",
-		.acpi_match_table = surface_sam_vhf_match,
+		.acpi_match_table = surface_keyboard_match,
 		.pm = &surface_hid_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
