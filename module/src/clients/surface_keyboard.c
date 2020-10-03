@@ -209,6 +209,8 @@ static void surface_hid_device_destroy(struct surface_hid_device *hdev)
 }
 
 
+/* -- PM ops. --------------------------------------------------------------- */
+
 #ifdef CONFIG_PM
 
 static int surface_hid_suspend(struct device *dev)
@@ -275,6 +277,9 @@ struct dev_pm_ops surface_hid_pm_ops = {
 struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
+
+
+/* -- Driver setup. --------------------------------------------------------- */
 
 static int surface_hid_probe(struct platform_device *pdev)
 {
