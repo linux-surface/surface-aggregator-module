@@ -19,21 +19,100 @@
 #include "../../include/linux/surface_aggregator/device.h"
 #include "../../include/linux/surface_aggregator/controller.h"
 
+#define SHID_RETRY			3
+#define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
-#define USB_VENDOR_ID_MICROSOFT		0x045e
-#define USB_DEVICE_ID_MS_VHF		0xf001
 
 #define SURFACE_HID_DEVICE_NAME		"Microsoft Surface Aggregator HID"
 
+enum surface_hid_descriptor_entry {
+	SURFACE_HID_DESC_HID    = 0,
+	SURFACE_HID_DESC_REPORT = 1,
+	SURFACE_HID_DESC_ATTRS  = 2,
+};
+
+struct surface_hid_attributes {
+	__le32 length;
+	__le16 vendor;
+	__le16 product;
+	__le16 version;
+	__u8 _unknown[22];
+} __packed;
+
+static_assert(sizeof(struct surface_hid_attributes) == 32);
 
 struct surface_hid_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 	struct ssam_device_uid uid;
 
+	struct surface_hid_attributes attrs;
+
 	struct ssam_event_notifier notif;
 	struct hid_device *hdev;
 };
+
+
+static int shid_kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
+				    u8 *buf, size_t len)
+{
+	struct ssam_request rqst;
+	struct ssam_response rsp;
+	int status;
+
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.command_id = 0x00;
+	rqst.instance_id = shid->uid.instance;
+	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
+	rqst.length = sizeof(u8);
+	rqst.payload = &entry;
+
+	rsp.capacity = len;
+	rsp.length = 0;
+	rsp.pointer = buf;
+
+	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
+	if (status)
+		return status;
+
+	if (rsp.length != len) {
+		dev_err(shid->dev, "invalid descriptor length: got %zu, "
+			"expected, %zu\n", rsp.length, len);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
+static int shid_load_device_attribs(struct surface_hid_device *shid)
+{
+	int status;
+
+	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_ATTRS,
+					  (u8 *)&shid->attrs,
+					  sizeof(shid->attrs));
+	if (status)
+		return status;
+
+	if (shid->attrs.length != sizeof(shid->attrs)) {
+		dev_err(shid->dev, "unexpected attribute length: got %u, "
+			"expected %zu\n", shid->attrs.length,
+			sizeof(shid->attrs));
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
+static int shid_load_descriptors(struct surface_hid_device *shid)
+{
+	return shid_load_device_attribs(shid);
+}
+
+static void shid_free_descriptors(struct surface_hid_device *shid)
+{
+}
 
 
 /*
@@ -185,14 +264,20 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
+	status = shid_load_descriptors(shid);
+	if (status)
+		return status;
+
 	shid->hdev = hid_allocate_device();
-	if (IS_ERR(shid->hdev))
-		return PTR_ERR(shid->hdev);
+	if (IS_ERR(shid->hdev)) {
+		status = PTR_ERR(shid->hdev);
+		goto err_alloc;
+	}
 
 	shid->hdev->dev.parent = shid->dev;
 	shid->hdev->bus = BUS_VIRTUAL;
-	shid->hdev->vendor = USB_VENDOR_ID_MICROSOFT;
-	shid->hdev->product = USB_DEVICE_ID_MS_VHF;
+	shid->hdev->vendor = cpu_to_le16(shid->attrs.vendor);
+	shid->hdev->product = cpu_to_le16(shid->attrs.product);
 
 	strlcpy(shid->hdev->name, SURFACE_HID_DEVICE_NAME, sizeof(shid->hdev->name));
 	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
@@ -201,14 +286,21 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 
 	status = hid_add_device(shid->hdev);
 	if (status)
-		hid_destroy_device(shid->hdev);
+		goto err_add;
 
+	return 0;
+
+err_add:
+	hid_destroy_device(shid->hdev);
+err_alloc:
+	shid_free_descriptors(shid);
 	return status;
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
 {
 	hid_destroy_device(shid->hdev);
+	shid_free_descriptors(shid);
 }
 
 
