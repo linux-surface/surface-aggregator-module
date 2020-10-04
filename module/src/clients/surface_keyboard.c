@@ -53,6 +53,12 @@ struct surface_hid_attributes {
 
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
+enum surface_kbd_cid {
+	SURFACE_KBD_CID_GET_DESCRIPTOR = 0,
+	SURFACE_KBD_CID_EVT_INPUT_GENERIC = 3,
+	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS = 4,
+};
+
 struct surface_hid_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
@@ -78,7 +84,7 @@ static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 
 	rqst.target_category = shid->uid.category;
 	rqst.target_id = shid->uid.target;
-	rqst.command_id = 0x00;
+	rqst.command_id = SURFACE_KBD_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(u8);
@@ -203,6 +209,17 @@ static void surface_hid_free_descriptors(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
+static bool surface_keyboard_is_input_event(const struct ssam_event *event)
+{
+	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
+		return true;
+
+	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_HOTKEYS)
+		return true;
+
+	return false;
+}
+
 static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 				     const struct ssam_event *event)
 {
@@ -225,8 +242,7 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 	if (shid->uid.instance != event->instance_id)
 		return 0;
 
-	// Note: Command id 3 is regular input, command ID 4 is FN-key input.
-	if (event->command_id != 0x03 && event->command_id != 0x04)
+	if (surface_keyboard_is_input_event(event))
 		return 0;
 
 	status = hid_input_report(shid->hdev, HID_INPUT_REPORT,
