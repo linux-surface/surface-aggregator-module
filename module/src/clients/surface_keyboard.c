@@ -183,31 +183,27 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 
 static int surface_hid_device_add(struct surface_hid_device *shid)
 {
-	struct hid_device *hdev;
 	int status;
 
-	hdev = hid_allocate_device();
-	if (IS_ERR(hdev))
-		return PTR_ERR(hdev);
+	shid->hdev = hid_allocate_device();
+	if (IS_ERR(shid->hdev))
+		return PTR_ERR(shid->hdev);
 
-	hdev->dev.parent = shid->dev;
-	hdev->bus = BUS_VIRTUAL;
-	hdev->vendor = USB_VENDOR_ID_MICROSOFT;
-	hdev->product = USB_DEVICE_ID_MS_VHF;
+	shid->hdev->dev.parent = shid->dev;
+	shid->hdev->bus = BUS_VIRTUAL;
+	shid->hdev->vendor = USB_VENDOR_ID_MICROSOFT;
+	shid->hdev->product = USB_DEVICE_ID_MS_VHF;
 
-	strlcpy(hdev->name, SURFACE_HID_DEVICE_NAME, sizeof(hdev->name));
-	strlcpy(hdev->phys, dev_name(shid->dev), sizeof(hdev->phys));
+	strlcpy(shid->hdev->name, SURFACE_HID_DEVICE_NAME, sizeof(shid->hdev->name));
+	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
 
-	hdev->ll_driver = &surface_hid_ll_driver;
+	shid->hdev->ll_driver = &surface_hid_ll_driver;
 
-	shid->hdev = hdev;
-
-	status = hid_add_device(hdev);
+	status = hid_add_device(shid->hdev);
 	if (status)
-		hid_destroy_device(hdev);
+		hid_destroy_device(shid->hdev);
 
 	return status;
-
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
