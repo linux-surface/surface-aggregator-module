@@ -69,8 +69,8 @@ struct surface_hid_device {
 
 /* -- Device descriptor access. --------------------------------------------- */
 
-static int shid_kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
-				    u8 *buf, size_t len)
+static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
+			       u8 *buf, size_t len)
 {
 	struct ssam_request rqst;
 	struct ssam_response rsp;
@@ -101,13 +101,13 @@ static int shid_kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
-static int shid_load_hid_desc(struct surface_hid_device *shid)
+static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_HID,
-					  (u8 *)&shid->hid_desc,
-					  sizeof(shid->hid_desc));
+	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_HID,
+				     (u8 *)&shid->hid_desc,
+				     sizeof(shid->hid_desc));
 	if (status)
 		return status;
 
@@ -141,7 +141,7 @@ static int shid_load_hid_desc(struct surface_hid_device *shid)
 	return 0;
 }
 
-static int shid_load_report_desc(struct surface_hid_device *shid)
+static int surface_hid_load_report_descriptor(struct surface_hid_device *shid)
 {
 	int status;
 
@@ -149,9 +149,9 @@ static int shid_load_report_desc(struct surface_hid_device *shid)
 	if (!shid->report_desc)
 		return -ENOMEM;
 
-	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_REPORT,
-					  shid->report_desc,
-					  shid->hid_desc.report_desc_len);
+	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_REPORT,
+				     shid->report_desc,
+				     shid->hid_desc.report_desc_len);
 	if (status) {
 		kfree(shid->report_desc);
 		shid->report_desc = NULL;
@@ -160,13 +160,12 @@ static int shid_load_report_desc(struct surface_hid_device *shid)
 	return status;
 }
 
-static int shid_load_device_attribs(struct surface_hid_device *shid)
+static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_ATTRS,
-					  (u8 *)&shid->attrs,
-					  sizeof(shid->attrs));
+	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_ATTRS,
+				     (u8 *)&shid->attrs, sizeof(shid->attrs));
 	if (status)
 		return status;
 
@@ -180,22 +179,22 @@ static int shid_load_device_attribs(struct surface_hid_device *shid)
 	return 0;
 }
 
-static int shid_load_descriptors(struct surface_hid_device *shid)
+static int surface_hid_load_descriptors(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = shid_load_hid_desc(shid);
+	status = surface_hid_load_hid_descriptor(shid);
 	if (status)
 		return status;
 
-	status = shid_load_device_attribs(shid);
+	status = surface_hid_load_device_attributes(shid);
 	if (status)
 		return status;
 
-	return shid_load_report_desc(shid);
+	return surface_hid_load_report_descriptor(shid);
 }
 
-static void shid_free_descriptors(struct surface_hid_device *shid)
+static void surface_hid_free_descriptors(struct surface_hid_device *shid)
 {
 	kfree(shid->report_desc);
 	shid->report_desc = NULL;
@@ -299,7 +298,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = shid_load_descriptors(shid);
+	status = surface_hid_load_descriptors(shid);
 	if (status)
 		return status;
 
@@ -334,14 +333,14 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 err_add:
 	hid_destroy_device(shid->hdev);
 err_alloc:
-	shid_free_descriptors(shid);
+	surface_hid_free_descriptors(shid);
 	return status;
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
 {
 	hid_destroy_device(shid->hdev);
-	shid_free_descriptors(shid);
+	surface_hid_free_descriptors(shid);
 }
 
 
