@@ -417,7 +417,7 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 
 /* -- Driver setup. --------------------------------------------------------- */
 
-static int surface_hid_probe(struct platform_device *pdev)
+static int surface_keyboard_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
 	struct surface_hid_device *shid;
@@ -454,7 +454,7 @@ static int surface_hid_probe(struct platform_device *pdev)
 	return surface_hid_device_add(shid);
 }
 
-static int surface_hid_remove(struct platform_device *pdev)
+static int surface_keyboard_remove(struct platform_device *pdev)
 {
 	surface_hid_device_destroy(platform_get_drvdata(pdev));
 	return 0;
@@ -467,8 +467,8 @@ static const struct acpi_device_id surface_keyboard_match[] = {
 MODULE_DEVICE_TABLE(acpi, surface_keyboard_match);
 
 static struct platform_driver surface_keyboard_driver = {
-	.probe = surface_hid_probe,
-	.remove = surface_hid_remove,
+	.probe = surface_keyboard_probe,
+	.remove = surface_keyboard_remove,
 	.driver = {
 		.name = "surface_keyboard",
 		.acpi_match_table = surface_keyboard_match,
