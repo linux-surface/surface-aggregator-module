@@ -62,6 +62,7 @@ struct surface_hid_device {
 
 	struct surface_hid_descriptor hid_desc;
 	struct surface_hid_attributes attrs;
+	u8 *report_desc;
 
 	struct ssam_event_notifier notif;
 	struct hid_device *hdev;
@@ -140,6 +141,25 @@ static int shid_load_hid_desc(struct surface_hid_device *shid)
 	return 0;
 }
 
+static int shid_load_report_desc(struct surface_hid_device *shid)
+{
+	int status;
+
+	shid->report_desc = kzalloc(shid->hid_desc.report_desc_len, GFP_KERNEL);
+	if (!shid->report_desc)
+		return -ENOMEM;
+
+	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_REPORT,
+					  shid->report_desc,
+					  shid->hid_desc.report_desc_len);
+	if (status) {
+		kfree(shid->report_desc);
+		shid->report_desc = NULL;
+	}
+
+	return status;
+}
+
 static int shid_load_device_attribs(struct surface_hid_device *shid)
 {
 	int status;
@@ -168,70 +188,18 @@ static int shid_load_descriptors(struct surface_hid_device *shid)
 	if (status)
 		return status;
 
-	return shid_load_device_attribs(shid);
+	status = shid_load_device_attribs(shid);
+	if (status)
+		return status;
+
+	return shid_load_report_desc(shid);
 }
 
 static void shid_free_descriptors(struct surface_hid_device *shid)
 {
+	kfree(shid->report_desc);
+	shid->report_desc = NULL;
 }
-
-
-/*
- * These report descriptors have been extracted from a Surface Book 2.
- * They seems to be similar enough to be usable on the Surface Laptop.
- */
-static const u8 vhf_hid_desc[] = {
-	// keyboard descriptor (event command ID 0x03)
-	0x05, 0x01,             /*  Usage Page (Desktop),                   */
-	0x09, 0x06,             /*  Usage (Keyboard),                       */
-	0xA1, 0x01,             /*  Collection (Application),               */
-	0x85, 0x01,             /*      Report ID (1),                      */
-	0x15, 0x00,             /*      Logical Minimum (0),                */
-	0x25, 0x01,             /*      Logical Maximum (1),                */
-	0x75, 0x01,             /*      Report Size (1),                    */
-	0x95, 0x08,             /*      Report Count (8),                   */
-	0x05, 0x07,             /*      Usage Page (Keyboard),              */
-	0x19, 0xE0,             /*      Usage Minimum (KB Leftcontrol),     */
-	0x29, 0xE7,             /*      Usage Maximum (KB Right GUI),       */
-	0x81, 0x02,             /*      Input (Variable),                   */
-	0x75, 0x08,             /*      Report Size (8),                    */
-	0x95, 0x0A,             /*      Report Count (10),                  */
-	0x19, 0x00,             /*      Usage Minimum (None),               */
-	0x29, 0x91,             /*      Usage Maximum (KB LANG2),           */
-	0x26, 0xFF, 0x00,       /*      Logical Maximum (255),              */
-	0x81, 0x00,             /*      Input,                              */
-	0x05, 0x0C,             /*      Usage Page (Consumer),              */
-	0x0A, 0xC0, 0x02,       /*      Usage (02C0h),                      */
-	0xA1, 0x02,             /*      Collection (Logical),               */
-	0x1A, 0xC1, 0x02,       /*          Usage Minimum (02C1h),          */
-	0x2A, 0xC6, 0x02,       /*          Usage Maximum (02C6h),          */
-	0x95, 0x06,             /*          Report Count (6),               */
-	0xB1, 0x03,             /*          Feature (Constant, Variable),   */
-	0xC0,                   /*      End Collection,                     */
-	0x05, 0x08,             /*      Usage Page (LED),                   */
-	0x19, 0x01,             /*      Usage Minimum (01h),                */
-	0x29, 0x03,             /*      Usage Maximum (03h),                */
-	0x75, 0x01,             /*      Report Size (1),                    */
-	0x95, 0x03,             /*      Report Count (3),                   */
-	0x25, 0x01,             /*      Logical Maximum (1),                */
-	0x91, 0x02,             /*      Output (Variable),                  */
-	0x95, 0x05,             /*      Report Count (5),                   */
-	0x91, 0x01,             /*      Output (Constant),                  */
-	0xC0,                   /*  End Collection,                         */
-
-	// media key descriptor (event command ID 0x04)
-	0x05, 0x0C,             /*  Usage Page (Consumer),                  */
-	0x09, 0x01,             /*  Usage (Consumer Control),               */
-	0xA1, 0x01,             /*  Collection (Application),               */
-	0x85, 0x03,             /*      Report ID (3),                      */
-	0x75, 0x10,             /*      Report Size (16),                   */
-	0x15, 0x00,             /*      Logical Minimum (0),                */
-	0x26, 0xFF, 0x03,       /*      Logical Maximum (1023),             */
-	0x19, 0x00,             /*      Usage Minimum (00h),                */
-	0x2A, 0xFF, 0x03,       /*      Usage Maximum (03FFh),              */
-	0x81, 0x00,             /*      Input,                              */
-	0xC0,                   /*  End Collection,                         */
-};
 
 
 static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
@@ -293,7 +261,10 @@ static void surface_hid_close(struct hid_device *hdev)
 
 static int surface_hid_parse(struct hid_device *hdev)
 {
-	return hid_parse_report(hdev, (u8 *)vhf_hid_desc, ARRAY_SIZE(vhf_hid_desc));
+	struct surface_hid_device *shid = dev_get_drvdata(hdev->dev.parent);
+
+	return hid_parse_report(hdev, shid->report_desc,
+				shid->hid_desc.report_desc_len);
 }
 
 static int surface_hid_raw_request(struct hid_device *hdev,
