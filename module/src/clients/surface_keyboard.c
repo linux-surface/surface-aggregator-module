@@ -24,8 +24,6 @@
 #define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
 
-#define SURFACE_HID_DEVICE_NAME		"Microsoft Surface Aggregator HID"
-
 enum surface_hid_descriptor_entry {
 	SURFACE_HID_DESC_HID    = 0,
 	SURFACE_HID_DESC_REPORT = 1,
@@ -313,7 +311,10 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
 	shid->hdev->country = shid->hid_desc.country_code;
 
-	strlcpy(shid->hdev->name, SURFACE_HID_DEVICE_NAME, sizeof(shid->hdev->name));
+	snprintf(shid->hdev->name, sizeof(shid->hdev->name),
+		 "Microsoft Surface %04X:%04X",
+		 shid->hdev->vendor, shid->hdev->product);
+
 	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
 
 	shid->hdev->ll_driver = &surface_hid_ll_driver;
