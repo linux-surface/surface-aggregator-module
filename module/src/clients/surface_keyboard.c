@@ -310,7 +310,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	}
 
 	shid->hdev->dev.parent = shid->dev;
-	shid->hdev->bus = BUS_VIRTUAL;
+	shid->hdev->bus = BUS_VIRTUAL;		// TODO: BUS_SURFACE
 	shid->hdev->vendor = cpu_to_le16(shid->attrs.vendor);
 	shid->hdev->product = cpu_to_le16(shid->attrs.product);
 	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
