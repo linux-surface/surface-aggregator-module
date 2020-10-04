@@ -314,7 +314,6 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	shid->hdev->product = cpu_to_le16(shid->attrs.product);
 	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
 	shid->hdev->country = shid->hid_desc.country_code;
-	shid->hdev->driver_data = shid;
 
 	snprintf(shid->hdev->name, sizeof(shid->hdev->name),
 		 "Microsoft Surface %04X:%04X",
@@ -322,6 +321,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 
 	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
 
+	shid->hdev->driver_data = shid;
 	shid->hdev->ll_driver = &surface_hid_ll_driver;
 
 	status = hid_add_device(shid->hdev);
