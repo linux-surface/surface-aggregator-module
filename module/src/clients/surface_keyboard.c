@@ -235,14 +235,14 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 
 static int surface_hid_start(struct hid_device *hdev)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hdev->dev.parent);
+	struct surface_hid_device *shid = hdev->driver_data;
 
 	return ssam_notifier_register(shid->ctrl, &shid->notif);
 }
 
 static void surface_hid_stop(struct hid_device *hdev)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hdev->dev.parent);
+	struct surface_hid_device *shid = hdev->driver_data;
 
 	// Note: This call will log errors for us, so ignore them here.
 	ssam_notifier_unregister(shid->ctrl, &shid->notif);
@@ -259,7 +259,7 @@ static void surface_hid_close(struct hid_device *hdev)
 
 static int surface_hid_parse(struct hid_device *hdev)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hdev->dev.parent);
+	struct surface_hid_device *shid = hdev->driver_data;
 
 	return hid_parse_report(hdev, shid->report_desc,
 				shid->hid_desc.report_desc_len);
@@ -310,6 +310,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	shid->hdev->product = cpu_to_le16(shid->attrs.product);
 	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
 	shid->hdev->country = shid->hid_desc.country_code;
+	shid->hdev->driver_data = shid;
 
 	snprintf(shid->hdev->name, sizeof(shid->hdev->name),
 		 "Microsoft Surface %04X:%04X",
