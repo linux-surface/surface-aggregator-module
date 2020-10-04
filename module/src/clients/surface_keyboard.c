@@ -67,6 +67,8 @@ struct surface_hid_device {
 };
 
 
+/* -- Device descriptor access. --------------------------------------------- */
+
 static int shid_kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 				    u8 *buf, size_t len)
 {
@@ -200,6 +202,8 @@ static void shid_free_descriptors(struct surface_hid_device *shid)
 }
 
 
+/* -- Transport driver. ----------------------------------------------------- */
+
 static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 				     const struct ssam_event *event)
 {
@@ -231,7 +235,6 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
-
 
 static int surface_hid_start(struct hid_device *hdev)
 {
@@ -289,6 +292,8 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 	.raw_request   = surface_hid_raw_request,
 };
 
+
+/* -- Common device setup. -------------------------------------------------- */
 
 static int surface_hid_device_add(struct surface_hid_device *shid)
 {
