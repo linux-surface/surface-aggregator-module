@@ -323,7 +323,7 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 	struct sid_vhf *vhf = container_of(nf, struct sid_vhf, notif);
 	int status;
 
-	if (event->command_id != 0x00 && event->command_id != 0x03 && event->command_id != 0x04)
+	if (event->command_id != 0x00)
 		return 0;
 
 	// skip if HID hasn't started yet
