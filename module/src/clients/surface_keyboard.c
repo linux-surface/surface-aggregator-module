@@ -432,8 +432,6 @@ static int surface_keyboard_probe(struct platform_device *pdev)
 	if (!shid)
 		return -ENOMEM;
 
-	platform_set_drvdata(pdev, shid);
-
 	shid->dev = &pdev->dev;
 	shid->ctrl = ctrl;
 
@@ -451,6 +449,7 @@ static int surface_keyboard_probe(struct platform_device *pdev)
 	shid->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	shid->notif.event.flags = 0;
 
+	platform_set_drvdata(pdev, shid);
 	return surface_hid_device_add(shid);
 }
 
