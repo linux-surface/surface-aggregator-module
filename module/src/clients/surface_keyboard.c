@@ -15,6 +15,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/types.h>
+#include <linux/usb/ch9.h>
 
 #include "../../include/linux/surface_aggregator/device.h"
 #include "../../include/linux/surface_aggregator/controller.h"
@@ -31,6 +32,19 @@ enum surface_hid_descriptor_entry {
 	SURFACE_HID_DESC_ATTRS  = 2,
 };
 
+struct surface_hid_descriptor {
+	__u8 desc_len;			// = 9
+	__u8 desc_type;			// = HID_DT_HID
+	__le16 hid_version;
+	__u8 country_code;
+	__u8 num_descriptors;		// = 1
+
+	__u8 report_desc_type;		// = HID_DT_REPORT
+	__le16 report_desc_len;
+} __packed;
+
+static_assert(sizeof(struct surface_hid_descriptor) == 9);
+
 struct surface_hid_attributes {
 	__le32 length;
 	__le16 vendor;
@@ -46,6 +60,7 @@ struct surface_hid_device {
 	struct ssam_controller *ctrl;
 	struct ssam_device_uid uid;
 
+	struct surface_hid_descriptor hid_desc;
 	struct surface_hid_attributes attrs;
 
 	struct ssam_event_notifier notif;
@@ -85,6 +100,46 @@ static int shid_kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
+static int shid_load_hid_desc(struct surface_hid_device *shid)
+{
+	int status;
+
+	status = shid_kbd_load_descriptor(shid, SURFACE_HID_DESC_HID,
+					  (u8 *)&shid->hid_desc,
+					  sizeof(shid->hid_desc));
+	if (status)
+		return status;
+
+	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
+		dev_err(shid->dev, "unexpected hid descriptor length: got %u, "
+			"expected %zu\n", shid->hid_desc.desc_len,
+			sizeof(shid->hid_desc));
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.desc_type != HID_DT_HID) {
+		dev_err(shid->dev, "unexpected hid descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.desc_type,
+			HID_DT_HID);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.num_descriptors != 1) {
+		dev_err(shid->dev, "unexpected number of descriptors: got %u, "
+			"expected 1\n", shid->hid_desc.num_descriptors);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.report_desc_type != HID_DT_REPORT) {
+		dev_err(shid->dev, "unexpected report descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.report_desc_type,
+			HID_DT_REPORT);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
 static int shid_load_device_attribs(struct surface_hid_device *shid)
 {
 	int status;
@@ -107,6 +162,12 @@ static int shid_load_device_attribs(struct surface_hid_device *shid)
 
 static int shid_load_descriptors(struct surface_hid_device *shid)
 {
+	int status;
+
+	status = shid_load_hid_desc(shid);
+	if (status)
+		return status;
+
 	return shid_load_device_attribs(shid);
 }
 
@@ -278,6 +339,8 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	shid->hdev->bus = BUS_VIRTUAL;
 	shid->hdev->vendor = cpu_to_le16(shid->attrs.vendor);
 	shid->hdev->product = cpu_to_le16(shid->attrs.product);
+	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
+	shid->hdev->country = shid->hid_desc.country_code;
 
 	strlcpy(shid->hdev->name, SURFACE_HID_DEVICE_NAME, sizeof(shid->hdev->name));
 	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
