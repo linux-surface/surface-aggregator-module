@@ -17,8 +17,6 @@
 #include "../../include/linux/surface_aggregator/device.h"
 
 
-#define SID_VHF_INPUT_NAME	"Microsoft Surface HID"
-
 #define VHF_HID_STARTED		0
 
 struct sid_vhf_properties {
