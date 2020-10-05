@@ -73,7 +73,7 @@ struct surface_hid_device {
 	u8 *report_desc;
 
 	struct ssam_event_notifier notif;
-	struct hid_device *hdev;
+	struct hid_device *hid;
 };
 
 
@@ -263,14 +263,14 @@ static void surface_hid_free_descriptors(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
-static int kbd_get_caps_led_value(struct hid_device *hdev, u8 *data, size_t len)
+static int kbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
 {
 	struct hid_field *field;
 	unsigned offset, size;
 	int i;
 
 	// get led field
-	field = hidinput_get_led_field(hdev);
+	field = hidinput_get_led_field(hid);
 	if (!field)
 		return -ENOENT;
 
@@ -292,7 +292,7 @@ static int kbd_get_caps_led_value(struct hid_device *hdev, u8 *data, size_t len)
 	// extract value
 	size = field->report_size;
 	offset = field->report_offset + i * size;
-	return !!hid_field_extract(hdev, data + 1, size, offset);
+	return !!hid_field_extract(hid, data + 1, size, offset);
 }
 
 static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
@@ -301,7 +301,7 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
 	int caps_led;
 	int status;
 
-	caps_led = kbd_get_caps_led_value(shid->hdev, data, len);
+	caps_led = kbd_get_caps_led_value(shid->hid, data, len);
 	if (caps_led < 0)
 		return -ENOTSUPP;  // only caps output reports are supported
 
@@ -374,52 +374,52 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 	if (surface_keyboard_is_input_event(event))
 		return 0;
 
-	status = hid_input_report(shid->hdev, HID_INPUT_REPORT,
+	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
 				  (u8 *)&event->data[0], event->length, 0);
 
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
-static int surface_hid_start(struct hid_device *hdev)
+static int surface_hid_start(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = hdev->driver_data;
+	struct surface_hid_device *shid = hid->driver_data;
 
 	return ssam_notifier_register(shid->ctrl, &shid->notif);
 }
 
-static void surface_hid_stop(struct hid_device *hdev)
+static void surface_hid_stop(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = hdev->driver_data;
+	struct surface_hid_device *shid = hid->driver_data;
 
 	// Note: This call will log errors for us, so ignore them here.
 	ssam_notifier_unregister(shid->ctrl, &shid->notif);
 }
 
-static int surface_hid_open(struct hid_device *hdev)
+static int surface_hid_open(struct hid_device *hid)
 {
 	return 0;
 }
 
-static void surface_hid_close(struct hid_device *hdev)
+static void surface_hid_close(struct hid_device *hid)
 {
 }
 
-static int surface_hid_parse(struct hid_device *hdev)
+static int surface_hid_parse(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = hdev->driver_data;
+	struct surface_hid_device *shid = hid->driver_data;
 
-	return hid_parse_report(hdev, shid->report_desc,
+	return hid_parse_report(hid, shid->report_desc,
 				shid->hid_desc.report_desc_len);
 }
 
-static int surface_hid_raw_request(struct hid_device *hdev,
+static int surface_hid_raw_request(struct hid_device *hid,
 		unsigned char reportnum, u8 *buf, size_t len,
 		unsigned char rtype, int reqtype)
 {
-	struct surface_hid_device *shid = hdev->driver_data;
+	struct surface_hid_device *shid = hid->driver_data;
 
-	hid_info(hdev, "%s: reportnum=%d, rtype=%d, reqtype=%d\n",
+	hid_info(hid, "%s: reportnum=%d, rtype=%d, reqtype=%d\n",
 		 __func__, reportnum, rtype, reqtype);
 
 	print_hex_dump(KERN_INFO, "report: ", DUMP_PREFIX_OFFSET, 16, 1,
@@ -454,36 +454,36 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	if (status)
 		return status;
 
-	shid->hdev = hid_allocate_device();
-	if (IS_ERR(shid->hdev)) {
-		status = PTR_ERR(shid->hdev);
+	shid->hid = hid_allocate_device();
+	if (IS_ERR(shid->hid)) {
+		status = PTR_ERR(shid->hid);
 		goto err_alloc;
 	}
 
-	shid->hdev->dev.parent = shid->dev;
-	shid->hdev->bus = BUS_VIRTUAL;		// TODO: BUS_SURFACE
-	shid->hdev->vendor = cpu_to_le16(shid->attrs.vendor);
-	shid->hdev->product = cpu_to_le16(shid->attrs.product);
-	shid->hdev->version = cpu_to_le16(shid->hid_desc.hid_version);
-	shid->hdev->country = shid->hid_desc.country_code;
+	shid->hid->dev.parent = shid->dev;
+	shid->hid->bus = BUS_VIRTUAL;		// TODO: BUS_SURFACE
+	shid->hid->vendor = cpu_to_le16(shid->attrs.vendor);
+	shid->hid->product = cpu_to_le16(shid->attrs.product);
+	shid->hid->version = cpu_to_le16(shid->hid_desc.hid_version);
+	shid->hid->country = shid->hid_desc.country_code;
 
-	snprintf(shid->hdev->name, sizeof(shid->hdev->name),
+	snprintf(shid->hid->name, sizeof(shid->hid->name),
 		 "Microsoft Surface %04X:%04X",
-		 shid->hdev->vendor, shid->hdev->product);
+		 shid->hid->vendor, shid->hid->product);
 
-	strlcpy(shid->hdev->phys, dev_name(shid->dev), sizeof(shid->hdev->phys));
+	strlcpy(shid->hid->phys, dev_name(shid->dev), sizeof(shid->hid->phys));
 
-	shid->hdev->driver_data = shid;
-	shid->hdev->ll_driver = &surface_hid_ll_driver;
+	shid->hid->driver_data = shid;
+	shid->hid->ll_driver = &surface_hid_ll_driver;
 
-	status = hid_add_device(shid->hdev);
+	status = hid_add_device(shid->hid);
 	if (status)
 		goto err_add;
 
 	return 0;
 
 err_add:
-	hid_destroy_device(shid->hdev);
+	hid_destroy_device(shid->hid);
 err_alloc:
 	surface_hid_free_descriptors(shid);
 	return status;
@@ -491,7 +491,7 @@ err_alloc:
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
 {
-	hid_destroy_device(shid->hdev);
+	hid_destroy_device(shid->hid);
 	surface_hid_free_descriptors(shid);
 }
 
@@ -504,8 +504,8 @@ static int surface_hid_suspend(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hdev->driver && d->hdev->driver->suspend)
-		return d->hdev->driver->suspend(d->hdev, PMSG_SUSPEND);
+	if (d->hid->driver && d->hid->driver->suspend)
+		return d->hid->driver->suspend(d->hid, PMSG_SUSPEND);
 
 	return 0;
 }
@@ -514,8 +514,8 @@ static int surface_hid_resume(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hdev->driver && d->hdev->driver->resume)
-		return d->hdev->driver->resume(d->hdev);
+	if (d->hid->driver && d->hid->driver->resume)
+		return d->hid->driver->resume(d->hid);
 
 	return 0;
 }
@@ -524,8 +524,8 @@ static int surface_hid_freeze(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hdev->driver && d->hdev->driver->suspend)
-		return d->hdev->driver->suspend(d->hdev, PMSG_FREEZE);
+	if (d->hid->driver && d->hid->driver->suspend)
+		return d->hid->driver->suspend(d->hid, PMSG_FREEZE);
 
 	return 0;
 }
@@ -534,8 +534,8 @@ static int surface_hid_poweroff(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hdev->driver && d->hdev->driver->suspend)
-		return d->hdev->driver->suspend(d->hdev, PMSG_HIBERNATE);
+	if (d->hid->driver && d->hid->driver->suspend)
+		return d->hid->driver->suspend(d->hid, PMSG_HIBERNATE);
 
 	return 0;
 }
@@ -544,8 +544,8 @@ static int surface_hid_restore(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
-	if (d->hdev->driver && d->hdev->driver->reset_resume)
-		return d->hdev->driver->reset_resume(d->hdev);
+	if (d->hid->driver && d->hid->driver->reset_resume)
+		return d->hid->driver->reset_resume(d->hid);
 
 	return 0;
 }
