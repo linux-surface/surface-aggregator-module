@@ -261,7 +261,8 @@ static int kbd_get_caps_led_value(struct hid_device *hdev, u8 *data, size_t len)
 	return !!hid_field_extract(hdev, data + 1, size, offset);
 }
 
-static int kbd_output_report(struct surface_hid_device *shid, u8 *data, size_t len)
+static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
+			     size_t len)
 {
 	int caps_led;
 
