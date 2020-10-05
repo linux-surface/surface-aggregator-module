@@ -53,11 +53,14 @@ struct surface_hid_attributes {
 
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
+#define KBD_FEATURE_REPORT_SIZE		7	// 6 + report ID
+
 enum surface_kbd_cid {
 	SURFACE_KBD_CID_GET_DESCRIPTOR    = 0x00,
 	SURFACE_KBD_CID_SET_CAPSLOCK_LED  = 0x01,
 	SURFACE_KBD_CID_EVT_INPUT_GENERIC = 0x03,
 	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS = 0x04,
+	SURFACE_KBD_CID_GET_FEATURE       = 0x0b,
 };
 
 struct surface_hid_device {
@@ -122,6 +125,39 @@ static int ssam_kbd_set_caps_led(struct surface_hid_device *shid, bool value)
 	rqst.payload = &value_u8;
 
 	return shid_retry(ssam_request_sync, shid->ctrl, &rqst, NULL);
+}
+
+static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
+				       size_t len)
+{
+	struct ssam_request rqst;
+	struct ssam_response rsp;
+	u8 payload = 0;
+	int status;
+
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.command_id = SURFACE_KBD_CID_GET_DESCRIPTOR;
+	rqst.instance_id = shid->uid.instance;
+	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
+	rqst.length = sizeof(u8);
+	rqst.payload = &payload;
+
+	rsp.capacity = len;
+	rsp.length = 0;
+	rsp.pointer = buf;
+
+	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
+	if (status)
+		return status;
+
+	if (rsp.length != len) {
+		dev_err(shid->dev, "invalid feature report length: got %zu, "
+			"expected, %zu\n", rsp.length, len);
+		return -EPROTO;
+	}
+
+	return 0;
 }
 
 
@@ -276,6 +312,32 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
 	return len;
 }
 
+static int kbd_get_feature_report(struct surface_hid_device *shid, u8 report_id,
+				  u8 *data, size_t len)
+{
+	u8 report[KBD_FEATURE_REPORT_SIZE];
+	int status;
+
+	/*
+	 * The keyboard only has a single hard-coded read-only feature report
+	 * of size KBD_FEATURE_REPORT_SIZE. Try to load it and compare its
+	 * report ID against the requested one.
+	 */
+
+	if (len < ARRAY_SIZE(report))
+		return -ENOSPC;
+
+	status = ssam_kbd_get_feature_report(shid, report, ARRAY_SIZE(report));
+	if (status < 0)
+		return status;
+
+	if (report_id != report[0])
+		return -ENOENT;
+
+	memcpy(data, report, ARRAY_SIZE(report));
+	return len;
+}
+
 
 static bool surface_keyboard_is_input_event(const struct ssam_event *event)
 {
@@ -365,6 +427,9 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
 		return kbd_output_report(shid, buf, len);
+
+	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_GET_REPORT)
+		return kbd_get_feature_report(shid, reportnum, buf, len);
 
 	return -ENOTSUPP;
 }
