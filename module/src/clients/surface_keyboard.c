@@ -267,7 +267,7 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data, size_t l
 
 	caps_led = kbd_get_caps_led_value(shid->hdev, data, len);
 	if (caps_led < 0)
-		return -EIO;	// only caps output reports are supported
+		return -ENOTSUPP;  // only caps output reports are supported
 
 	return kbd_set_caps_led(shid, caps_led);
 }
@@ -362,7 +362,7 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
 		return kbd_output_report(shid, buf, len);
 
-	return -EIO;
+	return -ENOTSUPP;
 }
 
 static struct hid_ll_driver surface_hid_ll_driver = {
