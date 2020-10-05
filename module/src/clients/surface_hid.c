@@ -14,7 +14,11 @@
 #include <linux/module.h>
 #include <linux/types.h>
 
+#include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
+
+#define SHID_RETRY			3
+#define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
 
 #define VHF_HID_STARTED		0
@@ -124,7 +128,7 @@ static int vhf_get_metadata(struct ssam_device *sdev, struct vhf_device_metadata
 	rsp.length = 0;
 	rsp.pointer = (u8 *)&data;
 
-	status = ssam_request_sync(sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
 	if (status)
 		return status;
 
@@ -159,7 +163,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	rsp.pointer = (u8 *)&data;
 
 	// first fetch 00 to get the total length
-	status = ssam_request_sync(sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
 	if (status)
 		return status;
 
@@ -175,7 +179,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	data.rqst.end = 0;
 
 	while (!data.rqst.end && data.rqst.offset < len) {
-		status = ssam_request_sync(sdev->ctrl, &rqst, &rsp);
+		status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
 		if (status) {
 			kfree(buf);
 			return status;
@@ -270,7 +274,7 @@ static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
 
 	hid_dbg(hid, "%s: sending to cid=%#04x snc=%#04x\n", __func__, cid, HID_REQ_GET_REPORT == reqtype);
 
-	status = ssam_request_sync(vhf->sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, vhf->sdev->ctrl, &rqst, &rsp);
 	hid_dbg(hid, "%s: status %i\n", __func__, status);
 
 	if (status)
