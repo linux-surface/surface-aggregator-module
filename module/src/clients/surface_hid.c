@@ -19,8 +19,6 @@
 
 #define SID_VHF_INPUT_NAME	"Microsoft Surface HID"
 
-#define SAM_EVENT_SID_VHF_TC	0x15
-
 #define VHF_HID_STARTED		0
 
 struct sid_vhf_properties {
