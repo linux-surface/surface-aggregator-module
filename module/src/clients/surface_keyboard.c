@@ -261,15 +261,15 @@ static int kbd_get_caps_led_value(struct hid_device *hdev, u8 *data, size_t len)
 	return !!hid_field_extract(hdev, data + 1, size, offset);
 }
 
-static int kbd_output_report(struct hid_device *hdev, u8 *data, size_t len)
+static int kbd_output_report(struct surface_hid_device *shid, u8 *data, size_t len)
 {
 	int caps_led;
 
-	caps_led = kbd_get_caps_led_value(hdev, data, len);
+	caps_led = kbd_get_caps_led_value(shid->hdev, data, len);
 	if (caps_led < 0)
 		return -EIO;	// only caps output reports are supported
 
-	return kbd_set_caps_led(hdev->driver_data, caps_led);
+	return kbd_set_caps_led(shid, caps_led);
 }
 
 
@@ -351,7 +351,7 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 		unsigned char reportnum, u8 *buf, size_t len,
 		unsigned char rtype, int reqtype)
 {
-	// TODO: implement feature reports
+	struct surface_hid_device *shid = hdev->driver_data;
 
 	hid_info(hdev, "%s: reportnum=%d, rtype=%d, reqtype=%d\n",
 		 __func__, reportnum, rtype, reqtype);
@@ -360,7 +360,7 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 		       buf, len, false);
 
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
-		return kbd_output_report(hdev, buf, len);
+		return kbd_output_report(shid, buf, len);
 
 	return -EIO;
 }
