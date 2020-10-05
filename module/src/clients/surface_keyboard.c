@@ -265,12 +265,17 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
 			     size_t len)
 {
 	int caps_led;
+	int status;
 
 	caps_led = kbd_get_caps_led_value(shid->hdev, data, len);
 	if (caps_led < 0)
 		return -ENOTSUPP;  // only caps output reports are supported
 
-	return kbd_set_caps_led(shid, caps_led);
+	status = kbd_set_caps_led(shid, caps_led);
+	if (status < 0)
+		return status;
+
+	return len;
 }
 
 
