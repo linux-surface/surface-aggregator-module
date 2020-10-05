@@ -338,7 +338,6 @@ static int kbd_get_feature_report(struct surface_hid_device *shid, u8 report_id,
 	return len;
 }
 
-
 static bool surface_keyboard_is_input_event(const struct ssam_event *event)
 {
 	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
@@ -380,6 +379,7 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
+
 
 static int surface_hid_start(struct hid_device *hdev)
 {
