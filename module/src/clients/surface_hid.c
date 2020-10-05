@@ -310,7 +310,8 @@ static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, st
 
 	hid->ll_driver = &sid_vhf_hid_ll_driver;
 
-	sprintf(hid->name, "%s", SID_VHF_INPUT_NAME);
+	snprintf(hid->name, sizeof(hid->name), "Microsoft Surface %04X:%04X",
+		 hid->vendor, hid->product);
 
 	return hid;
 }
