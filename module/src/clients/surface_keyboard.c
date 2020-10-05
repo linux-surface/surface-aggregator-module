@@ -76,8 +76,8 @@ struct surface_hid_device {
 
 /* -- SAM requests. --------------------------------------------------------- */
 
-static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
-			       u8 *buf, size_t len)
+static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry,
+				   u8 *buf, size_t len)
 {
 	struct ssam_request rqst;
 	struct ssam_response rsp;
@@ -108,7 +108,7 @@ static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
-static int kbd_set_caps_led(struct surface_hid_device *shid, bool value)
+static int ssam_kbd_set_caps_led(struct surface_hid_device *shid, bool value)
 {
 	struct ssam_request rqst;
 	u8 value_u8 = value;
@@ -131,9 +131,8 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_HID,
-				     (u8 *)&shid->hid_desc,
-				     sizeof(shid->hid_desc));
+	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_HID,
+			(u8 *)&shid->hid_desc, sizeof(shid->hid_desc));
 	if (status)
 		return status;
 
@@ -175,9 +174,8 @@ static int surface_hid_load_report_descriptor(struct surface_hid_device *shid)
 	if (!shid->report_desc)
 		return -ENOMEM;
 
-	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_REPORT,
-				     shid->report_desc,
-				     shid->hid_desc.report_desc_len);
+	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_REPORT,
+			shid->report_desc, shid->hid_desc.report_desc_len);
 	if (status) {
 		kfree(shid->report_desc);
 		shid->report_desc = NULL;
@@ -190,8 +188,8 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = kbd_load_descriptor(shid, SURFACE_HID_DESC_ATTRS,
-				     (u8 *)&shid->attrs, sizeof(shid->attrs));
+	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_ATTRS,
+			(u8 *)&shid->attrs, sizeof(shid->attrs));
 	if (status)
 		return status;
 
@@ -271,7 +269,7 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
 	if (caps_led < 0)
 		return -ENOTSUPP;  // only caps output reports are supported
 
-	status = kbd_set_caps_led(shid, caps_led);
+	status = ssam_kbd_set_caps_led(shid, caps_led);
 	if (status < 0)
 		return status;
 
