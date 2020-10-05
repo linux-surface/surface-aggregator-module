@@ -54,9 +54,10 @@ struct surface_hid_attributes {
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
 enum surface_kbd_cid {
-	SURFACE_KBD_CID_GET_DESCRIPTOR = 0,
-	SURFACE_KBD_CID_EVT_INPUT_GENERIC = 3,
-	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS = 4,
+	SURFACE_KBD_CID_GET_DESCRIPTOR    = 0x00,
+	SURFACE_KBD_CID_SET_CAPSLOCK_LED  = 0x01,
+	SURFACE_KBD_CID_EVT_INPUT_GENERIC = 0x03,
+	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS = 0x04,
 };
 
 struct surface_hid_device {
@@ -73,7 +74,7 @@ struct surface_hid_device {
 };
 
 
-/* -- Device descriptor access. --------------------------------------------- */
+/* -- SAM requests. --------------------------------------------------------- */
 
 static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 			       u8 *buf, size_t len)
@@ -106,6 +107,25 @@ static int kbd_load_descriptor(struct surface_hid_device *shid, u8 entry,
 
 	return 0;
 }
+
+static int kbd_set_caps_led(struct surface_hid_device *shid, bool value)
+{
+	struct ssam_request rqst;
+	u8 value_u8 = value;
+
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.command_id = SURFACE_KBD_CID_SET_CAPSLOCK_LED;
+	rqst.instance_id = shid->uid.instance;
+	rqst.flags = SSAM_REQUEST_UNSEQUENCED;
+	rqst.length = sizeof(u8);
+	rqst.payload = &value_u8;
+
+	return shid_retry(ssam_request_sync, shid->ctrl, &rqst, NULL);
+}
+
+
+/* -- Device descriptor access. --------------------------------------------- */
 
 static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 {
@@ -209,6 +229,50 @@ static void surface_hid_free_descriptors(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
+static int kbd_get_caps_led_value(struct hid_device *hdev, u8 *data, size_t len)
+{
+	struct hid_field *field;
+	unsigned offset, size;
+	int i;
+
+	// get led field
+	field = hidinput_get_led_field(hdev);
+	if (!field)
+		return -ENOENT;
+
+	// check if we got the correct report
+	if (len != hid_report_len(field->report))
+		return -ENOENT;
+
+	if (!field->report->id || data[0] != field->report->id)
+		return -ENOENT;
+
+	// get caps lock led index
+	for (i = 0; i < field->report_count; i++)
+		if ((field->usage[i].hid & 0xffff) == 0x02)
+			break;
+
+	if (i == field->report_count)
+		return -ENOENT;
+
+	// extract value
+	size = field->report_size;
+	offset = field->report_offset + i * size;
+	return !!hid_field_extract(hdev, data + 1, size, offset);
+}
+
+static int kbd_output_report(struct hid_device *hdev, u8 *data, size_t len)
+{
+	int caps_led;
+
+	caps_led = kbd_get_caps_led_value(hdev, data, len);
+	if (caps_led < 0)
+		return -EIO;	// only caps output reports are supported
+
+	return kbd_set_caps_led(hdev->driver_data, caps_led);
+}
+
+
 static bool surface_keyboard_is_input_event(const struct ssam_event *event)
 {
 	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
@@ -287,7 +351,7 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 		unsigned char reportnum, u8 *buf, size_t len,
 		unsigned char rtype, int reqtype)
 {
-	// TODO: implement feature + output reports
+	// TODO: implement feature reports
 
 	hid_info(hdev, "%s: reportnum=%d, rtype=%d, reqtype=%d\n",
 		 __func__, reportnum, rtype, reqtype);
@@ -295,7 +359,10 @@ static int surface_hid_raw_request(struct hid_device *hdev,
 	print_hex_dump(KERN_INFO, "report: ", DUMP_PREFIX_OFFSET, 16, 1,
 		       buf, len, false);
 
-	return 0;
+	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
+		return kbd_output_report(hdev, buf, len);
+
+	return -EIO;
 }
 
 static struct hid_ll_driver surface_hid_ll_driver = {
