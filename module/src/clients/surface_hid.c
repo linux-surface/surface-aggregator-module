@@ -158,14 +158,14 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 }
 
 
-static int sid_vhf_hid_start(struct hid_device *hid)
+static int surface_hid_start(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
 
 	return ssam_notifier_register(shid->sdev->ctrl, &shid->notif);
 }
 
-static void sid_vhf_hid_stop(struct hid_device *hid)
+static void surface_hid_stop(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
 
@@ -173,16 +173,16 @@ static void sid_vhf_hid_stop(struct hid_device *hid)
 	ssam_notifier_unregister(shid->sdev->ctrl, &shid->notif);
 }
 
-static int sid_vhf_hid_open(struct hid_device *hid)
+static int surface_hid_open(struct hid_device *hid)
 {
 	return 0;
 }
 
-static void sid_vhf_hid_close(struct hid_device *hid)
+static void surface_hid_close(struct hid_device *hid)
 {
 }
 
-static int sid_vhf_hid_parse(struct hid_device *hid)
+static int surface_hid_parse(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
 	int ret = 0, size;
@@ -202,7 +202,7 @@ static int sid_vhf_hid_parse(struct hid_device *hid)
 
 }
 
-static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
+static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 		reportnum, u8 *buf, size_t len, unsigned char rtype, int
 		reqtype)
 {
@@ -273,13 +273,13 @@ static int sid_vhf_hid_raw_request(struct hid_device *hid, unsigned char
 	return rsp.length;
 }
 
-static struct hid_ll_driver sid_vhf_hid_ll_driver = {
-	.start         = sid_vhf_hid_start,
-	.stop          = sid_vhf_hid_stop,
-	.open          = sid_vhf_hid_open,
-	.close         = sid_vhf_hid_close,
-	.parse         = sid_vhf_hid_parse,
-	.raw_request   = sid_vhf_hid_raw_request,
+static struct hid_ll_driver surface_hid_ll_driver = {
+	.start         = surface_hid_start,
+	.stop          = surface_hid_stop,
+	.open          = surface_hid_open,
+	.close         = surface_hid_close,
+	.parse         = surface_hid_parse,
+	.raw_request   = surface_hid_raw_request,
 };
 
 
@@ -297,7 +297,7 @@ static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, st
 	hid->vendor  = meta->vendor_id;
 	hid->product = meta->product_id;
 
-	hid->ll_driver = &sid_vhf_hid_ll_driver;
+	hid->ll_driver = &surface_hid_ll_driver;
 
 	snprintf(hid->name, sizeof(hid->name), "Microsoft Surface %04X:%04X",
 		 hid->vendor, hid->product);
