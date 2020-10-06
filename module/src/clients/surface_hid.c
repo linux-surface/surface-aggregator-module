@@ -280,9 +280,9 @@ static int surface_hid_parse(struct hid_device *hid)
 	return status;
 }
 
-static int surface_hid_raw_request(struct hid_device *hid, unsigned char
-		reportnum, u8 *buf, size_t len, unsigned char rtype, int
-		reqtype)
+static int surface_hid_raw_request(struct hid_device *hid,
+		unsigned char reportnum, u8 *buf, size_t len,
+		unsigned char rtype, int reqtype)
 {
 	struct surface_hid_device *shid = hid->driver_data;
 	struct ssam_request rqst;
