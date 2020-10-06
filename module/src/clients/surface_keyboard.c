@@ -308,7 +308,7 @@ static int skbd_output_report(struct surface_hid_device *shid, u8 report_id,
 
 	caps_led = skbd_get_caps_led_value(shid->hid, report_id, data, len);
 	if (caps_led < 0)
-		return -ENOTSUPP;  // only caps output reports are supported
+		return -EIO;	// only caps output reports are supported
 
 	status = ssam_kbd_set_caps_led(shid, caps_led);
 	if (status < 0)
@@ -405,7 +405,7 @@ static int surface_hid_raw_request(struct hid_device *hid,
 	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_GET_REPORT)
 		return skbd_get_feature_report(shid, reportnum, buf, len);
 
-	return -ENOTSUPP;
+	return -EIO;
 }
 
 static struct hid_ll_driver surface_hid_ll_driver = {
