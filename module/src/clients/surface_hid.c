@@ -93,6 +93,8 @@ struct surface_hid_device {
 };
 
 
+/* -- SAM requests. --------------------------------------------------------- */
+
 static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 				   u8 *buf, size_t len)
 {
@@ -164,6 +166,9 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
+
+/* -- Device descriptor access. --------------------------------------------- */
+
 static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 {
 	int status;
@@ -223,6 +228,8 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 	return 0;
 }
 
+
+/* -- Transport driver. ----------------------------------------------------- */
 
 static int surface_hid_start(struct hid_device *hid)
 {
@@ -360,6 +367,8 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
+
+/* -- Common device setup. -------------------------------------------------- */
 
 static int surface_hid_device_add(struct surface_hid_device *shid)
 {
