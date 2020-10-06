@@ -394,7 +394,7 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
-	struct surface_hid_attributes attrs = {};
+	struct surface_hid_attributes attrs;
 	struct hid_device *hid;
 	int status;
 
