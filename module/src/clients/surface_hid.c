@@ -5,7 +5,8 @@
  * Provides support for HID input devices connected via the Surface System
  * Aggregator Module.
  *
- * Copyright (C) 2019-2020 Blaž Hrastnik <blaz@mxxn.io>
+ * Copyright (C) 2019-2020 Blaž Hrastnik <blaz@mxxn.io>,
+ *                         Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <asm/unaligned.h>
@@ -558,6 +559,7 @@ static struct ssam_device_driver surface_hid_driver = {
 module_ssam_device_driver(surface_hid_driver);
 
 MODULE_AUTHOR("Blaž Hrastnik <blaz@mxxn.io>");
+MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("HID transport-/device-driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
 
