@@ -169,14 +169,14 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 
 static int surface_hid_start(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+	struct surface_hid_device *shid = hid->driver_data;
 
 	return ssam_notifier_register(shid->ctrl, &shid->notif);
 }
 
 static void surface_hid_stop(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+	struct surface_hid_device *shid = hid->driver_data;
 
 	// Note: This call will log errors for us, so ignore them here.
 	ssam_notifier_unregister(shid->ctrl, &shid->notif);
@@ -193,7 +193,7 @@ static void surface_hid_close(struct hid_device *hid)
 
 static int surface_hid_parse(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+	struct surface_hid_device *shid = hid->driver_data;
 	int ret = 0, size;
 	u8 *buf;
 
@@ -215,7 +215,7 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 		reportnum, u8 *buf, size_t len, unsigned char rtype, int
 		reqtype)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+	struct surface_hid_device *shid = hid->driver_data;
 	struct ssam_request rqst;
 	struct ssam_response rsp;
 	int status;
@@ -323,13 +323,14 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	shid->hid->vendor  = get_unaligned_le16(&shid->attrs.vendor);
 	shid->hid->product = get_unaligned_le16(&shid->attrs.product);
 
-	shid->hid->ll_driver = &surface_hid_ll_driver;
-
 	snprintf(shid->hid->name, sizeof(shid->hid->name),
 		 "Microsoft Surface %04X:%04X",
 		 shid->hid->vendor, shid->hid->product);
 
 	strlcpy(shid->hid->phys, dev_name(shid->dev), sizeof(shid->hid->phys));
+
+	shid->hid->driver_data = shid;
+	shid->hid->ll_driver = &surface_hid_ll_driver;
 
 	status = hid_add_device(shid->hid);
 	if (status)
