@@ -267,7 +267,7 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
-static int kbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
+static int skbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
 {
 	struct hid_field *field;
 	unsigned offset, size;
@@ -299,13 +299,13 @@ static int kbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
 	return !!hid_field_extract(hid, data + 1, size, offset);
 }
 
-static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
-			     size_t len)
+static int skbd_output_report(struct surface_hid_device *shid, u8 *data,
+			      size_t len)
 {
 	int caps_led;
 	int status;
 
-	caps_led = kbd_get_caps_led_value(shid->hid, data, len);
+	caps_led = skbd_get_caps_led_value(shid->hid, data, len);
 	if (caps_led < 0)
 		return -ENOTSUPP;  // only caps output reports are supported
 
@@ -316,8 +316,8 @@ static int kbd_output_report(struct surface_hid_device *shid, u8 *data,
 	return len;
 }
 
-static int kbd_get_feature_report(struct surface_hid_device *shid, u8 report_id,
-				  u8 *data, size_t len)
+static int skbd_get_feature_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *data, size_t len)
 {
 	u8 report[KBD_FEATURE_REPORT_SIZE];
 	int status;
@@ -399,10 +399,10 @@ static int surface_hid_raw_request(struct hid_device *hid,
 		       buf, len, false);
 
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
-		return kbd_output_report(shid, buf, len);
+		return skbd_output_report(shid, buf, len);
 
 	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_GET_REPORT)
-		return kbd_get_feature_report(shid, reportnum, buf, len);
+		return skbd_get_feature_report(shid, reportnum, buf, len);
 
 	return -ENOTSUPP;
 }
