@@ -395,7 +395,6 @@ static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
 	struct surface_hid_attributes attrs;
-	struct hid_device *hid;
 	int status;
 
 	shid = devm_kzalloc(&sdev->dev, sizeof(*shid), GFP_KERNEL);
@@ -406,12 +405,7 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	if (status)
 		return status;
 
-	hid = sid_vhf_create_hid_device(sdev, &attrs);
-	if (IS_ERR(hid))
-		return PTR_ERR(hid);
-
 	shid->sdev = sdev;
-	shid->hid = hid;
 
 	shid->notif.base.priority = 1;
 	shid->notif.base.fn = sid_vhf_event_handler;
@@ -421,11 +415,15 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	shid->notif.event.mask = SSAM_EVENT_MASK_STRICT;
 	shid->notif.event.flags = 0;
 
+	shid->hid = sid_vhf_create_hid_device(sdev, &attrs);
+	if (IS_ERR(shid->hid))
+		return PTR_ERR(shid->hid);
+
 	ssam_device_set_drvdata(sdev, shid);
 
-	status = hid_add_device(hid);
+	status = hid_add_device(shid->hid);
 	if (status)
-		hid_destroy_device(hid);
+		hid_destroy_device(shid->hid);
 
 	return status;
 }
