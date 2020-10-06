@@ -33,6 +33,8 @@ struct surface_hid_descriptor {
 	__le16 report_desc_len;
 } __packed;
 
+static_assert(sizeof(struct surface_hid_descriptor) == 9);
+
 struct surface_hid_attributes {
 	__le32 length;
 	__le16 vendor;
@@ -40,6 +42,8 @@ struct surface_hid_attributes {
 	__le16 version;
 	__u8 _unknown[22];
 } __packed;
+
+static_assert(sizeof(struct surface_hid_attributes) == 32);
 
 struct surface_sam_sid_vhf_meta_rqst {
 	u8 id;
