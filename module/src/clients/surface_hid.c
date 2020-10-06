@@ -329,6 +329,8 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 		 "Microsoft Surface %04X:%04X",
 		 shid->hid->vendor, shid->hid->product);
 
+	strlcpy(shid->hid->phys, dev_name(shid->dev), sizeof(shid->hid->phys));
+
 	status = hid_add_device(shid->hid);
 	if (status)
 		hid_destroy_device(shid->hid);
