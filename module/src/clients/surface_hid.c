@@ -14,6 +14,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/types.h>
+#include <linux/usb/ch9.h>
 
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
@@ -84,6 +85,7 @@ struct surface_hid_device {
 	struct ssam_controller *ctrl;
 	struct ssam_device_uid uid;
 
+	struct surface_hid_descriptor hid_desc;
 	struct surface_hid_attributes attrs;
 
 	struct ssam_event_notifier notif;
@@ -162,6 +164,46 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
+static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
+{
+	int status;
+
+	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_HID,
+			(u8 *)&shid->hid_desc, sizeof(shid->hid_desc));
+	if (status)
+		return status;
+
+	if (get_unaligned_le16(&shid->hid_desc.desc_len) != sizeof(shid->hid_desc)) {
+		dev_err(shid->dev, "unexpected hid descriptor length: got %u, "
+			"expected %zu\n",
+			get_unaligned_le16(&shid->hid_desc.desc_len),
+			sizeof(shid->hid_desc));
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.desc_type != HID_DT_HID) {
+		dev_err(shid->dev, "unexpected hid descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.desc_type,
+			HID_DT_HID);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.num_descriptors != 1) {
+		dev_err(shid->dev, "unexpected number of descriptors: got %u, "
+			"expected 1\n", shid->hid_desc.num_descriptors);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.report_desc_type != HID_DT_REPORT) {
+		dev_err(shid->dev, "unexpected report descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.report_desc_type,
+			HID_DT_REPORT);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
 static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 {
 	int status;
@@ -177,32 +219,6 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 			sizeof(shid->attrs));
 		return -EPROTO;
 	}
-
-	return 0;
-}
-
-static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, int *size)
-{
-	struct surface_hid_descriptor hid_desc;
-	u16 len;
-	u8 *buf;
-	int status;
-
-	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_HID, (u8 *)&hid_desc, sizeof(hid_desc));
-	if (status)
-		return status;
-
-	len = get_unaligned_le16(&hid_desc.report_desc_len);
-	buf = kzalloc(len, GFP_KERNEL);
-
-	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
-	if (status) {
-		kfree(buf);
-		return status;
-	}
-
-	*desc = buf;
-	*size = len;
 
 	return 0;
 }
@@ -235,21 +251,20 @@ static void surface_hid_close(struct hid_device *hid)
 static int surface_hid_parse(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = hid->driver_data;
-	int ret = 0, size;
+	size_t len = get_unaligned_le16(&shid->hid_desc.report_desc_len);
 	u8 *buf;
+	int status;
 
-	ret = vhf_get_hid_descriptor(shid, &buf, &size);
-	if (ret != 0) {
-		hid_err(hid, "Failed to read HID descriptor from device: %d\n", ret);
-		return -EIO;
-	}
-	hid_dbg(hid, "HID descriptor of device:");
-	print_hex_dump_debug("descriptor:", DUMP_PREFIX_OFFSET, 16, 1, buf, size, false);
+	buf = kzalloc(len, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
 
-	ret = hid_parse_report(hid, buf, size);
+	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
+	if (!status)
+		status = hid_parse_report(hid, buf, len);
+
 	kfree(buf);
-	return ret;
-
+	return status;
 }
 
 static int surface_hid_raw_request(struct hid_device *hid, unsigned char
@@ -349,6 +364,10 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
+
+	status = surface_hid_load_hid_descriptor(shid);
+	if (status)
+		return status;
 
 	status = surface_hid_load_device_attributes(shid);
 	if (status)
