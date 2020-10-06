@@ -58,14 +58,11 @@ struct surface_sam_sid_vhf_meta_resp {
 } __packed;
 
 
-#define VHF_HID_STARTED		0
-
 struct surface_hid_device {
 	struct ssam_device *sdev;
 	struct ssam_event_notifier notif;
 
 	struct hid_device *hid;
-	unsigned long state;
 };
 
 
@@ -163,27 +160,26 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 
 static int sid_vhf_hid_start(struct hid_device *hid)
 {
-	return 0;
+	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+
+	return ssam_notifier_register(shid->sdev->ctrl, &shid->notif);
 }
 
 static void sid_vhf_hid_stop(struct hid_device *hid)
 {
+	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+
+	// Note: This call will log errors for us, so ignore them here.
+	ssam_notifier_unregister(shid->sdev->ctrl, &shid->notif);
 }
 
 static int sid_vhf_hid_open(struct hid_device *hid)
 {
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	set_bit(VHF_HID_STARTED, &shid->state);
 	return 0;
 }
 
 static void sid_vhf_hid_close(struct hid_device *hid)
 {
-
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	clear_bit(VHF_HID_STARTED, &shid->state);
 }
 
 static int sid_vhf_hid_parse(struct hid_device *hid)
@@ -317,10 +313,6 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 	if (event->command_id != 0x00)
 		return 0;
 
-	// skip if HID hasn't started yet
-	if (!test_bit(VHF_HID_STARTED, &shid->state))
-		return SSAM_NOTIF_HANDLED;
-
 	status = hid_input_report(shid->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 0);
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
@@ -426,20 +418,10 @@ static int surface_hid_probe(struct ssam_device *sdev)
 
 	ssam_device_set_drvdata(sdev, shid);
 
-	status = ssam_notifier_register(sdev->ctrl, &shid->notif);
-	if (status)
-		goto err_notif;
-
 	status = hid_add_device(hid);
 	if (status)
-		goto err_add_hid;
+		hid_destroy_device(hid);
 
-	return 0;
-
-err_add_hid:
-	ssam_notifier_unregister(sdev->ctrl, &shid->notif);
-err_notif:
-	hid_destroy_device(hid);
 	return status;
 }
 
@@ -447,7 +429,6 @@ static void surface_hid_remove(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid = ssam_device_get_drvdata(sdev);
 
-	ssam_notifier_unregister(sdev->ctrl, &shid->notif);
 	hid_destroy_device(shid->hid);
 }
 
