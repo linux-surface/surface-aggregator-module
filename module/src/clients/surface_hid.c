@@ -65,7 +65,9 @@ struct surface_sam_sid_vhf_meta_resp {
 
 
 struct surface_hid_device {
-	struct ssam_device *sdev;
+	struct device *dev;
+	struct ssam_controller *ctrl;
+	struct ssam_device_uid uid;
 
 	struct surface_hid_attributes attrs;
 
@@ -74,7 +76,7 @@ struct surface_hid_device {
 };
 
 
-static int vhf_get_metadata(struct ssam_device *sdev, struct surface_hid_attributes *attrs)
+static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_attributes *attrs)
 {
 	struct surface_sam_sid_vhf_meta_resp data = {};
 	struct ssam_request rqst;
@@ -86,10 +88,10 @@ static int vhf_get_metadata(struct ssam_device *sdev, struct surface_hid_attribu
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
 
-	rqst.target_category = sdev->uid.category;
-	rqst.target_id = sdev->uid.target;
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
 	rqst.command_id = 0x04;
-	rqst.instance_id = sdev->uid.instance;
+	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
 	rqst.payload = (u8 *)&data.rqst;
@@ -98,7 +100,7 @@ static int vhf_get_metadata(struct ssam_device *sdev, struct surface_hid_attribu
 	rsp.length = 0;
 	rsp.pointer = (u8 *)&data;
 
-	status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
 	if (status)
 		return status;
 
@@ -106,7 +108,7 @@ static int vhf_get_metadata(struct ssam_device *sdev, struct surface_hid_attribu
 	return 0;
 }
 
-static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size)
+static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, int *size)
 {
 	struct surface_sam_sid_vhf_meta_resp data = {};
 	struct ssam_request rqst;
@@ -119,10 +121,10 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
 
-	rqst.target_category = sdev->uid.category;
-	rqst.target_id = sdev->uid.target;;
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;;
 	rqst.command_id = 0x04;
-	rqst.instance_id = sdev->uid.instance;
+	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
 	rqst.payload = (u8 *)&data.rqst;
@@ -132,7 +134,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	rsp.pointer = (u8 *)&data;
 
 	// first fetch 00 to get the total length
-	status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
 	if (status)
 		return status;
 
@@ -148,7 +150,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	data.rqst.end = 0;
 
 	while (!data.rqst.end && data.rqst.offset < len) {
-		status = shid_retry(ssam_request_sync, sdev->ctrl, &rqst, &rsp);
+		status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
 		if (status) {
 			kfree(buf);
 			return status;
@@ -169,7 +171,7 @@ static int surface_hid_start(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
 
-	return ssam_notifier_register(shid->sdev->ctrl, &shid->notif);
+	return ssam_notifier_register(shid->ctrl, &shid->notif);
 }
 
 static void surface_hid_stop(struct hid_device *hid)
@@ -177,7 +179,7 @@ static void surface_hid_stop(struct hid_device *hid)
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
 
 	// Note: This call will log errors for us, so ignore them here.
-	ssam_notifier_unregister(shid->sdev->ctrl, &shid->notif);
+	ssam_notifier_unregister(shid->ctrl, &shid->notif);
 }
 
 static int surface_hid_open(struct hid_device *hid)
@@ -195,7 +197,7 @@ static int surface_hid_parse(struct hid_device *hid)
 	int ret = 0, size;
 	u8 *buf;
 
-	ret = vhf_get_hid_descriptor(shid->sdev, &buf, &size);
+	ret = vhf_get_hid_descriptor(shid, &buf, &size);
 	if (ret != 0) {
 		hid_err(hid, "Failed to read HID descriptor from device: %d\n", ret);
 		return -EIO;
@@ -254,9 +256,9 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 		return -EIO;
 	}
 
-	rqst.target_category = shid->sdev->uid.category;
-	rqst.target_id = shid->sdev->uid.target;
-	rqst.instance_id = shid->sdev->uid.instance;
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.instance_id = shid->uid.instance;
 	rqst.command_id = cid;
 	rqst.flags = reqtype == HID_REQ_GET_REPORT ? SSAM_REQUEST_HAS_RESPONSE : 0;
 	rqst.length = reqtype == HID_REQ_GET_REPORT ? 1 : len;
@@ -268,7 +270,7 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 
 	hid_dbg(hid, "%s: sending to cid=%#04x snc=%#04x\n", __func__, cid, HID_REQ_GET_REPORT == reqtype);
 
-	status = shid_retry(ssam_request_sync, shid->sdev->ctrl, &rqst, &rsp);
+	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
 	hid_dbg(hid, "%s: status %i\n", __func__, status);
 
 	if (status)
@@ -311,7 +313,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	if (IS_ERR(shid->hid))
 		return PTR_ERR(shid->hid);
 
-	shid->hid->dev.parent = &shid->sdev->dev;
+	shid->hid->dev.parent = shid->dev;
 
 	shid->hid->bus     = BUS_VIRTUAL;
 	shid->hid->vendor  = get_unaligned_le16(&shid->attrs.vendor);
@@ -413,11 +415,13 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	if (!shid)
 		return -ENOMEM;
 
-	status = vhf_get_metadata(sdev, &shid->attrs);
+	shid->dev = &sdev->dev;
+	shid->ctrl = sdev->ctrl;
+	shid->uid = sdev->uid;
+
+	status = vhf_get_metadata(shid, &shid->attrs);
 	if (status)
 		return status;
-
-	shid->sdev = sdev;
 
 	shid->notif.base.priority = 1;
 	shid->notif.base.fn = sid_vhf_event_handler;
