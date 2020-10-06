@@ -22,6 +22,12 @@
 #define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
 
+enum surface_hid_descriptor_entry {
+	SURFACE_HID_DESC_HID    = 0,
+	SURFACE_HID_DESC_REPORT = 1,
+	SURFACE_HID_DESC_ATTRS  = 2,
+};
+
 struct surface_hid_descriptor {
 	__u8 desc_len;			// = 9
 	__u8 desc_type;			// = HID_DT_HID
@@ -83,7 +89,7 @@ static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_
 	struct ssam_response rsp;
 	int status;
 
-	data.rqst.id = 2;
+	data.rqst.id = SURFACE_HID_DESC_ATTRS;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
@@ -116,7 +122,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 	int status, len;
 	u8 *buf;
 
-	data.rqst.id = 0;
+	data.rqst.id = SURFACE_HID_DESC_HID;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
@@ -144,7 +150,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 	buf = kzalloc(len, GFP_KERNEL);
 
 	// then, iterate and write into buffer, copying out bytes
-	data.rqst.id = 1;
+	data.rqst.id = SURFACE_HID_DESC_REPORT;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
