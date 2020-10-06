@@ -399,9 +399,6 @@ static int surface_hid_raw_request(struct hid_device *hid,
 	print_hex_dump(KERN_INFO, "report: ", DUMP_PREFIX_OFFSET, 16, 1,
 		       buf, len, false);
 
-	// Byte 0 is the report number. Report data starts at byte 1.
-	buf[0] = reportnum;
-
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
 		return skbd_output_report(shid, reportnum, buf, len);
 
