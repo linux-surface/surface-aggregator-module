@@ -271,7 +271,7 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 report_id,
 				   u8 *data, size_t len)
 {
 	struct hid_field *field;
-	unsigned offset, size;
+	unsigned int offset, size;
 	int i;
 
 	// get led field
@@ -519,7 +519,7 @@ static int surface_hid_restore(struct device *dev)
 	return 0;
 }
 
-struct dev_pm_ops surface_hid_pm_ops = {
+const struct dev_pm_ops surface_hid_pm_ops = {
 	.freeze   = surface_hid_freeze,
 	.thaw     = surface_hid_resume,
 	.suspend  = surface_hid_suspend,
@@ -530,7 +530,7 @@ struct dev_pm_ops surface_hid_pm_ops = {
 
 #else /* CONFIG_PM */
 
-struct dev_pm_ops surface_hid_pm_ops = { };
+const struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
 

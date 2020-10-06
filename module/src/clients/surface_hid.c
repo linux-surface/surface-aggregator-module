@@ -493,7 +493,7 @@ static int surface_hid_restore(struct device *dev)
 	return 0;
 }
 
-struct dev_pm_ops surface_hid_pm_ops = {
+const struct dev_pm_ops surface_hid_pm_ops = {
 	.freeze   = surface_hid_freeze,
 	.thaw     = surface_hid_resume,
 	.suspend  = surface_hid_suspend,
@@ -504,7 +504,7 @@ struct dev_pm_ops surface_hid_pm_ops = {
 
 #else /* CONFIG_PM */
 
-struct dev_pm_ops surface_hid_pm_ops = { };
+const struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
 
