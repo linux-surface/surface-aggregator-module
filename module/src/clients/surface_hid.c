@@ -21,22 +21,15 @@
 #define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
 
-struct surface_sam_sid_vhf_meta_rqst {
-	u8 id;
-	u32 offset;
-	u32 length; // buffer limit on send, length of data received on receive
-	u8 end; // 0x01 if end was reached
-} __packed;
+struct surface_hid_descriptor {
+	__u8 desc_len;			// = 9
+	__u8 desc_type;			// = HID_DT_HID
+	__le16 hid_version;
+	__u8 country_code;
+	__u8 num_descriptors;		// = 1
 
-struct vhf_device_metadata_info {
-	u8 len;
-	u8 _2;
-	u8 _3;
-	u8 _4;
-	u8 _5;
-	u8 _6;
-	u8 _7;
-	u16 hid_len; // hid descriptor length
+	__u8 report_desc_type;		// = HID_DT_REPORT
+	__le16 report_desc_len;
 } __packed;
 
 struct vhf_device_metadata {
@@ -46,8 +39,15 @@ struct vhf_device_metadata {
 	u8  _1[24];
 } __packed;
 
+struct surface_sam_sid_vhf_meta_rqst {
+	u8 id;
+	u32 offset;
+	u32 length; // buffer limit on send, length of data received on receive
+	u8 end; // 0x01 if end was reached
+} __packed;
+
 union vhf_buffer_data {
-	struct vhf_device_metadata_info info;
+	struct surface_hid_descriptor hid_descriptor;
 	u8 pld[0x76];
 	struct vhf_device_metadata meta;
 };
@@ -129,7 +129,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	if (status)
 		return status;
 
-	len = data.data.info.hid_len;
+	len = data.data.hid_descriptor.report_desc_len;
 
 	// allocate a buffer for the descriptor
 	buf = kzalloc(len, GFP_KERNEL);
