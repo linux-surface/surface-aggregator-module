@@ -333,7 +333,7 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 
 #ifdef CONFIG_PM
 
-static int surface_sam_sid_vhf_suspend(struct device *dev)
+static int surface_hid_suspend(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -343,7 +343,7 @@ static int surface_sam_sid_vhf_suspend(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_sid_vhf_resume(struct device *dev)
+static int surface_hid_resume(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -353,7 +353,7 @@ static int surface_sam_sid_vhf_resume(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_sid_vhf_freeze(struct device *dev)
+static int surface_hid_freeze(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -363,7 +363,7 @@ static int surface_sam_sid_vhf_freeze(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_sid_vhf_poweroff(struct device *dev)
+static int surface_hid_poweroff(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -373,7 +373,7 @@ static int surface_sam_sid_vhf_poweroff(struct device *dev)
 	return 0;
 }
 
-static int surface_sam_sid_vhf_restore(struct device *dev)
+static int surface_hid_restore(struct device *dev)
 {
 	struct surface_hid_device *d = dev_get_drvdata(dev);
 
@@ -383,18 +383,18 @@ static int surface_sam_sid_vhf_restore(struct device *dev)
 	return 0;
 }
 
-struct dev_pm_ops surface_sam_sid_vhf_pm_ops = {
-	.freeze   = surface_sam_sid_vhf_freeze,
-	.thaw     = surface_sam_sid_vhf_resume,
-	.suspend  = surface_sam_sid_vhf_suspend,
-	.resume   = surface_sam_sid_vhf_resume,
-	.poweroff = surface_sam_sid_vhf_poweroff,
-	.restore  = surface_sam_sid_vhf_restore,
+struct dev_pm_ops surface_hid_pm_ops = {
+	.freeze   = surface_hid_freeze,
+	.thaw     = surface_hid_resume,
+	.suspend  = surface_hid_suspend,
+	.resume   = surface_hid_resume,
+	.poweroff = surface_hid_poweroff,
+	.restore  = surface_hid_restore,
 };
 
 #else /* CONFIG_PM */
 
-struct dev_pm_ops surface_sam_sid_vhf_pm_ops = { };
+struct dev_pm_ops surface_hid_pm_ops = { };
 
 #endif /* CONFIG_PM */
 
@@ -468,7 +468,7 @@ static struct ssam_device_driver surface_sam_sid_vhf = {
 	.match_table = surface_sam_sid_vhf_match,
 	.driver = {
 		.name = "surface_hid",
-		.pm = &surface_sam_sid_vhf_pm_ops,
+		.pm = &surface_hid_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
