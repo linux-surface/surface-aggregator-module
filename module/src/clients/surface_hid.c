@@ -21,48 +21,6 @@
 #define shid_retry(fn, args...)		ssam_retry(fn, SHID_RETRY, args)
 
 
-#define VHF_HID_STARTED		0
-
-struct surface_hid_device {
-	struct ssam_device *sdev;
-	struct ssam_event_notifier notif;
-
-	struct hid_device *hid;
-	unsigned long state;
-};
-
-
-static int sid_vhf_hid_start(struct hid_device *hid)
-{
-	hid_dbg(hid, "%s\n", __func__);
-	return 0;
-}
-
-static void sid_vhf_hid_stop(struct hid_device *hid)
-{
-	hid_dbg(hid, "%s\n", __func__);
-}
-
-static int sid_vhf_hid_open(struct hid_device *hid)
-{
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	hid_dbg(hid, "%s\n", __func__);
-
-	set_bit(VHF_HID_STARTED, &shid->state);
-	return 0;
-}
-
-static void sid_vhf_hid_close(struct hid_device *hid)
-{
-
-	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	hid_dbg(hid, "%s\n", __func__);
-
-	clear_bit(VHF_HID_STARTED, &shid->state);
-}
-
 struct surface_sam_sid_vhf_meta_rqst {
 	u8 id;
 	u32 offset;
@@ -98,6 +56,17 @@ struct surface_sam_sid_vhf_meta_resp {
 	struct surface_sam_sid_vhf_meta_rqst rqst;
 	union vhf_buffer_data data;
 } __packed;
+
+
+#define VHF_HID_STARTED		0
+
+struct surface_hid_device {
+	struct ssam_device *sdev;
+	struct ssam_event_notifier notif;
+
+	struct hid_device *hid;
+	unsigned long state;
+};
 
 
 static int vhf_get_metadata(struct ssam_device *sdev, struct vhf_device_metadata *meta)
@@ -189,6 +158,38 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	*size = len;
 
 	return 0;
+}
+
+
+static int sid_vhf_hid_start(struct hid_device *hid)
+{
+	hid_dbg(hid, "%s\n", __func__);
+	return 0;
+}
+
+static void sid_vhf_hid_stop(struct hid_device *hid)
+{
+	hid_dbg(hid, "%s\n", __func__);
+}
+
+static int sid_vhf_hid_open(struct hid_device *hid)
+{
+	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+
+	hid_dbg(hid, "%s\n", __func__);
+
+	set_bit(VHF_HID_STARTED, &shid->state);
+	return 0;
+}
+
+static void sid_vhf_hid_close(struct hid_device *hid)
+{
+
+	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
+
+	hid_dbg(hid, "%s\n", __func__);
+
+	clear_bit(VHF_HID_STARTED, &shid->state);
 }
 
 static int sid_vhf_hid_parse(struct hid_device *hid)
