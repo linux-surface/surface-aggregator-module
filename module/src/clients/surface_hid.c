@@ -292,6 +292,8 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 
 static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 {
+	int status;
+
 	shid->hid = hid_allocate_device();
 	if (IS_ERR(shid->hid))
 		return PTR_ERR(shid->hid);
@@ -307,6 +309,10 @@ static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 	snprintf(shid->hid->name, sizeof(shid->hid->name),
 		 "Microsoft Surface %04X:%04X",
 		 shid->hid->vendor, shid->hid->product);
+
+	status = hid_add_device(shid->hid);
+	if (status)
+		hid_destroy_device(shid->hid);
 
 	return 0;
 }
@@ -415,17 +421,8 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	shid->notif.event.mask = SSAM_EVENT_MASK_STRICT;
 	shid->notif.event.flags = 0;
 
-	status = sid_vhf_create_hid_device(shid);
-	if (status)
-		return status;
-
 	ssam_device_set_drvdata(sdev, shid);
-
-	status = hid_add_device(shid->hid);
-	if (status)
-		hid_destroy_device(shid->hid);
-
-	return status;
+	return sid_vhf_create_hid_device(shid);
 }
 
 static void surface_hid_remove(struct ssam_device *sdev)
