@@ -82,7 +82,7 @@ struct surface_hid_device {
 };
 
 
-/* -- SAM requests. --------------------------------------------------------- */
+/* -- SAM interface. -------------------------------------------------------- */
 
 static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 				   u8 *buf, size_t len)
@@ -153,6 +153,23 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	}
 
 	return 0;
+}
+
+static u32 ssam_hid_event_fn(struct ssam_event_notifier *nf,
+			     const struct ssam_event *event)
+{
+	struct surface_hid_device *shid;
+	int status;
+
+	shid = container_of(nf, struct surface_hid_device, notif);
+
+	if (event->command_id != 0x00)
+		return 0;
+
+	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
+				  (u8 *)&event->data[0], event->length, 0);
+
+	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
@@ -342,24 +359,6 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 	.parse       = surface_hid_parse,
 	.raw_request = surface_hid_raw_request,
 };
-
-
-static u32 ssam_hid_event_fn(struct ssam_event_notifier *nf,
-			     const struct ssam_event *event)
-{
-	struct surface_hid_device *shid;
-	int status;
-
-	shid = container_of(nf, struct surface_hid_device, notif);
-
-	if (event->command_id != 0x00)
-		return 0;
-
-	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
-				  (u8 *)&event->data[0], event->length, 0);
-
-	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
-}
 
 
 /* -- Common device setup. -------------------------------------------------- */
