@@ -155,6 +155,52 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
+static int ssam_hid_set_raw_report(struct surface_hid_device *shid,
+				   u8 report_id, bool feature, u8 *buf,
+				   size_t len)
+{
+	struct ssam_request rqst;
+	u8 cid;
+
+	if (feature)
+		cid = SURFACE_HID_CID_SET_FEATURE_REPORT;
+	else
+		cid = SURFACE_HID_CID_OUTPUT_REPORT;
+
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.instance_id = shid->uid.instance;
+	rqst.command_id = cid;
+	rqst.flags = 0;
+	rqst.length = len;
+	rqst.payload = buf;
+
+	buf[0] = report_id;
+
+	return shid_retry(ssam_request_sync, shid->ctrl, &rqst, NULL);
+}
+
+static int ssam_hid_get_raw_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *buf, size_t len)
+{
+	struct ssam_request rqst;
+	struct ssam_response rsp;
+
+	rqst.target_category = shid->uid.category;
+	rqst.target_id = shid->uid.target;
+	rqst.instance_id = shid->uid.instance;
+	rqst.command_id = SURFACE_HID_CID_GET_FEATURE_REPORT;
+	rqst.flags = 0;
+	rqst.length = sizeof(u8);
+	rqst.payload = &report_id;
+
+	rsp.capacity = len;
+	rsp.length = 0;
+	rsp.pointer = buf;
+
+	return shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
+}
+
 static u32 ssam_hid_event_fn(struct ssam_event_notifier *nf,
 			     const struct ssam_event *event)
 {
@@ -237,6 +283,43 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
+static int shid_output_report(struct surface_hid_device *shid, u8 report_id,
+			      u8 *data, size_t len)
+{
+	int status;
+
+	status =  ssam_hid_set_raw_report(shid, report_id, false, data, len);
+	return status >= 0 ? len : status;
+}
+
+static int shid_get_feature_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *data, size_t len)
+{
+	int status;
+
+	// TODO: Fix this blacklist. Either
+	//  - replace this by HID_QUIRK_NO[_INIT]_INPUT_REPORTS if possible, or
+	//  - make it dependent on vendor + product ID if not.
+
+	if (report_id == 6 || report_id == 7 || report_id == 8 || report_id == 9 || report_id == 0x0b) {
+		dev_dbg(shid->dev, "%s: skipping get feature report for 0x%02x\n", __func__, report_id);
+		return 0;
+	}
+
+	status = ssam_hid_get_raw_report(shid, report_id, data, len);
+	return status >= 0 ? len : status;
+}
+
+static int shid_set_feature_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *data, size_t len)
+{
+	int status;
+
+	status =  ssam_hid_set_raw_report(shid, report_id, true, data, len);
+	return status >= 0 ? len : status;
+}
+
+
 static int surface_hid_start(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = hid->driver_data;
@@ -285,70 +368,17 @@ static int surface_hid_raw_request(struct hid_device *hid,
 		unsigned char rtype, int reqtype)
 {
 	struct surface_hid_device *shid = hid->driver_data;
-	struct ssam_request rqst;
-	struct ssam_response rsp;
-	int status;
-	u8 cid;
 
-	hid_dbg(hid, "%s: reportnum=%#04x rtype=%i reqtype=%i\n", __func__, reportnum, rtype, reqtype);
-	print_hex_dump_debug("report:", DUMP_PREFIX_OFFSET, 16, 1, buf, len, false);
+	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
+		return shid_output_report(shid, reportnum, buf, len);
 
-	// Byte 0 is the report number. Report data starts at byte 1.
-	buf[0] = reportnum;
+	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_GET_REPORT)
+		return shid_get_feature_report(shid, reportnum, buf, len);
 
-	switch (rtype) {
-	case HID_OUTPUT_REPORT:
-		cid = SURFACE_HID_CID_OUTPUT_REPORT;
-		break;
-	case HID_FEATURE_REPORT:
-		switch (reqtype) {
-		case HID_REQ_GET_REPORT:
-			// The EC doesn't respond to GET FEATURE for these touchpad reports
-			// we immediately discard to avoid waiting for a timeout.
-			if (reportnum == 6 || reportnum == 7 || reportnum == 8 || reportnum == 9 || reportnum == 0x0b) {
-				hid_dbg(hid, "%s: skipping get feature report for 0x%02x\n", __func__, reportnum);
-				return 0;
-			}
+	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_SET_REPORT)
+		return shid_set_feature_report(shid, reportnum, buf, len);
 
-			cid = SURFACE_HID_CID_GET_FEATURE_REPORT;
-			break;
-		case HID_REQ_SET_REPORT:
-			cid = SURFACE_HID_CID_SET_FEATURE_REPORT;
-			break;
-		default:
-			hid_err(hid, "%s: unknown req type 0x%02x\n", __func__, rtype);
-			return -EIO;
-		}
-		break;
-	default:
-		hid_err(hid, "%s: unknown report type 0x%02x\n", __func__, reportnum);
-		return -EIO;
-	}
-
-	rqst.target_category = shid->uid.category;
-	rqst.target_id = shid->uid.target;
-	rqst.instance_id = shid->uid.instance;
-	rqst.command_id = cid;
-	rqst.flags = reqtype == HID_REQ_GET_REPORT ? SSAM_REQUEST_HAS_RESPONSE : 0;
-	rqst.length = reqtype == HID_REQ_GET_REPORT ? 1 : len;
-	rqst.payload = buf;
-
-	rsp.capacity = len;
-	rsp.length = 0;
-	rsp.pointer = buf;
-
-	hid_dbg(hid, "%s: sending to cid=%#04x snc=%#04x\n", __func__, cid, HID_REQ_GET_REPORT == reqtype);
-
-	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
-	hid_dbg(hid, "%s: status %i\n", __func__, status);
-
-	if (status)
-		return status;
-
-	if (rsp.length > 0)
-		print_hex_dump_debug("response:", DUMP_PREFIX_OFFSET, 16, 1, rsp.pointer, rsp.length, false);
-
-	return rsp.length;
+	return -EIO;
 }
 
 static struct hid_ll_driver surface_hid_ll_driver = {
