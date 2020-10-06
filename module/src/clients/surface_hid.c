@@ -51,14 +51,14 @@ struct surface_hid_attributes {
 
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
-struct surface_sam_sid_vhf_meta_rqst {
+struct surface_hid_buffer_slice {
 	__u8 id;
 	__le32 offset;
 	__le32 length;
 	__u8 end;
 } __packed;
 
-static_assert(sizeof(struct surface_sam_sid_vhf_meta_rqst) == 10);
+static_assert(sizeof(struct surface_hid_buffer_slice) == 10);
 
 union vhf_buffer_data {
 	struct surface_hid_descriptor hid_descriptor;
@@ -67,7 +67,7 @@ union vhf_buffer_data {
 };
 
 struct surface_sam_sid_vhf_meta_resp {
-	struct surface_sam_sid_vhf_meta_rqst rqst;
+	struct surface_hid_buffer_slice rqst;
 	union vhf_buffer_data data;
 } __packed;
 
@@ -107,7 +107,7 @@ static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_
 	rqst.command_id = SURFACE_HID_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
+	rqst.length = sizeof(struct surface_hid_buffer_slice);
 	rqst.payload = (u8 *)&data.rqst;
 
 	rsp.capacity = sizeof(struct surface_sam_sid_vhf_meta_resp);
@@ -140,7 +140,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 	rqst.command_id = SURFACE_HID_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
+	rqst.length = sizeof(struct surface_hid_buffer_slice);
 	rqst.payload = (u8 *)&data.rqst;
 
 	rsp.capacity = sizeof(struct surface_sam_sid_vhf_meta_resp);
