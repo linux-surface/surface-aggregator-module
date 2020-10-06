@@ -77,7 +77,7 @@ struct surface_hid_device {
 };
 
 
-/* -- SAM requests. --------------------------------------------------------- */
+/* -- SAM interface. -------------------------------------------------------- */
 
 static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry,
 				   u8 *buf, size_t len)
@@ -158,6 +158,48 @@ static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
 	}
 
 	return 0;
+}
+
+static bool ssam_kbd_is_input_event(const struct ssam_event *event)
+{
+	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
+		return true;
+
+	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_HOTKEYS)
+		return true;
+
+	return false;
+}
+
+static u32 ssam_kbd_event_fn(struct ssam_event_notifier *nf,
+				const struct ssam_event *event)
+{
+	struct surface_hid_device *shid;
+	int status;
+
+	shid = container_of(nf, struct surface_hid_device, notif);
+
+	/*
+	 * Check against device UID manually, as registry and device target
+	 * category doesn't line up.
+	 */
+
+	if (shid->uid.category != event->target_category)
+		return 0;
+
+	if (shid->uid.target != event->target_id)
+		return 0;
+
+	if (shid->uid.instance != event->instance_id)
+		return 0;
+
+	if (!ssam_kbd_is_input_event(event))
+		return 0;
+
+	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
+				  (u8 *)&event->data[0], event->length, 0);
+
+	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
@@ -298,48 +340,6 @@ static int kbd_get_feature_report(struct surface_hid_device *shid, u8 report_id,
 
 	memcpy(data, report, ARRAY_SIZE(report));
 	return len;
-}
-
-static bool kbd_is_input_event(const struct ssam_event *event)
-{
-	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
-		return true;
-
-	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_HOTKEYS)
-		return true;
-
-	return false;
-}
-
-static u32 ssam_kbd_event_fn(struct ssam_event_notifier *nf,
-				const struct ssam_event *event)
-{
-	struct surface_hid_device *shid;
-	int status;
-
-	shid = container_of(nf, struct surface_hid_device, notif);
-
-	/*
-	 * Check against device UID manually, as registry and device target
-	 * category doesn't line up.
-	 */
-
-	if (shid->uid.category != event->target_category)
-		return 0;
-
-	if (shid->uid.target != event->target_id)
-		return 0;
-
-	if (shid->uid.instance != event->instance_id)
-		return 0;
-
-	if (!kbd_is_input_event(event))
-		return 0;
-
-	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
-				  (u8 *)&event->data[0], event->length, 0);
-
-	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
