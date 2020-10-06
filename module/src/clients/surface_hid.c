@@ -58,6 +58,8 @@ struct surface_sam_sid_vhf_meta_rqst {
 	u8 end; // 0x01 if end was reached
 } __packed;
 
+static_assert(sizeof(struct surface_sam_sid_vhf_meta_rqst) == 10);
+
 union vhf_buffer_data {
 	struct surface_hid_descriptor hid_descriptor;
 	struct surface_hid_attributes attributes;
