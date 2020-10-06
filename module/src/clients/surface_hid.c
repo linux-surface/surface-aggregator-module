@@ -54,8 +54,8 @@ static_assert(sizeof(struct surface_hid_attributes) == 32);
 struct surface_sam_sid_vhf_meta_rqst {
 	__u8 id;
 	__le32 offset;
-	__le32 length; // buffer limit on send, length of data received on receive
-	__u8 end; // 0x01 if end was reached
+	__le32 length;
+	__u8 end;
 } __packed;
 
 static_assert(sizeof(struct surface_sam_sid_vhf_meta_rqst) == 10);
