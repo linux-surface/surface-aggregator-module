@@ -57,11 +57,11 @@ static_assert(sizeof(struct surface_hid_attributes) == 32);
 #define KBD_FEATURE_REPORT_SIZE		7	// 6 + report ID
 
 enum surface_kbd_cid {
-	SURFACE_KBD_CID_GET_DESCRIPTOR    = 0x00,
-	SURFACE_KBD_CID_SET_CAPSLOCK_LED  = 0x01,
-	SURFACE_KBD_CID_EVT_INPUT_GENERIC = 0x03,
-	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS = 0x04,
-	SURFACE_KBD_CID_GET_FEATURE       = 0x0b,
+	SURFACE_KBD_CID_GET_DESCRIPTOR     = 0x00,
+	SURFACE_KBD_CID_SET_CAPSLOCK_LED   = 0x01,
+	SURFACE_KBD_CID_EVT_INPUT_GENERIC  = 0x03,
+	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS  = 0x04,
+	SURFACE_KBD_CID_GET_FEATURE_REPORT = 0x0b,
 };
 
 struct surface_hid_device {
@@ -137,7 +137,7 @@ static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
 
 	rqst.target_category = shid->uid.category;
 	rqst.target_id = shid->uid.target;
-	rqst.command_id = SURFACE_KBD_CID_GET_DESCRIPTOR;
+	rqst.command_id = SURFACE_KBD_CID_GET_FEATURE_REPORT;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(u8);
