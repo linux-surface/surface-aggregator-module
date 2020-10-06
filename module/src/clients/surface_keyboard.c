@@ -267,7 +267,8 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 
 /* -- Transport driver. ----------------------------------------------------- */
 
-static int skbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
+static int skbd_get_caps_led_value(struct hid_device *hid, u8 report_id,
+				   u8 *data, size_t len)
 {
 	struct hid_field *field;
 	unsigned offset, size;
@@ -282,7 +283,7 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
 	if (len != hid_report_len(field->report))
 		return -ENOENT;
 
-	if (!field->report->id || data[0] != field->report->id)
+	if (report_id != field->report->id)
 		return -ENOENT;
 
 	// get caps lock led index
@@ -299,13 +300,13 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 *data, size_t len)
 	return !!hid_field_extract(hid, data + 1, size, offset);
 }
 
-static int skbd_output_report(struct surface_hid_device *shid, u8 *data,
-			      size_t len)
+static int skbd_output_report(struct surface_hid_device *shid, u8 report_id,
+			      u8 *data, size_t len)
 {
 	int caps_led;
 	int status;
 
-	caps_led = skbd_get_caps_led_value(shid->hid, data, len);
+	caps_led = skbd_get_caps_led_value(shid->hid, report_id, data, len);
 	if (caps_led < 0)
 		return -ENOTSUPP;  // only caps output reports are supported
 
@@ -399,7 +400,7 @@ static int surface_hid_raw_request(struct hid_device *hid,
 		       buf, len, false);
 
 	if (rtype == HID_OUTPUT_REPORT && reqtype == HID_REQ_SET_REPORT)
-		return skbd_output_report(shid, buf, len);
+		return skbd_output_report(shid, reportnum, buf, len);
 
 	else if (rtype == HID_FEATURE_REPORT && reqtype == HID_REQ_GET_REPORT)
 		return skbd_get_feature_report(shid, reportnum, buf, len);
