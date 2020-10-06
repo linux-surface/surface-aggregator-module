@@ -399,7 +399,7 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 #endif /* CONFIG_PM */
 
 
-static int surface_sam_sid_vhf_probe(struct ssam_device *sdev)
+static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
 	struct vhf_device_metadata meta = {};
@@ -448,7 +448,7 @@ err_notif:
 	return status;
 }
 
-static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
+static void surface_hid_remove(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid = ssam_device_get_drvdata(sdev);
 
@@ -456,23 +456,23 @@ static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
 	hid_destroy_device(shid->hid);
 }
 
-static const struct ssam_device_id surface_sam_sid_vhf_match[] = {
+static const struct ssam_device_id surface_hid_match[] = {
 	{ SSAM_SDEV(HID, SSAM_ANY_TID, SSAM_ANY_IID, 0x00) },
 	{ },
 };
-MODULE_DEVICE_TABLE(ssam, surface_sam_sid_vhf_match);
+MODULE_DEVICE_TABLE(ssam, surface_hid_match);
 
-static struct ssam_device_driver surface_sam_sid_vhf = {
-	.probe = surface_sam_sid_vhf_probe,
-	.remove = surface_sam_sid_vhf_remove,
-	.match_table = surface_sam_sid_vhf_match,
+static struct ssam_device_driver surface_hid_driver = {
+	.probe = surface_hid_probe,
+	.remove = surface_hid_remove,
+	.match_table = surface_hid_match,
 	.driver = {
 		.name = "surface_hid",
 		.pm = &surface_hid_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_ssam_device_driver(surface_sam_sid_vhf);
+module_ssam_device_driver(surface_hid_driver);
 
 MODULE_AUTHOR("Blaž Hrastnik <blaz@mxxn.io>");
 MODULE_DESCRIPTION("HID transport-/device-driver for Surface System Aggregator Module");
