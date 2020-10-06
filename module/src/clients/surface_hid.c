@@ -309,6 +309,10 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
+	status = vhf_get_metadata(shid, &shid->attrs);
+	if (status)
+		return status;
+
 	shid->hid = hid_allocate_device();
 	if (IS_ERR(shid->hid))
 		return PTR_ERR(shid->hid);
@@ -409,7 +413,6 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
-	int status;
 
 	shid = devm_kzalloc(&sdev->dev, sizeof(*shid), GFP_KERNEL);
 	if (!shid)
@@ -418,10 +421,6 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	shid->dev = &sdev->dev;
 	shid->ctrl = sdev->ctrl;
 	shid->uid = sdev->uid;
-
-	status = vhf_get_metadata(shid, &shid->attrs);
-	if (status)
-		return status;
 
 	shid->notif.base.priority = 1;
 	shid->notif.base.fn = sid_vhf_event_handler;
