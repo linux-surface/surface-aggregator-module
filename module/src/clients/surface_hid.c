@@ -336,7 +336,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 	if (status)
 		hid_destroy_device(shid->hid);
 
-	return 0;
+	return status;
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
