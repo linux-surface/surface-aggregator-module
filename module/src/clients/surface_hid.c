@@ -23,10 +23,6 @@
 
 #define VHF_HID_STARTED		0
 
-struct sid_vhf_properties {
-	struct ssam_event_registry registry;
-};
-
 struct sid_vhf {
 	struct ssam_device *sdev;
 	struct ssam_event_notifier notif;
@@ -405,15 +401,10 @@ struct dev_pm_ops surface_sam_sid_vhf_pm_ops = { };
 
 static int surface_sam_sid_vhf_probe(struct ssam_device *sdev)
 {
-	const struct sid_vhf_properties *p;
 	struct sid_vhf *vhf;
 	struct vhf_device_metadata meta = {};
 	struct hid_device *hid;
 	int status;
-
-	p = ssam_device_get_match_data(sdev);
-	if (!p)
-		return -ENODEV;
 
 	vhf = devm_kzalloc(&sdev->dev, sizeof(*vhf), GFP_KERNEL);
 	if (!vhf)
@@ -432,7 +423,7 @@ static int surface_sam_sid_vhf_probe(struct ssam_device *sdev)
 
 	vhf->notif.base.priority = 1;
 	vhf->notif.base.fn = sid_vhf_event_handler;
-	vhf->notif.event.reg = p->registry;
+	vhf->notif.event.reg = SSAM_EVENT_REGISTRY_REG,
 	vhf->notif.event.id.target_category = sdev->uid.category;
 	vhf->notif.event.id.instance = sdev->uid.instance;
 	vhf->notif.event.mask = SSAM_EVENT_MASK_STRICT;
@@ -465,15 +456,8 @@ static void surface_sam_sid_vhf_remove(struct ssam_device *sdev)
 	hid_destroy_device(vhf->hid);
 }
 
-static const struct sid_vhf_properties sid_vhf_default_props = {
-	.registry = SSAM_EVENT_REGISTRY_REG,
-};
-
 static const struct ssam_device_id surface_sam_sid_vhf_match[] = {
-	{
-		SSAM_SDEV(HID, SSAM_ANY_TID, SSAM_ANY_IID, 0x00),
-		.driver_data = (unsigned long)&sid_vhf_default_props
-	},
+	{ SSAM_SDEV(HID, SSAM_ANY_TID, SSAM_ANY_IID, 0x00) },
 	{ },
 };
 MODULE_DEVICE_TABLE(ssam, surface_sam_sid_vhf_match);
