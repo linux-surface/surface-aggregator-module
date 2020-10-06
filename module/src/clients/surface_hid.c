@@ -52,7 +52,7 @@ struct surface_hid_attributes {
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
 struct surface_hid_buffer_slice {
-	__u8 id;
+	__u8 entry;
 	__le32 offset;
 	__le32 length;
 	__u8 end;
@@ -97,7 +97,7 @@ static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_
 	struct ssam_response rsp;
 	int status;
 
-	data.rqst.id = SURFACE_HID_DESC_ATTRS;
+	data.rqst.entry = SURFACE_HID_DESC_ATTRS;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
@@ -130,7 +130,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 	int status, len;
 	u8 *buf;
 
-	data.rqst.id = SURFACE_HID_DESC_HID;
+	data.rqst.entry = SURFACE_HID_DESC_HID;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
@@ -158,7 +158,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 	buf = kzalloc(len, GFP_KERNEL);
 
 	// then, iterate and write into buffer, copying out bytes
-	data.rqst.id = SURFACE_HID_DESC_REPORT;
+	data.rqst.entry = SURFACE_HID_DESC_REPORT;
 	data.rqst.offset = 0;
 	data.rqst.length = 0x76;
 	data.rqst.end = 0;
