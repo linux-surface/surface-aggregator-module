@@ -33,11 +33,12 @@ struct surface_hid_descriptor {
 	__le16 report_desc_len;
 } __packed;
 
-struct vhf_device_metadata {
-	u32 len;
-	u16 vendor_id;
-	u16 product_id;
-	u8  _1[24];
+struct surface_hid_attributes {
+	__le32 length;
+	__le16 vendor;
+	__le16 product;
+	__le16 version;
+	__u8 _unknown[22];
 } __packed;
 
 struct surface_sam_sid_vhf_meta_rqst {
@@ -49,8 +50,8 @@ struct surface_sam_sid_vhf_meta_rqst {
 
 union vhf_buffer_data {
 	struct surface_hid_descriptor hid_descriptor;
+	struct surface_hid_attributes attributes;
 	u8 pld[0x76];
-	struct vhf_device_metadata meta;
 };
 
 struct surface_sam_sid_vhf_meta_resp {
@@ -67,7 +68,7 @@ struct surface_hid_device {
 };
 
 
-static int vhf_get_metadata(struct ssam_device *sdev, struct vhf_device_metadata *meta)
+static int vhf_get_metadata(struct ssam_device *sdev, struct surface_hid_attributes *attrs)
 {
 	struct surface_sam_sid_vhf_meta_resp data = {};
 	struct ssam_request rqst;
@@ -95,8 +96,7 @@ static int vhf_get_metadata(struct ssam_device *sdev, struct vhf_device_metadata
 	if (status)
 		return status;
 
-	*meta = data.data.meta;
-
+	*attrs = data.data.attributes;
 	return 0;
 }
 
@@ -284,7 +284,7 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 };
 
 
-static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, struct vhf_device_metadata *meta)
+static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, struct surface_hid_attributes *attrs)
 {
 	struct hid_device *hid;
 
@@ -295,8 +295,8 @@ static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, st
 	hid->dev.parent = &sdev->dev;
 
 	hid->bus     = BUS_VIRTUAL;
-	hid->vendor  = meta->vendor_id;
-	hid->product = meta->product_id;
+	hid->vendor  = get_unaligned_le16(&attrs->vendor);
+	hid->product = get_unaligned_le16(&attrs->product);
 
 	hid->ll_driver = &surface_hid_ll_driver;
 
@@ -390,7 +390,7 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
-	struct vhf_device_metadata meta = {};
+	struct surface_hid_attributes attrs = {};
 	struct hid_device *hid;
 	int status;
 
@@ -398,11 +398,11 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	if (!shid)
 		return -ENOMEM;
 
-	status = vhf_get_metadata(sdev, &meta);
+	status = vhf_get_metadata(sdev, &attrs);
 	if (status)
 		return status;
 
-	hid = sid_vhf_create_hid_device(sdev, &meta);
+	hid = sid_vhf_create_hid_device(sdev, &attrs);
 	if (IS_ERR(hid))
 		return PTR_ERR(hid);
 
