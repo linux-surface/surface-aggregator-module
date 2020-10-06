@@ -71,7 +71,6 @@ struct surface_hid_device {
 
 	struct surface_hid_descriptor hid_desc;
 	struct surface_hid_attributes attrs;
-	u8 *report_desc;
 
 	struct ssam_event_notifier notif;
 	struct hid_device *hid;
@@ -203,24 +202,6 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 	return 0;
 }
 
-static int surface_hid_load_report_descriptor(struct surface_hid_device *shid)
-{
-	int status;
-
-	shid->report_desc = kzalloc(shid->hid_desc.report_desc_len, GFP_KERNEL);
-	if (!shid->report_desc)
-		return -ENOMEM;
-
-	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_REPORT,
-			shid->report_desc, shid->hid_desc.report_desc_len);
-	if (status) {
-		kfree(shid->report_desc);
-		shid->report_desc = NULL;
-	}
-
-	return status;
-}
-
 static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 {
 	int status;
@@ -238,27 +219,6 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 	}
 
 	return 0;
-}
-
-static int surface_hid_load_descriptors(struct surface_hid_device *shid)
-{
-	int status;
-
-	status = surface_hid_load_hid_descriptor(shid);
-	if (status)
-		return status;
-
-	status = surface_hid_load_device_attributes(shid);
-	if (status)
-		return status;
-
-	return surface_hid_load_report_descriptor(shid);
-}
-
-static void surface_hid_free_descriptors(struct surface_hid_device *shid)
-{
-	kfree(shid->report_desc);
-	shid->report_desc = NULL;
 }
 
 
@@ -409,9 +369,20 @@ static void surface_hid_close(struct hid_device *hid)
 static int surface_hid_parse(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = hid->driver_data;
+	size_t len = shid->hid_desc.report_desc_len;
+	u8 *buf;
+	int status;
 
-	return hid_parse_report(hid, shid->report_desc,
-				shid->hid_desc.report_desc_len);
+	buf = kzalloc(len, GFP_KERNEL);
+	if (!buf)
+		return -ENOMEM;
+
+	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
+	if (!status)
+		status = hid_parse_report(hid, buf, len);
+
+	kfree(buf);
+	return status;
 }
 
 static int surface_hid_raw_request(struct hid_device *hid,
@@ -451,15 +422,17 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = surface_hid_load_descriptors(shid);
+	status = surface_hid_load_hid_descriptor(shid);
+	if (status)
+		return status;
+
+	status = surface_hid_load_device_attributes(shid);
 	if (status)
 		return status;
 
 	shid->hid = hid_allocate_device();
-	if (IS_ERR(shid->hid)) {
-		status = PTR_ERR(shid->hid);
-		goto err_alloc;
-	}
+	if (IS_ERR(shid->hid))
+		return PTR_ERR(shid->hid);
 
 	shid->hid->dev.parent = shid->dev;
 	shid->hid->bus = BUS_VIRTUAL;		// TODO: BUS_SURFACE
@@ -479,21 +452,14 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 
 	status = hid_add_device(shid->hid);
 	if (status)
-		goto err_add;
+		hid_destroy_device(shid->hid);
 
-	return 0;
-
-err_add:
-	hid_destroy_device(shid->hid);
-err_alloc:
-	surface_hid_free_descriptors(shid);
 	return status;
 }
 
 static void surface_hid_device_destroy(struct surface_hid_device *shid)
 {
 	hid_destroy_device(shid->hid);
-	surface_hid_free_descriptors(shid);
 }
 
 
