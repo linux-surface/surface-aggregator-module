@@ -371,7 +371,7 @@ static u32 surface_keyboard_event_fn(struct ssam_event_notifier *nf,
 	if (shid->uid.instance != event->instance_id)
 		return 0;
 
-	if (surface_keyboard_is_input_event(event))
+	if (!surface_keyboard_is_input_event(event))
 		return 0;
 
 	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
