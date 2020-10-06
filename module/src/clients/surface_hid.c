@@ -303,7 +303,7 @@ static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ss
 }
 
 
-static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
+static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
@@ -328,6 +328,11 @@ static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 		hid_destroy_device(shid->hid);
 
 	return 0;
+}
+
+static void surface_hid_device_destroy(struct surface_hid_device *shid)
+{
+	hid_destroy_device(shid->hid);
 }
 
 
@@ -423,14 +428,12 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	shid->notif.event.flags = 0;
 
 	ssam_device_set_drvdata(sdev, shid);
-	return sid_vhf_create_hid_device(shid);
+	return surface_hid_device_add(shid);
 }
 
 static void surface_hid_remove(struct ssam_device *sdev)
 {
-	struct surface_hid_device *shid = ssam_device_get_drvdata(sdev);
-
-	hid_destroy_device(shid->hid);
+	surface_hid_device_destroy(ssam_device_get_drvdata(sdev));
 }
 
 static const struct ssam_device_id surface_hid_match[] = {
