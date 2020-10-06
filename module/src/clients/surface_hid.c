@@ -162,9 +162,23 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	return 0;
 }
 
-static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_attributes *attrs)
+static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 {
-	return ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_ATTRS, (u8 *)attrs, sizeof(*attrs));
+	int status;
+
+	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_ATTRS,
+			(u8 *)&shid->attrs, sizeof(shid->attrs));
+	if (status)
+		return status;
+
+	if (get_unaligned_le32(&shid->attrs.length) != sizeof(shid->attrs)) {
+		dev_err(shid->dev, "unexpected attribute length: got %u, "
+			"expected %zu\n", get_unaligned_le32(&shid->attrs.length),
+			sizeof(shid->attrs));
+		return -EPROTO;
+	}
+
+	return 0;
 }
 
 static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, int *size)
@@ -336,7 +350,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 {
 	int status;
 
-	status = vhf_get_metadata(shid, &shid->attrs);
+	status = surface_hid_load_device_attributes(shid);
 	if (status)
 		return status;
 
