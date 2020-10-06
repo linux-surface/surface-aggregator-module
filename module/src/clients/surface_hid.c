@@ -69,6 +69,12 @@ struct surface_sam_sid_vhf_meta_resp {
 	union vhf_buffer_data data;
 } __packed;
 
+enum surface_hid_cid {
+	SURFACE_HID_CID_OUTPUT_REPORT      = 0x01,
+	SURFACE_HID_CID_GET_FEATURE_REPORT = 0x02,
+	SURFACE_HID_CID_SET_FEATURE_REPORT = 0x03,
+	SURFACE_HID_CID_GET_DESCRIPTOR     = 0x04,
+};
 
 struct surface_hid_device {
 	struct device *dev;
@@ -96,7 +102,7 @@ static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_
 
 	rqst.target_category = shid->uid.category;
 	rqst.target_id = shid->uid.target;
-	rqst.command_id = 0x04;
+	rqst.command_id = SURFACE_HID_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
@@ -129,7 +135,7 @@ static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, in
 
 	rqst.target_category = shid->uid.category;
 	rqst.target_id = shid->uid.target;;
-	rqst.command_id = 0x04;
+	rqst.command_id = SURFACE_HID_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(struct surface_sam_sid_vhf_meta_rqst);
@@ -235,7 +241,7 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 
 	switch (rtype) {
 	case HID_OUTPUT_REPORT:
-		cid = 0x01;
+		cid = SURFACE_HID_CID_OUTPUT_REPORT;
 		break;
 	case HID_FEATURE_REPORT:
 		switch (reqtype) {
@@ -247,10 +253,10 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 				return 0;
 			}
 
-			cid = 0x02;
+			cid = SURFACE_HID_CID_GET_FEATURE_REPORT;
 			break;
 		case HID_REQ_SET_REPORT:
-			cid = 0x03;
+			cid = SURFACE_HID_CID_SET_FEATURE_REPORT;
 			break;
 		default:
 			hid_err(hid, "%s: unknown req type 0x%02x\n", __func__, rtype);
