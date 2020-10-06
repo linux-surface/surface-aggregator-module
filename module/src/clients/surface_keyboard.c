@@ -300,7 +300,7 @@ static int kbd_get_feature_report(struct surface_hid_device *shid, u8 report_id,
 	return len;
 }
 
-static bool surface_kbd_is_input_event(const struct ssam_event *event)
+static bool kbd_is_input_event(const struct ssam_event *event)
 {
 	if (event->command_id == SURFACE_KBD_CID_EVT_INPUT_GENERIC)
 		return true;
@@ -311,7 +311,7 @@ static bool surface_kbd_is_input_event(const struct ssam_event *event)
 	return false;
 }
 
-static u32 surface_kbd_event_fn(struct ssam_event_notifier *nf,
+static u32 ssam_kbd_event_fn(struct ssam_event_notifier *nf,
 				const struct ssam_event *event)
 {
 	struct surface_hid_device *shid;
@@ -333,7 +333,7 @@ static u32 surface_kbd_event_fn(struct ssam_event_notifier *nf,
 	if (shid->uid.instance != event->instance_id)
 		return 0;
 
-	if (!surface_kbd_is_input_event(event))
+	if (!kbd_is_input_event(event))
 		return 0;
 
 	status = hid_input_report(shid->hid, HID_INPUT_REPORT,
@@ -561,7 +561,7 @@ static int surface_kbd_probe(struct platform_device *pdev)
 	shid->uid.function = 0;
 
 	shid->notif.base.priority = 1;
-	shid->notif.base.fn = surface_kbd_event_fn;
+	shid->notif.base.fn = ssam_kbd_event_fn;
 	shid->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	shid->notif.event.id.target_category = shid->uid.category;
 	shid->notif.event.id.instance = shid->uid.instance;
