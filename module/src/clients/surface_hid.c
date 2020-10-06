@@ -56,6 +56,7 @@ struct surface_hid_buffer_slice {
 	__le32 offset;
 	__le32 length;
 	__u8 end;
+	__u8 data[];
 } __packed;
 
 static_assert(sizeof(struct surface_hid_buffer_slice) == 10);
@@ -90,17 +91,23 @@ struct surface_hid_device {
 };
 
 
-static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_attributes *attrs)
+static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
+				   u8 *buf, size_t len)
 {
-	struct surface_sam_sid_vhf_meta_resp data = {};
+	u8 buffer[sizeof(struct surface_hid_buffer_slice) + 0x76];
+	struct surface_hid_buffer_slice *slice;
 	struct ssam_request rqst;
 	struct ssam_response rsp;
+	u32 buffer_len, offset, length;
 	int status;
 
-	data.rqst.entry = SURFACE_HID_DESC_ATTRS;
-	data.rqst.offset = 0;
-	data.rqst.length = 0x76;
-	data.rqst.end = 0;
+	/*
+	 * Note: The 0x76 above has been chosen because that's what's used by
+	 * the Windows driver. Together with the header, this leads to a 128
+	 * byte payload in total.
+	 */
+
+	buffer_len = ARRAY_SIZE(buffer) - sizeof(struct surface_hid_buffer_slice);
 
 	rqst.target_category = shid->uid.category;
 	rqst.target_id = shid->uid.target;
@@ -108,70 +115,76 @@ static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
 	rqst.length = sizeof(struct surface_hid_buffer_slice);
-	rqst.payload = (u8 *)&data.rqst;
+	rqst.payload = buffer;
 
-	rsp.capacity = sizeof(struct surface_sam_sid_vhf_meta_resp);
-	rsp.length = 0;
-	rsp.pointer = (u8 *)&data;
+	rsp.capacity = ARRAY_SIZE(buffer);
+	rsp.pointer = buffer;
 
-	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
-	if (status)
-		return status;
+	slice = (struct surface_hid_buffer_slice *)buffer;
+	slice->entry = entry;
+	slice->end = 0;
 
-	*attrs = data.data.attributes;
+	offset = 0;
+	length = buffer_len;
+
+	while (!slice->end && offset < len) {
+		put_unaligned_le32(offset, &slice->offset);
+		put_unaligned_le32(length, &slice->length);
+
+		rsp.length = 0;
+
+		status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
+		if (status)
+			return status;
+
+		offset = get_unaligned_le32(&slice->offset);
+		length = get_unaligned_le32(&slice->length);
+
+		// don't mess stuff up in case we receive garbage
+		if (length > buffer_len || offset > len)
+			return -EPROTO;
+
+		if (offset + length > len)
+			length = len - offset;
+
+		memcpy(buf + offset, &slice->data[0], length);
+
+		offset += length;
+		length = buffer_len;
+	}
+
+	if (offset != len) {
+		dev_err(shid->dev, "unexpected descriptor length: got %u, "
+			"expected %zu\n", offset, len);
+		return -EPROTO;
+	}
+
 	return 0;
+}
+
+static int vhf_get_metadata(struct surface_hid_device *shid, struct surface_hid_attributes *attrs)
+{
+	return ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_ATTRS, (u8 *)attrs, sizeof(*attrs));
 }
 
 static int vhf_get_hid_descriptor(struct surface_hid_device *shid, u8 **desc, int *size)
 {
-	struct surface_sam_sid_vhf_meta_resp data = {};
-	struct ssam_request rqst;
-	struct ssam_response rsp;
-	int status, len;
+	struct surface_hid_descriptor hid_desc;
+	u16 len;
 	u8 *buf;
+	int status;
 
-	data.rqst.entry = SURFACE_HID_DESC_HID;
-	data.rqst.offset = 0;
-	data.rqst.length = 0x76;
-	data.rqst.end = 0;
-
-	rqst.target_category = shid->uid.category;
-	rqst.target_id = shid->uid.target;;
-	rqst.command_id = SURFACE_HID_CID_GET_DESCRIPTOR;
-	rqst.instance_id = shid->uid.instance;
-	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(struct surface_hid_buffer_slice);
-	rqst.payload = (u8 *)&data.rqst;
-
-	rsp.capacity = sizeof(struct surface_sam_sid_vhf_meta_resp);
-	rsp.length = 0;
-	rsp.pointer = (u8 *)&data;
-
-	// first fetch 00 to get the total length
-	status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
+	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_HID, (u8 *)&hid_desc, sizeof(hid_desc));
 	if (status)
 		return status;
 
-	len = get_unaligned_le16(&data.data.hid_descriptor.report_desc_len);
-
-	// allocate a buffer for the descriptor
+	len = get_unaligned_le16(&hid_desc.report_desc_len);
 	buf = kzalloc(len, GFP_KERNEL);
 
-	// then, iterate and write into buffer, copying out bytes
-	data.rqst.entry = SURFACE_HID_DESC_REPORT;
-	data.rqst.offset = 0;
-	data.rqst.length = 0x76;
-	data.rqst.end = 0;
-
-	while (!data.rqst.end && data.rqst.offset < len) {
-		status = shid_retry(ssam_request_sync, shid->ctrl, &rqst, &rsp);
-		if (status) {
-			kfree(buf);
-			return status;
-		}
-		memcpy(buf + data.rqst.offset, data.data.pld, data.rqst.length);
-
-		data.rqst.offset += data.rqst.length;
+	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
+	if (status) {
+		kfree(buf);
+		return status;
 	}
 
 	*desc = buf;
