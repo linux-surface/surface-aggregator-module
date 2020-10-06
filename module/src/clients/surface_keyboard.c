@@ -172,9 +172,10 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 	if (status)
 		return status;
 
-	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
+	if (get_unaligned_le16(&shid->hid_desc.desc_len) != sizeof(shid->hid_desc)) {
 		dev_err(shid->dev, "unexpected hid descriptor length: got %u, "
-			"expected %zu\n", shid->hid_desc.desc_len,
+			"expected %zu\n",
+			get_unaligned_le16(&shid->hid_desc.desc_len),
 			sizeof(shid->hid_desc));
 		return -EPROTO;
 	}
@@ -211,9 +212,9 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 	if (status)
 		return status;
 
-	if (shid->attrs.length != sizeof(shid->attrs)) {
+	if (get_unaligned_le32(&shid->attrs.length) != sizeof(shid->attrs)) {
 		dev_err(shid->dev, "unexpected attribute length: got %u, "
-			"expected %zu\n", shid->attrs.length,
+			"expected %zu\n", get_unaligned_le32(&shid->attrs.length),
 			sizeof(shid->attrs));
 		return -EPROTO;
 	}
@@ -369,7 +370,7 @@ static void surface_hid_close(struct hid_device *hid)
 static int surface_hid_parse(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = hid->driver_data;
-	size_t len = shid->hid_desc.report_desc_len;
+	size_t len = get_unaligned_le16(&shid->hid_desc.report_desc_len);
 	u8 *buf;
 	int status;
 
