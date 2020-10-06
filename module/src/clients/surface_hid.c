@@ -290,6 +290,19 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 };
 
 
+static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
+{
+	struct surface_hid_device *shid = container_of(nf, struct surface_hid_device, notif);
+	int status;
+
+	if (event->command_id != 0x00)
+		return 0;
+
+	status = hid_input_report(shid->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 0);
+	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
+}
+
+
 static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 {
 	int status;
@@ -315,18 +328,6 @@ static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 		hid_destroy_device(shid->hid);
 
 	return 0;
-}
-
-static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
-{
-	struct surface_hid_device *shid = container_of(nf, struct surface_hid_device, notif);
-	int status;
-
-	if (event->command_id != 0x00)
-		return 0;
-
-	status = hid_input_report(shid->hid, HID_INPUT_REPORT, (u8 *)&event->data[0], event->length, 0);
-	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
 
