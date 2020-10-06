@@ -120,7 +120,7 @@ static int ssam_kbd_set_caps_led(struct surface_hid_device *shid, bool value)
 	rqst.target_id = shid->uid.target;
 	rqst.command_id = SURFACE_KBD_CID_SET_CAPSLOCK_LED;
 	rqst.instance_id = shid->uid.instance;
-	rqst.flags = SSAM_REQUEST_UNSEQUENCED;
+	rqst.flags = 0;
 	rqst.length = sizeof(u8);
 	rqst.payload = &value_u8;
 
