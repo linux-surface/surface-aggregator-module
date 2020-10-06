@@ -66,8 +66,10 @@ struct surface_sam_sid_vhf_meta_resp {
 
 struct surface_hid_device {
 	struct ssam_device *sdev;
-	struct ssam_event_notifier notif;
 
+	struct surface_hid_attributes attrs;
+
+	struct ssam_event_notifier notif;
 	struct hid_device *hid;
 };
 
@@ -288,26 +290,25 @@ static struct hid_ll_driver surface_hid_ll_driver = {
 };
 
 
-static struct hid_device *sid_vhf_create_hid_device(struct ssam_device *sdev, struct surface_hid_attributes *attrs)
+static int sid_vhf_create_hid_device(struct surface_hid_device *shid)
 {
-	struct hid_device *hid;
+	shid->hid = hid_allocate_device();
+	if (IS_ERR(shid->hid))
+		return PTR_ERR(shid->hid);
 
-	hid = hid_allocate_device();
-	if (IS_ERR(hid))
-		return hid;
+	shid->hid->dev.parent = &shid->sdev->dev;
 
-	hid->dev.parent = &sdev->dev;
+	shid->hid->bus     = BUS_VIRTUAL;
+	shid->hid->vendor  = get_unaligned_le16(&shid->attrs.vendor);
+	shid->hid->product = get_unaligned_le16(&shid->attrs.product);
 
-	hid->bus     = BUS_VIRTUAL;
-	hid->vendor  = get_unaligned_le16(&attrs->vendor);
-	hid->product = get_unaligned_le16(&attrs->product);
+	shid->hid->ll_driver = &surface_hid_ll_driver;
 
-	hid->ll_driver = &surface_hid_ll_driver;
+	snprintf(shid->hid->name, sizeof(shid->hid->name),
+		 "Microsoft Surface %04X:%04X",
+		 shid->hid->vendor, shid->hid->product);
 
-	snprintf(hid->name, sizeof(hid->name), "Microsoft Surface %04X:%04X",
-		 hid->vendor, hid->product);
-
-	return hid;
+	return 0;
 }
 
 static u32 sid_vhf_event_handler(struct ssam_event_notifier *nf, const struct ssam_event *event)
@@ -394,14 +395,13 @@ struct dev_pm_ops surface_hid_pm_ops = { };
 static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
-	struct surface_hid_attributes attrs;
 	int status;
 
 	shid = devm_kzalloc(&sdev->dev, sizeof(*shid), GFP_KERNEL);
 	if (!shid)
 		return -ENOMEM;
 
-	status = vhf_get_metadata(sdev, &attrs);
+	status = vhf_get_metadata(sdev, &shid->attrs);
 	if (status)
 		return status;
 
@@ -415,9 +415,9 @@ static int surface_hid_probe(struct ssam_device *sdev)
 	shid->notif.event.mask = SSAM_EVENT_MASK_STRICT;
 	shid->notif.event.flags = 0;
 
-	shid->hid = sid_vhf_create_hid_device(sdev, &attrs);
-	if (IS_ERR(shid->hid))
-		return PTR_ERR(shid->hid);
+	status = sid_vhf_create_hid_device(shid);
+	if (status)
+		return status;
 
 	ssam_device_set_drvdata(sdev, shid);
 
