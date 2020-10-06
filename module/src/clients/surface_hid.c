@@ -255,7 +255,7 @@ static int surface_hid_parse(struct hid_device *hid)
 	if (!buf)
 		return -ENOMEM;
 
-	status = ssam_kbd_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
+	status = ssam_hid_get_descriptor(shid, SURFACE_HID_DESC_REPORT, buf, len);
 	if (!status)
 		status = hid_parse_report(hid, buf, len);
 
