@@ -8,6 +8,7 @@
  * Copyright (C) 2019-2020 Blaž Hrastnik <blaz@mxxn.io>
  */
 
+#include <asm/unaligned.h>
 #include <linux/hid.h>
 #include <linux/input.h>
 #include <linux/kernel.h>
@@ -129,7 +130,7 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 	if (status)
 		return status;
 
-	len = data.data.hid_descriptor.report_desc_len;
+	len = get_unaligned_le16(&data.data.hid_descriptor.report_desc_len);
 
 	// allocate a buffer for the descriptor
 	buf = kzalloc(len, GFP_KERNEL);
