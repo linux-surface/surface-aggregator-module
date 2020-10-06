@@ -62,17 +62,6 @@ struct surface_hid_buffer_slice {
 
 static_assert(sizeof(struct surface_hid_buffer_slice) == 10);
 
-union vhf_buffer_data {
-	struct surface_hid_descriptor hid_descriptor;
-	struct surface_hid_attributes attributes;
-	u8 pld[0x76];
-};
-
-struct surface_sam_sid_vhf_meta_resp {
-	struct surface_hid_buffer_slice rqst;
-	union vhf_buffer_data data;
-} __packed;
-
 enum surface_hid_cid {
 	SURFACE_HID_CID_OUTPUT_REPORT      = 0x01,
 	SURFACE_HID_CID_GET_FEATURE_REPORT = 0x02,
