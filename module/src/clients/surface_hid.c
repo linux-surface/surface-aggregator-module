@@ -163,20 +163,16 @@ static int vhf_get_hid_descriptor(struct ssam_device *sdev, u8 **desc, int *size
 
 static int sid_vhf_hid_start(struct hid_device *hid)
 {
-	hid_dbg(hid, "%s\n", __func__);
 	return 0;
 }
 
 static void sid_vhf_hid_stop(struct hid_device *hid)
 {
-	hid_dbg(hid, "%s\n", __func__);
 }
 
 static int sid_vhf_hid_open(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	hid_dbg(hid, "%s\n", __func__);
 
 	set_bit(VHF_HID_STARTED, &shid->state);
 	return 0;
@@ -186,8 +182,6 @@ static void sid_vhf_hid_close(struct hid_device *hid)
 {
 
 	struct surface_hid_device *shid = dev_get_drvdata(hid->dev.parent);
-
-	hid_dbg(hid, "%s\n", __func__);
 
 	clear_bit(VHF_HID_STARTED, &shid->state);
 }
