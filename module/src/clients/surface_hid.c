@@ -275,12 +275,12 @@ static int surface_hid_raw_request(struct hid_device *hid, unsigned char
 }
 
 static struct hid_ll_driver surface_hid_ll_driver = {
-	.start         = surface_hid_start,
-	.stop          = surface_hid_stop,
-	.open          = surface_hid_open,
-	.close         = surface_hid_close,
-	.parse         = surface_hid_parse,
-	.raw_request   = surface_hid_raw_request,
+	.start       = surface_hid_start,
+	.stop        = surface_hid_stop,
+	.open        = surface_hid_open,
+	.close       = surface_hid_close,
+	.parse       = surface_hid_parse,
+	.raw_request = surface_hid_raw_request,
 };
 
 
