@@ -239,7 +239,7 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 	}
 
 	if (shid->hid_desc.desc_type != HID_DT_HID) {
-		dev_err(shid->dev, "unexpected hid descriptor type: got 0x%x, "
+		dev_err(shid->dev, "unexpected HID descriptor type: got 0x%x, "
 			"expected 0x%x\n", shid->hid_desc.desc_type,
 			HID_DT_HID);
 		return -EPROTO;
