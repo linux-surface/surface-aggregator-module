@@ -12,7 +12,7 @@ If you have a Surface Book 2 you might also want to have a look at the [dtx-daem
 |------------------------|------------------------------------------------------------------------------|--------------------------------------------------------------|
 | Surface Book 2         | lid status, battery status, clipboard detach events, performance-modes, dGPU | -                                                            |
 | Surface Book 3         | lid status, battery status, performance-modes, dGPU                          | clipboard detach events (#39)                                |
-| Surface Laptop         | battery status, keyboard                                                     | caps-lock indicator (#8), performance-modes (#18)            |
+| Surface Laptop         | battery status, keyboard                                                     | performance-modes (#18)                                      |
 | Surface Laptop 2       | battery status, keyboard                                                     | caps-lock indicator (#8), performance-modes (#18)            |
 | Surface Laptop 3 (13") | battery status, keyboard, performance-modes                                  | -                                                            |
 | Surface Laptop 3 (15") | battery status, keyboard  performance-modes                                  | -                                                            |
