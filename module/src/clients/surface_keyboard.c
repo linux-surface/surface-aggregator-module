@@ -215,7 +215,7 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 		return status;
 
 	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
-		dev_err(shid->dev, "unexpected hid descriptor length: got %u, "
+		dev_err(shid->dev, "unexpected HID descriptor length: got %u, "
 			"expected %zu\n", shid->hid_desc.desc_len,
 			sizeof(shid->hid_desc));
 		return -EPROTO;
