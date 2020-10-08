@@ -297,15 +297,6 @@ static int shid_get_feature_report(struct surface_hid_device *shid,
 {
 	int status;
 
-	// TODO: Fix this blacklist. Either
-	//  - replace this by HID_QUIRK_NO[_INIT]_INPUT_REPORTS if possible, or
-	//  - make it dependent on vendor + product ID if not.
-
-	if (report_id == 6 || report_id == 7 || report_id == 8 || report_id == 9 || report_id == 0x0b) {
-		dev_dbg(shid->dev, "%s: skipping get feature report for 0x%02x\n", __func__, report_id);
-		return 0;
-	}
-
 	status = ssam_hid_get_raw_report(shid, report_id, data, len);
 	return status >= 0 ? len : status;
 }
