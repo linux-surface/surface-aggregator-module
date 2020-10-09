@@ -193,7 +193,7 @@ static int ssam_hid_get_raw_report(struct surface_hid_device *shid,
 	rqst.instance_id = shid->uid.instance;
 	rqst.command_id = SURFACE_HID_CID_GET_FEATURE_REPORT;
 	rqst.flags = 0;
-	rqst.length = sizeof(u8);
+	rqst.length = sizeof(report_id);
 	rqst.payload = &report_id;
 
 	rsp.capacity = len;
@@ -201,7 +201,7 @@ static int ssam_hid_get_raw_report(struct surface_hid_device *shid,
 	rsp.pointer = buf;
 
 	return shid_retry(ssam_request_sync_onstack, shid->ctrl, &rqst, &rsp,
-			  sizeof(u8));
+			  sizeof(report_id));
 }
 
 static u32 ssam_hid_event_fn(struct ssam_event_notifier *nf,

@@ -91,7 +91,7 @@ static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	rqst.command_id = SURFACE_KBD_CID_GET_DESCRIPTOR;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(u8);
+	rqst.length = sizeof(entry);
 	rqst.payload = &entry;
 
 	rsp.capacity = len;
@@ -99,7 +99,7 @@ static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	rsp.pointer = buf;
 
 	status = shid_retry(ssam_request_sync_onstack, shid->ctrl, &rqst, &rsp,
-			    sizeof(u8));
+			    sizeof(entry));
 	if (status)
 		return status;
 
@@ -122,11 +122,11 @@ static int ssam_kbd_set_caps_led(struct surface_hid_device *shid, bool value)
 	rqst.command_id = SURFACE_KBD_CID_SET_CAPSLOCK_LED;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = 0;
-	rqst.length = sizeof(u8);
+	rqst.length = sizeof(value_u8);
 	rqst.payload = &value_u8;
 
 	return shid_retry(ssam_request_sync_onstack, shid->ctrl, &rqst, NULL,
-			  sizeof(u8));
+			  sizeof(value_u8));
 }
 
 static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
@@ -142,7 +142,7 @@ static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
 	rqst.command_id = SURFACE_KBD_CID_GET_FEATURE_REPORT;
 	rqst.instance_id = shid->uid.instance;
 	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(u8);
+	rqst.length = sizeof(payload);
 	rqst.payload = &payload;
 
 	rsp.capacity = len;
@@ -150,7 +150,7 @@ static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
 	rsp.pointer = buf;
 
 	status = shid_retry(ssam_request_sync_onstack, shid->ctrl, &rqst, &rsp,
-			    sizeof(u8));
+			    sizeof(payload));
 	if (status)
 		return status;
 
