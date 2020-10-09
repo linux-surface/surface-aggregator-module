@@ -8,7 +8,6 @@ obj-m += surface_battery.o
 obj-m += surface_dtx.o
 obj-m += surface_hid.o
 obj-m += surface_hotplug.o
-obj-m += surface_keyboard.o
 obj-m += surface_perfmode.o
 
 #ccflags-y += -DDEBUG
