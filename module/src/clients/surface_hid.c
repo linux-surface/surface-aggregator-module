@@ -55,16 +55,6 @@ struct surface_hid_attributes {
 
 static_assert(sizeof(struct surface_hid_attributes) == 32);
 
-struct surface_hid_buffer_slice {
-	__u8 entry;
-	__le32 offset;
-	__le32 length;
-	__u8 end;
-	__u8 data[];
-} __packed;
-
-static_assert(sizeof(struct surface_hid_buffer_slice) == 10);
-
 struct surface_hid_device;
 
 struct surface_hid_device_ops {
@@ -94,6 +84,18 @@ struct surface_hid_device {
 
 
 /* -- SAM interface (HID). -------------------------------------------------- */
+
+#ifdef CONFIG_SURFACE_AGGREGATOR_BUS
+
+struct surface_hid_buffer_slice {
+	__u8 entry;
+	__le32 offset;
+	__le32 length;
+	__u8 end;
+	__u8 data[];
+} __packed;
+
+static_assert(sizeof(struct surface_hid_buffer_slice) == 10);
 
 enum surface_hid_cid {
 	SURFACE_HID_CID_OUTPUT_REPORT      = 0x01,
@@ -239,6 +241,38 @@ static u32 ssam_hid_event_fn(struct ssam_event_notifier *nf,
 }
 
 
+/* -- Transport driver (HID). ----------------------------------------------- */
+
+static int shid_output_report(struct surface_hid_device *shid, u8 report_id,
+			      u8 *data, size_t len)
+{
+	int status;
+
+	status =  ssam_hid_set_raw_report(shid, report_id, false, data, len);
+	return status >= 0 ? len : status;
+}
+
+static int shid_get_feature_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *data, size_t len)
+{
+	int status;
+
+	status = ssam_hid_get_raw_report(shid, report_id, data, len);
+	return status >= 0 ? len : status;
+}
+
+static int shid_set_feature_report(struct surface_hid_device *shid,
+				   u8 report_id, u8 *data, size_t len)
+{
+	int status;
+
+	status =  ssam_hid_set_raw_report(shid, report_id, true, data, len);
+	return status >= 0 ? len : status;
+}
+
+#endif /* CONFIG_SURFACE_AGGREGATOR_BUS */
+
+
 /* -- SAM interface (KBD). -------------------------------------------------- */
 
 #define KBD_FEATURE_REPORT_SIZE		7  // 6 + report ID
@@ -378,97 +412,6 @@ static u32 ssam_kbd_event_fn(struct ssam_event_notifier *nf,
 }
 
 
-/* -- Device descriptor access. --------------------------------------------- */
-
-static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
-{
-	int status;
-
-	status = shid->ops.get_descriptor(shid, SURFACE_HID_DESC_HID,
-			(u8 *)&shid->hid_desc, sizeof(shid->hid_desc));
-	if (status)
-		return status;
-
-	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
-		dev_err(shid->dev, "unexpected HID descriptor length: got %u, "
-			"expected %zu\n", shid->hid_desc.desc_len,
-			sizeof(shid->hid_desc));
-		return -EPROTO;
-	}
-
-	if (shid->hid_desc.desc_type != HID_DT_HID) {
-		dev_err(shid->dev, "unexpected HID descriptor type: got 0x%x, "
-			"expected 0x%x\n", shid->hid_desc.desc_type,
-			HID_DT_HID);
-		return -EPROTO;
-	}
-
-	if (shid->hid_desc.num_descriptors != 1) {
-		dev_err(shid->dev, "unexpected number of descriptors: got %u, "
-			"expected 1\n", shid->hid_desc.num_descriptors);
-		return -EPROTO;
-	}
-
-	if (shid->hid_desc.report_desc_type != HID_DT_REPORT) {
-		dev_err(shid->dev, "unexpected report descriptor type: got 0x%x, "
-			"expected 0x%x\n", shid->hid_desc.report_desc_type,
-			HID_DT_REPORT);
-		return -EPROTO;
-	}
-
-	return 0;
-}
-
-static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
-{
-	int status;
-
-	status = shid->ops.get_descriptor(shid, SURFACE_HID_DESC_ATTRS,
-			(u8 *)&shid->attrs, sizeof(shid->attrs));
-	if (status)
-		return status;
-
-	if (get_unaligned_le32(&shid->attrs.length) != sizeof(shid->attrs)) {
-		dev_err(shid->dev, "unexpected attribute length: got %u, "
-			"expected %zu\n", get_unaligned_le32(&shid->attrs.length),
-			sizeof(shid->attrs));
-		return -EPROTO;
-	}
-
-	return 0;
-}
-
-
-/* -- Transport driver (HID). ----------------------------------------------- */
-
-static int shid_output_report(struct surface_hid_device *shid, u8 report_id,
-			      u8 *data, size_t len)
-{
-	int status;
-
-	status =  ssam_hid_set_raw_report(shid, report_id, false, data, len);
-	return status >= 0 ? len : status;
-}
-
-static int shid_get_feature_report(struct surface_hid_device *shid,
-				   u8 report_id, u8 *data, size_t len)
-{
-	int status;
-
-	status = ssam_hid_get_raw_report(shid, report_id, data, len);
-	return status >= 0 ? len : status;
-}
-
-static int shid_set_feature_report(struct surface_hid_device *shid,
-				   u8 report_id, u8 *data, size_t len)
-{
-	int status;
-
-	status =  ssam_hid_set_raw_report(shid, report_id, true, data, len);
-	return status >= 0 ? len : status;
-}
-
-
 /* -- Transport driver (KBD). ----------------------------------------------- */
 
 static int skbd_get_caps_led_value(struct hid_device *hid, u8 report_id,
@@ -551,6 +494,67 @@ static int skbd_set_feature_report(struct surface_hid_device *shid,
 				   u8 report_id, u8 *data, size_t len)
 {
 	return -EIO;
+}
+
+
+/* -- Device descriptor access. --------------------------------------------- */
+
+static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
+{
+	int status;
+
+	status = shid->ops.get_descriptor(shid, SURFACE_HID_DESC_HID,
+			(u8 *)&shid->hid_desc, sizeof(shid->hid_desc));
+	if (status)
+		return status;
+
+	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
+		dev_err(shid->dev, "unexpected HID descriptor length: got %u, "
+			"expected %zu\n", shid->hid_desc.desc_len,
+			sizeof(shid->hid_desc));
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.desc_type != HID_DT_HID) {
+		dev_err(shid->dev, "unexpected HID descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.desc_type,
+			HID_DT_HID);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.num_descriptors != 1) {
+		dev_err(shid->dev, "unexpected number of descriptors: got %u, "
+			"expected 1\n", shid->hid_desc.num_descriptors);
+		return -EPROTO;
+	}
+
+	if (shid->hid_desc.report_desc_type != HID_DT_REPORT) {
+		dev_err(shid->dev, "unexpected report descriptor type: got 0x%x, "
+			"expected 0x%x\n", shid->hid_desc.report_desc_type,
+			HID_DT_REPORT);
+		return -EPROTO;
+	}
+
+	return 0;
+}
+
+static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
+{
+	int status;
+
+	status = shid->ops.get_descriptor(shid, SURFACE_HID_DESC_ATTRS,
+			(u8 *)&shid->attrs, sizeof(shid->attrs));
+	if (status)
+		return status;
+
+	if (get_unaligned_le32(&shid->attrs.length) != sizeof(shid->attrs)) {
+		dev_err(shid->dev, "unexpected attribute length: got %u, "
+			"expected %zu\n", get_unaligned_le32(&shid->attrs.length),
+			sizeof(shid->attrs));
+		return -EPROTO;
+	}
+
+	return 0;
 }
 
 
@@ -746,6 +750,8 @@ const struct dev_pm_ops surface_hid_pm_ops = { };
 
 /* -- Driver setup (HID). --------------------------------------------------- */
 
+#ifdef CONFIG_SURFACE_AGGREGATOR_BUS
+
 static int surface_hid_probe(struct ssam_device *sdev)
 {
 	struct surface_hid_device *shid;
@@ -796,6 +802,29 @@ static struct ssam_device_driver surface_hid_driver = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
+
+static int surface_hid_driver_register(void)
+{
+	return ssam_device_driver_register(&surface_hid_driver);
+}
+
+static void surface_hid_driver_unregister(void)
+{
+	ssam_device_driver_unregister(&surface_hid_driver);
+}
+
+#else /* CONFIG_SURFACE_AGGREGATOR_BUS */
+
+static int surface_hid_driver_register(void)
+{
+	return 0;
+}
+
+static void surface_hid_driver_unregister(void)
+{
+}
+
+#endif /* CONFIG_SURFACE_AGGREGATOR_BUS */
 
 
 /* -- Driver setup (KBD). --------------------------------------------------- */
@@ -871,13 +900,13 @@ static int __init surface_hid_init(void)
 {
 	int status;
 
-	status = ssam_device_driver_register(&surface_hid_driver);
+	status = surface_hid_driver_register();
 	if (status)
 		return status;
 
 	status = platform_driver_register(&surface_kbd_driver);
 	if (status)
-		ssam_device_driver_unregister(&surface_hid_driver);
+		surface_hid_driver_unregister();
 
 	return status;
 }
@@ -886,7 +915,7 @@ module_init(surface_hid_init);
 static void __exit surface_hid_exit(void)
 {
 	platform_driver_unregister(&surface_kbd_driver);
-	ssam_device_driver_unregister(&surface_hid_driver);
+	surface_hid_driver_unregister();
 }
 module_exit(surface_hid_exit);
 
