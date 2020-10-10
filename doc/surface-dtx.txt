@@ -153,27 +153,31 @@ properties except where stated otherwise:
 Command-Codes/IDs:
 
     CID 0x06:
-        Lock latch. Transfers the latch from 'closed' to 'locked' state.
+        Lock latch.
 
-        This command will be silently ignored if the latch has already been
-        locked.
+        Transfers the latch from 'closed' to 'locked' state. This command
+        will be silently ignored if the latch has already been locked.
 
         Context:
             Valid only outside detachment-process (otherwise silently ignored).
 
     CID 0x07:
-        Unlock latch. Transfers the latch from 'locked' to 'closed'/unlocked
-        state. This command only unlocks the latch. It will not open the
-        latch when sent during an ongoing detatchment process. It will be
-        silently ignored if the lock is already unlocked/closed.
+        Unlock latch.
+
+        Transfers the latch from 'locked' to 'closed'/unlocked state. This
+        command only unlocks the latch. It will not open the latch when sent
+        during an ongoing detatchment process. It will be silently ignored
+        if the lock is already unlocked/closed.
 
         Context:
             Valid in any context.
 
     CID 0x08:
-        Generic latch request. Behavior depends on the context: If no
-        detachment-process is active, detachment is requested. Otherwise the
-        currently active detachment-process will be aborted.
+        Generic latch request.
+
+        Behavior depends on the context: If no detachment-process is active,
+        detachment is requested. Otherwise the currently active
+        detachment-process will be aborted.
 
         Context:
             Valid in any context, altough with different behavior.
@@ -189,7 +193,7 @@ Command-Codes/IDs:
         Context:
             Valid only during detachment-process (otherwise silently ignored).
 
-    CID 0x0D, SNC 0x01:
+    CID 0x0d, SNC 0x01:
         Get device operation mode.
 
         Returns a single byte containing the operatio mode. This can be one
