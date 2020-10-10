@@ -242,12 +242,12 @@ Event Codes/IDs:
 
     CID 0x0e:
         Generic detach-request event. Depending on the context, can signal
-        initiation or abortion of a detachment-process.
+        initiation or abortion of a detachment-process by a user.
 
         Payload: None
 
     CID 0x0f:
-        Detachment canceled.
+        Detachment canceled due to error.
 
         Payload: 1 byte.
             0x00:   Not feasible (detach with low battery).
