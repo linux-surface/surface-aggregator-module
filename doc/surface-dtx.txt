@@ -216,6 +216,31 @@ Command-Codes/IDs:
         Context:
             Valid only during detachment-process (otherwise silently ignored).
 
+    CID 0x0c, SNC 0x01:
+        Get connection state.
+
+        Get the current connection state (i.e. attached/detached) and the
+        type of the base connected to the clipboard.
+
+        This is command essentially provides a way to query the information
+        provided by the connection change event (CID=0x0c).
+
+        Return: 2 bytes: [state, base].
+            The `state` byte specifies the detach state, while the `base`
+            byte specifies the base type.
+
+            state:
+                0x00:   detached (detach success)
+                0x01:   attached
+                0x02:   not feasible (detach with low battery)
+
+            base:
+                0x07:   Ur base
+                0x0a:   ZOr base
+                0x0d:   Ge base (additional checks/setup?)
+                0x0e:   Ce base
+                other:  no dGPU (or unknown?)
+
     CID 0x0d, SNC 0x01:
         Get device operation mode.
 
