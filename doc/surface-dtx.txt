@@ -6,6 +6,8 @@ Devices:     Surface Book 2.
 Date:        2019-04-05
 
 
+Warning: This documentation is outdated and in parts inaccurate.
+
 The DTX driver is responsible for proper clipboard detachment and
 re-attachment handling. To this end, it provides the `/dev/surface_dtx`
 device, through which it can interface with a user-space daemon. This daemon
