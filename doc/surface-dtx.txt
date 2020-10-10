@@ -155,7 +155,7 @@ Command-Codes/IDs:
     CID 0x06:
         Lock latch. Transfers the latch from 'closed' to 'locked' state.
 
-        This command will be silently ignored if the latch is already
+        This command will be silently ignored if the latch has already been
         locked.
 
         Context:
@@ -163,32 +163,31 @@ Command-Codes/IDs:
 
     CID 0x07:
         Unlock latch. Transfers the latch from 'locked' to 'closed'/unlocked
-        state. During a detachment process with locked latch, this also
-        opens the latch.
-
-        This command will be silently ignored if the lock is already
-        unlocked/closed (even during a detachment-process).
+        state. This command only unlocks the latch. It will not open the
+        latch when sent during an ongoing detatchment process. It will be
+        silently ignored if the lock is already unlocked/closed.
 
         Context:
             Valid in any context.
 
     CID 0x08:
         Generic latch request. Behavior depends on the context: If no
-        detachment-process is active, requests detachment. Otherwise the
+        detachment-process is active, detachment is requested. Otherwise the
         currently active detachment-process will be aborted.
 
         Context:
             Valid in any context, altough with different behavior.
 
     CID 0x09:
-        Open latch.
+        Open latch / confirm latch open.
+
+        Acknowledges and confirms a latch request. If sent, during an
+        ongoing detachment process, this command causes the latch to be
+        opened immediately. The latch will also be opened if it has been
+        locked. In this case, the latch lock is reset to the unlocked state.
 
         Context:
             Valid only during detachment-process (otherwise silently ignored).
-
-            If the latch is locked _and_ the dGPU is active/consumes power,
-            this command will abort the detachment process instead of
-            unlocking the hardware-lock.
 
     CID 0x0D, SNC 0x01:
         Get device operation mode.
