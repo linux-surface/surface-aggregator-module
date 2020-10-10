@@ -193,6 +193,16 @@ Command-Codes/IDs:
         Context:
             Valid only during detachment-process (otherwise silently ignored).
 
+    CID 0x0a:
+        Heartbeat for detachment in progress.
+
+        Sends a heartbeat, essentially resetting the detachment timeout.
+        This command can be used to keep the detachment process allive while
+        work required for the detachment to succeed is still in progress.
+
+        Context:
+            Valid only during detachment-process (otherwise silently ignored).
+
     CID 0x0d, SNC 0x01:
         Get device operation mode.
 
