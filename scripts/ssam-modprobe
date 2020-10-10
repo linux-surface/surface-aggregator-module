@@ -16,7 +16,6 @@ unload() {
     modprobe -r ac
 
     ${cmd} surface_perfmode
-    ${cmd} surface_keyboard
     ${cmd} surface_hotplug
     ${cmd} surface_hid
     ${cmd} surface_dtx
@@ -39,7 +38,6 @@ load() {
     ${cmd} "${client_pfx}"surface_dtx"${ext}"
     ${cmd} "${client_pfx}"surface_hid"${ext}"
     ${cmd} "${client_pfx}"surface_hotplug"${ext}"
-    ${cmd} "${client_pfx}"surface_keyboard"${ext}"
     ${cmd} "${client_pfx}"surface_perfmode"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
 
