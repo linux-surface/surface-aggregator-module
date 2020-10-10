@@ -252,6 +252,24 @@ Command-Codes/IDs:
             0x01: Laptop Mode (tablet attached normally)
             0x02: Studio Mode (tablet attached but reversed, no keyboard)
 
+    CID 0x11, SNC 0x01:
+        Get latch status.
+
+        Get the current latch status or (presumably) the last error
+        encountered when trying to open/close the latch.
+
+        This is command essentially provides a way to query the information
+        provided by the latch status change event (CID=0x11).
+
+        Return: 1 byte.
+            0x00:   Latch locked.
+            0x01:   Latch unlocked.
+            0x02:   Failed to unlock.
+            0x03:   Failed to remain unlocked.
+            0x04:   Failed to re-lock.
+
+        Note: In this context unlocked/locked means open/close.
+
 
 Events
 --------------------------------------------------------------------------------
