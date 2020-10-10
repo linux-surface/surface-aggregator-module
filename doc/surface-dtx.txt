@@ -179,6 +179,9 @@ Command-Codes/IDs:
         detachment is requested. Otherwise the currently active
         detachment-process will be aborted.
 
+        If a detachment process is canceled by this operation, a generic
+        detachment request event (CID=0x06) will be sent.
+
         Context:
             Valid in any context, altough with different behavior.
 
@@ -199,6 +202,16 @@ Command-Codes/IDs:
         Sends a heartbeat, essentially resetting the detachment timeout.
         This command can be used to keep the detachment process allive while
         work required for the detachment to succeed is still in progress.
+
+        Context:
+            Valid only during detachment-process (otherwise silently ignored).
+
+    CID 0x0b:
+        Cancel detachment.
+
+        Cancels detachment in progress. If a detachment process is canceled
+        by this operation, a generic detachment request event (CID=0x06)
+        will be sent.
 
         Context:
             Valid only during detachment-process (otherwise silently ignored).
