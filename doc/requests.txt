@@ -374,6 +374,14 @@ List of Unknown KIP Requests (TC = 0x0E)
     0x2c  0x00  0x01  no       u8        ?                      rev
 
 
+List of Unknown BAS Requests (TC = 0x11)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Response  Function/Behavior      Source
+    ------------------------------------------------------------------------
+    0x0a  0x00  0x01  no       yes       ?                      probing
+
+
 List of Unknown REG Requests (TC = 0x21)
 --------------------------------------------------------------------------------
 
