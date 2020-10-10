@@ -209,13 +209,21 @@ Event Codes/IDs:
         Physical connection changed. This means real physical contact as in
         clipboard separated from / inserted into base.
 
-        Payload: 2 bytes.
-            [0x00, 0x00]:   Disconnected.
-            [0x01, 0x0a]:   Connected.
+        Payload: 2 bytes: [state, base].
+            The `state` byte specifies the detach state, while the `base`
+            byte specifies the base type.
 
-            The specific purpose of the second byte is (so far) unclear. It
-            might be related to the type of hardware/base that has been
-            attached (i.e. with/without dGPU).
+            state:
+                0x00:   detached (detach success)
+                0x01:   attached
+                0x02:   not feasible (detach with low battery)
+
+            base:
+                0x07:   Ur base
+                0x0a:   ZOr base
+                0x0d:   Ge base (additional checks/setup?)
+                0x0e:   Ce base
+                other:  no dGPU (or unknown?)
 
     CID 0x0e:
         Generic detach-request event. Depending on the context, can signal
@@ -224,13 +232,17 @@ Event Codes/IDs:
         Payload: None
 
     CID 0x0f:
-        Generic error event.
+        Detachment canceled.
 
-        Payload: 1 byte (0x02).
-            0x02: The detachment-process timed out while the latch was
-                  locked. The latch has not been opened.
+        Payload: 1 byte.
+            0x00:   Not feasible (detach with low battery).
+            0x02:   The detachment-process timed out while the latch was
+                    locked. The latch has not been opened.
+            0x03:   Failed to unlock.
+            0x04:   Failed to remain unlocked.
+            0x05:   Failed to re-lock.
 
-            Other values are currently unknown.
+        Note: In this context unlocked/locked means open/close.
 
     CID 0x11:
         Latch status event. Signals change of the latch status, specifically
@@ -238,8 +250,13 @@ Event Codes/IDs:
         the user when the clipboard is ready to be separated from the base.
 
         Payload: 1 byte.
-            0x01:   Latch has been opened.
-            0x00:   Latch has been closed.
+            0x00:   Latch locked.
+            0x01:   Latch unlocked.
+            0x02:   Failed to unlock.
+            0x03:   Failed to remain unlocked.
+            0x04:   Failed to re-lock.
+
+        Note: In this context unlocked/locked means open/close.
 
 
 User-Space API
