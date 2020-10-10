@@ -219,8 +219,10 @@ Command-Codes/IDs:
     CID 0x0d, SNC 0x01:
         Get device operation mode.
 
-        Returns a single byte containing the operatio mode. This can be one
-        of
+        Retunrs the device operation mode, indicating if and how the base is
+        attached to the clipboard.
+
+        Return: 1 byte.
             0x00: Tablet Mode (tablet detached)
             0x01: Laptop Mode (tablet attached normally)
             0x02: Studio Mode (tablet attached but reversed, no keyboard)
