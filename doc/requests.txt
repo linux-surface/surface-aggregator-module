@@ -379,7 +379,7 @@ List of Unknown BAS Requests (TC = 0x11)
 
      CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
-    0x0a  0x00  0x01  no       yes       ?                      probing
+    0x0a  0x00  0x01  no       yes       fw-version?            probing
 
 
 List of Unknown REG Requests (TC = 0x21)
