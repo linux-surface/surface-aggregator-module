@@ -62,6 +62,14 @@ enum dtx_latch_status {
 	DTX_LATCH_STATUS_FAILED_TO_CLOSE	= 0x04,
 };
 
+enum dtx_cancel_reason {
+	DTX_CANCEL_REASON_NOT_FEASIBLE		= 0x00,  // low battery
+	DTX_CANCEL_REASON_TIMEOUT		= 0x02,
+	DTX_CANCEL_REASON_FAILED_TO_OPEN	= 0x03,
+	DTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN	= 0x04,
+	DTX_CANCEL_REASON_FAILED_TO_CLOSE	= 0x05,
+};
+
 
 // Warning: This must always be a power of 2!
 #define DTX_CLIENT_BUF_SIZE			16
