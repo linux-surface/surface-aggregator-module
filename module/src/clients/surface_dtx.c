@@ -380,6 +380,7 @@ static struct surface_dtx_dev surface_dtx_dev = {
 	.mdev = {
 		.minor = MISC_DYNAMIC_MINOR,
 		.name = "surface_dtx",
+		.nodename = "surface/dtx",
 		.fops = &surface_dtx_fops,
 	},
 	.client_lock = __SPIN_LOCK_UNLOCKED(),
