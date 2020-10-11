@@ -47,6 +47,12 @@ enum dtx_device_mode {
 	DTX_DEVICE_MODE_STUDIO			= 0x02,
 };
 
+enum dtx_connection_state {
+	DTX_CONNECTION_STATE_DETACH_SUCCESS	= 0x00,
+	DTX_CONNECTION_STATE_ATTACHED		= 0x01,
+	DTX_CONNECTION_STATE_NOT_FEASIBLE	= 0x02,
+};
+
 enum dtx_latch_status {
 	DTX_LATCH_STATUS_CLOSED			= 0x00,
 	DTX_LATCH_STATUS_OPENED			= 0x01,
