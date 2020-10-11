@@ -28,11 +28,24 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
-#define DTX_IOCTL_LATCH_LOCK			_IO(0x11, 0x01)
-#define DTX_IOCTL_LATCH_UNLOCK			_IO(0x11, 0x02)
-#define DTX_IOCTL_LATCH_REQUEST			_IO(0x11, 0x03)
-#define DTX_IOCTL_LATCH_CONFIRM			_IO(0x11, 0x04)
-#define DTX_IOCTL_GET_DEVICE_MODE		_IOR(0x11, 0x05, u32)
+struct dtx_base_info {
+	u16 state;
+	u16 base_id;
+} __packed;
+
+#define DTX_IOCTL_EVENTS_ENABLE		_IO(0x11, 0x01)
+#define DTX_IOCTL_EVENTS_DISABLE	_IO(0x11, 0x02)
+
+#define DTX_IOCTL_LATCH_LOCK		_IO(0x11, 0x03)
+#define DTX_IOCTL_LATCH_UNLOCK		_IO(0x11, 0x04)
+#define DTX_IOCTL_LATCH_REQUEST		_IO(0x11, 0x05)
+#define DTX_IOCTL_LATCH_CONFIRM		_IO(0x11, 0x06)
+#define DTX_IOCTL_LATCH_HEARTBEAT	_IO(0x11, 0x07)
+#define DTX_IOCTL_LATCH_CANCEL		_IO(0x11, 0x08)
+
+#define DTX_IOCTL_GET_BASE_INFO		_IOR(0x11, 0x09, struct dtx_base_info)
+#define DTX_IOCTL_GET_DEVICE_MODE	_IOR(0x11, 0x0a, u16)
+#define DTX_IOCTL_GET_LATCH_STATUS	_IOR(0x11, 0x0b, u16)
 
 
 // Warning: This must always be a power of 2!
@@ -187,7 +200,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 });
 
 
-static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u32 __user *buf)
+static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u16 __user *buf)
 {
 	u8 mode;
 	int status;
@@ -356,7 +369,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 
 	case DTX_IOCTL_GET_DEVICE_MODE:
-		status = dtx_bas_get_device_mode(ddev->ctrl, (u32 __user *)arg);
+		status = dtx_bas_get_device_mode(ddev->ctrl, (u16 __user *)arg);
 		break;
 
 	default:
