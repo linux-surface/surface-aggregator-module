@@ -32,7 +32,7 @@
 #define DTX_IOCTL_LATCH_UNLOCK			_IO(0x11, 0x02)
 #define DTX_IOCTL_LATCH_REQUEST			_IO(0x11, 0x03)
 #define DTX_IOCTL_LATCH_OPEN			_IO(0x11, 0x04)
-#define DTX_IOCTL_GET_DEVICE_MODE		_IOR(0x11, 0x05, int)
+#define DTX_IOCTL_GET_DEVICE_MODE		_IOR(0x11, 0x05, u32)
 
 enum sam_event_cid_bas {
 	SAM_EVENT_CID_DTX_CONNECTION		= 0x0c,
@@ -180,7 +180,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 });
 
 
-static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, int __user *buf)
+static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u32 __user *buf)
 {
 	u8 mode;
 	int status;
@@ -349,7 +349,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 
 	case DTX_IOCTL_GET_DEVICE_MODE:
-		status = dtx_bas_get_device_mode(ddev->ctrl, (int __user *)arg);
+		status = dtx_bas_get_device_mode(ddev->ctrl, (u32 __user *)arg);
 		break;
 
 	default:
