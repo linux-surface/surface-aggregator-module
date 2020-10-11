@@ -501,7 +501,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 
 	input_dev->name = DTX_INPUT_NAME;
 	input_dev->dev.parent = &pdev->dev;
-	input_dev->id.bustype = BUS_VIRTUAL;
+	input_dev->id.bustype = BUS_HOST;
 
 	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
 
