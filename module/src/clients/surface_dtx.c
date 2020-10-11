@@ -35,29 +35,38 @@
 #define DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
 
 
-#define DTX_CMD_LATCH_LOCK				_IO(0x11, 0x01)
-#define DTX_CMD_LATCH_UNLOCK				_IO(0x11, 0x02)
-#define DTX_CMD_LATCH_REQUEST				_IO(0x11, 0x03)
-#define DTX_CMD_LATCH_OPEN				_IO(0x11, 0x04)
-#define DTX_CMD_GET_DEVICE_MODE				_IOR(0x11, 0x05, int)
+#define DTX_IOCTL_LATCH_LOCK			_IO(0x11, 0x01)
+#define DTX_IOCTL_LATCH_UNLOCK			_IO(0x11, 0x02)
+#define DTX_IOCTL_LATCH_REQUEST			_IO(0x11, 0x03)
+#define DTX_IOCTL_LATCH_OPEN			_IO(0x11, 0x04)
+#define DTX_IOCTL_GET_DEVICE_MODE		_IOR(0x11, 0x05, int)
 
-#define SAM_EVENT_DTX_CID_CONNECTION			0x0c
-#define SAM_EVENT_DTX_CID_BUTTON			0x0e
-#define SAM_EVENT_DTX_CID_ERROR				0x0f
-#define SAM_EVENT_DTX_CID_LATCH_STATUS			0x11
+enum sam_event_cid_bas {
+	SAM_EVENT_CID_DTX_CONNECTION		= 0x0c,
+	SAM_EVENT_CID_DTX_REQUEST		= 0x0e,
+	SAM_EVENT_CID_DTX_CANCEL		= 0x0f,
+	SAM_EVENT_CID_DTX_LATCH_STATUS		= 0x11,
+};
 
-#define DTX_OPMODE_TABLET				0x00
-#define DTX_OPMODE_LAPTOP				0x01
-#define DTX_OPMODE_STUDIO				0x02
+enum dtx_device_mode {
+	DTX_DEVICE_MODE_TABLET			= 0x00,
+	DTX_DEVICE_MODE_LAPTOP			= 0x01,
+	DTX_DEVICE_MODE_STUDIO			= 0x02,
+};
 
-#define DTX_LATCH_CLOSED				0x00
-#define DTX_LATCH_OPENED				0x01
+enum dtx_latch_status {
+	DTX_LATCH_STATUS_CLOSED			= 0x00,
+	DTX_LATCH_STATUS_OPENED			= 0x01,
+	DTX_LATCH_STATUS_FAILED_TO_OPEN		= 0x02,
+	DTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN	= 0x03,
+	DTX_LATCH_STATUS_FAILED_TO_CLOSE	= 0x04,
+};
 
 
 // Warning: This must always be a power of 2!
-#define DTX_CLIENT_BUF_SIZE				16
+#define DTX_CLIENT_BUF_SIZE			16
 
-#define DTX_CONNECT_DEVICE_MODE_DELAY			1000
+#define DTX_CONNECT_DEVICE_MODE_DELAY		1000
 
 #define DTX_ERR		KERN_ERR "surface_dtx: "
 #define DTX_WARN	KERN_WARNING "surface_dtx: "
@@ -322,23 +331,23 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	}
 
 	switch (cmd) {
-	case DTX_CMD_LATCH_LOCK:
+	case DTX_IOCTL_LATCH_LOCK:
 		status = ssam_bas_latch_lock(ddev->ctrl);
 		break;
 
-	case DTX_CMD_LATCH_UNLOCK:
+	case DTX_IOCTL_LATCH_UNLOCK:
 		status = ssam_bas_latch_unlock(ddev->ctrl);
 		break;
 
-	case DTX_CMD_LATCH_REQUEST:
+	case DTX_IOCTL_LATCH_REQUEST:
 		status = ssam_bas_latch_request(ddev->ctrl);
 		break;
 
-	case DTX_CMD_LATCH_OPEN:
+	case DTX_IOCTL_LATCH_OPEN:
 		status = ssam_bas_latch_confirm(ddev->ctrl);
 		break;
 
-	case DTX_CMD_GET_DEVICE_MODE:
+	case DTX_IOCTL_GET_DEVICE_MODE:
 		status = dtx_bas_get_device_mode(ddev->ctrl, (int __user *)arg);
 		break;
 
@@ -424,7 +433,7 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 
 	// send SW_TABLET_MODE event
 	spin_lock(&ddev->input_lock);
-	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != DTX_MODE_LAPTOP);
+	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != DTX_DEVICE_MODE_LAPTOP);
 	input_sync(ddev->input_dev);
 	spin_unlock(&ddev->input_lock);
 }
@@ -443,10 +452,10 @@ static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct
 	unsigned long delay;
 
 	switch (in_event->command_id) {
-	case SAM_EVENT_DTX_CID_CONNECTION:
-	case SAM_EVENT_DTX_CID_BUTTON:
-	case SAM_EVENT_DTX_CID_ERROR:
-	case SAM_EVENT_DTX_CID_LATCH_STATUS:
+	case SAM_EVENT_CID_DTX_CONNECTION:
+	case SAM_EVENT_CID_DTX_REQUEST:
+	case SAM_EVENT_CID_DTX_CANCEL:
+	case SAM_EVENT_CID_DTX_LATCH_STATUS:
 		if (in_event->length > 2) {
 			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
 			       in_event->command_id, in_event->length);
@@ -465,7 +474,7 @@ static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct
 	}
 
 	// update device mode
-	if (in_event->command_id == SAM_EVENT_DTX_CID_CONNECTION) {
+	if (in_event->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
 		delay = event.arg0 ? DTX_CONNECT_DEVICE_MODE_DELAY : 0;
 		schedule_delayed_work(&ddev->device_mode_work, delay);
 	}
@@ -499,7 +508,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 		return ERR_PTR(status);
 	}
 
-	input_report_switch(input_dev, SW_TABLET_MODE, mode != DTX_MODE_LAPTOP);
+	input_report_switch(input_dev, SW_TABLET_MODE, mode != DTX_DEVICE_MODE_LAPTOP);
 
 	status = input_register_device(input_dev);
 	if (status) {
