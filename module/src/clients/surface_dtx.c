@@ -115,12 +115,12 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-struct dtx_base_state {
+struct ssam_dtx_base_state {
 	u8 state;
 	u8 base_id;
 } __packed;
 
-static_assert(sizeof(struct dtx_base_state) == 2);
+static_assert(sizeof(struct ssam_dtx_base_state) == 2);
 
 static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_lock, {
 	.target_category = SSAM_SSH_TC_BAS,
@@ -164,7 +164,7 @@ static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_cancel, {
 	.instance_id     = 0x00,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_base, struct dtx_base_state, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_base, struct ssam_dtx_base_state, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x0c,
