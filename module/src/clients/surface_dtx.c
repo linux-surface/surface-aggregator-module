@@ -99,6 +99,13 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
+struct dtx_base_state {
+	u8 state;
+	u8 base_id;
+} __packed;
+
+static_assert(sizeof(struct dtx_base_state) == 2);
+
 static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_lock, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
@@ -127,10 +134,38 @@ static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_confirm, {
 	.instance_id     = 0x00,
 });
 
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_heartbeat, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
+	.command_id      = 0x0a,
+	.instance_id     = 0x00,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_cancel, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
+	.command_id      = 0x0b,
+	.instance_id     = 0x00,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_base, struct dtx_base_state, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
+	.command_id      = 0x0c,
+	.instance_id     = 0x00,
+});
+
 static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_device_mode, u8, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x0d,
+	.instance_id     = 0x00,
+});
+
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
+	.target_category = SSAM_SSH_TC_BAS,
+	.target_id       = 0x01,
+	.command_id      = 0x11,
 	.instance_id     = 0x00,
 });
 
