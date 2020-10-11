@@ -29,8 +29,8 @@
 
 
 struct dtx_base_info {
-	u16 state;
-	u16 base_id;
+	__u16 state;
+	__u16 base_id;
 } __packed;
 
 #define DTX_IOCTL_EVENTS_ENABLE		_IO(0x11, 0x01)
