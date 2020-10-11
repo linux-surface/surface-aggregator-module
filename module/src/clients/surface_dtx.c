@@ -31,7 +31,7 @@
 #define DTX_IOCTL_LATCH_LOCK			_IO(0x11, 0x01)
 #define DTX_IOCTL_LATCH_UNLOCK			_IO(0x11, 0x02)
 #define DTX_IOCTL_LATCH_REQUEST			_IO(0x11, 0x03)
-#define DTX_IOCTL_LATCH_OPEN			_IO(0x11, 0x04)
+#define DTX_IOCTL_LATCH_CONFIRM			_IO(0x11, 0x04)
 #define DTX_IOCTL_GET_DEVICE_MODE		_IOR(0x11, 0x05, u32)
 
 enum sam_event_cid_bas {
@@ -344,7 +344,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		status = ssam_bas_latch_request(ddev->ctrl);
 		break;
 
-	case DTX_IOCTL_LATCH_OPEN:
+	case DTX_IOCTL_LATCH_CONFIRM:
 		status = ssam_bas_latch_confirm(ddev->ctrl);
 		break;
 
