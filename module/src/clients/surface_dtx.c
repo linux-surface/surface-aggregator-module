@@ -28,9 +28,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
-#define USB_VENDOR_ID_MICROSOFT				0x045e
-#define USB_DEVICE_ID_MS_SURFACE_BASE_2_INTEGRATION	0x0922
-
 // name copied from MS device manager
 #define DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
 
@@ -505,8 +502,6 @@ static struct input_dev *surface_dtx_register_inputdev(
 	input_dev->name = DTX_INPUT_NAME;
 	input_dev->dev.parent = &pdev->dev;
 	input_dev->id.bustype = BUS_VIRTUAL;
-	input_dev->id.vendor  = USB_VENDOR_ID_MICROSOFT;
-	input_dev->id.product = USB_DEVICE_ID_MS_SURFACE_BASE_2_INTEGRATION;
 
 	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
 
