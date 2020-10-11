@@ -39,7 +39,7 @@
 #define DTX_CMD_LATCH_UNLOCK				_IO(0x11, 0x02)
 #define DTX_CMD_LATCH_REQUEST				_IO(0x11, 0x03)
 #define DTX_CMD_LATCH_OPEN				_IO(0x11, 0x04)
-#define DTX_CMD_GET_OPMODE				_IOR(0x11, 0x05, int)
+#define DTX_CMD_GET_DEVICE_MODE				_IOR(0x11, 0x05, int)
 
 #define SAM_EVENT_DTX_CID_CONNECTION			0x0c
 #define SAM_EVENT_DTX_CID_BUTTON			0x0e
@@ -57,7 +57,7 @@
 // Warning: This must always be a power of 2!
 #define DTX_CLIENT_BUF_SIZE				16
 
-#define DTX_CONNECT_OPMODE_DELAY			1000
+#define DTX_CONNECT_DEVICE_MODE_DELAY			1000
 
 #define DTX_ERR		KERN_ERR "surface_dtx: "
 #define DTX_WARN	KERN_WARNING "surface_dtx: "
@@ -74,7 +74,7 @@ struct surface_dtx_dev {
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
-	struct delayed_work opmode_work;
+	struct delayed_work device_mode_work;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
 	spinlock_t client_lock;
@@ -120,14 +120,14 @@ static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_request, {
 	.instance_id     = 0x00,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_open, {
+static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_confirm, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x09,
 	.instance_id     = 0x00,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_device_mode, u8, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x0d,
@@ -135,16 +135,16 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
 });
 
 
-static int dtx_bas_get_opmode(struct ssam_controller *ctrl, int __user *buf)
+static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, int __user *buf)
 {
-	u8 opmode;
+	u8 mode;
 	int status;
 
-	status = ssam_bas_query_opmode(ctrl, &opmode);
+	status = ssam_bas_get_device_mode(ctrl, &mode);
 	if (status < 0)
 		return status;
 
-	if (put_user(opmode, buf))
+	if (put_user(mode, buf))
 		return -EACCES;
 
 	return 0;
@@ -300,11 +300,11 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 
 	case DTX_CMD_LATCH_OPEN:
-		status = ssam_bas_latch_open(ddev->ctrl);
+		status = ssam_bas_latch_confirm(ddev->ctrl);
 		break;
 
-	case DTX_CMD_GET_OPMODE:
-		status = dtx_bas_get_opmode(ddev->ctrl, (int __user *)arg);
+	case DTX_CMD_GET_DEVICE_MODE:
+		status = dtx_bas_get_device_mode(ddev->ctrl, (int __user *)arg);
 		break;
 
 	default:
@@ -366,14 +366,14 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 }
 
 
-static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
+static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 {
 	struct surface_dtx_event event;
-	u8 opmode;
+	u8 mode;
 	int status;
 
 	// get operation mode
-	status = ssam_bas_query_opmode(ddev->ctrl, &opmode);
+	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
 	if (status < 0) {
 		printk(DTX_ERR "EC request failed with error %d\n", status);
 		return;
@@ -382,23 +382,23 @@ static void surface_dtx_update_opmpde(struct surface_dtx_dev *ddev)
 	// send DTX event
 	event.type = 0x11;
 	event.code = 0x0D;
-	event.arg0 = opmode;
+	event.arg0 = mode;
 	event.arg1 = 0x00;
 
 	surface_dtx_push_event(ddev, &event);
 
 	// send SW_TABLET_MODE event
 	spin_lock(&ddev->input_lock);
-	input_report_switch(ddev->input_dev, SW_TABLET_MODE, opmode != DTX_OPMODE_LAPTOP);
+	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != DTX_MODE_LAPTOP);
 	input_sync(ddev->input_dev);
 	spin_unlock(&ddev->input_lock);
 }
 
-static void surface_dtx_opmode_workfn(struct work_struct *work)
+static void surface_dtx_device_mode_workfn(struct work_struct *work)
 {
-	struct surface_dtx_dev *ddev = container_of(work, struct surface_dtx_dev, opmode_work.work);
+	struct surface_dtx_dev *ddev = container_of(work, struct surface_dtx_dev, device_mode_work.work);
 
-	surface_dtx_update_opmpde(ddev);
+	surface_dtx_update_device_mode(ddev);
 }
 
 static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct ssam_event *in_event)
@@ -431,8 +431,8 @@ static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct
 
 	// update device mode
 	if (in_event->command_id == SAM_EVENT_DTX_CID_CONNECTION) {
-		delay = event.arg0 ? DTX_CONNECT_OPMODE_DELAY : 0;
-		schedule_delayed_work(&ddev->opmode_work, delay);
+		delay = event.arg0 ? DTX_CONNECT_DEVICE_MODE_DELAY : 0;
+		schedule_delayed_work(&ddev->device_mode_work, delay);
 	}
 
 	return SSAM_NOTIF_HANDLED;
@@ -443,7 +443,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 		struct platform_device *pdev, struct ssam_controller *ctrl)
 {
 	struct input_dev *input_dev;
-	u8 opmode;
+	u8 mode;
 	int status;
 
 	input_dev = input_allocate_device();
@@ -458,13 +458,13 @@ static struct input_dev *surface_dtx_register_inputdev(
 
 	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
 
-	status = ssam_bas_query_opmode(ctrl, &opmode);
+	status = ssam_bas_get_device_mode(ctrl, &mode);
 	if (status < 0) {
 		input_free_device(input_dev);
 		return ERR_PTR(status);
 	}
 
-	input_report_switch(input_dev, SW_TABLET_MODE, opmode != DTX_OPMODE_LAPTOP);
+	input_report_switch(input_dev, SW_TABLET_MODE, mode != DTX_MODE_LAPTOP);
 
 	status = input_register_device(input_dev);
 	if (status) {
@@ -501,7 +501,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	}
 
 	ddev->ctrl = ctrl;
-	INIT_DELAYED_WORK(&ddev->opmode_work, surface_dtx_opmode_workfn);
+	INIT_DELAYED_WORK(&ddev->device_mode_work, surface_dtx_device_mode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
