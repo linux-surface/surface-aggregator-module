@@ -28,10 +28,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
-// name copied from MS device manager
-#define DTX_INPUT_NAME	"Microsoft Surface Base 2 Integration Device"
-
-
 #define DTX_IOCTL_LATCH_LOCK			_IO(0x11, 0x01)
 #define DTX_IOCTL_LATCH_UNLOCK			_IO(0x11, 0x02)
 #define DTX_IOCTL_LATCH_REQUEST			_IO(0x11, 0x03)
@@ -500,7 +496,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 	if (!input_dev)
 		return ERR_PTR(-ENOMEM);
 
-	input_dev->name = DTX_INPUT_NAME;
+	input_dev->name = "Microsoft Surface DTX Device Mode Switch";
 	input_dev->dev.parent = &pdev->dev;
 	input_dev->id.bustype = BUS_HOST;
 
