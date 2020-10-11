@@ -369,6 +369,7 @@ static const struct file_operations surface_dtx_fops = {
 	.poll           = surface_dtx_poll,
 	.fasync         = surface_dtx_fasync,
 	.unlocked_ioctl = surface_dtx_ioctl,
+	.compat_ioctl   = surface_dtx_ioctl,
 	.llseek         = no_llseek,
 };
 
