@@ -62,6 +62,17 @@
 #define DTX_ERR_FAILED_TO_CLOSE		DTX_ERR_HW(0x03)
 
 
+/* Base types */
+#define DTX_DEVICE_TYPE_HID		0x0100
+#define DTX_DEVICE_TYPE_SSH		0x0200
+
+#define DTX_DEVICE_TYPE_MASK		0x0f00
+#define DTX_DEVICE_TYPE(value)		((value) & DTX_DEVICE_TYPE_MASK)
+
+#define DTX_BASE_TYPE_HID(id)		((id) | DTX_DEVICE_TYPE_HID)
+#define DTX_BASE_TYPE_SSH(id)		((id) | DTX_DEVICE_TYPE_SSH)
+
+
 struct dtx_base_info {
 	__u16 state;
 	__u16 base_id;
