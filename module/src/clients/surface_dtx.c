@@ -501,6 +501,10 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		status = ssam_bas_latch_heartbeat(ddev->ctrl);
 		break;
 
+	case SDTX_IOCTL_LATCH_CANCEL:
+		status = ssam_bas_latch_cancel(ddev->ctrl);
+		break;
+
 	case SDTX_IOCTL_GET_DEVICE_MODE:
 		status = sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
 		break;
