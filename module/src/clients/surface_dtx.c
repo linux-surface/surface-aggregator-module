@@ -376,65 +376,45 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 {
 	struct surface_dtx_client *client = file->private_data;
 	struct surface_dtx_dev *ddev = client->ddev;
-	int status;
-
-	status = mutex_lock_interruptible(&ddev->mutex);
-	if (status)
-		return status;
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
-		status = -EINVAL;		// TODO
-		break;
+		return -EINVAL;		// TODO
 
 	case SDTX_IOCTL_EVENTS_DISABLE:
-		status = -EINVAL;		// TODO
-		break;
+		return -EINVAL;		// TODO
 
 	case SDTX_IOCTL_LATCH_LOCK:
-		status = ssam_bas_latch_lock(ddev->ctrl);
-		break;
+		return ssam_bas_latch_lock(ddev->ctrl);
 
 	case SDTX_IOCTL_LATCH_UNLOCK:
-		status = ssam_bas_latch_unlock(ddev->ctrl);
-		break;
+		return ssam_bas_latch_unlock(ddev->ctrl);
 
 	case SDTX_IOCTL_LATCH_REQUEST:
-		status = ssam_bas_latch_request(ddev->ctrl);
-		break;
+		return ssam_bas_latch_request(ddev->ctrl);
 
 	case SDTX_IOCTL_LATCH_CONFIRM:
-		status = ssam_bas_latch_confirm(ddev->ctrl);
-		break;
+		return ssam_bas_latch_confirm(ddev->ctrl);
 
 	case SDTX_IOCTL_LATCH_HEARTBEAT:
-		status = ssam_bas_latch_heartbeat(ddev->ctrl);
-		break;
+		return ssam_bas_latch_heartbeat(ddev->ctrl);
 
 	case SDTX_IOCTL_LATCH_CANCEL:
-		status = ssam_bas_latch_cancel(ddev->ctrl);
-		break;
+		return ssam_bas_latch_cancel(ddev->ctrl);
 
 	case SDTX_IOCTL_GET_BASE_INFO:
-		status = sdtx_ioctl_get_base_info(ddev,
+		return sdtx_ioctl_get_base_info(ddev,
 				(struct sdtx_base_info __user *)arg);
-		break;
 
 	case SDTX_IOCTL_GET_DEVICE_MODE:
-		status = sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
-		break;
+		return sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
 
 	case SDTX_IOCTL_GET_LATCH_STATUS:
-		status = sdtx_ioctl_get_latch_status(ddev, (u16 __user *)arg);
-		break;
+		return sdtx_ioctl_get_latch_status(ddev, (u16 __user *)arg);
 
 	default:
-		status = -EINVAL;
-		break;
+		return -EINVAL;
 	}
-
-	mutex_unlock(&ddev->mutex);
-	return status;
 }
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
