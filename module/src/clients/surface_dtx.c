@@ -321,7 +321,7 @@ static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- IOCTL Helpers. -------------------------------------------------------- */
 
 static int sdtx_ioctl_get_base_info(struct surface_dtx_dev *ddev,
 				    struct sdtx_base_info __user *buf)
@@ -369,6 +369,8 @@ static int sdtx_ioctl_get_latch_status(struct surface_dtx_dev *ddev,
 	return put_user(sdtx_translate_latch_status(ddev, latch), buf);
 }
 
+
+/* -- TODO ------------------------------------------------------------------ */
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
