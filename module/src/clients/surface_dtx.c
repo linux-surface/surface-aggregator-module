@@ -454,7 +454,8 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t count, loff_t *offs)
+static ssize_t surface_dtx_read(struct file *file, char __user *buf,
+				size_t count, loff_t *offs)
 {
 	struct surface_dtx_client *client = file->private_data;
 	struct surface_dtx_dev *ddev = client->ddev;
