@@ -234,7 +234,6 @@ struct surface_dtx_dev {
 	struct list_head client_list;
 	struct mutex mutex;
 	bool active;
-	spinlock_t input_lock;
 	struct input_dev *input_dev;
 };
 
@@ -453,7 +452,6 @@ static struct surface_dtx_dev surface_dtx_dev = {
 		.fops = &surface_dtx_fops,
 	},
 	.client_lock = __SPIN_LOCK_UNLOCKED(),
-	.input_lock = __SPIN_LOCK_UNLOCKED(),
 	.mutex  = __MUTEX_INITIALIZER(surface_dtx_dev.mutex),
 	.active = false,
 };
@@ -507,10 +505,8 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 	surface_dtx_push_event(ddev, &event);
 
 	// send SW_TABLET_MODE event
-	spin_lock(&ddev->input_lock);
 	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != SDTX_DEVICE_MODE_LAPTOP);
 	input_sync(ddev->input_dev);
-	spin_unlock(&ddev->input_lock);
 }
 
 static void surface_dtx_device_mode_workfn(struct work_struct *work)
