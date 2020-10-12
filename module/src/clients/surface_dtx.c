@@ -224,6 +224,7 @@ struct surface_dtx_event {
 } __packed;
 
 struct surface_dtx_dev {
+	struct device *dev;
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
@@ -719,6 +720,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 		goto err_register;
 	}
 
+	ddev->dev = &pdev->dev;
 	ddev->ctrl = ctrl;
 	INIT_DELAYED_WORK(&ddev->mode_work, surface_dtx_device_mode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
