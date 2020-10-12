@@ -252,6 +252,77 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
+/* -- Firmware Value Translations. ------------------------------------------ */
+
+static u16 sdtx_translate_base_state(struct surface_dtx_dev *ddev, u8 state)
+{
+	switch (state) {
+	case SDTX_BASE_STATE_ATTACHED:
+		return SDTX_BASE_ATTACHED;
+
+	case SDTX_BASE_STATE_DETACH_SUCCESS:
+		return SDTX_BASE_DETACHED;
+
+	case SDTX_BASE_STATE_NOT_FEASIBLE:
+		return SDTX_DETACH_NOT_FEASIBLE;
+
+	default:
+		// TODO: print error
+		return SDTX_UNKNOWN(state);
+	}
+}
+
+static u16 sdtx_translate_latch_status(struct surface_dtx_dev *ddev, u8 status)
+{
+	switch (status) {
+	case SDTX_LATCH_STATUS_CLOSED:
+		return SDTX_LATCH_CLOSED;
+
+	case SDTX_LATCH_STATUS_OPENED:
+		return SDTX_LATCH_OPENED;
+
+	case SDTX_LATCH_STATUS_FAILED_TO_OPEN:
+		return SDTX_ERR_FAILED_TO_OPEN;
+
+	case SDTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN:
+		return SDTX_ERR_FAILED_TO_REMAIN_OPEN;
+
+	case SDTX_LATCH_STATUS_FAILED_TO_CLOSE:
+		return SDTX_ERR_FAILED_TO_CLOSE;
+
+	default:
+		// TODO: print error
+		return SDTX_UNKNOWN(status);
+	}
+}
+
+static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
+{
+	switch (reason) {
+	case SDTX_CANCEL_REASON_NOT_FEASIBLE:
+		return SDTX_DETACH_NOT_FEASIBLE;
+
+	case SDTX_CANCEL_REASON_TIMEOUT:
+		return SDTX_DETACH_TIMEDOUT;
+
+	case SDTX_CANCEL_REASON_FAILED_TO_OPEN:
+		return SDTX_ERR_FAILED_TO_OPEN;
+
+	case SDTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN:
+		return SDTX_ERR_FAILED_TO_REMAIN_OPEN;
+
+	case SDTX_CANCEL_REASON_FAILED_TO_CLOSE:
+		return SDTX_ERR_FAILED_TO_CLOSE;
+
+	default:
+		// TODO: print error
+		return SDTX_UNKNOWN(reason);
+	}
+}
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
 static int sdtx_ioctl_get_device_mode(struct surface_dtx_dev *ddev,
 				      u16 __user *buf)
 {
