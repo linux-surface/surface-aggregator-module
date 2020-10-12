@@ -246,7 +246,8 @@ struct surface_dtx_client {
 
 	struct fasync_struct *fasync;
 
-	spinlock_t buffer_lock;
+	struct mutex read_lock;
+	spinlock_t write_lock;
 	DECLARE_KFIFO(buffer, u8, 512);
 };
 
@@ -435,7 +436,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	client->ddev = ddev;
-	spin_lock_init(&client->buffer_lock);
+	mutex_init(&client->read_lock);
 	INIT_KFIFO(client->buffer);
 
 	file->private_data = client;
@@ -483,9 +484,11 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 		}
 
 		// try to read from fifo
-		spin_lock(&client->buffer_lock);
+		if (mutex_lock_interruptible(&client->read_lock))
+			return -ERESTARTSYS;
+
 		status = kfifo_to_user(&client->buffer, buf, count, &copied);
-		spin_unlock(&client->buffer_lock);
+		mutex_unlock(&client->read_lock);
 
 		if (status < 0)
 			return status;
@@ -551,13 +554,13 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(client, &ddev->client_list, node) {
-		spin_lock(&client->buffer_lock);
+		spin_lock(&client->write_lock);
 
 		if (likely(kfifo_avail(&client->buffer) >= sizeof(*event))) {
 			kfifo_in(&client->buffer, (const u8 *)event, sizeof(*event));
-			spin_unlock(&client->buffer_lock);
+			spin_unlock(&client->write_lock);
 		} else {
-			spin_unlock(&client->buffer_lock);
+			spin_unlock(&client->write_lock);
 			printk(DTX_WARN "event buffer overrun\n");
 		}
 
