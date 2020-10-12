@@ -252,12 +252,13 @@ struct surface_dtx_client {
 static struct surface_dtx_dev surface_dtx_dev;
 
 
-static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u16 __user *buf)
+static int sdtx_ioctl_get_device_mode(struct surface_dtx_dev *ddev,
+				      u16 __user *buf)
 {
 	u8 mode;
 	int status;
 
-	status = ssam_bas_get_device_mode(ctrl, &mode);
+	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
 	if (status < 0)
 		return status;
 
@@ -418,7 +419,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 		break;
 
 	case SDTX_IOCTL_GET_DEVICE_MODE:
-		status = dtx_bas_get_device_mode(ddev->ctrl, (u16 __user *)arg);
+		status = sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
 		break;
 
 	default:
