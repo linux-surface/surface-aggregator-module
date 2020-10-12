@@ -493,19 +493,12 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt)
 {
 	struct surface_dtx_client *client = file->private_data;
-	int mask;
 
 	poll_wait(file, &client->ddev->waitq, pt);
-
-	if (client->ddev->active)
-		mask = EPOLLOUT | EPOLLWRNORM;
-	else
-		mask = EPOLLHUP | EPOLLERR;
-
 	if (!kfifo_is_empty(&client->buffer))
-		mask |= EPOLLIN | EPOLLRDNORM;
+		return EPOLLIN | EPOLLRDNORM;
 
-	return mask;
+	return 0;
 }
 
 static int surface_dtx_fasync(int fd, struct file *file, int on)
