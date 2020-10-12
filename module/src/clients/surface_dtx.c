@@ -228,18 +228,21 @@ struct surface_dtx_dev {
 	struct ssam_event_notifier notif;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
-	spinlock_t client_lock;
-	struct list_head client_list;
 	struct mutex mutex;
 	bool active;
+
+	spinlock_t client_lock;
+	struct list_head client_list;
 
 	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
 };
 
 struct surface_dtx_client {
-	struct list_head node;
 	struct surface_dtx_dev *ddev;
+	struct list_head node;
+	struct rcu_head rcu;
+
 	struct fasync_struct *fasync;
 
 	spinlock_t buffer_lock;
@@ -413,6 +416,11 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 /* -- TODO ------------------------------------------------------------------ */
 
+static void sdtx_client_free(struct rcu_head *rcu)
+{
+	kfree(container_of(rcu, struct surface_dtx_client, rcu));
+}
+
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
 	struct surface_dtx_dev *ddev;
@@ -448,9 +456,8 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	spin_lock(&client->ddev->client_lock);
 	list_del_rcu(&client->node);
 	spin_unlock(&client->ddev->client_lock);
-	synchronize_rcu();
+	call_rcu(&client->rcu, sdtx_client_free);
 
-	kfree(client);
 	return 0;
 }
 
@@ -752,6 +759,11 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	ddev->active = false;
 	mutex_unlock(&ddev->mutex);
 
+	/*
+	 * Make sure all clients have been freed, so it's safe to unload the
+	 * module afterwards.
+	 */
+	synchronize_rcu();
 	return 0;
 }
 
