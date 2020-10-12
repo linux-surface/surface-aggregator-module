@@ -261,10 +261,7 @@ static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u16 __user *buf
 	if (status < 0)
 		return status;
 
-	if (put_user(mode, buf))
-		return -EACCES;
-
-	return 0;
+	return put_user(mode, buf);
 }
 
 
