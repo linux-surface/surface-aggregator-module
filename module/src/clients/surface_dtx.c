@@ -415,8 +415,10 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
-	struct surface_dtx_dev *ddev = container_of(file->private_data, struct surface_dtx_dev, mdev);
+	struct surface_dtx_dev *ddev;
 	struct surface_dtx_client *client;
+
+	ddev = container_of(file->private_data, struct surface_dtx_dev, mdev);
 
 	// initialize client
 	client = kzalloc(sizeof(*client), GFP_KERNEL);
