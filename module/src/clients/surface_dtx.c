@@ -429,14 +429,14 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	spin_lock_init(&client->buffer_lock);
 	INIT_KFIFO(client->buffer);
 
+	file->private_data = client;
+
 	// attach client
 	spin_lock(&ddev->client_lock);
 	list_add_tail_rcu(&client->node, &ddev->client_list);
 	spin_unlock(&ddev->client_lock);
 
-	file->private_data = client;
 	stream_open(inode, file);
-
 	return 0;
 }
 
