@@ -458,8 +458,8 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 {
 	struct surface_dtx_client *client = file->private_data;
 	struct surface_dtx_dev *ddev = client->ddev;
-	unsigned int copied = 0;
-	int status = 0;
+	unsigned int copied;
+	int status;
 
 	do {
 		// check availability, wait if necessary
