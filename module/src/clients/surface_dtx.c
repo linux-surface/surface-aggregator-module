@@ -449,8 +449,6 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	synchronize_rcu();
 
 	kfree(client);
-	file->private_data = NULL;
-
 	return 0;
 }
 
