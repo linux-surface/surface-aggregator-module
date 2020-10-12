@@ -435,7 +435,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	spin_unlock(&ddev->client_lock);
 
 	file->private_data = client;
-	nonseekable_open(inode, file);
+	stream_open(inode, file);
 
 	return 0;
 }
