@@ -268,7 +268,7 @@ static u16 sdtx_translate_base_state(struct surface_dtx_dev *ddev, u8 state)
 		return SDTX_DETACH_NOT_FEASIBLE;
 
 	default:
-		// TODO: print error
+		dev_err(ddev->dev, "unknown base state: 0x%02x\n", state);
 		return SDTX_UNKNOWN(state);
 	}
 }
@@ -292,7 +292,7 @@ static u16 sdtx_translate_latch_status(struct surface_dtx_dev *ddev, u8 status)
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
-		// TODO: print error
+		dev_err(ddev->dev, "unknown latch status: 0x%02x\n", status);
 		return SDTX_UNKNOWN(status);
 	}
 }
@@ -316,7 +316,7 @@ static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
-		// TODO: print error
+		dev_err(ddev->dev, "unknown cancel reason: 0x%02x\n", reason);
 		return SDTX_UNKNOWN(reason);
 	}
 }
