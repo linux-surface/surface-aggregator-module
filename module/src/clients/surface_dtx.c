@@ -29,68 +29,68 @@
 
 
 /* Status/error categories */
-#define DTX_CATEGORY_STATUS		0x0000
-#define DTX_CATEGORY_RUNTIME_ERROR	0x1000
-#define DTX_CATEGORY_HARDWARE_ERROR	0x2000
-#define DTX_CATEGORY_UNKNOWN		0xf000
+#define SDTX_CATEGORY_STATUS		0x0000
+#define SDTX_CATEGORY_RUNTIME_ERROR	0x1000
+#define SDTX_CATEGORY_HARDWARE_ERROR	0x2000
+#define SDTX_CATEGORY_UNKNOWN		0xf000
 
-#define DTX_CATEGORY_MASK		0xf000
-#define DTX_CATEGORY(value)		((value) & DTX_CATEGORY_MASK)
+#define SDTX_CATEGORY_MASK		0xf000
+#define SDTX_CATEGORY(value)		((value) & SDTX_CATEGORY_MASK)
 
-#define DTX_STATUS(code)		((code) | DTX_CATEGORY_STATUS)
-#define DTX_ERR_RT(code)		((code) | DTX_CATEGORY_RUNTIME_ERROR)
-#define DTX_ERR_HW(code)		((code) | DTX_CATEGORY_HARDWARE_ERROR)
-#define DTX_UNKNOWN(code)		((code) | DTX_CATEGORY_UNKNOWN)
+#define SDTX_STATUS(code)		((code) | SDTX_CATEGORY_STATUS)
+#define SDTX_ERR_RT(code)		((code) | SDTX_CATEGORY_RUNTIME_ERROR)
+#define SDTX_ERR_HW(code)		((code) | SDTX_CATEGORY_HARDWARE_ERROR)
+#define SDTX_UNKNOWN(code)		((code) | SDTX_CATEGORY_UNKNOWN)
 
-#define DTX_SUCCESS(value)	(DTX_CATEGORY(value) == DTX_CATEGORY_STATUS)
+#define SDTX_SUCCESS(value)	(SDTX_CATEGORY(value) == SDTX_CATEGORY_STATUS)
 
 /* Latch status values */
-#define DTX_LATCH_CLOSED		DTX_STATUS(0x00)
-#define DTX_LATCH_OPENED		DTX_STATUS(0x01)
+#define SDTX_LATCH_CLOSED		SDTX_STATUS(0x00)
+#define SDTX_LATCH_OPENED		SDTX_STATUS(0x01)
 
 /* Base state values */
-#define DTX_BASE_DETACHED		DTX_STATUS(0x00)
-#define DTX_BASE_ATTACHED		DTX_STATUS(0x01)
+#define SDTX_BASE_DETACHED		SDTX_STATUS(0x00)
+#define SDTX_BASE_ATTACHED		SDTX_STATUS(0x01)
 
 /* Runtime errors (non-critical) */
-#define DTX_DETACH_NOT_FEASIBLE		DTX_ERR_RT(0x01)
-#define DTX_DETACH_TIMEDOUT		DTX_ERR_RT(0x02)
+#define SDTX_DETACH_NOT_FEASIBLE	SDTX_ERR_RT(0x01)
+#define SDTX_DETACH_TIMEDOUT		SDTX_ERR_RT(0x02)
 
 /* Hardware errors (critical) */
-#define DTX_ERR_FAILED_TO_OPEN		DTX_ERR_HW(0x01)
-#define DTX_ERR_FAILED_TO_REMAIN_OPEN	DTX_ERR_HW(0x02)
-#define DTX_ERR_FAILED_TO_CLOSE		DTX_ERR_HW(0x03)
+#define SDTX_ERR_FAILED_TO_OPEN		SDTX_ERR_HW(0x01)
+#define SDTX_ERR_FAILED_TO_REMAIN_OPEN	SDTX_ERR_HW(0x02)
+#define SDTX_ERR_FAILED_TO_CLOSE	SDTX_ERR_HW(0x03)
 
 
 /* Base types */
-#define DTX_DEVICE_TYPE_HID		0x0100
-#define DTX_DEVICE_TYPE_SSH		0x0200
+#define SDTX_DEVICE_TYPE_HID		0x0100
+#define SDTX_DEVICE_TYPE_SSH		0x0200
 
-#define DTX_DEVICE_TYPE_MASK		0x0f00
-#define DTX_DEVICE_TYPE(value)		((value) & DTX_DEVICE_TYPE_MASK)
+#define SDTX_DEVICE_TYPE_MASK		0x0f00
+#define SDTX_DEVICE_TYPE(value)		((value) & SDTX_DEVICE_TYPE_MASK)
 
-#define DTX_BASE_TYPE_HID(id)		((id) | DTX_DEVICE_TYPE_HID)
-#define DTX_BASE_TYPE_SSH(id)		((id) | DTX_DEVICE_TYPE_SSH)
+#define SDTX_BASE_TYPE_HID(id)		((id) | SDTX_DEVICE_TYPE_HID)
+#define SDTX_BASE_TYPE_SSH(id)		((id) | SDTX_DEVICE_TYPE_SSH)
 
 
-struct dtx_base_info {
+struct sdtx_base_info {
 	__u16 state;
 	__u16 base_id;
 } __packed;
 
-#define DTX_IOCTL_EVENTS_ENABLE		_IO(0x11, 0x01)
-#define DTX_IOCTL_EVENTS_DISABLE	_IO(0x11, 0x02)
+#define SDTX_IOCTL_EVENTS_ENABLE	_IO(0x11, 0x01)
+#define SDTX_IOCTL_EVENTS_DISABLE	_IO(0x11, 0x02)
 
-#define DTX_IOCTL_LATCH_LOCK		_IO(0x11, 0x03)
-#define DTX_IOCTL_LATCH_UNLOCK		_IO(0x11, 0x04)
-#define DTX_IOCTL_LATCH_REQUEST		_IO(0x11, 0x05)
-#define DTX_IOCTL_LATCH_CONFIRM		_IO(0x11, 0x06)
-#define DTX_IOCTL_LATCH_HEARTBEAT	_IO(0x11, 0x07)
-#define DTX_IOCTL_LATCH_CANCEL		_IO(0x11, 0x08)
+#define SDTX_IOCTL_LATCH_LOCK		_IO(0x11, 0x03)
+#define SDTX_IOCTL_LATCH_UNLOCK		_IO(0x11, 0x04)
+#define SDTX_IOCTL_LATCH_REQUEST	_IO(0x11, 0x05)
+#define SDTX_IOCTL_LATCH_CONFIRM	_IO(0x11, 0x06)
+#define SDTX_IOCTL_LATCH_HEARTBEAT	_IO(0x11, 0x07)
+#define SDTX_IOCTL_LATCH_CANCEL		_IO(0x11, 0x08)
 
-#define DTX_IOCTL_GET_BASE_INFO		_IOR(0x11, 0x09, struct dtx_base_info)
-#define DTX_IOCTL_GET_DEVICE_MODE	_IOR(0x11, 0x0a, u16)
-#define DTX_IOCTL_GET_LATCH_STATUS	_IOR(0x11, 0x0b, u16)
+#define SDTX_IOCTL_GET_BASE_INFO	_IOR(0x11, 0x09, struct sdtx_base_info)
+#define SDTX_IOCTL_GET_DEVICE_MODE	_IOR(0x11, 0x0a, u16)
+#define SDTX_IOCTL_GET_LATCH_STATUS	_IOR(0x11, 0x0b, u16)
 
 
 // Warning: This must always be a power of 2!
@@ -397,23 +397,23 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	}
 
 	switch (cmd) {
-	case DTX_IOCTL_LATCH_LOCK:
+	case SDTX_IOCTL_LATCH_LOCK:
 		status = ssam_bas_latch_lock(ddev->ctrl);
 		break;
 
-	case DTX_IOCTL_LATCH_UNLOCK:
+	case SDTX_IOCTL_LATCH_UNLOCK:
 		status = ssam_bas_latch_unlock(ddev->ctrl);
 		break;
 
-	case DTX_IOCTL_LATCH_REQUEST:
+	case SDTX_IOCTL_LATCH_REQUEST:
 		status = ssam_bas_latch_request(ddev->ctrl);
 		break;
 
-	case DTX_IOCTL_LATCH_CONFIRM:
+	case SDTX_IOCTL_LATCH_CONFIRM:
 		status = ssam_bas_latch_confirm(ddev->ctrl);
 		break;
 
-	case DTX_IOCTL_GET_DEVICE_MODE:
+	case SDTX_IOCTL_GET_DEVICE_MODE:
 		status = dtx_bas_get_device_mode(ddev->ctrl, (u16 __user *)arg);
 		break;
 
