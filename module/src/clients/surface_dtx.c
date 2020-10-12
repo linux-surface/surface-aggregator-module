@@ -473,6 +473,14 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	}
 
 	switch (cmd) {
+	case SDTX_IOCTL_EVENTS_ENABLE:
+		status = -EINVAL;		// TODO
+		break;
+
+	case SDTX_IOCTL_EVENTS_DISABLE:
+		status = -EINVAL;		// TODO
+		break;
+
 	case SDTX_IOCTL_LATCH_LOCK:
 		status = ssam_bas_latch_lock(ddev->ctrl);
 		break;
