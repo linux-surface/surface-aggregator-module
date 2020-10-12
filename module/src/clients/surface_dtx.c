@@ -414,7 +414,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- File Operations. ------------------------------------------------------ */
 
 static void sdtx_client_free(struct rcu_head *rcu)
 {
@@ -527,6 +527,9 @@ static const struct file_operations surface_dtx_fops = {
 	.compat_ioctl   = surface_dtx_ioctl,
 	.llseek         = no_llseek,
 };
+
+
+/* -- TODO ------------------------------------------------------------------ */
 
 static struct surface_dtx_dev surface_dtx_dev = {
 	.mdev = {
