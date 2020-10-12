@@ -28,6 +28,8 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
+/* -- Public Interface. ----------------------------------------------------- */
+
 /* Status/error categories */
 #define SDTX_CATEGORY_STATUS		0x0000
 #define SDTX_CATEGORY_RUNTIME_ERROR	0x1000
@@ -73,6 +75,14 @@
 #define SDTX_BASE_TYPE_SSH(id)		((id) | SDTX_DEVICE_TYPE_SSH)
 
 
+/* Device mode */
+enum sdtx_device_mode {
+	SDTX_DEVICE_MODE_TABLET		= 0x00,
+	SDTX_DEVICE_MODE_LAPTOP		= 0x01,
+	SDTX_DEVICE_MODE_STUDIO		= 0x02,
+};
+
+/* IOCTL interface */
 struct sdtx_base_info {
 	__u16 state;
 	__u16 base_id;
@@ -93,84 +103,35 @@ struct sdtx_base_info {
 #define SDTX_IOCTL_GET_LATCH_STATUS	_IOR(0x11, 0x0b, u16)
 
 
-// Warning: This must always be a power of 2!
-#define DTX_CLIENT_BUF_SIZE			16
-
-#define DTX_CONNECT_DEVICE_MODE_DELAY		1000
-
-#define DTX_ERR		KERN_ERR "surface_dtx: "
-#define DTX_WARN	KERN_WARNING "surface_dtx: "
-
-
-struct surface_dtx_event {
-	u8 type;
-	u8 code;
-	u8 arg0;
-	u8 arg1;
-} __packed;
-
-struct surface_dtx_dev {
-	struct ssam_controller *ctrl;
-
-	struct ssam_event_notifier notif;
-	struct delayed_work device_mode_work;
-	wait_queue_head_t waitq;
-	struct miscdevice mdev;
-	spinlock_t client_lock;
-	struct list_head client_list;
-	struct mutex mutex;
-	bool active;
-	spinlock_t input_lock;
-	struct input_dev *input_dev;
-};
-
-struct surface_dtx_client {
-	struct list_head node;
-	struct surface_dtx_dev *ddev;
-	struct fasync_struct *fasync;
-	spinlock_t buffer_lock;
-	unsigned int buffer_head;
-	unsigned int buffer_tail;
-	struct surface_dtx_event buffer[DTX_CLIENT_BUF_SIZE];
-};
-
-
-static struct surface_dtx_dev surface_dtx_dev;
-
+/* -- SSAM Interface. ------------------------------------------------------- */
 
 enum sam_event_cid_bas {
-	SAM_EVENT_CID_DTX_CONNECTION		= 0x0c,
-	SAM_EVENT_CID_DTX_REQUEST		= 0x0e,
-	SAM_EVENT_CID_DTX_CANCEL		= 0x0f,
-	SAM_EVENT_CID_DTX_LATCH_STATUS		= 0x11,
-};
-
-enum dtx_device_mode {
-	DTX_DEVICE_MODE_TABLET			= 0x00,
-	DTX_DEVICE_MODE_LAPTOP			= 0x01,
-	DTX_DEVICE_MODE_STUDIO			= 0x02,
+	SAM_EVENT_CID_DTX_CONNECTION			= 0x0c,
+	SAM_EVENT_CID_DTX_REQUEST			= 0x0e,
+	SAM_EVENT_CID_DTX_CANCEL			= 0x0f,
+	SAM_EVENT_CID_DTX_LATCH_STATUS			= 0x11,
 };
 
 enum dtx_base_state {
-	DTX_BASE_STATE_DETACH_SUCCESS		= 0x00,
-	DTX_BASE_STATE_ATTACHED			= 0x01,
-	DTX_BASE_STATE_NOT_FEASIBLE		= 0x02,
+	SDTX_BASE_STATE_DETACH_SUCCESS			= 0x00,
+	SDTX_BASE_STATE_ATTACHED			= 0x01,
+	SDTX_BASE_STATE_NOT_FEASIBLE			= 0x02,
 };
 
 enum dtx_latch_status {
-	DTX_LATCH_STATUS_CLOSED			= 0x00,
-	DTX_LATCH_STATUS_OPENED			= 0x01,
-	DTX_LATCH_STATUS_FAILED_TO_OPEN		= 0x02,
-	DTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN	= 0x03,
-	DTX_LATCH_STATUS_FAILED_TO_CLOSE	= 0x04,
+	SDTX_LATCH_STATUS_CLOSED			= 0x00,
+	SDTX_LATCH_STATUS_OPENED			= 0x01,
+	SDTX_LATCH_STATUS_FAILED_TO_OPEN		= 0x02,
+	SDTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN		= 0x03,
+	SDTX_LATCH_STATUS_FAILED_TO_CLOSE		= 0x04,
 };
 
 enum dtx_cancel_reason {
-	DTX_CANCEL_REASON_NOT_FEASIBLE		= 0x00,  // low battery
-	DTX_CANCEL_REASON_TIMEOUT		= 0x02,
-	DTX_CANCEL_REASON_FAILED_TO_OPEN	= 0x03,
-	DTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN	= 0x04,
-	DTX_CANCEL_REASON_FAILED_TO_CLOSE	= 0x05,
+	SDTX_CANCEL_REASON_NOT_FEASIBLE			= 0x00,  // low battery
+	SDTX_CANCEL_REASON_TIMEOUT			= 0x02,
+	SDTX_CANCEL_REASON_FAILED_TO_OPEN		= 0x03,
+	SDTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN	= 0x04,
+	SDTX_CANCEL_REASON_FAILED_TO_CLOSE		= 0x05,
 };
 
 
@@ -243,6 +204,52 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 	.command_id      = 0x11,
 	.instance_id     = 0x00,
 });
+
+
+/* -- TODO ------------------------------------------------------------------ */
+
+// Warning: This must always be a power of 2!
+#define DTX_CLIENT_BUF_SIZE			16
+
+#define DTX_CONNECT_DEVICE_MODE_DELAY		1000
+
+#define DTX_ERR		KERN_ERR "surface_dtx: "
+#define DTX_WARN	KERN_WARNING "surface_dtx: "
+
+struct surface_dtx_event {
+	u8 type;
+	u8 code;
+	u8 arg0;
+	u8 arg1;
+} __packed;
+
+struct surface_dtx_dev {
+	struct ssam_controller *ctrl;
+
+	struct ssam_event_notifier notif;
+	struct delayed_work device_mode_work;
+	wait_queue_head_t waitq;
+	struct miscdevice mdev;
+	spinlock_t client_lock;
+	struct list_head client_list;
+	struct mutex mutex;
+	bool active;
+	spinlock_t input_lock;
+	struct input_dev *input_dev;
+};
+
+struct surface_dtx_client {
+	struct list_head node;
+	struct surface_dtx_dev *ddev;
+	struct fasync_struct *fasync;
+	spinlock_t buffer_lock;
+	unsigned int buffer_head;
+	unsigned int buffer_tail;
+	struct surface_dtx_event buffer[DTX_CLIENT_BUF_SIZE];
+};
+
+
+static struct surface_dtx_dev surface_dtx_dev;
 
 
 static int dtx_bas_get_device_mode(struct ssam_controller *ctrl, u16 __user *buf)
@@ -501,7 +508,7 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 
 	// send SW_TABLET_MODE event
 	spin_lock(&ddev->input_lock);
-	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != DTX_DEVICE_MODE_LAPTOP);
+	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != SDTX_DEVICE_MODE_LAPTOP);
 	input_sync(ddev->input_dev);
 	spin_unlock(&ddev->input_lock);
 }
@@ -574,7 +581,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 		return ERR_PTR(status);
 	}
 
-	input_report_switch(input_dev, SW_TABLET_MODE, mode != DTX_DEVICE_MODE_LAPTOP);
+	input_report_switch(input_dev, SW_TABLET_MODE, mode != SDTX_DEVICE_MODE_LAPTOP);
 
 	status = input_register_device(input_dev);
 	if (status) {
