@@ -760,16 +760,6 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	struct surface_dtx_dev *ddev = &surface_dtx_dev;
 	struct surface_dtx_client *client;
 
-	mutex_lock(&ddev->mutex);
-	if (!ddev->active) {
-		mutex_unlock(&ddev->mutex);
-		return 0;
-	}
-
-	// mark as inactive
-	ddev->active = false;
-	mutex_unlock(&ddev->mutex);
-
 	// After this call we're guaranteed that no more input events will arive
 	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
 
@@ -785,6 +775,11 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	// unregister user-space devices
 	input_unregister_device(ddev->mode_switch);
 	misc_deregister(&ddev->mdev);
+
+	// mark as inactive
+	mutex_lock(&ddev->mutex);
+	ddev->active = false;
+	mutex_unlock(&ddev->mutex);
 
 	return 0;
 }
