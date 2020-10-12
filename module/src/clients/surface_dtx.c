@@ -382,11 +382,6 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	if (status)
 		return status;
 
-	if (!ddev->active) {
-		mutex_unlock(&ddev->mutex);
-		return -ENODEV;
-	}
-
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
 		status = -EINVAL;		// TODO
