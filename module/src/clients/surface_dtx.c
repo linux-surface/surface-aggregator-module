@@ -227,7 +227,6 @@ struct surface_dtx_dev {
 	struct ssam_controller *ctrl;
 
 	struct ssam_event_notifier notif;
-	struct delayed_work device_mode_work;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
 	spinlock_t client_lock;
@@ -235,6 +234,7 @@ struct surface_dtx_dev {
 	struct mutex mutex;
 	bool active;
 
+	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
 };
 
@@ -514,8 +514,9 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 
 static void surface_dtx_device_mode_workfn(struct work_struct *work)
 {
-	struct surface_dtx_dev *ddev = container_of(work, struct surface_dtx_dev, device_mode_work.work);
+	struct surface_dtx_dev *ddev;
 
+	ddev = container_of(work, struct surface_dtx_dev, mode_work.work);
 	surface_dtx_update_device_mode(ddev);
 }
 
@@ -550,7 +551,7 @@ static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct
 	// update device mode
 	if (in_event->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
 		delay = event.arg0 ? DTX_CONNECT_DEVICE_MODE_DELAY : 0;
-		schedule_delayed_work(&ddev->device_mode_work, delay);
+		schedule_delayed_work(&ddev->mode_work, delay);
 	}
 
 	return SSAM_NOTIF_HANDLED;
@@ -617,7 +618,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	}
 
 	ddev->ctrl = ctrl;
-	INIT_DELAYED_WORK(&ddev->device_mode_work, surface_dtx_device_mode_workfn);
+	INIT_DELAYED_WORK(&ddev->mode_work, surface_dtx_device_mode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
