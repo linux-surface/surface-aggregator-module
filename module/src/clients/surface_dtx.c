@@ -372,6 +372,76 @@ static int sdtx_ioctl_get_latch_status(struct surface_dtx_dev *ddev,
 
 /* -- TODO ------------------------------------------------------------------ */
 
+static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+{
+	struct surface_dtx_client *client = file->private_data;
+	struct surface_dtx_dev *ddev = client->ddev;
+	int status;
+
+	status = mutex_lock_interruptible(&ddev->mutex);
+	if (status)
+		return status;
+
+	if (!ddev->active) {
+		mutex_unlock(&ddev->mutex);
+		return -ENODEV;
+	}
+
+	switch (cmd) {
+	case SDTX_IOCTL_EVENTS_ENABLE:
+		status = -EINVAL;		// TODO
+		break;
+
+	case SDTX_IOCTL_EVENTS_DISABLE:
+		status = -EINVAL;		// TODO
+		break;
+
+	case SDTX_IOCTL_LATCH_LOCK:
+		status = ssam_bas_latch_lock(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_LATCH_UNLOCK:
+		status = ssam_bas_latch_unlock(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_LATCH_REQUEST:
+		status = ssam_bas_latch_request(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_LATCH_CONFIRM:
+		status = ssam_bas_latch_confirm(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_LATCH_HEARTBEAT:
+		status = ssam_bas_latch_heartbeat(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_LATCH_CANCEL:
+		status = ssam_bas_latch_cancel(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_GET_BASE_INFO:
+		status = sdtx_ioctl_get_base_info(ddev,
+				(struct sdtx_base_info __user *)arg);
+		break;
+
+	case SDTX_IOCTL_GET_DEVICE_MODE:
+		status = sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
+		break;
+
+	case SDTX_IOCTL_GET_LATCH_STATUS:
+		status = sdtx_ioctl_get_latch_status(ddev, (u16 __user *)arg);
+		break;
+
+	default:
+		status = -EINVAL;
+		break;
+	}
+
+	mutex_unlock(&ddev->mutex);
+	return status;
+}
+
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
 	struct surface_dtx_dev *ddev = container_of(file->private_data, struct surface_dtx_dev, mdev);
@@ -490,76 +560,6 @@ static int surface_dtx_fasync(int fd, struct file *file, int on)
 	struct surface_dtx_client *client = file->private_data;
 
 	return fasync_helper(fd, file, on, &client->fasync);
-}
-
-static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-{
-	struct surface_dtx_client *client = file->private_data;
-	struct surface_dtx_dev *ddev = client->ddev;
-	int status;
-
-	status = mutex_lock_interruptible(&ddev->mutex);
-	if (status)
-		return status;
-
-	if (!ddev->active) {
-		mutex_unlock(&ddev->mutex);
-		return -ENODEV;
-	}
-
-	switch (cmd) {
-	case SDTX_IOCTL_EVENTS_ENABLE:
-		status = -EINVAL;		// TODO
-		break;
-
-	case SDTX_IOCTL_EVENTS_DISABLE:
-		status = -EINVAL;		// TODO
-		break;
-
-	case SDTX_IOCTL_LATCH_LOCK:
-		status = ssam_bas_latch_lock(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_LATCH_UNLOCK:
-		status = ssam_bas_latch_unlock(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_LATCH_REQUEST:
-		status = ssam_bas_latch_request(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_LATCH_CONFIRM:
-		status = ssam_bas_latch_confirm(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_LATCH_HEARTBEAT:
-		status = ssam_bas_latch_heartbeat(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_LATCH_CANCEL:
-		status = ssam_bas_latch_cancel(ddev->ctrl);
-		break;
-
-	case SDTX_IOCTL_GET_BASE_INFO:
-		status = sdtx_ioctl_get_base_info(ddev,
-				(struct sdtx_base_info __user *)arg);
-		break;
-
-	case SDTX_IOCTL_GET_DEVICE_MODE:
-		status = sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
-		break;
-
-	case SDTX_IOCTL_GET_LATCH_STATUS:
-		status = sdtx_ioctl_get_latch_status(ddev, (u16 __user *)arg);
-		break;
-
-	default:
-		status = -EINVAL;
-		break;
-	}
-
-	mutex_unlock(&ddev->mutex);
-	return status;
 }
 
 static const struct file_operations surface_dtx_fops = {
