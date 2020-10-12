@@ -469,7 +469,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 
 			status = wait_event_interruptible(ddev->waitq,
 					!kfifo_is_empty(&client->buffer));
-			if (status)
+			if (status < 0)
 				return status;
 		}
 
@@ -478,7 +478,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 		status = kfifo_to_user(&client->buffer, buf, count, &copied);
 		spin_unlock(&client->buffer_lock);
 
-		if (status)
+		if (status < 0)
 			return status;
 
 		// we might not have gotten anything, check this here
