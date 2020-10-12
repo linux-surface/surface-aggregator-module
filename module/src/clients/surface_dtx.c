@@ -88,19 +88,19 @@ struct sdtx_base_info {
 	__u16 base_id;
 } __packed;
 
-#define SDTX_IOCTL_EVENTS_ENABLE	_IO(0x11, 0x01)
-#define SDTX_IOCTL_EVENTS_DISABLE	_IO(0x11, 0x02)
+#define SDTX_IOCTL_EVENTS_ENABLE	_IO(0xa5, 0x21)
+#define SDTX_IOCTL_EVENTS_DISABLE	_IO(0xa5, 0x22)
 
-#define SDTX_IOCTL_LATCH_LOCK		_IO(0x11, 0x03)
-#define SDTX_IOCTL_LATCH_UNLOCK		_IO(0x11, 0x04)
-#define SDTX_IOCTL_LATCH_REQUEST	_IO(0x11, 0x05)
-#define SDTX_IOCTL_LATCH_CONFIRM	_IO(0x11, 0x06)
-#define SDTX_IOCTL_LATCH_HEARTBEAT	_IO(0x11, 0x07)
-#define SDTX_IOCTL_LATCH_CANCEL		_IO(0x11, 0x08)
+#define SDTX_IOCTL_LATCH_LOCK		_IO(0xa5, 0x23)
+#define SDTX_IOCTL_LATCH_UNLOCK		_IO(0xa5, 0x24)
+#define SDTX_IOCTL_LATCH_REQUEST	_IO(0xa5, 0x25)
+#define SDTX_IOCTL_LATCH_CONFIRM	_IO(0xa5, 0x26)
+#define SDTX_IOCTL_LATCH_HEARTBEAT	_IO(0xa5, 0x27)
+#define SDTX_IOCTL_LATCH_CANCEL		_IO(0xa5, 0x28)
 
-#define SDTX_IOCTL_GET_BASE_INFO	_IOR(0x11, 0x09, struct sdtx_base_info)
-#define SDTX_IOCTL_GET_DEVICE_MODE	_IOR(0x11, 0x0a, u16)
-#define SDTX_IOCTL_GET_LATCH_STATUS	_IOR(0x11, 0x0b, u16)
+#define SDTX_IOCTL_GET_BASE_INFO	_IOR(0xa5, 0x29, struct sdtx_base_info)
+#define SDTX_IOCTL_GET_DEVICE_MODE	_IOR(0xa5, 0x2a, u16)
+#define SDTX_IOCTL_GET_LATCH_STATUS	_IOR(0xa5, 0x2b, u16)
 
 
 /* -- SSAM Interface. ------------------------------------------------------- */
