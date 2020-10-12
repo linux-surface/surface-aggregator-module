@@ -234,7 +234,8 @@ struct surface_dtx_dev {
 	struct list_head client_list;
 	struct mutex mutex;
 	bool active;
-	struct input_dev *input_dev;
+
+	struct input_dev *mode_switch;
 };
 
 struct surface_dtx_client {
@@ -487,6 +488,7 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 {
 	struct surface_dtx_event event;
 	u8 mode;
+	int tablet;
 	int status;
 
 	// get operation mode
@@ -505,8 +507,9 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 	surface_dtx_push_event(ddev, &event);
 
 	// send SW_TABLET_MODE event
-	input_report_switch(ddev->input_dev, SW_TABLET_MODE, mode != SDTX_DEVICE_MODE_LAPTOP);
-	input_sync(ddev->input_dev);
+	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
+	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet);
+	input_sync(ddev->mode_switch);
 }
 
 static void surface_dtx_device_mode_workfn(struct work_struct *work)
@@ -618,7 +621,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
-	ddev->input_dev = input_dev;
+	ddev->mode_switch = input_dev;
 	mutex_unlock(&ddev->mutex);
 
 	status = misc_register(&ddev->mdev);
@@ -643,7 +646,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 err_events_setup:
 	misc_deregister(&ddev->mdev);
 err_register:
-	input_unregister_device(ddev->input_dev);
+	input_unregister_device(ddev->mode_switch);
 	return status;
 }
 
@@ -675,7 +678,7 @@ static int surface_sam_dtx_remove(struct platform_device *pdev)
 	wake_up_interruptible(&ddev->waitq);
 
 	// unregister user-space devices
-	input_unregister_device(ddev->input_dev);
+	input_unregister_device(ddev->mode_switch);
 	misc_deregister(&ddev->mdev);
 
 	return 0;
