@@ -323,6 +323,26 @@ static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
 
 /* -- TODO ------------------------------------------------------------------ */
 
+static int sdtx_ioctl_get_base_info(struct surface_dtx_dev *ddev,
+				    struct sdtx_base_info __user *buf)
+{
+	struct ssam_dtx_base_info raw;
+	struct sdtx_base_info info;
+	int status;
+
+	status = ssam_bas_get_base(ddev->ctrl, &raw);
+	if (status < 0)
+		return status;
+
+	info.state = sdtx_translate_base_state(ddev, raw.state);
+	info.base_id = SDTX_BASE_TYPE_SSH(raw.base_id);
+
+	if (copy_to_user(buf, &info, sizeof(info)))
+		return -EFAULT;
+
+	return 0;
+}
+
 static int sdtx_ioctl_get_device_mode(struct surface_dtx_dev *ddev,
 				      u16 __user *buf)
 {
@@ -503,6 +523,11 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 	case SDTX_IOCTL_LATCH_CANCEL:
 		status = ssam_bas_latch_cancel(ddev->ctrl);
+		break;
+
+	case SDTX_IOCTL_GET_BASE_INFO:
+		status = sdtx_ioctl_get_base_info(ddev,
+				(struct sdtx_base_info __user *)arg);
 		break;
 
 	case SDTX_IOCTL_GET_DEVICE_MODE:
