@@ -225,14 +225,14 @@ struct surface_dtx_dev {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
+	spinlock_t client_lock;
+	struct list_head client_list;
+
 	struct ssam_event_notifier notif;
 	wait_queue_head_t waitq;
 	struct miscdevice mdev;
 	struct mutex mutex;
 	bool active;
-
-	spinlock_t client_lock;
-	struct list_head client_list;
 
 	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
@@ -240,6 +240,7 @@ struct surface_dtx_dev {
 
 struct surface_dtx_client {
 	struct surface_dtx_dev *ddev;
+
 	struct list_head node;
 	struct rcu_head rcu;
 
