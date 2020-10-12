@@ -469,9 +469,6 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 	if (count != 0 && count < sizeof(struct surface_dtx_event))
 		return -EINVAL;
 
-	if (!ddev->active)
-		return -ENODEV;
-
 	// check availability
 	if (client->buffer_head == client->buffer_tail) {
 		if (file->f_flags & O_NONBLOCK)
@@ -482,9 +479,6 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 				!ddev->active);
 		if (status)
 			return status;
-
-		if (!ddev->active)
-			return -ENODEV;
 	}
 
 	// copy events one by one
