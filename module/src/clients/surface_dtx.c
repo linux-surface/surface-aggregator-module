@@ -28,6 +28,40 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
+/* Status/error categories */
+#define DTX_CATEGORY_STATUS		0x0000
+#define DTX_CATEGORY_RUNTIME_ERROR	0x1000
+#define DTX_CATEGORY_HARDWARE_ERROR	0x2000
+#define DTX_CATEGORY_UNKNOWN		0xf000
+
+#define DTX_CATEGORY_MASK		0xf000
+#define DTX_CATEGORY(value)		((value) & DTX_CATEGORY_MASK)
+
+#define DTX_STATUS(code)		((code) | DTX_CATEGORY_STATUS)
+#define DTX_ERR_RT(code)		((code) | DTX_CATEGORY_RUNTIME_ERROR)
+#define DTX_ERR_HW(code)		((code) | DTX_CATEGORY_HARDWARE_ERROR)
+#define DTX_UNKNOWN(code)		((code) | DTX_CATEGORY_UNKNOWN)
+
+#define DTX_SUCCESS(value)	(DTX_CATEGORY(value) == DTX_CATEGORY_STATUS)
+
+/* Latch status values */
+#define DTX_LATCH_CLOSED		DTX_STATUS(0x00)
+#define DTX_LATCH_OPENED		DTX_STATUS(0x01)
+
+/* Base state values */
+#define DTX_BASE_DETACHED		DTX_STATUS(0x00)
+#define DTX_BASE_ATTACHED		DTX_STATUS(0x01)
+
+/* Runtime errors (non-critical) */
+#define DTX_DETACH_NOT_FEASIBLE		DTX_ERR_RT(0x01)
+#define DTX_DETACH_TIMEDOUT		DTX_ERR_RT(0x02)
+
+/* Hardware errors (critical) */
+#define DTX_ERR_FAILED_TO_OPEN		DTX_ERR_HW(0x01)
+#define DTX_ERR_FAILED_TO_REMAIN_OPEN	DTX_ERR_HW(0x02)
+#define DTX_ERR_FAILED_TO_CLOSE		DTX_ERR_HW(0x03)
+
+
 struct dtx_base_info {
 	__u16 state;
 	__u16 base_id;
