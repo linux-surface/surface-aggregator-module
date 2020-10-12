@@ -17,6 +17,7 @@
 #include <linux/input.h>
 #include <linux/ioctl.h>
 #include <linux/kernel.h>
+#include <linux/kfifo.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -208,9 +209,6 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 
 /* -- TODO ------------------------------------------------------------------ */
 
-// Warning: This must always be a power of 2!
-#define DTX_CLIENT_BUF_SIZE			16
-
 #define DTX_CONNECT_DEVICE_MODE_DELAY		1000
 
 #define DTX_ERR		KERN_ERR "surface_dtx: "
@@ -243,10 +241,9 @@ struct surface_dtx_client {
 	struct list_head node;
 	struct surface_dtx_dev *ddev;
 	struct fasync_struct *fasync;
+
 	spinlock_t buffer_lock;
-	unsigned int buffer_head;
-	unsigned int buffer_tail;
-	struct surface_dtx_event buffer[DTX_CLIENT_BUF_SIZE];
+	DECLARE_KFIFO(buffer, u8, 512);
 };
 
 
@@ -426,10 +423,9 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	if (!client)
 		return -ENOMEM;
 
-	spin_lock_init(&client->buffer_lock);
-	client->buffer_head = 0;
-	client->buffer_tail = 0;
 	client->ddev = ddev;
+	spin_lock_init(&client->buffer_lock);
+	INIT_KFIFO(client->buffer);
 
 	// attach client
 	spin_lock(&ddev->client_lock);
@@ -462,47 +458,36 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 {
 	struct surface_dtx_client *client = file->private_data;
 	struct surface_dtx_dev *ddev = client->ddev;
-	struct surface_dtx_event event;
-	size_t read = 0;
+	unsigned int copied = 0;
 	int status = 0;
 
-	if (count != 0 && count < sizeof(struct surface_dtx_event))
-		return -EINVAL;
+	do {
+		// check availability, wait if necessary
+		if (kfifo_is_empty(&client->buffer)) {
+			if (file->f_flags & O_NONBLOCK)
+				return -EAGAIN;
 
-	// check availability
-	if (client->buffer_head == client->buffer_tail) {
-		if (file->f_flags & O_NONBLOCK)
-			return -EAGAIN;
-
-		status = wait_event_interruptible(ddev->waitq,
-				client->buffer_head != client->buffer_tail ||
-				!ddev->active);
-		if (status)
-			return status;
-	}
-
-	// copy events one by one
-	while (read + sizeof(struct surface_dtx_event) <= count) {
-		spin_lock_irq(&client->buffer_lock);
-
-		if (client->buffer_head == client->buffer_tail) {
-			spin_unlock_irq(&client->buffer_lock);
-			break;
+			status = wait_event_interruptible(ddev->waitq,
+					!kfifo_is_empty(&client->buffer));
+			if (status)
+				return status;
 		}
 
-		// get one event
-		event = client->buffer[client->buffer_tail];
-		client->buffer_tail = (client->buffer_tail + 1) & (DTX_CLIENT_BUF_SIZE - 1);
-		spin_unlock_irq(&client->buffer_lock);
+		// try to read from fifo
+		spin_lock(&client->buffer_lock);
+		status = kfifo_to_user(&client->buffer, buf, count, &copied);
+		spin_unlock(&client->buffer_lock);
 
-		// copy to userspace
-		if (copy_to_user(buf, &event, sizeof(struct surface_dtx_event)))
-			return -EFAULT;
+		if (status)
+			return status;
 
-		read += sizeof(struct surface_dtx_event);
-	}
+		// we might not have gotten anything, check this here
+		if (copied == 0 && (file->f_flags & O_NONBLOCK))
+			return -EAGAIN;
 
-	return read;
+	} while (copied == 0);
+
+	return copied;
 }
 
 static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt)
@@ -517,7 +502,7 @@ static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt
 	else
 		mask = EPOLLHUP | EPOLLERR;
 
-	if (client->buffer_head != client->buffer_tail)
+	if (!kfifo_is_empty(&client->buffer))
 		mask |= EPOLLIN | EPOLLRDNORM;
 
 	return mask;
@@ -563,15 +548,13 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 	list_for_each_entry_rcu(client, &ddev->client_list, node) {
 		spin_lock(&client->buffer_lock);
 
-		client->buffer[client->buffer_head++] = *event;
-		client->buffer_head &= DTX_CLIENT_BUF_SIZE - 1;
-
-		if (unlikely(client->buffer_head == client->buffer_tail)) {
+		if (likely(kfifo_avail(&client->buffer) >= sizeof(*event))) {
+			kfifo_in(&client->buffer, (const u8 *)event, sizeof(*event));
+			spin_unlock(&client->buffer_lock);
+		} else {
+			spin_unlock(&client->buffer_lock);
 			printk(DTX_WARN "event buffer overrun\n");
-			client->buffer_tail = (client->buffer_tail + 1) & (DTX_CLIENT_BUF_SIZE - 1);
 		}
-
-		spin_unlock(&client->buffer_lock);
 
 		kill_fasync(&client->fasync, SIGIO, POLL_IN);
 	}
