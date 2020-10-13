@@ -543,7 +543,19 @@ static const struct file_operations surface_dtx_fops = {
 
 /* -- Event Handling/Forwarding. -------------------------------------------- */
 
-#define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(1000)
+/*
+ * The device operation mode is not immediately updated on the EC when the
+ * base has been connected, i.e. querying the device mode inside the
+ * connection event callback yields an outdated value. Thus, we can only
+ * determine the new tablet-mode switch and device mode values after some
+ * time.
+ *
+ * These delays have been chosen by experimenting. We first delay on connect
+ * events, then check and validate the device mode against the base state and
+ * if invalid delay again by the "recheck" delay.
+ */
+#define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(100)
+#define SDTX_DEVICE_MODE_DELAY_RECHECK	msecs_to_jiffies(100)
 
 static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay);
 
@@ -666,12 +678,19 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 
 /* -- Tablet Mode Switch. --------------------------------------------------- */
 
+static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay)
+{
+	schedule_delayed_work(&ddev->mode_work, delay);
+}
+
 static void sdtx_device_mode_workfn(struct work_struct *work)
 {
 	struct surface_dtx_dev *ddev;
 	struct sdtx_status_event event;
-	u8 mode;
+	struct ssam_dtx_base_info base;
 	int status, tablet;
+	bool invalid;
+	u8 mode;
 
 	ddev = container_of(work, struct surface_dtx_dev, mode_work.work);
 
@@ -679,6 +698,30 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
 	if (status) {
 		dev_err(ddev->dev, "failed to get device mode: %d\n", status);
+		return;
+	}
+
+	// get base info
+	status = ssam_bas_get_base(ddev->ctrl, &base);
+	if (status) {
+		dev_err(ddev->dev, "failed to get base info: %d\n", status);
+		return;
+	}
+
+	/*
+	 * In some cases (specifically when attaching the base), the device
+	 * mode isn't updated right away. Thus we check if the device mode
+	 * makes sense for the given base state and try again later if it
+	 * doesn't.
+	 */
+	invalid = ((base.state == SDTX_BASE_STATE_ATTACHED)
+			&& (mode == SDTX_DEVICE_MODE_TABLET))
+		|| ((base.state == SDTX_BASE_STATE_DETACH_SUCCESS)
+			&& (mode != SDTX_DEVICE_MODE_TABLET));
+
+	if (invalid) {
+		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
+		sdtx_update_device_mode(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
 		return;
 	}
 
@@ -692,11 +735,6 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
 	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet);
 	input_sync(ddev->mode_switch);
-}
-
-static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay)
-{
-	schedule_delayed_work(&ddev->mode_work, delay);
 }
 
 
