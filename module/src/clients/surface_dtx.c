@@ -246,7 +246,7 @@ struct sdtx_device {
 	struct input_dev *mode_switch;
 };
 
-struct surface_dtx_client {
+struct sdtx_client {
 	struct sdtx_device *ddev;
 
 	struct list_head node;
@@ -377,7 +377,7 @@ static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf
 
 static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-	struct surface_dtx_client *client = file->private_data;
+	struct sdtx_client *client = file->private_data;
 	struct sdtx_device *ddev = client->ddev;
 
 	switch (cmd) {
@@ -425,13 +425,13 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 static void sdtx_client_free(struct rcu_head *rcu)
 {
-	kfree(container_of(rcu, struct surface_dtx_client, rcu));
+	kfree(container_of(rcu, struct sdtx_client, rcu));
 }
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
 	struct sdtx_device *ddev;
-	struct surface_dtx_client *client;
+	struct sdtx_client *client;
 
 	ddev = container_of(file->private_data, struct sdtx_device, mdev);
 
@@ -457,7 +457,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 
 static int surface_dtx_release(struct inode *inode, struct file *file)
 {
-	struct surface_dtx_client *client = file->private_data;
+	struct sdtx_client *client = file->private_data;
 
 	// detach client
 	spin_lock(&client->ddev->client_lock);
@@ -471,7 +471,7 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 				size_t count, loff_t *offs)
 {
-	struct surface_dtx_client *client = file->private_data;
+	struct sdtx_client *client = file->private_data;
 	struct sdtx_device *ddev = client->ddev;
 	unsigned int copied;
 	int status;
@@ -509,7 +509,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 
 static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt)
 {
-	struct surface_dtx_client *client = file->private_data;
+	struct sdtx_client *client = file->private_data;
 
 	poll_wait(file, &client->ddev->waitq, pt);
 	if (!kfifo_is_empty(&client->buffer))
@@ -520,7 +520,7 @@ static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt
 
 static int surface_dtx_fasync(int fd, struct file *file, int on)
 {
-	struct surface_dtx_client *client = file->private_data;
+	struct sdtx_client *client = file->private_data;
 
 	return fasync_helper(fd, file, on, &client->fasync);
 }
@@ -576,7 +576,7 @@ union sdtx_generic_event {
 static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 {
 	const size_t len = sizeof(struct sdtx_event) + evt->length;
-	struct surface_dtx_client *client;
+	struct sdtx_client *client;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(client, &ddev->client_list, node) {
@@ -847,7 +847,7 @@ err_register:
 static int surface_sam_dtx_remove(struct platform_device *pdev)
 {
 	struct sdtx_device *ddev = &surface_dtx_dev;
-	struct surface_dtx_client *client;
+	struct sdtx_client *client;
 
 	// After this call we're guaranteed that no more input events will arive
 	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
