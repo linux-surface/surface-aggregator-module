@@ -588,7 +588,7 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 			spin_unlock(&client->write_lock);
 		} else {
 			spin_unlock(&client->write_lock);
-			printk(DTX_WARN "event buffer overrun\n");
+			dev_warn(ddev->dev, "event buffer overrun\n");
 		}
 
 		kill_fasync(&client->fasync, SIGIO, POLL_IN);
