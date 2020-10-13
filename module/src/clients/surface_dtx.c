@@ -423,7 +423,10 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 static void sdtx_client_free(struct rcu_head *rcu)
 {
-	kfree(container_of(rcu, struct sdtx_client, rcu));
+	struct sdtx_client *client = container_of(rcu, struct sdtx_client, rcu);
+
+	mutex_destroy(&client->read_lock);
+	kfree(client);
 }
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
@@ -439,7 +442,12 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 		return -ENOMEM;
 
 	client->ddev = ddev;
+
+	INIT_LIST_HEAD(&client->node);
+	rcu_head_init(&client->rcu);
+
 	mutex_init(&client->read_lock);
+	spin_lock_init(&client->write_lock);
 	INIT_KFIFO(client->buffer);
 
 	file->private_data = client;
