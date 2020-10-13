@@ -229,7 +229,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 #define DTX_ERR		KERN_ERR "surface_dtx: "
 #define DTX_WARN	KERN_WARNING "surface_dtx: "
 
-struct surface_dtx_dev {
+struct sdtx_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
@@ -247,7 +247,7 @@ struct surface_dtx_dev {
 };
 
 struct surface_dtx_client {
-	struct surface_dtx_dev *ddev;
+	struct sdtx_device *ddev;
 
 	struct list_head node;
 	struct rcu_head rcu;
@@ -262,7 +262,7 @@ struct surface_dtx_client {
 
 /* -- Firmware Value Translations. ------------------------------------------ */
 
-static u16 sdtx_translate_base_state(struct surface_dtx_dev *ddev, u8 state)
+static u16 sdtx_translate_base_state(struct sdtx_device *ddev, u8 state)
 {
 	switch (state) {
 	case SDTX_BASE_STATE_ATTACHED:
@@ -280,7 +280,7 @@ static u16 sdtx_translate_base_state(struct surface_dtx_dev *ddev, u8 state)
 	}
 }
 
-static u16 sdtx_translate_latch_status(struct surface_dtx_dev *ddev, u8 status)
+static u16 sdtx_translate_latch_status(struct sdtx_device *ddev, u8 status)
 {
 	switch (status) {
 	case SDTX_LATCH_STATUS_CLOSED:
@@ -304,7 +304,7 @@ static u16 sdtx_translate_latch_status(struct surface_dtx_dev *ddev, u8 status)
 	}
 }
 
-static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
+static u16 sdtx_translate_cancel_reason(struct sdtx_device *ddev, u8 reason)
 {
 	switch (reason) {
 	case SDTX_CANCEL_REASON_NOT_FEASIBLE:
@@ -331,7 +331,7 @@ static u16 sdtx_translate_cancel_reason(struct surface_dtx_dev *ddev, u8 reason)
 
 /* -- IOCTLs. --------------------------------------------------------------- */
 
-static int sdtx_ioctl_get_base_info(struct surface_dtx_dev *ddev,
+static int sdtx_ioctl_get_base_info(struct sdtx_device *ddev,
 				    struct sdtx_base_info __user *buf)
 {
 	struct ssam_dtx_base_info raw;
@@ -351,7 +351,7 @@ static int sdtx_ioctl_get_base_info(struct surface_dtx_dev *ddev,
 	return 0;
 }
 
-static int sdtx_ioctl_get_device_mode(struct surface_dtx_dev *ddev, u16 __user *buf)
+static int sdtx_ioctl_get_device_mode(struct sdtx_device *ddev, u16 __user *buf)
 {
 	u8 mode;
 	int status;
@@ -363,7 +363,7 @@ static int sdtx_ioctl_get_device_mode(struct surface_dtx_dev *ddev, u16 __user *
 	return put_user(mode, buf);
 }
 
-static int sdtx_ioctl_get_latch_status(struct surface_dtx_dev *ddev, u16 __user *buf)
+static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf)
 {
 	u8 latch;
 	int status;
@@ -378,7 +378,7 @@ static int sdtx_ioctl_get_latch_status(struct surface_dtx_dev *ddev, u16 __user 
 static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct surface_dtx_client *client = file->private_data;
-	struct surface_dtx_dev *ddev = client->ddev;
+	struct sdtx_device *ddev = client->ddev;
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
@@ -430,10 +430,10 @@ static void sdtx_client_free(struct rcu_head *rcu)
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
-	struct surface_dtx_dev *ddev;
+	struct sdtx_device *ddev;
 	struct surface_dtx_client *client;
 
-	ddev = container_of(file->private_data, struct surface_dtx_dev, mdev);
+	ddev = container_of(file->private_data, struct sdtx_device, mdev);
 
 	// initialize client
 	client = kzalloc(sizeof(*client), GFP_KERNEL);
@@ -472,7 +472,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 				size_t count, loff_t *offs)
 {
 	struct surface_dtx_client *client = file->private_data;
-	struct surface_dtx_dev *ddev = client->ddev;
+	struct sdtx_device *ddev = client->ddev;
 	unsigned int copied;
 	int status;
 
@@ -554,7 +554,7 @@ static const struct file_operations surface_dtx_fops = {
 #define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(100)
 #define SDTX_DEVICE_MODE_DELAY_RECHECK	msecs_to_jiffies(100)
 
-static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay);
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay);
 
 
 struct sdtx_status_event {
@@ -573,7 +573,7 @@ union sdtx_generic_event {
 	struct sdtx_base_info_event base;
 };
 
-static void sdtx_push_event(struct surface_dtx_dev *ddev, struct sdtx_event *evt)
+static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 {
 	const size_t len = sizeof(struct sdtx_event) + evt->length;
 	struct surface_dtx_client *client;
@@ -600,7 +600,7 @@ static void sdtx_push_event(struct surface_dtx_dev *ddev, struct sdtx_event *evt
 static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 			 const struct ssam_event *in)
 {
-	struct surface_dtx_dev *ddev = container_of(nf, struct surface_dtx_dev, notif);
+	struct sdtx_device *ddev = container_of(nf, struct sdtx_device, notif);
 	union sdtx_generic_event event;
 	size_t len;
 
@@ -675,21 +675,21 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 
 /* -- Tablet Mode Switch. --------------------------------------------------- */
 
-static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay)
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay)
 {
 	schedule_delayed_work(&ddev->mode_work, delay);
 }
 
 static void sdtx_device_mode_workfn(struct work_struct *work)
 {
-	struct surface_dtx_dev *ddev;
+	struct sdtx_device *ddev;
 	struct sdtx_status_event event;
 	struct ssam_dtx_base_info base;
 	int status, tablet;
 	bool invalid;
 	u8 mode;
 
-	ddev = container_of(work, struct surface_dtx_dev, mode_work.work);
+	ddev = container_of(work, struct sdtx_device, mode_work.work);
 
 	// get operation mode
 	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
@@ -737,7 +737,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 
 /* -- TODO ------------------------------------------------------------------ */
 
-static struct surface_dtx_dev surface_dtx_dev = {
+static struct sdtx_device surface_dtx_dev = {
 	.mdev = {
 		.minor = MISC_DYNAMIC_MINOR,
 		.name = "surface_dtx",
@@ -787,7 +787,7 @@ static struct input_dev *surface_dtx_register_inputdev(
 
 static int surface_sam_dtx_probe(struct platform_device *pdev)
 {
-	struct surface_dtx_dev *ddev = &surface_dtx_dev;
+	struct sdtx_device *ddev = &surface_dtx_dev;
 	struct ssam_controller *ctrl;
 	struct input_dev *input_dev;
 	int status;
@@ -846,7 +846,7 @@ err_register:
 
 static int surface_sam_dtx_remove(struct platform_device *pdev)
 {
-	struct surface_dtx_dev *ddev = &surface_dtx_dev;
+	struct sdtx_device *ddev = &surface_dtx_dev;
 	struct surface_dtx_client *client;
 
 	// After this call we're guaranteed that no more input events will arive
