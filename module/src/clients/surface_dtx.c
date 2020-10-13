@@ -260,9 +260,6 @@ struct surface_dtx_client {
 };
 
 
-static struct surface_dtx_dev surface_dtx_dev;
-
-
 /* -- Firmware Value Translations. ------------------------------------------ */
 
 static u16 sdtx_translate_base_state(struct surface_dtx_dev *ddev, u8 state)
