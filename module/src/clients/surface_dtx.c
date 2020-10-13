@@ -233,17 +233,18 @@ struct sdtx_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
 
+	struct miscdevice mdev;
+	wait_queue_head_t waitq;
 	spinlock_t client_lock;
 	struct list_head client_list;
 
-	struct ssam_event_notifier notif;
-	wait_queue_head_t waitq;
-	struct miscdevice mdev;
-	struct mutex mutex;
-	bool active;
-
 	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
+
+	struct ssam_event_notifier notif;
+
+	struct mutex mutex;
+	bool active;
 };
 
 struct sdtx_client {
