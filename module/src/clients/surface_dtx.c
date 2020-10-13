@@ -83,6 +83,23 @@ enum sdtx_device_mode {
 	SDTX_DEVICE_MODE_STUDIO		= 0x02,
 };
 
+
+/* Event provided by reading from the device */
+struct sdtx_event {
+	__u16 length;
+	__u16 code;
+	__u8 data[];
+} __packed;
+
+enum sdtx_event_code {
+	SDTX_EVENT_REQUEST		= 1,
+	SDTX_EVENT_CANCEL		= 2,
+	SDTX_EVENT_BASE_CONNECTION	= 3,
+	SDTX_EVENT_LATCH_STATUS		= 4,
+	SDTX_EVENT_DEVICE_MODE		= 5,
+};
+
+
 /* IOCTL interface */
 struct sdtx_base_info {
 	__u16 state;
@@ -209,17 +226,8 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 
 /* -- TODO ------------------------------------------------------------------ */
 
-#define DTX_CONNECT_DEVICE_MODE_DELAY		1000
-
 #define DTX_ERR		KERN_ERR "surface_dtx: "
 #define DTX_WARN	KERN_WARNING "surface_dtx: "
-
-struct surface_dtx_event {
-	u8 type;
-	u8 code;
-	u8 arg0;
-	u8 arg1;
-} __packed;
 
 struct surface_dtx_dev {
 	struct device *dev;
@@ -533,31 +541,40 @@ static const struct file_operations surface_dtx_fops = {
 };
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Event Handling/Forwarding. -------------------------------------------- */
 
-static struct surface_dtx_dev surface_dtx_dev = {
-	.mdev = {
-		.minor = MISC_DYNAMIC_MINOR,
-		.name = "surface_dtx",
-		.nodename = "surface/dtx",
-		.fops = &surface_dtx_fops,
-	},
-	.client_lock = __SPIN_LOCK_UNLOCKED(),
-	.mutex  = __MUTEX_INITIALIZER(surface_dtx_dev.mutex),
-	.active = false,
+#define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(1000)
+
+static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay);
+
+
+struct sdtx_status_event {
+	struct sdtx_event e;
+	u16 v;
+} __packed;
+
+struct sdtx_base_info_event {
+	struct sdtx_event e;
+	struct sdtx_base_info v;
+} __packed;
+
+union sdtx_generic_event {
+	struct sdtx_event common;
+	struct sdtx_status_event status;
+	struct sdtx_base_info_event base;
 };
 
-
-static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_dtx_event *event)
+static void sdtx_push_event(struct surface_dtx_dev *ddev, struct sdtx_event *evt)
 {
+	const size_t len = sizeof(struct sdtx_event) + evt->length;
 	struct surface_dtx_client *client;
 
 	rcu_read_lock();
 	list_for_each_entry_rcu(client, &ddev->client_list, node) {
 		spin_lock(&client->write_lock);
 
-		if (likely(kfifo_avail(&client->buffer) >= sizeof(*event))) {
-			kfifo_in(&client->buffer, (const u8 *)event, sizeof(*event));
+		if (likely(kfifo_avail(&client->buffer) >= len)) {
+			kfifo_in(&client->buffer, (const u8 *)evt, len);
 			spin_unlock(&client->write_lock);
 		} else {
 			spin_unlock(&client->write_lock);
@@ -571,28 +588,105 @@ static void surface_dtx_push_event(struct surface_dtx_dev *ddev, struct surface_
 	wake_up_interruptible(&ddev->waitq);
 }
 
-
-static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
+static u32 sdtx_notifier(struct ssam_event_notifier *nf,
+			 const struct ssam_event *in)
 {
-	struct surface_dtx_event event;
+	struct surface_dtx_dev *ddev = container_of(nf, struct surface_dtx_dev, notif);
+	union sdtx_generic_event event;
+	size_t len;
+
+	// validate event payload length
+	switch (in->command_id) {
+	case SAM_EVENT_CID_DTX_CONNECTION:
+		len = 2;
+		break;
+
+	case SAM_EVENT_CID_DTX_REQUEST:
+		len = 0;
+		break;
+
+	case SAM_EVENT_CID_DTX_CANCEL:
+		len = 1;
+		break;
+
+	case SAM_EVENT_CID_DTX_LATCH_STATUS:
+		len = 1;
+		break;
+
+	default:
+		return 0;
+	};
+
+	if (in->length != len) {
+		dev_err(ddev->dev, "unexpected payload size for event 0x%02x: "
+			"got %u, expected %zu", in->command_id, in->length, len);
+		return 0;
+	}
+
+	// translate event
+	switch (in->command_id) {
+	case SAM_EVENT_CID_DTX_CONNECTION:
+		event.base.e.code = SDTX_EVENT_BASE_CONNECTION;
+		event.base.e.length = sizeof(struct sdtx_base_info);
+		event.base.v.state = sdtx_translate_base_state(ddev, in->data[0]);
+		event.base.v.base_id = SDTX_BASE_TYPE_SSH(in->data[1]);
+		break;
+
+	case SAM_EVENT_CID_DTX_REQUEST:
+		event.common.code = SDTX_EVENT_REQUEST;
+		event.common.length = 0;
+		break;
+
+	case SAM_EVENT_CID_DTX_CANCEL:
+		event.status.e.code = SDTX_EVENT_CANCEL;
+		event.status.e.length = sizeof(u16);
+		event.status.v = sdtx_translate_cancel_reason(ddev, in->data[0]);
+		break;
+
+	case SAM_EVENT_CID_DTX_LATCH_STATUS:
+		event.status.e.code = SDTX_EVENT_LATCH_STATUS;
+		event.status.e.length = sizeof(u16);
+		event.status.v = sdtx_translate_latch_status(ddev, in->data[0]);
+		break;
+	}
+
+	sdtx_push_event(ddev, &event.common);
+
+	// update device mode on base connection change
+	if (in->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
+		unsigned long delay;
+
+		delay = in->data[0] ? SDTX_DEVICE_MODE_DELAY_CONNECT : 0;
+		sdtx_update_device_mode(ddev, delay);
+	}
+
+	return SSAM_NOTIF_HANDLED;
+}
+
+
+/* -- Tablet Mode Switch. --------------------------------------------------- */
+
+static void sdtx_device_mode_workfn(struct work_struct *work)
+{
+	struct surface_dtx_dev *ddev;
+	struct sdtx_status_event event;
 	u8 mode;
-	int tablet;
-	int status;
+	int status, tablet;
+
+	ddev = container_of(work, struct surface_dtx_dev, mode_work.work);
 
 	// get operation mode
 	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
-	if (status < 0) {
-		printk(DTX_ERR "EC request failed with error %d\n", status);
+	if (status) {
+		dev_err(ddev->dev, "failed to get device mode: %d\n", status);
 		return;
 	}
 
-	// send DTX event
-	event.type = 0x11;
-	event.code = 0x0D;
-	event.arg0 = mode;
-	event.arg1 = 0x00;
+	event.e.code = SDTX_EVENT_DEVICE_MODE;
+	event.e.length = sizeof(u16);
+	event.v = mode;
 
-	surface_dtx_push_event(ddev, &event);
+	sdtx_push_event(ddev, &event.e);
 
 	// send SW_TABLET_MODE event
 	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
@@ -600,50 +694,25 @@ static void surface_dtx_update_device_mode(struct surface_dtx_dev *ddev)
 	input_sync(ddev->mode_switch);
 }
 
-static void surface_dtx_device_mode_workfn(struct work_struct *work)
+static void sdtx_update_device_mode(struct surface_dtx_dev *ddev, unsigned long delay)
 {
-	struct surface_dtx_dev *ddev;
-
-	ddev = container_of(work, struct surface_dtx_dev, mode_work.work);
-	surface_dtx_update_device_mode(ddev);
+	schedule_delayed_work(&ddev->mode_work, delay);
 }
 
-static u32 surface_dtx_notification(struct ssam_event_notifier *nf, const struct ssam_event *in_event)
-{
-	struct surface_dtx_dev *ddev = container_of(nf, struct surface_dtx_dev, notif);
-	struct surface_dtx_event event;
-	unsigned long delay;
 
-	switch (in_event->command_id) {
-	case SAM_EVENT_CID_DTX_CONNECTION:
-	case SAM_EVENT_CID_DTX_REQUEST:
-	case SAM_EVENT_CID_DTX_CANCEL:
-	case SAM_EVENT_CID_DTX_LATCH_STATUS:
-		if (in_event->length > 2) {
-			printk(DTX_ERR "unexpected payload size (cid: %x, len: %u)\n",
-			       in_event->command_id, in_event->length);
-			return SSAM_NOTIF_HANDLED;
-		}
+/* -- TODO ------------------------------------------------------------------ */
 
-		event.type = in_event->target_category;
-		event.code = in_event->command_id;
-		event.arg0 = in_event->length >= 1 ? in_event->data[0] : 0x00;
-		event.arg1 = in_event->length >= 2 ? in_event->data[1] : 0x00;
-		surface_dtx_push_event(ddev, &event);
-		break;
-
-	default:
-		return 0;
-	}
-
-	// update device mode
-	if (in_event->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
-		delay = event.arg0 ? DTX_CONNECT_DEVICE_MODE_DELAY : 0;
-		schedule_delayed_work(&ddev->mode_work, delay);
-	}
-
-	return SSAM_NOTIF_HANDLED;
-}
+static struct surface_dtx_dev surface_dtx_dev = {
+	.mdev = {
+		.minor = MISC_DYNAMIC_MINOR,
+		.name = "surface_dtx",
+		.nodename = "surface/dtx",
+		.fops = &surface_dtx_fops,
+	},
+	.client_lock = __SPIN_LOCK_UNLOCKED(),
+	.mutex  = __MUTEX_INITIALIZER(surface_dtx_dev.mutex),
+	.active = false,
+};
 
 
 static struct input_dev *surface_dtx_register_inputdev(
@@ -707,7 +776,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 
 	ddev->dev = &pdev->dev;
 	ddev->ctrl = ctrl;
-	INIT_DELAYED_WORK(&ddev->mode_work, surface_dtx_device_mode_workfn);
+	INIT_DELAYED_WORK(&ddev->mode_work, sdtx_device_mode_workfn);
 	INIT_LIST_HEAD(&ddev->client_list);
 	init_waitqueue_head(&ddev->waitq);
 	ddev->active = true;
@@ -720,7 +789,7 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 
 	// set up events
 	ddev->notif.base.priority = 1;
-	ddev->notif.base.fn = surface_dtx_notification;
+	ddev->notif.base.fn = sdtx_notifier;
 	ddev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
 	ddev->notif.event.id.target_category = SSAM_SSH_TC_BAS;
 	ddev->notif.event.id.instance = 0;
