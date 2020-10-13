@@ -224,10 +224,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 });
 
 
-/* -- TODO ------------------------------------------------------------------ */
-
-#define DTX_ERR		KERN_ERR "surface_dtx: "
-#define DTX_WARN	KERN_WARNING "surface_dtx: "
+/* -- Main Structures. ------------------------------------------------------ */
 
 struct sdtx_device {
 	struct device *dev;
