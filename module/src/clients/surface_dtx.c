@@ -226,9 +226,14 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 
 /* -- Main Structures. ------------------------------------------------------ */
 
+enum sdtx_device_state {
+	SDTX_DEVICE_SHUTDOWN = BIT(0),
+};
+
 struct sdtx_device {
 	struct device *dev;
 	struct ssam_controller *ctrl;
+	unsigned long state;
 
 	struct miscdevice mdev;
 	wait_queue_head_t waitq;
@@ -443,6 +448,14 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 
 	// attach client
 	down_write(&ddev->client_lock);
+
+	// do not add a new client if the device has been shut down
+	if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+		up_write(&ddev->client_lock);
+		kfree(client);
+		return -ESHUTDOWN;
+	}
+
 	list_add_tail(&client->node, &ddev->client_list);
 	up_write(&ddev->client_lock);
 
@@ -817,6 +830,8 @@ err_mdev:
 
 static void sdtx_device_destroy(struct sdtx_device *ddev)
 {
+	struct sdtx_client *client;
+
 	// disable notifiers, prevent new events from arriving
 	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
 
@@ -826,6 +841,14 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 	// with mode_work canceled, we can unregister the mode_switch
 	input_unregister_device(ddev->mode_switch);
 
+	// mark device as shut-down, prevent new clients from being added
+	set_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state);
+
+	down_write(&ddev->client_lock);
+	list_for_each_entry(client, &ddev->client_list, node) {
+		// TODO: shut down client
+	}
+	up_write(&ddev->client_lock);
 	// finally remove the misc-device
 	misc_deregister(&ddev->mdev);
 }
