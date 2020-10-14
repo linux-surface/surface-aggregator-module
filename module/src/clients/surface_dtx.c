@@ -884,7 +884,21 @@ static struct platform_driver surface_dtx_driver = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_dtx_driver);
+
+static int __init surface_dtx_init(void)
+{
+	return platform_driver_register(&surface_dtx_driver);
+}
+module_init(surface_dtx_init);
+
+static void __exit surface_dtx_exit(void)
+{
+	platform_driver_unregister(&surface_dtx_driver);
+
+	// ensure all clients have been freed completely
+	synchronize_rcu();
+}
+module_exit(surface_dtx_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Detachment-system driver for Surface System Aggregator Module");
