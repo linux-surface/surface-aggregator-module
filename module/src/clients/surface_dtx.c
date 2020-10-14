@@ -808,6 +808,14 @@ static int sdtx_device_setup(struct sdtx_device *ddev, struct device *dev,
 	if (status)
 		goto err_mdev;
 
+	/*
+	 * Update device mode in case it has changed between getting the
+	 * initial mode and registring the event notifier. Note that this is
+	 * safe with regards to concurrent connection change events as the
+	 * update work will actually check for consistency with base info.
+	 */
+	sdtx_device_mode_update(ddev, 0);
+
 	return 0;
 
 err_notif:
