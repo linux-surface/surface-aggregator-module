@@ -22,7 +22,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <linux/poll.h>
-#include <linux/rculist.h>
+#include <linux/rwsem.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
 
@@ -232,7 +232,7 @@ struct sdtx_device {
 
 	struct miscdevice mdev;
 	wait_queue_head_t waitq;
-	spinlock_t client_lock;
+	struct rw_semaphore client_lock;
 	struct list_head client_list;
 
 	struct delayed_work mode_work;
@@ -246,9 +246,7 @@ struct sdtx_device {
 
 struct sdtx_client {
 	struct sdtx_device *ddev;
-
 	struct list_head node;
-	struct rcu_head rcu;
 
 	struct fasync_struct *fasync;
 
@@ -421,14 +419,6 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 
 /* -- File Operations. ------------------------------------------------------ */
 
-static void sdtx_client_free(struct rcu_head *rcu)
-{
-	struct sdtx_client *client = container_of(rcu, struct sdtx_client, rcu);
-
-	mutex_destroy(&client->read_lock);
-	kfree(client);
-}
-
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
 	struct sdtx_device *ddev;
@@ -444,7 +434,6 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	client->ddev = ddev;
 
 	INIT_LIST_HEAD(&client->node);
-	rcu_head_init(&client->rcu);
 
 	mutex_init(&client->read_lock);
 	spin_lock_init(&client->write_lock);
@@ -453,9 +442,9 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	file->private_data = client;
 
 	// attach client
-	spin_lock(&ddev->client_lock);
-	list_add_tail_rcu(&client->node, &ddev->client_list);
-	spin_unlock(&ddev->client_lock);
+	down_write(&ddev->client_lock);
+	list_add_tail(&client->node, &ddev->client_list);
+	up_write(&ddev->client_lock);
 
 	stream_open(inode, file);
 	return 0;
@@ -466,11 +455,11 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	struct sdtx_client *client = file->private_data;
 
 	// detach client
-	spin_lock(&client->ddev->client_lock);
-	list_del_rcu(&client->node);
-	spin_unlock(&client->ddev->client_lock);
-	call_rcu(&client->rcu, sdtx_client_free);
+	down_write(&client->ddev->client_lock);
+	list_del(&client->node);
+	up_write(&client->ddev->client_lock);
 
+	kfree(client);
 	return 0;
 }
 
@@ -584,8 +573,8 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 	const size_t len = sizeof(struct sdtx_event) + evt->length;
 	struct sdtx_client *client;
 
-	rcu_read_lock();
-	list_for_each_entry_rcu(client, &ddev->client_list, node) {
+	down_read(&ddev->client_lock);
+	list_for_each_entry(client, &ddev->client_list, node) {
 		spin_lock(&client->write_lock);
 
 		if (likely(kfifo_avail(&client->buffer) >= len)) {
@@ -598,7 +587,7 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 
 		kill_fasync(&client->fasync, SIGIO, POLL_IN);
 	}
-	rcu_read_unlock();
+	up_read(&ddev->client_lock);
 
 	wake_up_interruptible(&ddev->waitq);
 }
@@ -767,7 +756,7 @@ static int sdtx_device_setup(struct sdtx_device *ddev, struct device *dev,
 	ddev->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
 	init_waitqueue_head(&ddev->waitq);
-	spin_lock_init(&ddev->client_lock);
+	init_rwsem(&ddev->client_lock);
 	INIT_LIST_HEAD(&ddev->client_list);
 
 	INIT_DELAYED_WORK(&ddev->mode_work, sdtx_device_mode_workfn);
@@ -884,21 +873,7 @@ static struct platform_driver surface_dtx_driver = {
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-
-static int __init surface_dtx_init(void)
-{
-	return platform_driver_register(&surface_dtx_driver);
-}
-module_init(surface_dtx_init);
-
-static void __exit surface_dtx_exit(void)
-{
-	platform_driver_unregister(&surface_dtx_driver);
-
-	// ensure all clients have been freed completely
-	synchronize_rcu();
-}
-module_exit(surface_dtx_exit);
+module_platform_driver(surface_dtx_driver);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Detachment-system driver for Surface System Aggregator Module");
