@@ -833,9 +833,9 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Driver Setup. --------------------------------------------------------- */
 
-static int surface_sam_dtx_probe(struct platform_device *pdev)
+static int surface_dtx_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
 	struct sdtx_device *ddev;
@@ -854,28 +854,28 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	return sdtx_device_setup(ddev, &pdev->dev, ctrl);
 }
 
-static int surface_sam_dtx_remove(struct platform_device *pdev)
+static int surface_dtx_remove(struct platform_device *pdev)
 {
 	sdtx_device_destroy(platform_get_drvdata(pdev));
 	return 0;
 }
 
-static const struct acpi_device_id surface_sam_dtx_match[] = {
+static const struct acpi_device_id surface_dtx_match[] = {
 	{ "MSHW0133", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surface_sam_dtx_match);
+MODULE_DEVICE_TABLE(acpi, surface_dtx_match);
 
-static struct platform_driver surface_sam_dtx = {
-	.probe = surface_sam_dtx_probe,
-	.remove = surface_sam_dtx_remove,
+static struct platform_driver surface_dtx_driver = {
+	.probe = surface_dtx_probe,
+	.remove = surface_dtx_remove,
 	.driver = {
 		.name = "surface_dtx",
-		.acpi_match_table = surface_sam_dtx_match,
+		.acpi_match_table = surface_dtx_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_sam_dtx);
+module_platform_driver(surface_dtx_driver);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Detachment-system driver for Surface System Aggregator Module");
