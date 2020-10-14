@@ -785,6 +785,7 @@ static int sdtx_device_setup(struct sdtx_device *ddev, struct device *dev,
 		return -ENOMEM;
 
 	ddev->mode_switch->name = "Microsoft Surface DTX Device Mode Switch";
+	ddev->mode_switch->phys = "ssam/01:11:01:00:00/input0";
 	ddev->mode_switch->id.bustype = BUS_HOST;
 	ddev->mode_switch->dev.parent = ddev->dev;
 
