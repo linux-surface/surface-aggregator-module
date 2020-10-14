@@ -18,6 +18,7 @@
 #include <linux/ioctl.h>
 #include <linux/kernel.h>
 #include <linux/kfifo.h>
+#include <linux/kref.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
 #include <linux/platform_device.h>
@@ -231,6 +232,9 @@ enum sdtx_device_state {
 };
 
 struct sdtx_device {
+	struct kref kref;
+	struct rw_semaphore lock;
+
 	struct device *dev;
 	struct ssam_controller *ctrl;
 	unsigned long state;
@@ -259,6 +263,25 @@ struct sdtx_client {
 	spinlock_t write_lock;
 	DECLARE_KFIFO(buffer, u8, 512);
 };
+
+static void __sdtx_device_release(struct kref *kref)
+{
+	kfree(container_of(kref, struct sdtx_device, kref));
+}
+
+static struct sdtx_device *sdtx_device_get(struct sdtx_device *ddev)
+{
+	if (ddev)
+		kref_get(&ddev->kref);
+
+	return ddev;
+}
+
+static void sdtx_device_put(struct sdtx_device *ddev)
+{
+	if (ddev)
+		kref_put(&ddev->kref, __sdtx_device_release);
+}
 
 
 /* -- Firmware Value Translations. ------------------------------------------ */
@@ -376,9 +399,9 @@ static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf
 	return put_user(sdtx_translate_latch_status(ddev, latch), buf);
 }
 
-static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
+static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
+				unsigned long arg)
 {
-	struct sdtx_client *client = file->private_data;
 	struct sdtx_device *ddev = client->ddev;
 
 	switch (cmd) {
@@ -421,6 +444,26 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long
 	}
 }
 
+static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
+			      unsigned long arg)
+{
+	struct sdtx_client *client = file->private_data;
+	long status;
+
+	if (down_read_killable(&client->ddev->lock))
+		return -ERESTARTSYS;
+
+	if (test_bit(SDTX_DEVICE_SHUTDOWN, &client->ddev->state)) {
+		up_read(&client->ddev->lock);
+		return -ENODEV;
+	}
+
+	status = __surface_dtx_ioctl(client, cmd, arg);
+
+	up_read(&client->ddev->lock);
+	return status;
+}
+
 
 /* -- File Operations. ------------------------------------------------------ */
 
@@ -436,7 +479,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	if (!client)
 		return -ENOMEM;
 
-	client->ddev = ddev;
+	client->ddev = sdtx_device_get(ddev);
 
 	INIT_LIST_HEAD(&client->node);
 
@@ -452,6 +495,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	// do not add a new client if the device has been shut down
 	if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
 		up_write(&ddev->client_lock);
+		sdtx_device_put(client->ddev);
 		kfree(client);
 		return -ENODEV;
 	}
@@ -472,7 +516,9 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	list_del(&client->node);
 	up_write(&client->ddev->client_lock);
 
+	sdtx_device_put(client->ddev);
 	kfree(client);
+
 	return 0;
 }
 
@@ -482,48 +528,88 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 	struct sdtx_client *client = file->private_data;
 	struct sdtx_device *ddev = client->ddev;
 	unsigned int copied;
-	int status;
+	int status = 0;
+
+	if (down_read_killable(&ddev->lock))
+		return -ERESTARTSYS;
+
+	// make sure we're not shut down
+	if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+		up_read(&ddev->lock);
+		return -ENODEV;
+	}
 
 	do {
 		// check availability, wait if necessary
 		if (kfifo_is_empty(&client->buffer)) {
+			up_read(&ddev->lock);
+
 			if (file->f_flags & O_NONBLOCK)
 				return -EAGAIN;
 
 			status = wait_event_interruptible(ddev->waitq,
-					!kfifo_is_empty(&client->buffer));
+					!kfifo_is_empty(&client->buffer)
+					|| test_bit(SDTX_DEVICE_SHUTDOWN,
+						    &ddev->state));
 			if (status < 0)
 				return status;
+
+			if (down_read_killable(&client->ddev->lock))
+				return -ERESTARTSYS;
+
+			// need to check that we're not shut down again
+			if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+				up_read(&ddev->lock);
+				return -ENODEV;
+			}
 		}
 
 		// try to read from fifo
-		if (mutex_lock_interruptible(&client->read_lock))
+		if (mutex_lock_interruptible(&client->read_lock)) {
+			up_read(&ddev->lock);
 			return -ERESTARTSYS;
+		}
 
 		status = kfifo_to_user(&client->buffer, buf, count, &copied);
 		mutex_unlock(&client->read_lock);
 
-		if (status < 0)
+		if (status < 0) {
+			up_read(&ddev->lock);
 			return status;
+		}
 
 		// we might not have gotten anything, check this here
-		if (copied == 0 && (file->f_flags & O_NONBLOCK))
+		if (copied == 0 && (file->f_flags & O_NONBLOCK)) {
+			up_read(&ddev->lock);
 			return -EAGAIN;
+		}
 
 	} while (copied == 0);
 
+	up_read(&ddev->lock);
 	return copied;
 }
 
 static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt)
 {
 	struct sdtx_client *client = file->private_data;
+	__poll_t events = 0;
+
+	if (down_read_killable(&client->ddev->lock))
+		return -ERESTARTSYS;
+
+	if (test_bit(SDTX_DEVICE_SHUTDOWN, &client->ddev->state)) {
+		up_read(&client->ddev->lock);
+		return EPOLLHUP | EPOLLERR;
+	}
 
 	poll_wait(file, &client->ddev->waitq, pt);
-	if (!kfifo_is_empty(&client->buffer))
-		return EPOLLIN | EPOLLRDNORM;
 
-	return 0;
+	if (!kfifo_is_empty(&client->buffer))
+		events |= EPOLLIN | EPOLLRDNORM;
+
+	up_read(&client->ddev->lock);
+	return events;
 }
 
 static int surface_dtx_fasync(int fd, struct file *file, int on)
@@ -745,13 +831,14 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 
 /* -- Common Device Initialization. ----------------------------------------- */
 
-static int sdtx_device_setup(struct sdtx_device *ddev, struct device *dev,
-			     struct ssam_controller *ctrl)
+static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
+			    struct ssam_controller *ctrl)
 {
 	int status;
 	u8 mode;
 
 	// basic initialization
+	kref_init(&ddev->kref);
 	ddev->dev = dev;
 	ddev->ctrl = ctrl;
 
@@ -828,6 +915,25 @@ err_mdev:
 	return status;
 }
 
+static struct sdtx_device *sdtx_device_setup(struct device *dev,
+					     struct ssam_controller *ctrl)
+{
+	struct sdtx_device *ddev;
+	int status;
+
+	ddev = kzalloc(sizeof(*ddev), GFP_KERNEL);
+	if (!ddev)
+		return ERR_PTR(-ENOMEM);
+
+	status = sdtx_device_init(ddev, dev, ctrl);
+	if (status) {
+		kfree(ddev);
+		return ERR_PTR(status);
+	}
+
+	return ddev;
+}
+
 static void sdtx_device_destroy(struct sdtx_device *ddev)
 {
 	struct sdtx_client *client;
@@ -841,16 +947,40 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 	// with mode_work canceled, we can unregister the mode_switch
 	input_unregister_device(ddev->mode_switch);
 
-	// mark device as shut-down, prevent new clients from being added
+	/*
+	 * Mark device as shut-down. Prevent new clients from being added and
+	 * new operations from being executed.
+	 */
 	set_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state);
 
+	// wake up async clients
 	down_write(&ddev->client_lock);
 	list_for_each_entry(client, &ddev->client_list, node) {
-		// TODO: shut down client
+		kill_fasync(&client->fasync, SIGIO, POLL_HUP);
 	}
 	up_write(&ddev->client_lock);
+
+	// wake up blocking clients
+	wake_up_interruptible(&ddev->waitq);
+
+	/*
+	 * Wait for clients to finish their current operation. After this, the
+	 * controller and device references are guaranteed to be no longer in
+	 * use.
+	 */
+	down_write(&ddev->lock);
+	ddev->dev = NULL;
+	ddev->ctrl = NULL;
+	up_write(&ddev->lock);
+
 	// finally remove the misc-device
 	misc_deregister(&ddev->mdev);
+
+	/*
+	 * We're now guaranteed that sdtx_device_open() won't be called any
+	 * more, so we can now drop out reference.
+	 */
+	sdtx_device_put(ddev);
 }
 
 
@@ -867,12 +997,12 @@ static int surface_dtx_probe(struct platform_device *pdev)
 	if (status)
 		return status == -ENXIO ? -EPROBE_DEFER : status;
 
-	ddev = devm_kzalloc(&pdev->dev, sizeof(*ddev), GFP_KERNEL);
-	if (!ddev)
-		return -ENOMEM;
+	ddev = sdtx_device_setup(&pdev->dev, ctrl);
+	if (IS_ERR(ddev))
+		return PTR_ERR(ddev);
 
 	platform_set_drvdata(pdev, ddev);
-	return sdtx_device_setup(ddev, &pdev->dev, ctrl);
+	return 0;
 }
 
 static int surface_dtx_remove(struct platform_device *pdev)
