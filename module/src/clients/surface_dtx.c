@@ -253,9 +253,14 @@ struct sdtx_device {
 	bool active;
 };
 
+enum sdtx_client_state {
+	SDTX_CLIENT_EVENTS_ENABLED = BIT(0),
+};
+
 struct sdtx_client {
 	struct sdtx_device *ddev;
 	struct list_head node;
+	unsigned long state;
 
 	struct fasync_struct *fasync;
 
@@ -406,10 +411,12 @@ static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
-		return -EINVAL;		// TODO
+		set_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state);
+		return 0;
 
 	case SDTX_IOCTL_EVENTS_DISABLE:
-		return -EINVAL;		// TODO
+		clear_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state);
+		return 0;
 
 	case SDTX_IOCTL_LATCH_LOCK:
 		return ssam_bas_latch_lock(ddev->ctrl);
@@ -674,6 +681,9 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 
 	down_read(&ddev->client_lock);
 	list_for_each_entry(client, &ddev->client_list, node) {
+		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state))
+			continue;
+
 		spin_lock(&client->write_lock);
 
 		if (likely(kfifo_avail(&client->buffer) >= len)) {
