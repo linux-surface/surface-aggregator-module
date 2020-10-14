@@ -741,94 +741,23 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 }
 
 
-/* -- TODO ------------------------------------------------------------------ */
+/* -- Common Device Initialization. ----------------------------------------- */
 
-static struct sdtx_device surface_dtx_dev = {
-	.mdev = {
-		.minor = MISC_DYNAMIC_MINOR,
-		.name = "surface_dtx",
-		.nodename = "surface/dtx",
-		.fops = &surface_dtx_fops,
-	},
-	.client_lock = __SPIN_LOCK_UNLOCKED(),
-	.mutex  = __MUTEX_INITIALIZER(surface_dtx_dev.mutex),
-	.active = false,
-};
-
-
-static struct input_dev *surface_dtx_register_inputdev(
-		struct platform_device *pdev, struct ssam_controller *ctrl)
+static int sdtx_device_setup(struct sdtx_device *ddev, struct device *dev,
+			     struct ssam_controller *ctrl)
 {
-	struct input_dev *input_dev;
+	int status;
 	u8 mode;
-	int status;
 
-	input_dev = input_allocate_device();
-	if (!input_dev)
-		return ERR_PTR(-ENOMEM);
-
-	input_dev->name = "Microsoft Surface DTX Device Mode Switch";
-	input_dev->dev.parent = &pdev->dev;
-	input_dev->id.bustype = BUS_HOST;
-
-	input_set_capability(input_dev, EV_SW, SW_TABLET_MODE);
-
-	status = ssam_bas_get_device_mode(ctrl, &mode);
-	if (status < 0) {
-		input_free_device(input_dev);
-		return ERR_PTR(status);
-	}
-
-	input_report_switch(input_dev, SW_TABLET_MODE, mode != SDTX_DEVICE_MODE_LAPTOP);
-
-	status = input_register_device(input_dev);
-	if (status) {
-		input_unregister_device(input_dev);
-		return ERR_PTR(status);
-	}
-
-	return input_dev;
-}
-
-
-static int surface_sam_dtx_probe(struct platform_device *pdev)
-{
-	struct sdtx_device *ddev = &surface_dtx_dev;
-	struct ssam_controller *ctrl;
-	struct input_dev *input_dev;
-	int status;
-
-	// link to ec
-	status = ssam_client_bind(&pdev->dev, &ctrl);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
-
-	input_dev = surface_dtx_register_inputdev(pdev, ctrl);
-	if (IS_ERR(input_dev))
-		return PTR_ERR(input_dev);
-
-	// initialize device
-	mutex_lock(&ddev->mutex);
-	if (ddev->active) {
-		mutex_unlock(&ddev->mutex);
-		status = -ENODEV;
-		goto err_register;
-	}
-
-	ddev->dev = &pdev->dev;
+	// basic initialization
+	ddev->dev = dev;
 	ddev->ctrl = ctrl;
-	INIT_DELAYED_WORK(&ddev->mode_work, sdtx_device_mode_workfn);
-	INIT_LIST_HEAD(&ddev->client_list);
-	init_waitqueue_head(&ddev->waitq);
-	ddev->active = true;
-	ddev->mode_switch = input_dev;
-	mutex_unlock(&ddev->mutex);
 
-	status = misc_register(&ddev->mdev);
-	if (status)
-		goto err_register;
+	ddev->mdev.minor = MISC_DYNAMIC_MINOR;
+	ddev->mdev.name = "surface_dtx";
+	ddev->mdev.nodename = "surface/dtx";
+	ddev->mdev.fops = &surface_dtx_fops;
 
-	// set up events
 	ddev->notif.base.priority = 1;
 	ddev->notif.base.fn = sdtx_notifier;
 	ddev->notif.event.reg = SSAM_EVENT_REGISTRY_SAM;
@@ -837,53 +766,99 @@ static int surface_sam_dtx_probe(struct platform_device *pdev)
 	ddev->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	ddev->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
-	status = ssam_notifier_register(ctrl, &ddev->notif);
+	init_waitqueue_head(&ddev->waitq);
+	spin_lock_init(&ddev->client_lock);
+	INIT_LIST_HEAD(&ddev->client_list);
+
+	INIT_DELAYED_WORK(&ddev->mode_work, sdtx_device_mode_workfn);
+
+	// get current device mode
+	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
 	if (status)
-		goto err_events_setup;
+		return status;
+
+	mode = (mode != SDTX_DEVICE_MODE_LAPTOP);
+
+	// set up tablet mode switch
+	ddev->mode_switch = input_allocate_device();
+	if (!ddev->mode_switch)
+		return -ENOMEM;
+
+	ddev->mode_switch->name = "Microsoft Surface DTX Device Mode Switch";
+	ddev->mode_switch->id.bustype = BUS_HOST;
+	ddev->mode_switch->dev.parent = ddev->dev;
+
+	input_set_capability(ddev->mode_switch, EV_SW, SW_TABLET_MODE);
+	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, mode);
+
+	status = input_register_device(ddev->mode_switch);
+	if (status) {
+		input_free_device(ddev->mode_switch);
+		return status;
+	}
+
+	// set up event notifier
+	status = ssam_notifier_register(ddev->ctrl, &ddev->notif);
+	if (status)
+		goto err_notif;
+
+	// register miscdevice
+	status = misc_register(&ddev->mdev);
+	if (status)
+		goto err_mdev;
 
 	return 0;
 
-err_events_setup:
-	misc_deregister(&ddev->mdev);
-err_register:
+err_notif:
+	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
+	cancel_delayed_work_sync(&ddev->mode_work);
+err_mdev:
 	input_unregister_device(ddev->mode_switch);
 	return status;
 }
 
-static int surface_sam_dtx_remove(struct platform_device *pdev)
+static void sdtx_device_destroy(struct sdtx_device *ddev)
 {
-	struct sdtx_device *ddev = &surface_dtx_dev;
-	struct sdtx_client *client;
-
-	// After this call we're guaranteed that no more input events will arive
+	// disable notifiers, prevent new events from arriving
 	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
 
-	// wake up clients
-	spin_lock(&ddev->client_lock);
-	list_for_each_entry(client, &ddev->client_list, node) {
-		kill_fasync(&client->fasync, SIGIO, POLL_HUP);
-	}
-	spin_unlock(&ddev->client_lock);
+	// stop mode_work, prevent access to mode_switch
+	cancel_delayed_work_sync(&ddev->mode_work);
 
-	wake_up_interruptible(&ddev->waitq);
-
-	// unregister user-space devices
+	// with mode_work canceled, we can unregister the mode_switch
 	input_unregister_device(ddev->mode_switch);
+
+	// finally remove the misc-device
 	misc_deregister(&ddev->mdev);
-
-	// mark as inactive
-	mutex_lock(&ddev->mutex);
-	ddev->active = false;
-	mutex_unlock(&ddev->mutex);
-
-	/*
-	 * Make sure all clients have been freed, so it's safe to unload the
-	 * module afterwards.
-	 */
-	synchronize_rcu();
-	return 0;
 }
 
+
+/* -- TODO ------------------------------------------------------------------ */
+
+static int surface_sam_dtx_probe(struct platform_device *pdev)
+{
+	struct ssam_controller *ctrl;
+	struct sdtx_device *ddev;
+	int status;
+
+	// link to EC
+	status = ssam_client_bind(&pdev->dev, &ctrl);
+	if (status)
+		return status == -ENXIO ? -EPROBE_DEFER : status;
+
+	ddev = devm_kzalloc(&pdev->dev, sizeof(*ddev), GFP_KERNEL);
+	if (!ddev)
+		return -ENOMEM;
+
+	platform_set_drvdata(pdev, ddev);
+	return sdtx_device_setup(ddev, &pdev->dev, ctrl);
+}
+
+static int surface_sam_dtx_remove(struct platform_device *pdev)
+{
+	sdtx_device_destroy(platform_get_drvdata(pdev));
+	return 0;
+}
 
 static const struct acpi_device_id surface_sam_dtx_match[] = {
 	{ "MSHW0133", 0 },
