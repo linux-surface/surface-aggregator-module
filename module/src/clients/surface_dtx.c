@@ -28,6 +28,7 @@
 #include <linux/spinlock.h>
 
 #include "../../include/linux/surface_aggregator/controller.h"
+#include "../../include/linux/surface_aggregator/device.h"
 
 
 /* -- Public interface. ----------------------------------------------------- */
@@ -994,9 +995,9 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 }
 
 
-/* -- Driver setup. --------------------------------------------------------- */
+/* -- Platform driver. ------------------------------------------------------ */
 
-static int surface_dtx_probe(struct platform_device *pdev)
+static int surface_dtx_platform_probe(struct platform_device *pdev)
 {
 	struct ssam_controller *ctrl;
 	struct sdtx_device *ddev;
@@ -1015,29 +1016,119 @@ static int surface_dtx_probe(struct platform_device *pdev)
 	return 0;
 }
 
-static int surface_dtx_remove(struct platform_device *pdev)
+static int surface_dtx_platform_remove(struct platform_device *pdev)
 {
 	sdtx_device_destroy(platform_get_drvdata(pdev));
 	return 0;
 }
 
-static const struct acpi_device_id surface_dtx_match[] = {
+static const struct acpi_device_id surface_dtx_acpi_match[] = {
 	{ "MSHW0133", 0 },
 	{ },
 };
-MODULE_DEVICE_TABLE(acpi, surface_dtx_match);
+MODULE_DEVICE_TABLE(acpi, surface_dtx_acpi_match);
 
-static struct platform_driver surface_dtx_driver = {
-	.probe = surface_dtx_probe,
-	.remove = surface_dtx_remove,
+static struct platform_driver surface_dtx_platform_driver = {
+	.probe = surface_dtx_platform_probe,
+	.remove = surface_dtx_platform_remove,
 	.driver = {
-		.name = "surface_dtx",
-		.acpi_match_table = surface_dtx_match,
+		.name = "surface_dtx_pltf",
+		.acpi_match_table = surface_dtx_acpi_match,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
-module_platform_driver(surface_dtx_driver);
+
+
+/* -- SSAM device driver. --------------------------------------------------- */
+
+#ifdef CONFIG_SURFACE_AGGREGATOR_BUS
+
+static int surface_dtx_ssam_probe(struct ssam_device *sdev)
+{
+	struct sdtx_device *ddev;
+
+	ddev = sdtx_device_setup(&sdev->dev, sdev->ctrl);
+	if (IS_ERR(ddev))
+		return PTR_ERR(ddev);
+
+	ssam_device_set_drvdata(sdev, ddev);
+	return 0;
+}
+
+static void surface_dtx_ssam_remove(struct ssam_device *sdev)
+{
+	sdtx_device_destroy(ssam_device_get_drvdata(sdev));
+}
+
+static const struct ssam_device_id surface_dtx_ssam_match[] = {
+	{ SSAM_SDEV(BAS, 0x01, 0x00, 0x00) },
+	{ },
+};
+MODULE_DEVICE_TABLE(ssam, surface_dtx_ssam_match);
+
+static struct ssam_device_driver surface_dtx_ssam_driver = {
+	.probe = surface_dtx_ssam_probe,
+	.remove = surface_dtx_ssam_remove,
+	.match_table = surface_dtx_ssam_match,
+	.driver = {
+		.name = "surface_dtx",
+		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
+	},
+};
+
+static int ssam_dtx_driver_register(void)
+{
+	return ssam_device_driver_register(&surface_dtx_ssam_driver);
+}
+
+static void ssam_dtx_driver_unregister(void)
+{
+	ssam_device_driver_unregister(&surface_dtx_ssam_driver);
+}
+
+#else /* CONFIG_SURFACE_AGGREGATOR_BUS */
+
+static int ssam_dtx_driver_register(void)
+{
+	return 0;
+}
+
+static void ssam_dtx_driver_unregister(void)
+{
+}
+
+#endif /* CONFIG_SURFACE_AGGREGATOR_BUS */
+
+
+/* -- Module setup. --------------------------------------------------------- */
+
+static int __init surface_dtx_init(void)
+{
+	int status;
+
+	status = ssam_dtx_driver_register();
+	if (status)
+		return status;
+
+	status = platform_driver_register(&surface_dtx_platform_driver);
+	if (status)
+		ssam_dtx_driver_unregister();
+
+	return status;
+}
+module_init(surface_dtx_init);
+
+static void __exit surface_dtx_exit(void)
+{
+	platform_driver_unregister(&surface_dtx_platform_driver);
+	ssam_dtx_driver_unregister();
+}
+module_exit(surface_dtx_exit);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Detachment-system driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
+
+#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
+MODULE_ALIAS("ssam:d01c11t01i00f00");
+#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
