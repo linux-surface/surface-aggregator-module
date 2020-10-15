@@ -591,7 +591,6 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 			up_read(&ddev->lock);
 			return -EAGAIN;
 		}
-
 	} while (copied == 0);
 
 	up_read(&ddev->lock);
