@@ -20,7 +20,7 @@
 #include "controller.h"
 
 
-/* -- Surface System Aggregator Module Bus. --------------------------------- */
+/* -- Surface System Aggregator Module bus. --------------------------------- */
 
 /**
  * enum ssam_device_domain - SAM device domain.

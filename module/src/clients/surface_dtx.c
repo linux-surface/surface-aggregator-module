@@ -30,7 +30,7 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 
 
-/* -- Public Interface. ----------------------------------------------------- */
+/* -- Public interface. ----------------------------------------------------- */
 
 /* Status/error categories */
 #define SDTX_CATEGORY_STATUS		0x0000
@@ -122,7 +122,7 @@ struct sdtx_base_info {
 #define SDTX_IOCTL_GET_LATCH_STATUS	_IOR(0xa5, 0x2b, u16)
 
 
-/* -- SSAM Interface. ------------------------------------------------------- */
+/* -- SSAM interface. ------------------------------------------------------- */
 
 enum sam_event_cid_bas {
 	SAM_EVENT_CID_DTX_CONNECTION			= 0x0c,
@@ -225,7 +225,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 });
 
 
-/* -- Main Structures. ------------------------------------------------------ */
+/* -- Main structures. ------------------------------------------------------ */
 
 enum sdtx_device_state {
 	SDTX_DEVICE_SHUTDOWN = BIT(0),
@@ -289,7 +289,7 @@ static void sdtx_device_put(struct sdtx_device *ddev)
 }
 
 
-/* -- Firmware Value Translations. ------------------------------------------ */
+/* -- Firmware value translations. ------------------------------------------ */
 
 static u16 sdtx_translate_base_state(struct sdtx_device *ddev, u8 state)
 {
@@ -472,7 +472,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
 }
 
 
-/* -- File Operations. ------------------------------------------------------ */
+/* -- File operations. ------------------------------------------------------ */
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
@@ -639,7 +639,7 @@ static const struct file_operations surface_dtx_fops = {
 };
 
 
-/* -- Event Handling/Forwarding. -------------------------------------------- */
+/* -- Event handling/forwarding. -------------------------------------------- */
 
 /*
  * The device operation mode is not immediately updated on the EC when the
@@ -777,7 +777,7 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 }
 
 
-/* -- Tablet Mode Switch. --------------------------------------------------- */
+/* -- Tablet-mode switch. --------------------------------------------------- */
 
 static void sdtx_device_mode_update(struct sdtx_device *ddev, unsigned long delay)
 {
@@ -839,7 +839,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 }
 
 
-/* -- Common Device Initialization. ----------------------------------------- */
+/* -- Common device initialization. ----------------------------------------- */
 
 static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 			    struct ssam_controller *ctrl)
@@ -994,7 +994,7 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 }
 
 
-/* -- Driver Setup. --------------------------------------------------------- */
+/* -- Driver setup. --------------------------------------------------------- */
 
 static int surface_dtx_probe(struct platform_device *pdev)
 {

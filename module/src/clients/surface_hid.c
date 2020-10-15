@@ -894,7 +894,7 @@ static struct platform_driver surface_kbd_driver = {
 };
 
 
-/* -- Module setup ---------------------------------------------------------- */
+/* -- Module setup. --------------------------------------------------------- */
 
 static int __init surface_hid_init(void)
 {
