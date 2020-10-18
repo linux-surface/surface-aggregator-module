@@ -249,9 +249,6 @@ struct sdtx_device {
 	struct input_dev *mode_switch;
 
 	struct ssam_event_notifier notif;
-
-	struct mutex mutex;
-	bool active;
 };
 
 enum sdtx_client_state {
