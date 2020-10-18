@@ -1002,6 +1002,28 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 }
 
 
+/* -- PM ops. --------------------------------------------------------------- */
+
+#ifdef CONFIG_PM_SLEEP
+
+static void surface_dtx_pm_complete(struct device *dev)
+{
+	struct sdtx_device *ddev = dev_get_drvdata(dev);
+
+	sdtx_device_mode_update(ddev, 0);
+}
+
+static const struct dev_pm_ops surface_dtx_pm_ops = {
+	.complete = surface_dtx_pm_complete,
+};
+
+#else /* CONFIG_PM_SLEEP */
+
+static const struct dev_pm_ops surface_dtx_pm_ops = {};
+
+#endif /* CONFIG_PM_SLEEP */
+
+
 /* -- Platform driver. ------------------------------------------------------ */
 
 static int surface_dtx_platform_probe(struct platform_device *pdev)
@@ -1041,6 +1063,7 @@ static struct platform_driver surface_dtx_platform_driver = {
 	.driver = {
 		.name = "surface_dtx_pltf",
 		.acpi_match_table = surface_dtx_acpi_match,
+		.pm = &surface_dtx_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
