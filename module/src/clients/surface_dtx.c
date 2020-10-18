@@ -249,6 +249,10 @@ struct sdtx_device {
 	struct input_dev *mode_switch;
 
 	struct ssam_event_notifier notif;
+
+	struct {
+		u8 device_mode;
+	} values;
 };
 
 enum sdtx_client_state {
@@ -823,6 +827,12 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 		return;
 	}
 
+	// avoid sending duplicate device-mode events
+	if (ddev->values.device_mode == mode)
+		return;
+
+	ddev->values.device_mode = mode;
+
 	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.e.length = sizeof(u16);
 	event.v = mode;
@@ -873,6 +883,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	if (status)
 		return status;
 
+	ddev->values.device_mode = mode;
 	mode = (mode != SDTX_DEVICE_MODE_LAPTOP);
 
 	// set up tablet mode switch
