@@ -229,7 +229,7 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 /* -- Main structures. ------------------------------------------------------ */
 
 enum sdtx_device_state {
-	SDTX_DEVICE_SHUTDOWN = BIT(0),
+	SDTX_DEVICE_SHUTDOWN_BIT = BIT(0),
 };
 
 struct sdtx_device {
@@ -256,7 +256,7 @@ struct sdtx_device {
 };
 
 enum sdtx_client_state {
-	SDTX_CLIENT_EVENTS_ENABLED = BIT(0),
+	SDTX_CLIENT_EVENTS_ENABLED_BIT = BIT(0),
 };
 
 struct sdtx_client {
@@ -413,11 +413,11 @@ static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
-		set_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state);
+		set_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state);
 		return 0;
 
 	case SDTX_IOCTL_EVENTS_DISABLE:
-		clear_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state);
+		clear_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state);
 		return 0;
 
 	case SDTX_IOCTL_LATCH_LOCK:
@@ -462,7 +462,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
 	if (down_read_killable(&client->ddev->lock))
 		return -ERESTARTSYS;
 
-	if (test_bit(SDTX_DEVICE_SHUTDOWN, &client->ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->state)) {
 		up_read(&client->ddev->lock);
 		return -ENODEV;
 	}
@@ -502,7 +502,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	down_write(&ddev->client_lock);
 
 	// do not add a new client if the device has been shut down
-	if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
 		up_write(&ddev->client_lock);
 		sdtx_device_put(client->ddev);
 		kfree(client);
@@ -543,7 +543,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 		return -ERESTARTSYS;
 
 	// make sure we're not shut down
-	if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
 		up_read(&ddev->lock);
 		return -ENODEV;
 	}
@@ -558,7 +558,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 
 			status = wait_event_interruptible(ddev->waitq,
 					!kfifo_is_empty(&client->buffer)
-					|| test_bit(SDTX_DEVICE_SHUTDOWN,
+					|| test_bit(SDTX_DEVICE_SHUTDOWN_BIT,
 						    &ddev->state));
 			if (status < 0)
 				return status;
@@ -567,7 +567,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 				return -ERESTARTSYS;
 
 			// need to check that we're not shut down again
-			if (test_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state)) {
+			if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
 				up_read(&ddev->lock);
 				return -ENODEV;
 			}
@@ -606,7 +606,7 @@ static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt
 	if (down_read_killable(&client->ddev->lock))
 		return -ERESTARTSYS;
 
-	if (test_bit(SDTX_DEVICE_SHUTDOWN, &client->ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->state)) {
 		up_read(&client->ddev->lock);
 		return EPOLLHUP | EPOLLERR;
 	}
@@ -682,7 +682,7 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 
 	down_read(&ddev->client_lock);
 	list_for_each_entry(client, &ddev->client_list, node) {
-		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED, &client->state))
+		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state))
 			continue;
 
 		spin_lock(&client->write_lock);
@@ -969,7 +969,7 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 	 * Mark device as shut-down. Prevent new clients from being added and
 	 * new operations from being executed.
 	 */
-	set_bit(SDTX_DEVICE_SHUTDOWN, &ddev->state);
+	set_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state);
 
 	// wake up async clients
 	down_write(&ddev->client_lock);
