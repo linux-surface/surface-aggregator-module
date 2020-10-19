@@ -63,7 +63,6 @@ enum dtx_cancel_reason {
 	SDTX_CANCEL_REASON_FAILED_TO_CLOSE		= 0x05,
 };
 
-
 struct ssam_dtx_base_info {
 	u8 state;
 	u8 base_id;
