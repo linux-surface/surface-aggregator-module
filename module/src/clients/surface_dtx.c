@@ -656,7 +656,7 @@ static const struct file_operations surface_dtx_fops = {
 #define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(100)
 #define SDTX_DEVICE_MODE_DELAY_RECHECK	msecs_to_jiffies(100)
 
-static void sdtx_device_mode_update(struct sdtx_device *ddev, unsigned long delay);
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay);
 
 
 struct sdtx_status_event {
@@ -771,7 +771,7 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		unsigned long delay;
 
 		delay = in->data[0] ? SDTX_DEVICE_MODE_DELAY_CONNECT : 0;
-		sdtx_device_mode_update(ddev, delay);
+		sdtx_update_device_mode(ddev, delay);
 	}
 
 	return SSAM_NOTIF_HANDLED;
@@ -780,7 +780,7 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 
 /* -- Tablet-mode switch. --------------------------------------------------- */
 
-static void sdtx_device_mode_update(struct sdtx_device *ddev, unsigned long delay)
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay)
 {
 	schedule_delayed_work(&ddev->mode_work, delay);
 }
@@ -823,7 +823,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 
 	if (invalid) {
 		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
-		sdtx_device_mode_update(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
+		sdtx_update_device_mode(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
 		return;
 	}
 
@@ -921,7 +921,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	 * safe with regards to concurrent connection change events as the
 	 * update work will actually check for consistency with base info.
 	 */
-	sdtx_device_mode_update(ddev, 0);
+	sdtx_update_device_mode(ddev, 0);
 
 	return 0;
 
@@ -1010,7 +1010,7 @@ static void surface_dtx_pm_complete(struct device *dev)
 {
 	struct sdtx_device *ddev = dev_get_drvdata(dev);
 
-	sdtx_device_mode_update(ddev, 0);
+	sdtx_update_device_mode(ddev, 0);
 }
 
 static const struct dev_pm_ops surface_dtx_pm_ops = {
