@@ -229,7 +229,10 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_latch_status, u8, {
 /* -- Main structures. ------------------------------------------------------ */
 
 enum sdtx_device_state {
-	SDTX_DEVICE_SHUTDOWN_BIT = BIT(0),
+	SDTX_DEVICE_SHUTDOWN_BIT    = BIT(0),
+	SDTX_DEVICE_DIRTY_BASE_BIT  = BIT(1),
+	SDTX_DEVICE_DIRTY_MODE_BIT  = BIT(2),
+	SDTX_DEVICE_DIRTY_LATCH_BIT = BIT(3),
 };
 
 struct sdtx_device {
@@ -246,14 +249,17 @@ struct sdtx_device {
 	struct rw_semaphore client_lock;
 	struct list_head client_list;
 
+	struct delayed_work state_work;
+	struct {
+		struct ssam_dtx_base_info base;
+		u8 device_mode;
+		u8 latch_status;
+	} values;
+
 	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
 
 	struct ssam_event_notifier notif;
-
-	struct {
-		u8 device_mode;
-	} values;
 };
 
 enum sdtx_client_state {
@@ -737,6 +743,16 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 	// translate event
 	switch (in->command_id) {
 	case SAM_EVENT_CID_DTX_CONNECTION:
+		clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state);
+
+		// if values have not changed: do not send new event
+		if (ddev->values.base.state == in->data[0]
+		    && ddev->values.base.base_id == in->data[1])
+			goto out;
+
+		ddev->values.base.state = in->data[0];
+		ddev->values.base.base_id = in->data[1];
+
 		event.base.e.code = SDTX_EVENT_BASE_CONNECTION;
 		event.base.e.length = sizeof(struct sdtx_base_info);
 		event.base.v.state = sdtx_translate_base_state(ddev, in->data[0]);
@@ -755,6 +771,14 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		break;
 
 	case SAM_EVENT_CID_DTX_LATCH_STATUS:
+		clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state);
+
+		// if values have not changed: do not send new event
+		if (ddev->values.latch_status == in->data[0])
+			goto out;
+
+		ddev->values.latch_status = in->data[0];
+
 		event.status.e.code = SDTX_EVENT_LATCH_STATUS;
 		event.status.e.length = sizeof(u16);
 		event.status.v = sdtx_translate_latch_status(ddev, in->data[0]);
@@ -762,8 +786,6 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 	}
 
 	sdtx_push_event(ddev, &event.common);
-
-	mutex_unlock(&ddev->write_lock);
 
 	// update device mode on base connection change
 	if (in->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
@@ -773,11 +795,13 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		sdtx_update_device_mode(ddev, delay);
 	}
 
+out:
+	mutex_unlock(&ddev->write_lock);
 	return SSAM_NOTIF_HANDLED;
 }
 
 
-/* -- Tablet-mode switch. --------------------------------------------------- */
+/* -- State update functions. ----------------------------------------------- */
 
 static bool sdtx_device_mode_invalid(u8 mode, u8 base_state)
 {
@@ -824,6 +848,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	}
 
 	mutex_lock(&ddev->write_lock);
+	clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state);
 
 	// avoid sending duplicate device-mode events
 	if (ddev->values.device_mode == mode) {
@@ -853,13 +878,153 @@ static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long dela
 }
 
 
+static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
+					    struct ssam_dtx_base_info info)
+{
+	struct sdtx_base_info_event event;
+
+	// prevent duplicate events
+	if (ddev->values.base.state == info.state
+	    && ddev->values.base.base_id == info.base_id)
+		return;
+
+	ddev->values.base = info;
+
+	event.e.code = SDTX_EVENT_BASE_CONNECTION;
+	event.e.length = sizeof(struct sdtx_base_info);
+	event.v.state = sdtx_translate_base_state(ddev, info.state);
+	event.v.base_id = SDTX_BASE_TYPE_SSH(info.base_id);
+
+	sdtx_push_event(ddev, &event.e);
+}
+
+static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
+{
+	struct sdtx_status_event event;
+	int tablet;
+
+	/*
+	 * Note: This function must be called after updating the base state
+	 * via __sdtx_device_state_update_base(), as we rely on the updated
+	 * base state value in the validity check below.
+	 */
+
+	if (sdtx_device_mode_invalid(mode, ddev->values.base.state)) {
+		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
+		sdtx_update_device_mode(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
+		return;
+	}
+
+	// prevent duplicate events
+	if (ddev->values.device_mode == mode)
+		return;
+
+	ddev->values.device_mode = mode;
+
+	// send event
+	event.e.code = SDTX_EVENT_DEVICE_MODE;
+	event.e.length = sizeof(u16);
+	event.v = mode;
+
+	sdtx_push_event(ddev, &event.e);
+
+	// send SW_TABLET_MODE event
+	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
+	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet);
+	input_sync(ddev->mode_switch);
+}
+
+static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status)
+{
+	struct sdtx_status_event event;
+
+	// prevent duplicate events
+	if (ddev->values.latch_status == status)
+		return;
+
+	ddev->values.latch_status = status;
+
+	event.e.code = SDTX_EVENT_BASE_CONNECTION;
+	event.e.length = sizeof(struct sdtx_base_info);
+	event.v = sdtx_translate_latch_status(ddev, status);
+
+	sdtx_push_event(ddev, &event.e);
+}
+
+static void sdtx_device_state_workfn(struct work_struct *work)
+{
+	struct sdtx_device *ddev;
+	struct ssam_dtx_base_info base;
+	u8 mode, latch;
+	int status;
+
+	ddev = container_of(work, struct sdtx_device, state_work.work);
+
+	// mark everyting as dirty
+	set_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state);
+	set_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state);
+	set_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state);
+
+	/*
+	 * Ensure that the state gets marked as dirty before continuing to
+	 * query it. Necessary to ensure that clear_bit() calls in
+	 * sdtx_notifier() and sdtx_device_mode_workfn() actually clear these
+	 * bits if an event is received while updating the state here.
+	 */
+	smp_mb__after_atomic();
+
+	status = ssam_bas_get_base(ddev->ctrl, &base);
+	if (status) {
+		dev_err(ddev->dev, "failed to get base state: %d\n", status);
+		return;
+	}
+
+	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
+	if (status) {
+		dev_err(ddev->dev, "failed to get device mode: %d\n", status);
+		return;
+	}
+
+	status = ssam_bas_get_latch_status(ddev->ctrl, &latch);
+	if (status) {
+		dev_err(ddev->dev, "failed to get latch status: %d\n", status);
+		return;
+	}
+
+	mutex_lock(&ddev->write_lock);
+
+	/*
+	 * If the respective dirty-bit has been cleared, an event has been
+	 * received, updating this state. The queried state may thus be out of
+	 * date. At this point, we can safely assume that the state provided
+	 * by the event is either up to date, or we're about to receive
+	 * another event updating it.
+	 */
+
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state))
+		__sdtx_device_state_update_base(ddev, base);
+
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state))
+		__sdtx_device_state_update_mode(ddev, mode);
+
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state))
+		__sdtx_device_state_update_latch(ddev, latch);
+
+	mutex_unlock(&ddev->write_lock);
+}
+
+static void sdtx_update_device_state(struct sdtx_device *ddev, unsigned long delay)
+{
+	schedule_delayed_work(&ddev->state_work, delay);
+}
+
+
 /* -- Common device initialization. ----------------------------------------- */
 
 static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 			    struct ssam_controller *ctrl)
 {
-	int status;
-	u8 mode;
+	int status, tablet_mode;
 
 	// basic initialization
 	kref_init(&ddev->kref);
@@ -885,14 +1050,30 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	INIT_LIST_HEAD(&ddev->client_list);
 
 	INIT_DELAYED_WORK(&ddev->mode_work, sdtx_device_mode_workfn);
+	INIT_DELAYED_WORK(&ddev->state_work, sdtx_device_state_workfn);
 
-	// get current device mode
-	status = ssam_bas_get_device_mode(ddev->ctrl, &mode);
+	/*
+	 * Get current device state. We want to guarantee that events are only
+	 * sent when state actually changes. Thus we cannot use special
+	 * "uninitialized" values, as that would cause problems when manually
+	 * querying the state in surface_dtx_pm_complete(). I.e. we would not
+	 * be able to detect state changes there if no change event has been
+	 * received between driver initialization and first device suspension.
+	 *
+	 * Note that we also need to do this before registring the event
+	 * notifier, as that may access the state values.
+	 */
+	status = ssam_bas_get_base(ddev->ctrl, &ddev->values.base);
 	if (status)
 		return status;
 
-	ddev->values.device_mode = mode;
-	mode = (mode != SDTX_DEVICE_MODE_LAPTOP);
+	status = ssam_bas_get_device_mode(ddev->ctrl, &ddev->values.device_mode);
+	if (status)
+		return status;
+
+	status = ssam_bas_get_latch_status(ddev->ctrl, &ddev->values.latch_status);
+	if (status)
+		return status;
 
 	// set up tablet mode switch
 	ddev->mode_switch = input_allocate_device();
@@ -904,8 +1085,9 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	ddev->mode_switch->id.bustype = BUS_HOST;
 	ddev->mode_switch->dev.parent = ddev->dev;
 
+	tablet_mode = (ddev->values.device_mode != SDTX_DEVICE_MODE_LAPTOP);
 	input_set_capability(ddev->mode_switch, EV_SW, SW_TABLET_MODE);
-	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, mode);
+	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet_mode);
 
 	status = input_register_device(ddev->mode_switch);
 	if (status) {
@@ -924,13 +1106,10 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 		goto err_mdev;
 
 	/*
-	 * Update device mode in case it has changed between getting the
-	 * initial mode and registring the event notifier. Note that this is
-	 * safe with regards to concurrent connection change events as the
-	 * update work will actually check for consistency with base info.
+	 * Update device state in case it has changed between getting the
+	 * initial mode and registring the event notifier.
 	 */
-	sdtx_update_device_mode(ddev, 0);
-
+	sdtx_update_device_state(ddev, 0);
 	return 0;
 
 err_notif:
@@ -1018,7 +1197,22 @@ static void surface_dtx_pm_complete(struct device *dev)
 {
 	struct sdtx_device *ddev = dev_get_drvdata(dev);
 
-	sdtx_update_device_mode(ddev, 0);
+	/*
+	 * Normally, the EC will store events while suspended (i.e. in
+	 * display-off state) and release them when resumed (i.e. transitioned
+	 * to display-on state). During hibernation, however, the EC will be
+	 * shut down and does not store events. Furthermore, events might be
+	 * dropped during prolonged suspension (it is scurrently unknown how
+	 * big this event buffer is and how it behaves on overruns).
+	 *
+	 * To prevent any problems, we update the device state here. We do
+	 * this delayed to ensure that any events sent by the EC directly
+	 * after resuming will be handled first. The delay below has been
+	 * chosen (experimentally), so that there should be ample time for
+	 * these events to be handled, before we check and, if necessary,
+	 * update the state.
+	 */
+	sdtx_update_device_state(ddev, msecs_to_jiffies(1000));
 }
 
 static const struct dev_pm_ops surface_dtx_pm_ops = {
