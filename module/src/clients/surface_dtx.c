@@ -241,7 +241,7 @@ struct sdtx_device {
 
 	struct device *dev;
 	struct ssam_controller *ctrl;
-	unsigned long state;
+	unsigned long flags;
 
 	struct miscdevice mdev;
 	wait_queue_head_t waitq;
@@ -254,7 +254,7 @@ struct sdtx_device {
 		struct ssam_dtx_base_info base;
 		u8 device_mode;
 		u8 latch_status;
-	} values;
+	} state;
 
 	struct delayed_work mode_work;
 	struct input_dev *mode_switch;
@@ -269,7 +269,7 @@ enum sdtx_client_state {
 struct sdtx_client {
 	struct sdtx_device *ddev;
 	struct list_head node;
-	unsigned long state;
+	unsigned long flags;
 
 	struct fasync_struct *fasync;
 
@@ -419,11 +419,11 @@ static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
-		set_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state);
+		set_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->flags);
 		return 0;
 
 	case SDTX_IOCTL_EVENTS_DISABLE:
-		clear_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state);
+		clear_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->flags);
 		return 0;
 
 	case SDTX_IOCTL_LATCH_LOCK:
@@ -468,7 +468,7 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
 	if (down_read_killable(&client->ddev->lock))
 		return -ERESTARTSYS;
 
-	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->flags)) {
 		up_read(&client->ddev->lock);
 		return -ENODEV;
 	}
@@ -507,7 +507,7 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	down_write(&ddev->client_lock);
 
 	// do not add a new client if the device has been shut down
-	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags)) {
 		up_write(&ddev->client_lock);
 		sdtx_device_put(client->ddev);
 		kfree(client);
@@ -548,7 +548,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 		return -ERESTARTSYS;
 
 	// make sure we're not shut down
-	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags)) {
 		up_read(&ddev->lock);
 		return -ENODEV;
 	}
@@ -564,7 +564,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 			status = wait_event_interruptible(ddev->waitq,
 					!kfifo_is_empty(&client->buffer)
 					|| test_bit(SDTX_DEVICE_SHUTDOWN_BIT,
-						    &ddev->state));
+						    &ddev->flags));
 			if (status < 0)
 				return status;
 
@@ -572,7 +572,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 				return -ERESTARTSYS;
 
 			// need to check that we're not shut down again
-			if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state)) {
+			if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags)) {
 				up_read(&ddev->lock);
 				return -ENODEV;
 			}
@@ -611,7 +611,7 @@ static __poll_t surface_dtx_poll(struct file *file, struct poll_table_struct *pt
 	if (down_read_killable(&client->ddev->lock))
 		return -ERESTARTSYS;
 
-	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->state)) {
+	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &client->ddev->flags)) {
 		up_read(&client->ddev->lock);
 		return EPOLLHUP | EPOLLERR;
 	}
@@ -688,7 +688,7 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 
 	down_read(&ddev->client_lock);
 	list_for_each_entry(client, &ddev->client_list, node) {
-		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state))
+		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->flags))
 			continue;
 
 		if (likely(kfifo_avail(&client->buffer) >= len))
@@ -743,15 +743,15 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 	// translate event
 	switch (in->command_id) {
 	case SAM_EVENT_CID_DTX_CONNECTION:
-		clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state);
+		clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->flags);
 
-		// if values have not changed: do not send new event
-		if (ddev->values.base.state == in->data[0]
-		    && ddev->values.base.base_id == in->data[1])
+		// if state has not changed: do not send new event
+		if (ddev->state.base.state == in->data[0]
+		    && ddev->state.base.base_id == in->data[1])
 			goto out;
 
-		ddev->values.base.state = in->data[0];
-		ddev->values.base.base_id = in->data[1];
+		ddev->state.base.state = in->data[0];
+		ddev->state.base.base_id = in->data[1];
 
 		event.base.e.code = SDTX_EVENT_BASE_CONNECTION;
 		event.base.e.length = sizeof(struct sdtx_base_info);
@@ -771,13 +771,13 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		break;
 
 	case SAM_EVENT_CID_DTX_LATCH_STATUS:
-		clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state);
+		clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->flags);
 
-		// if values have not changed: do not send new event
-		if (ddev->values.latch_status == in->data[0])
+		// if state has not changed: do not send new event
+		if (ddev->state.latch_status == in->data[0])
 			goto out;
 
-		ddev->values.latch_status = in->data[0];
+		ddev->state.latch_status = in->data[0];
 
 		event.status.e.code = SDTX_EVENT_LATCH_STATUS;
 		event.status.e.length = sizeof(u16);
@@ -848,15 +848,15 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	}
 
 	mutex_lock(&ddev->write_lock);
-	clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state);
+	clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->flags);
 
 	// avoid sending duplicate device-mode events
-	if (ddev->values.device_mode == mode) {
+	if (ddev->state.device_mode == mode) {
 		mutex_unlock(&ddev->write_lock);
 		return;
 	}
 
-	ddev->values.device_mode = mode;
+	ddev->state.device_mode = mode;
 
 	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.e.length = sizeof(u16);
@@ -884,11 +884,11 @@ static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 	struct sdtx_base_info_event event;
 
 	// prevent duplicate events
-	if (ddev->values.base.state == info.state
-	    && ddev->values.base.base_id == info.base_id)
+	if (ddev->state.base.state == info.state
+	    && ddev->state.base.base_id == info.base_id)
 		return;
 
-	ddev->values.base = info;
+	ddev->state.base = info;
 
 	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.e.length = sizeof(struct sdtx_base_info);
@@ -909,17 +909,17 @@ static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 	 * base state value in the validity check below.
 	 */
 
-	if (sdtx_device_mode_invalid(mode, ddev->values.base.state)) {
+	if (sdtx_device_mode_invalid(mode, ddev->state.base.state)) {
 		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
 		sdtx_update_device_mode(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
 		return;
 	}
 
 	// prevent duplicate events
-	if (ddev->values.device_mode == mode)
+	if (ddev->state.device_mode == mode)
 		return;
 
-	ddev->values.device_mode = mode;
+	ddev->state.device_mode = mode;
 
 	// send event
 	event.e.code = SDTX_EVENT_DEVICE_MODE;
@@ -939,10 +939,10 @@ static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status
 	struct sdtx_status_event event;
 
 	// prevent duplicate events
-	if (ddev->values.latch_status == status)
+	if (ddev->state.latch_status == status)
 		return;
 
-	ddev->values.latch_status = status;
+	ddev->state.latch_status = status;
 
 	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.e.length = sizeof(struct sdtx_base_info);
@@ -961,9 +961,9 @@ static void sdtx_device_state_workfn(struct work_struct *work)
 	ddev = container_of(work, struct sdtx_device, state_work.work);
 
 	// mark everyting as dirty
-	set_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state);
-	set_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state);
-	set_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state);
+	set_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->flags);
+	set_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->flags);
+	set_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->flags);
 
 	/*
 	 * Ensure that the state gets marked as dirty before continuing to
@@ -1001,13 +1001,13 @@ static void sdtx_device_state_workfn(struct work_struct *work)
 	 * another event updating it.
 	 */
 
-	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->state))
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->flags))
 		__sdtx_device_state_update_base(ddev, base);
 
-	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->state))
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_MODE_BIT, &ddev->flags))
 		__sdtx_device_state_update_mode(ddev, mode);
 
-	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->state))
+	if (test_and_clear_bit(SDTX_DEVICE_DIRTY_LATCH_BIT, &ddev->flags))
 		__sdtx_device_state_update_latch(ddev, latch);
 
 	mutex_unlock(&ddev->write_lock);
@@ -1063,15 +1063,15 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	 * Note that we also need to do this before registring the event
 	 * notifier, as that may access the state values.
 	 */
-	status = ssam_bas_get_base(ddev->ctrl, &ddev->values.base);
+	status = ssam_bas_get_base(ddev->ctrl, &ddev->state.base);
 	if (status)
 		return status;
 
-	status = ssam_bas_get_device_mode(ddev->ctrl, &ddev->values.device_mode);
+	status = ssam_bas_get_device_mode(ddev->ctrl, &ddev->state.device_mode);
 	if (status)
 		return status;
 
-	status = ssam_bas_get_latch_status(ddev->ctrl, &ddev->values.latch_status);
+	status = ssam_bas_get_latch_status(ddev->ctrl, &ddev->state.latch_status);
 	if (status)
 		return status;
 
@@ -1085,7 +1085,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	ddev->mode_switch->id.bustype = BUS_HOST;
 	ddev->mode_switch->dev.parent = ddev->dev;
 
-	tablet_mode = (ddev->values.device_mode != SDTX_DEVICE_MODE_LAPTOP);
+	tablet_mode = (ddev->state.device_mode != SDTX_DEVICE_MODE_LAPTOP);
 	input_set_capability(ddev->mode_switch, EV_SW, SW_TABLET_MODE);
 	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet_mode);
 
@@ -1156,7 +1156,7 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 	 * Mark device as shut-down. Prevent new clients from being added and
 	 * new operations from being executed.
 	 */
-	set_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->state);
+	set_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags);
 
 	// wake up async clients
 	down_write(&ddev->client_lock);
