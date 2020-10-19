@@ -780,9 +780,12 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 
 /* -- Tablet-mode switch. --------------------------------------------------- */
 
-static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay)
+static bool sdtx_device_mode_invalid(u8 mode, u8 base_state)
 {
-	schedule_delayed_work(&ddev->mode_work, delay);
+	return ((base_state == SDTX_BASE_STATE_ATTACHED)
+			&& (mode == SDTX_DEVICE_MODE_TABLET))
+		|| ((base_state == SDTX_BASE_STATE_DETACH_SUCCESS)
+			&& (mode != SDTX_DEVICE_MODE_TABLET));
 }
 
 static void sdtx_device_mode_workfn(struct work_struct *work)
@@ -791,7 +794,6 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	struct sdtx_status_event event;
 	struct ssam_dtx_base_info base;
 	int status, tablet;
-	bool invalid;
 	u8 mode;
 
 	ddev = container_of(work, struct sdtx_device, mode_work.work);
@@ -816,12 +818,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	 * makes sense for the given base state and try again later if it
 	 * doesn't.
 	 */
-	invalid = ((base.state == SDTX_BASE_STATE_ATTACHED)
-			&& (mode == SDTX_DEVICE_MODE_TABLET))
-		|| ((base.state == SDTX_BASE_STATE_DETACH_SUCCESS)
-			&& (mode != SDTX_DEVICE_MODE_TABLET));
-
-	if (invalid) {
+	if (sdtx_device_mode_invalid(mode, base.state)) {
 		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
 		sdtx_update_device_mode(ddev, SDTX_DEVICE_MODE_DELAY_RECHECK);
 		return;
@@ -843,6 +840,11 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
 	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet);
 	input_sync(ddev->mode_switch);
+}
+
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay)
+{
+	schedule_delayed_work(&ddev->mode_work, delay);
 }
 
 
