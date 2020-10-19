@@ -242,6 +242,7 @@ struct sdtx_device {
 
 	struct miscdevice mdev;
 	wait_queue_head_t waitq;
+	struct mutex write_lock;
 	struct rw_semaphore client_lock;
 	struct list_head client_list;
 
@@ -267,7 +268,6 @@ struct sdtx_client {
 	struct fasync_struct *fasync;
 
 	struct mutex read_lock;
-	spinlock_t write_lock;
 	DECLARE_KFIFO(buffer, u8, 512);
 };
 
@@ -493,7 +493,6 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	INIT_LIST_HEAD(&client->node);
 
 	mutex_init(&client->read_lock);
-	spin_lock_init(&client->write_lock);
 	INIT_KFIFO(client->buffer);
 
 	file->private_data = client;
@@ -675,6 +674,7 @@ union sdtx_generic_event {
 	struct sdtx_base_info_event base;
 };
 
+/* Must be executed with ddev->write_lock held. */
 static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 {
 	const size_t len = sizeof(struct sdtx_event) + evt->length;
@@ -685,15 +685,10 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->state))
 			continue;
 
-		spin_lock(&client->write_lock);
-
-		if (likely(kfifo_avail(&client->buffer) >= len)) {
+		if (likely(kfifo_avail(&client->buffer) >= len))
 			kfifo_in(&client->buffer, (const u8 *)evt, len);
-			spin_unlock(&client->write_lock);
-		} else {
-			spin_unlock(&client->write_lock);
+		else
 			dev_warn(ddev->dev, "event buffer overrun\n");
-		}
 
 		kill_fasync(&client->fasync, SIGIO, POLL_IN);
 	}
@@ -737,6 +732,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		return 0;
 	}
 
+	mutex_lock(&ddev->write_lock);
+
 	// translate event
 	switch (in->command_id) {
 	case SAM_EVENT_CID_DTX_CONNECTION:
@@ -765,6 +762,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 	}
 
 	sdtx_push_event(ddev, &event.common);
+
+	mutex_unlock(&ddev->write_lock);
 
 	// update device mode on base connection change
 	if (in->command_id == SAM_EVENT_CID_DTX_CONNECTION) {
@@ -824,9 +823,13 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 		return;
 	}
 
+	mutex_lock(&ddev->write_lock);
+
 	// avoid sending duplicate device-mode events
-	if (ddev->values.device_mode == mode)
+	if (ddev->values.device_mode == mode) {
+		mutex_unlock(&ddev->write_lock);
 		return;
+	}
 
 	ddev->values.device_mode = mode;
 
@@ -840,6 +843,8 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 	tablet = mode != SDTX_DEVICE_MODE_LAPTOP;
 	input_report_switch(ddev->mode_switch, SW_TABLET_MODE, tablet);
 	input_sync(ddev->mode_switch);
+
+	mutex_unlock(&ddev->write_lock);
 }
 
 static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay)
@@ -875,6 +880,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	ddev->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
 	init_waitqueue_head(&ddev->waitq);
+	mutex_init(&ddev->write_lock);
 	init_rwsem(&ddev->client_lock);
 	INIT_LIST_HEAD(&ddev->client_list);
 
