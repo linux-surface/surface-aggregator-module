@@ -262,13 +262,11 @@ Command-Codes/IDs:
         provided by the latch status change event (CID=0x11).
 
         Return: 1 byte.
-            0x00:   Latch locked.
-            0x01:   Latch unlocked.
-            0x02:   Failed to unlock.
-            0x03:   Failed to remain unlocked.
-            0x04:   Failed to re-lock.
-
-        Note: In this context unlocked/locked means open/close.
+            0x00:   Latch closed.
+            0x01:   Latch open.
+            0x02:   Failed to open.
+            0x03:   Failed to remain open.
+            0x04:   Failed to close.
 
 
 Events
@@ -311,11 +309,9 @@ Event Codes/IDs:
             0x00:   Not feasible (detach with low battery).
             0x02:   The detachment-process timed out while the latch was
                     locked. The latch has not been opened.
-            0x03:   Failed to unlock.
-            0x04:   Failed to remain unlocked.
-            0x05:   Failed to re-lock.
-
-        Note: In this context unlocked/locked means open/close.
+            0x03:   Failed to open.
+            0x04:   Failed to remain open.
+            0x05:   Failed to close.
 
     CID 0x11:
         Latch status event. Signals change of the latch status, specifically
@@ -323,50 +319,8 @@ Event Codes/IDs:
         the user when the clipboard is ready to be separated from the base.
 
         Payload: 1 byte.
-            0x00:   Latch locked.
-            0x01:   Latch unlocked.
-            0x02:   Failed to unlock.
-            0x03:   Failed to remain unlocked.
-            0x04:   Failed to re-lock.
-
-        Note: In this context unlocked/locked means open/close.
-
-
-User-Space API
---------------------------------------------------------------------------------
-
-The user-space interface is provided via `/dev/surface_dtx`. This is a basic
-`miscdevice`, from which events can be received via `read` / `poll` /
-`select` / fasync, and to which commands can be sent via `ioctl`. Multiple
-clients may access this file at the same time.
-
-Event Structure:
-    Events consist of four consecutive bytes:
-
-        [type: u8, CID: u8, arg0: u8, arg1: u8]
-
-    where `type` is currently fixed to `0x11`, `CID` is the event ID as
-    described above, and `arg0` and `arg1` are the first and second byte of
-    the event payload. If unused, `arg0` and `arg1` are set to zero.
-
-Command IOCTLs:
-    All IOCTLs have type 0x11.
-
-    - Unlock latch (Nr. 0x01)
-        no parameters
-
-    - Lock latch (Nr. 0x02)
-        no parameters
-
-    - Latch request (Nr. 0x03)
-        no parameters
-
-    - Latch Open (Nr: 0x04)
-        no parameters
-
-    - Get Operation Mode (Nr: 0x05)
-        Returns a single integer (int) containing the device operation mode
-        as described in the 'Commands' section.
-
-For extended descriptions and usage, see the 'Commands' and 'Detachment
-Process' sections.
+            0x00:   Latch closed.
+            0x01:   Latch opened.
+            0x02:   Failed to open.
+            0x03:   Failed to remain open.
+            0x04:   Failed to close.
