@@ -61,21 +61,54 @@
 #define SDTX_BASE_TYPE_SSH(id)		((id) | SDTX_DEVICE_TYPE_SSH)
 
 
-/* Device mode */
+/**
+ * enum sdtx_device_mode - Mode describing how (and if) the clipboard is
+ * attached to the base of the device.
+ * @SDTX_DEVICE_MODE_TABLET: The clipboard is detached from the base and the
+ *                           device operates as tablet.
+ * @SDTX_DEVICE_MODE_LAPTOP: The clipboard is attached normally to the base
+ *                           and the device operates as laptop.
+ * @SDTX_DEVICE_MODE_STUDIO: The clipboard is attached to the base in reverse.
+ *                           The device operates as tablet with keyboard and
+ *                           touchpad deactivated, however, the base battery
+ *                           and, if present in the specific device model, dGPU
+ *                           are available to the system.
+ */
 enum sdtx_device_mode {
 	SDTX_DEVICE_MODE_TABLET		= 0x00,
 	SDTX_DEVICE_MODE_LAPTOP		= 0x01,
 	SDTX_DEVICE_MODE_STUDIO		= 0x02,
 };
 
-
-/* Event provided by reading from the device */
+/**
+ * struct sdtx_event - Event provided by reading from the DTX device file.
+ * @length: Length of the event payload, in bytes.
+ * @code:   Event code, detailing what type of event this is.
+ * @data:   Payload of the event, containing @length bytes.
+ *
+ * See &enum sdtx_event_code for currently valid event codes.
+ */
 struct sdtx_event {
 	__u16 length;
 	__u16 code;
 	__u8 data[];
 } __packed;
 
+/**
+ * enum sdtx_event_code - Code describing the type of an event.
+ * @SDTX_EVENT_REQUEST:         Detachment request event type.
+ * @SDTX_EVENT_CANCEL:          Cancel detachment process event type.
+ * @SDTX_EVENT_BASE_CONNECTION: Base/clipboard connection change event type.
+ * @SDTX_EVENT_LATCH_STATUS:    Latch status change event type.
+ * @SDTX_EVENT_DEVICE_MODE:     Device mode change event type.
+ *
+ * Used in @struct sdtx_event to describe the type of the event. Further event
+ * codes are reserved for future use. Any event parser should be able to
+ * gracefully handle unknown events, i.e. by simply skipping them.
+ *
+ * Consult the DTX user-space interface documentation for details regarding
+ * the individual event types.
+ */
 enum sdtx_event_code {
 	SDTX_EVENT_REQUEST		= 1,
 	SDTX_EVENT_CANCEL		= 2,
@@ -84,18 +117,27 @@ enum sdtx_event_code {
 	SDTX_EVENT_DEVICE_MODE		= 5,
 };
 
-
-/* IOCTL interface */
+/**
+ * struct sdtx_base_info - Describes if and what type of base is connected.
+ * @state:   The state of the connection. Valid values are %SDTX_BASE_DETACHED,
+ *           %SDTX_BASE_ATTACHED, and %SDTX_DETACH_NOT_FEASIBLE (in case a base
+ *           is attached but low clipboard battery prevents detachment). Other
+ *           values are currently reserved.
+ * @base_id: The type of base connected. Zero if no base is connected.
+ */
 struct sdtx_base_info {
 	__u16 state;
 	__u16 base_id;
 } __packed;
 
+
+/* IOCTLs */
 #define SDTX_IOCTL_EVENTS_ENABLE	_IO(0xa5, 0x21)
 #define SDTX_IOCTL_EVENTS_DISABLE	_IO(0xa5, 0x22)
 
 #define SDTX_IOCTL_LATCH_LOCK		_IO(0xa5, 0x23)
 #define SDTX_IOCTL_LATCH_UNLOCK		_IO(0xa5, 0x24)
+
 #define SDTX_IOCTL_LATCH_REQUEST	_IO(0xa5, 0x25)
 #define SDTX_IOCTL_LATCH_CONFIRM	_IO(0xa5, 0x26)
 #define SDTX_IOCTL_LATCH_HEARTBEAT	_IO(0xa5, 0x27)
