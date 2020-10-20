@@ -151,8 +151,8 @@ detection mechanism (e.g. CRCs), this is solely done on the frame level.
 Command-type payloads are used by the host to send commands and requests to
 the EC as well as by the EC to send responses and events back to the host.
 We differentiate between requests (sent by the host), responses (sent by the
-EC in response to a request), and events (sent by the EC without a
-preceeding request).
+EC in response to a request), and events (sent by the EC without a preceding
+request).
 
 Commands and events are uniquely identified by their target category (TC)
 and command ID (CID). The target category specifies a general category for
@@ -212,7 +212,7 @@ Limitations and Observations
 
 The protocol can, in theory, handle up to U8_MAX frames in parallel, with up
 to U16_MAX pending requests (neglecting request IDs reserved for events). In
-practice, however, this is more limited. From our testing (altough via a
+practice, however, this is more limited. From our testing (although via a
 python and thus a user-space program), it seems that the EC can handle up to
 four requests (mostly) reliably in parallel at a certain time. With five or
 more requests in parallel, consistent discarding of commands (ACKed frame
