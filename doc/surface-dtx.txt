@@ -92,7 +92,7 @@ that:
 
       - If the latch is locked, the EC will _not_ open the latch, meaning
         the clipboard cannot be detached from the base. Furthermore, the EC
-        sends an error event detailing this with the error code
+        sends a cancel event detailing this with the cancel reason
         SDTX_DETACH_TIMEDOUT (see section "Events" for details).
 
 Valid responses by a user-space daemon to a detachment request event are:
