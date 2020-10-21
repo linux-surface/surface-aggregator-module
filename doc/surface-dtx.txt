@@ -194,7 +194,7 @@ Command-Codes/IDs:
     CID 0x09:
         Open latch / confirm latch open.
 
-        Acknowledges and confirms a latch request. If sent, during an
+        Acknowledges and confirms a latch request. If sent during an
         ongoing detachment process, this command causes the latch to be
         opened immediately. The latch will also be opened if it has been
         locked. In this case, the latch lock is reset to the unlocked state.
@@ -225,8 +225,8 @@ Command-Codes/IDs:
     CID 0x0c, SNC 0x01:
         Get connection state.
 
-        Get the current connection state (i.e. attached/detached) and the
-        type of the base connected to the clipboard.
+        Get the current base connection state (i.e. attached/detached) and
+        the type of the base connected to the clipboard.
 
         This is command essentially provides a way to query the information
         provided by the connection change event (CID=0x0c).
