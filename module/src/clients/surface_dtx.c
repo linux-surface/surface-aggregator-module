@@ -574,7 +574,7 @@ static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long dela
 
 struct sdtx_status_event {
 	struct sdtx_event e;
-	u16 v;
+	__u16 v;
 } __packed;
 
 struct sdtx_base_info_event {
