@@ -661,8 +661,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		ddev->state.base.state = in->data[0];
 		ddev->state.base.base_id = in->data[1];
 
-		event.base.e.code = SDTX_EVENT_BASE_CONNECTION;
 		event.base.e.length = sizeof(struct sdtx_base_info);
+		event.base.e.code = SDTX_EVENT_BASE_CONNECTION;
 		event.base.v.state = sdtx_translate_base_state(ddev, in->data[0]);
 		event.base.v.base_id = SDTX_BASE_TYPE_SSH(in->data[1]);
 		break;
@@ -673,8 +673,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		break;
 
 	case SAM_EVENT_CID_DTX_CANCEL:
-		event.status.e.code = SDTX_EVENT_CANCEL;
 		event.status.e.length = sizeof(u16);
+		event.status.e.code = SDTX_EVENT_CANCEL;
 		event.status.v = sdtx_translate_cancel_reason(ddev, in->data[0]);
 		break;
 
@@ -687,8 +687,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 
 		ddev->state.latch_status = in->data[0];
 
-		event.status.e.code = SDTX_EVENT_LATCH_STATUS;
 		event.status.e.length = sizeof(u16);
+		event.status.e.code = SDTX_EVENT_LATCH_STATUS;
 		event.status.v = sdtx_translate_latch_status(ddev, in->data[0]);
 		break;
 	}
@@ -766,8 +766,8 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 
 	ddev->state.device_mode = mode;
 
-	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.e.length = sizeof(u16);
+	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.v = mode;
 
 	sdtx_push_event(ddev, &event.e);
@@ -798,8 +798,8 @@ static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 
 	ddev->state.base = info;
 
-	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.e.length = sizeof(struct sdtx_base_info);
+	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.v.state = sdtx_translate_base_state(ddev, info.state);
 	event.v.base_id = SDTX_BASE_TYPE_SSH(info.base_id);
 
@@ -830,8 +830,8 @@ static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 	ddev->state.device_mode = mode;
 
 	// send event
-	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.e.length = sizeof(u16);
+	event.e.code = SDTX_EVENT_DEVICE_MODE;
 	event.v = mode;
 
 	sdtx_push_event(ddev, &event.e);
@@ -852,8 +852,8 @@ static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status
 
 	ddev->state.latch_status = status;
 
-	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.e.length = sizeof(struct sdtx_base_info);
+	event.e.code = SDTX_EVENT_BASE_CONNECTION;
 	event.v = sdtx_translate_latch_status(ddev, status);
 
 	sdtx_push_event(ddev, &event.e);
