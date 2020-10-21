@@ -162,7 +162,7 @@ Command-Codes/IDs:
         Lock latch.
 
         Transfers the latch from 'closed' to 'locked' state. This command
-        will be silently ignored if the latch has already been locked.
+        will be silently ignored if the latchas is already locked.
 
         Context:
             Valid only outside detachment-process (otherwise silently ignored).
@@ -173,7 +173,7 @@ Command-Codes/IDs:
         Transfers the latch from 'locked' to 'closed'/unlocked state. This
         command only unlocks the latch. It will not open the latch when sent
         during an ongoing detachment process. It will be silently ignored
-        if the lock is already unlocked/closed.
+        if the latch is already unlocked.
 
         Context:
             Valid in any context.
