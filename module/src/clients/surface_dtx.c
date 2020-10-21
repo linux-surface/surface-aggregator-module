@@ -41,34 +41,34 @@ enum sam_event_cid_bas {
 	SAM_EVENT_CID_DTX_LATCH_STATUS			= 0x11,
 };
 
-enum dtx_base_state {
-	SDTX_BASE_STATE_DETACH_SUCCESS			= 0x00,
-	SDTX_BASE_STATE_ATTACHED			= 0x01,
-	SDTX_BASE_STATE_NOT_FEASIBLE			= 0x02,
+enum ssam_bas_base_state {
+	SSAM_BAS_BASE_STATE_DETACH_SUCCESS		= 0x00,
+	SSAM_BAS_BASE_STATE_ATTACHED			= 0x01,
+	SSAM_BAS_BASE_STATE_NOT_FEASIBLE		= 0x02,
 };
 
-enum dtx_latch_status {
-	SDTX_LATCH_STATUS_CLOSED			= 0x00,
-	SDTX_LATCH_STATUS_OPENED			= 0x01,
-	SDTX_LATCH_STATUS_FAILED_TO_OPEN		= 0x02,
-	SDTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN		= 0x03,
-	SDTX_LATCH_STATUS_FAILED_TO_CLOSE		= 0x04,
+enum ssam_bas_latch_status {
+	SSAM_BAS_LATCH_STATUS_CLOSED			= 0x00,
+	SSAM_BAS_LATCH_STATUS_OPENED			= 0x01,
+	SSAM_BAS_LATCH_STATUS_FAILED_TO_OPEN		= 0x02,
+	SSAM_BAS_LATCH_STATUS_FAILED_TO_REMAIN_OPEN	= 0x03,
+	SSAM_BAS_LATCH_STATUS_FAILED_TO_CLOSE		= 0x04,
 };
 
-enum dtx_cancel_reason {
-	SDTX_CANCEL_REASON_NOT_FEASIBLE			= 0x00,  // low battery
-	SDTX_CANCEL_REASON_TIMEOUT			= 0x02,
-	SDTX_CANCEL_REASON_FAILED_TO_OPEN		= 0x03,
-	SDTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN	= 0x04,
-	SDTX_CANCEL_REASON_FAILED_TO_CLOSE		= 0x05,
+enum ssam_bas_cancel_reason {
+	SSAM_BAS_CANCEL_REASON_NOT_FEASIBLE		= 0x00,  // low battery
+	SSAM_BAS_CANCEL_REASON_TIMEOUT			= 0x02,
+	SSAM_BAS_CANCEL_REASON_FAILED_TO_OPEN		= 0x03,
+	SSAM_BAS_CANCEL_REASON_FAILED_TO_REMAIN_OPEN	= 0x04,
+	SSAM_BAS_CANCEL_REASON_FAILED_TO_CLOSE		= 0x05,
 };
 
-struct ssam_dtx_base_info {
+struct ssam_bas_base_info {
 	u8 state;
 	u8 base_id;
 } __packed;
 
-static_assert(sizeof(struct ssam_dtx_base_info) == 2);
+static_assert(sizeof(struct ssam_bas_base_info) == 2);
 
 static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_lock, {
 	.target_category = SSAM_SSH_TC_BAS,
@@ -112,7 +112,7 @@ static SSAM_DEFINE_SYNC_REQUEST_N(ssam_bas_latch_cancel, {
 	.instance_id     = 0x00,
 });
 
-static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_base, struct ssam_dtx_base_info, {
+static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_get_base, struct ssam_bas_base_info, {
 	.target_category = SSAM_SSH_TC_BAS,
 	.target_id       = 0x01,
 	.command_id      = 0x0c,
@@ -159,7 +159,7 @@ struct sdtx_device {
 
 	struct delayed_work state_work;
 	struct {
-		struct ssam_dtx_base_info base;
+		struct ssam_bas_base_info base;
 		u8 device_mode;
 		u8 latch_status;
 	} state;
@@ -210,13 +210,13 @@ static void sdtx_device_put(struct sdtx_device *ddev)
 static u16 sdtx_translate_base_state(struct sdtx_device *ddev, u8 state)
 {
 	switch (state) {
-	case SDTX_BASE_STATE_ATTACHED:
+	case SSAM_BAS_BASE_STATE_ATTACHED:
 		return SDTX_BASE_ATTACHED;
 
-	case SDTX_BASE_STATE_DETACH_SUCCESS:
+	case SSAM_BAS_BASE_STATE_DETACH_SUCCESS:
 		return SDTX_BASE_DETACHED;
 
-	case SDTX_BASE_STATE_NOT_FEASIBLE:
+	case SSAM_BAS_BASE_STATE_NOT_FEASIBLE:
 		return SDTX_DETACH_NOT_FEASIBLE;
 
 	default:
@@ -228,19 +228,19 @@ static u16 sdtx_translate_base_state(struct sdtx_device *ddev, u8 state)
 static u16 sdtx_translate_latch_status(struct sdtx_device *ddev, u8 status)
 {
 	switch (status) {
-	case SDTX_LATCH_STATUS_CLOSED:
+	case SSAM_BAS_LATCH_STATUS_CLOSED:
 		return SDTX_LATCH_CLOSED;
 
-	case SDTX_LATCH_STATUS_OPENED:
+	case SSAM_BAS_LATCH_STATUS_OPENED:
 		return SDTX_LATCH_OPENED;
 
-	case SDTX_LATCH_STATUS_FAILED_TO_OPEN:
+	case SSAM_BAS_LATCH_STATUS_FAILED_TO_OPEN:
 		return SDTX_ERR_FAILED_TO_OPEN;
 
-	case SDTX_LATCH_STATUS_FAILED_TO_REMAIN_OPEN:
+	case SSAM_BAS_LATCH_STATUS_FAILED_TO_REMAIN_OPEN:
 		return SDTX_ERR_FAILED_TO_REMAIN_OPEN;
 
-	case SDTX_LATCH_STATUS_FAILED_TO_CLOSE:
+	case SSAM_BAS_LATCH_STATUS_FAILED_TO_CLOSE:
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
@@ -252,19 +252,19 @@ static u16 sdtx_translate_latch_status(struct sdtx_device *ddev, u8 status)
 static u16 sdtx_translate_cancel_reason(struct sdtx_device *ddev, u8 reason)
 {
 	switch (reason) {
-	case SDTX_CANCEL_REASON_NOT_FEASIBLE:
+	case SSAM_BAS_CANCEL_REASON_NOT_FEASIBLE:
 		return SDTX_DETACH_NOT_FEASIBLE;
 
-	case SDTX_CANCEL_REASON_TIMEOUT:
+	case SSAM_BAS_CANCEL_REASON_TIMEOUT:
 		return SDTX_DETACH_TIMEDOUT;
 
-	case SDTX_CANCEL_REASON_FAILED_TO_OPEN:
+	case SSAM_BAS_CANCEL_REASON_FAILED_TO_OPEN:
 		return SDTX_ERR_FAILED_TO_OPEN;
 
-	case SDTX_CANCEL_REASON_FAILED_TO_REMAIN_OPEN:
+	case SSAM_BAS_CANCEL_REASON_FAILED_TO_REMAIN_OPEN:
 		return SDTX_ERR_FAILED_TO_REMAIN_OPEN;
 
-	case SDTX_CANCEL_REASON_FAILED_TO_CLOSE:
+	case SSAM_BAS_CANCEL_REASON_FAILED_TO_CLOSE:
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
@@ -279,7 +279,7 @@ static u16 sdtx_translate_cancel_reason(struct sdtx_device *ddev, u8 reason)
 static int sdtx_ioctl_get_base_info(struct sdtx_device *ddev,
 				    struct sdtx_base_info __user *buf)
 {
-	struct ssam_dtx_base_info raw;
+	struct ssam_bas_base_info raw;
 	struct sdtx_base_info info;
 	int status;
 
@@ -713,9 +713,9 @@ out:
 
 static bool sdtx_device_mode_invalid(u8 mode, u8 base_state)
 {
-	return ((base_state == SDTX_BASE_STATE_ATTACHED)
+	return ((base_state == SSAM_BAS_BASE_STATE_ATTACHED)
 			&& (mode == SDTX_DEVICE_MODE_TABLET))
-		|| ((base_state == SDTX_BASE_STATE_DETACH_SUCCESS)
+		|| ((base_state == SSAM_BAS_BASE_STATE_DETACH_SUCCESS)
 			&& (mode != SDTX_DEVICE_MODE_TABLET));
 }
 
@@ -723,7 +723,7 @@ static void sdtx_device_mode_workfn(struct work_struct *work)
 {
 	struct sdtx_device *ddev;
 	struct sdtx_status_event event;
-	struct ssam_dtx_base_info base;
+	struct ssam_bas_base_info base;
 	int status, tablet;
 	u8 mode;
 
@@ -787,7 +787,7 @@ static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long dela
 
 
 static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
-					    struct ssam_dtx_base_info info)
+					    struct ssam_bas_base_info info)
 {
 	struct sdtx_base_info_event event;
 
@@ -862,7 +862,7 @@ static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status
 static void sdtx_device_state_workfn(struct work_struct *work)
 {
 	struct sdtx_device *ddev;
-	struct ssam_dtx_base_info base;
+	struct ssam_bas_base_info base;
 	u8 mode, latch;
 	int status;
 
