@@ -128,7 +128,7 @@ enum sdtx_event_code {
 struct sdtx_base_info {
 	__u16 state;
 	__u16 base_id;
-} __packed;
+} __attribute__((__packed__));
 
 
 /* IOCTLs */
