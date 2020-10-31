@@ -448,6 +448,8 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	if (!hub)
 		return -ENOMEM;
 
+	mutex_init(&hub->lock);
+
 	hub->sdev = sdev;
 	hub->state = SSAM_BASE_HUB_UNINITIALIZED;
 
@@ -494,6 +496,8 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 
 	ssam_notifier_unregister(sdev->ctrl, &hub->notif);
 	ssam_hub_remove_devices(&sdev->dev);
+
+	mutex_destroy(&hub->lock);
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
