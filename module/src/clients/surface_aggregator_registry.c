@@ -424,7 +424,7 @@ static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf,
 	return 0;
 }
 
-static int ssam_base_hub_resume(struct device *dev)
+static int __maybe_unused ssam_base_hub_resume(struct device *dev)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 	enum ssam_base_hub_state state;
