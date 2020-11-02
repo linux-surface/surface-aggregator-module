@@ -61,7 +61,7 @@ enum shps_irq_type {
 	SHPS_NUM_IRQS,
 };
 
-static const char *shps_gpio_names[] = {
+static const char *const shps_gpio_names[] = {
 	[SHPS_IRQ_TYPE_BASE_PRESENCE]	= "base_presence",
 	[SHPS_IRQ_TYPE_DEVICE_POWER]	= "device_power",
 	[SHPS_IRQ_TYPE_DEVICE_PRESENCE]	= "device_presence",
