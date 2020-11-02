@@ -12,8 +12,8 @@
 #ifndef _UAPI_LINUX_SURFACE_AGGREGATOR_DTX_H
 #define _UAPI_LINUX_SURFACE_AGGREGATOR_DTX_H
 
-#include <linux/types.h>
 #include <linux/ioctl.h>
+#include <linux/types.h>
 
 
 /* Status/error categories */
