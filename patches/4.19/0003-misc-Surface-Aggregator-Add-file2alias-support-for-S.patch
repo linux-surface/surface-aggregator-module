@@ -1,4 +1,4 @@
-From 5563782dd196a9a890d77e4ec275dd6d044edf20 Mon Sep 17 00:00:00 2001
+From b5199d153f007cf35e63b1f3434fe69efcdaadfb Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Sun, 20 Sep 2020 04:12:58 +0200
 Subject: [PATCH] misc: Surface Aggregator: Add file2alias support for Surface
@@ -100,5 +100,5 @@ index 7f40b6aab689..f171616ab318 100644
  
  /* Create MODULE_ALIAS() statements.
 -- 
-2.28.0
+2.29.2
 
