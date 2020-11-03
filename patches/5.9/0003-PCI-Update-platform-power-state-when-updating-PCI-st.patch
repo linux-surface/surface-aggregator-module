@@ -1,4 +1,4 @@
-From f23c80670394420c941e4b5ff2e72035ac14ddcd Mon Sep 17 00:00:00 2001
+From 8e7ad64917fd2db42d1ba246793612ce7fa38afa Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Sat, 31 Oct 2020 19:48:06 +0100
 Subject: [PATCH 3/4] PCI: Update platform power state when updating PCI state
