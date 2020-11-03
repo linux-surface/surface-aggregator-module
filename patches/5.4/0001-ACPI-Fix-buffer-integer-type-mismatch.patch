@@ -1,7 +1,7 @@
-From c345e6642da62137749fd9ae7e2808a20457e453 Mon Sep 17 00:00:00 2001
+From 2683d8259d8fe8f48635e01de12ba9e44af28fcc Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
 Date: Mon, 26 Aug 2019 01:11:08 +0200
-Subject: [PATCH 1/2] ACPI: Fix buffer/integer type mismatch
+Subject: [PATCH 1/6] ACPI: Fix buffer/integer type mismatch
 
 This is actually not a bug in the kernel, but rather Microsoft not
 conforming with the ACPI specification.
@@ -11,7 +11,7 @@ conforming with the ACPI specification.
  2 files changed, 10 insertions(+), 4 deletions(-)
 
 diff --git a/drivers/acpi/acpica/dsopcode.c b/drivers/acpi/acpica/dsopcode.c
-index 10f32b62608ee..7b2a4987f0507 100644
+index 10f32b62608e..7b2a4987f050 100644
 --- a/drivers/acpi/acpica/dsopcode.c
 +++ b/drivers/acpi/acpica/dsopcode.c
 @@ -123,7 +123,7 @@ acpi_ds_init_buffer_field(u16 aml_opcode,
@@ -24,7 +24,7 @@ index 10f32b62608ee..7b2a4987f0507 100644
  		bit_count = (u32) length_desc->integer.value;
  
 diff --git a/drivers/acpi/acpica/exfield.c b/drivers/acpi/acpica/exfield.c
-index d3d2dbfba680c..0b7f617a6e9b1 100644
+index d3d2dbfba680..0b7f617a6e9b 100644
 --- a/drivers/acpi/acpica/exfield.c
 +++ b/drivers/acpi/acpica/exfield.c
 @@ -109,6 +109,7 @@ acpi_ex_read_data_from_field(struct acpi_walk_state *walk_state,
@@ -56,5 +56,5 @@ index d3d2dbfba680c..0b7f617a6e9b1 100644
  		buffer_desc = acpi_ut_create_buffer_object(buffer_length);
  		if (!buffer_desc) {
 -- 
-2.27.0
+2.29.2
 

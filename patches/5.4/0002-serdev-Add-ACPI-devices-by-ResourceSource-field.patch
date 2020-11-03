@@ -1,7 +1,7 @@
-From f96430d0246c5394921c89b41c6845f59450c6c4 Mon Sep 17 00:00:00 2001
+From 060f62161b80bc502ad92b3b4bc9420b6779e1a3 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Tue, 24 Sep 2019 17:38:12 +0200
-Subject: [PATCH 2/2] serdev: Add ACPI devices by ResourceSource field
+Subject: [PATCH 2/6] serdev: Add ACPI devices by ResourceSource field
 
 When registering a serdev controller, ACPI needs to be checked for
 devices attached to it. Currently, all immediate children of the ACPI
@@ -28,7 +28,7 @@ Signed-off-by: Maximilian Luz <luzmaximilian@gmail.com>
  1 file changed, 99 insertions(+), 12 deletions(-)
 
 diff --git a/drivers/tty/serdev/core.c b/drivers/tty/serdev/core.c
-index a9719858c950b..ce5309d002805 100644
+index a9719858c950..ce5309d00280 100644
 --- a/drivers/tty/serdev/core.c
 +++ b/drivers/tty/serdev/core.c
 @@ -552,16 +552,97 @@ static int of_serdev_register_devices(struct serdev_controller *ctrl)
@@ -183,5 +183,5 @@ index a9719858c950b..ce5309d002805 100644
  	if (!ctrl->serdev)
  		return -ENODEV;
 -- 
-2.27.0
+2.29.2
 
