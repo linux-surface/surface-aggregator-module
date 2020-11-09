@@ -1,4 +1,4 @@
-From d9ee784be5afebb63935f4af34ff709ff847b4d6 Mon Sep 17 00:00:00 2001
+From 56a818f28cf64499c0f13a9c17475799478f0043 Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Tue, 31 Jul 2018 07:50:37 +0200
 Subject: [PATCH] PCI: pciehp: Differentiate between surprise and safe removal
@@ -195,7 +195,7 @@ index 5c58c22e0c08..18f83e554c73 100644
 -- 
 2.29.2
 
-From 730d0a24f9893a43d563668211774f119be17e28 Mon Sep 17 00:00:00 2001
+From 3fdcb1cccf34b45e200b3bc65fabad2c7f92da4b Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sun, 19 Aug 2018 16:29:00 +0200
 Subject: [PATCH] PCI: pciehp: Drop unnecessary includes
@@ -332,7 +332,7 @@ index 18f83e554c73..c512b2ed85ed 100644
 -- 
 2.29.2
 
-From 83380c1b2c99c98de0c8b41d8a4b1d1fd792376b Mon Sep 17 00:00:00 2001
+From e2386a9c9db9554de4532354ea49c38c28b6d4e5 Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sun, 19 Aug 2018 16:29:00 +0200
 Subject: [PATCH] PCI: pciehp: Drop hotplug_slot_ops wrappers
@@ -543,7 +543,7 @@ index d4b7049cbc70..576362d0b1cd 100644
 -- 
 2.29.2
 
-From c09c4e6bd51d9f7c3517f6cbeccc610f6936abf5 Mon Sep 17 00:00:00 2001
+From a24b798287f5b66ba1413688a186362c7d9fad17 Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sat, 8 Sep 2018 09:59:01 +0200
 Subject: [PATCH] PCI: pciehp: Tolerate Presence Detect hardwired to zero
@@ -739,7 +739,7 @@ index 576362d0b1cd..7f4173d6771a 100644
 -- 
 2.29.2
 
-From 9c39b273a4699fb5d5d463635c7e4ea8705e5a76 Mon Sep 17 00:00:00 2001
+From 9c7916df4b27b431f1b54c012a27cbd204c36735 Mon Sep 17 00:00:00 2001
 From: Patrick Talbert <ptalbert@redhat.com>
 Date: Wed, 5 Sep 2018 09:12:53 +0200
 Subject: [PATCH] PCI/ASPM: Do not initialize link state when aspm_disabled is
@@ -782,7 +782,7 @@ index 279f9f0197b0..a530a2e3f2b9 100644
 -- 
 2.29.2
 
-From f7a73be7ab0a1e409ad0dbde40b975bb6fdd10c3 Mon Sep 17 00:00:00 2001
+From b61a94c760e750a2b6c84bc9360c38a9675c277d Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sun, 19 Aug 2018 16:29:00 +0200
 Subject: [PATCH] PCI: Simplify disconnected marking
@@ -866,7 +866,7 @@ index 2c3b5bd59b18..dee5a7507403 100644
 -- 
 2.29.2
 
-From d4120f322eec951791cdd9eb8fd4547eec40e0b8 Mon Sep 17 00:00:00 2001
+From f008700293d605b9a94174a1d9e5f3a15288f9ed Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Tue, 18 Sep 2018 21:46:17 +0200
 Subject: [PATCH] PCI: pciehp: Unify controller and slot structs
@@ -2056,7 +2056,7 @@ index 8da87931bd45..b9c1396db6fe 100644
 -- 
 2.29.2
 
-From a97b2e38d6f1fd8004edf9de2418c3235389fa3f Mon Sep 17 00:00:00 2001
+From 50fb38a10b0cc6b3382824754e1084b6ee4ce500 Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sat, 8 Sep 2018 09:59:01 +0200
 Subject: [PATCH] PCI: pciehp: Rename controller struct members for clarity
@@ -2361,7 +2361,7 @@ index 4a17d71e15d3..e4d6ec960630 100644
 -- 
 2.29.2
 
-From 26d6d12f1dddb46b39730f1c4200f17ebff8612b Mon Sep 17 00:00:00 2001
+From f204d1702288d049da3355785b0436b967b73c69 Mon Sep 17 00:00:00 2001
 From: Lukas Wunner <lukas@wunner.de>
 Date: Sat, 8 Sep 2018 09:59:01 +0200
 Subject: [PATCH] PCI: pciehp: Reshuffle controller struct for clarity
@@ -2490,7 +2490,7 @@ index 2499489158cc..df82a0335515 100644
 -- 
 2.29.2
 
-From b38f4a2ccc8ca55dd8e285b632036cf0089ac65d Mon Sep 17 00:00:00 2001
+From 00b4722bd96b02243108fbab75d2ddd533ac182d Mon Sep 17 00:00:00 2001
 From: Keith Busch <keith.busch@intel.com>
 Date: Thu, 20 Sep 2018 10:27:17 -0600
 Subject: [PATCH] PCI: Make link active reporting detection generic
@@ -2685,7 +2685,7 @@ index 2fda9893962d..c9fcfecc1479 100644
 -- 
 2.29.2
 
-From 19fb63c193fc58fff2a6408da071ed07900ca0a0 Mon Sep 17 00:00:00 2001
+From 98d2c6ef690613e0c1b8b9d024d661b48e2490eb Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:53:53 -0500
 Subject: [PATCH] PCI: Do not skip power-managed bridges in pci_enable_wake()
@@ -2734,7 +2734,7 @@ index 99292b338401..2898b7c1ac4b 100644
 -- 
 2.29.2
 
-From e82c9c103f56773ef9bcf2d7d3561b0f1c91cc13 Mon Sep 17 00:00:00 2001
+From a948ff3c747bc843456cff338ef4a5cbba3412a2 Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:38:19 -0500
 Subject: [PATCH] PCI: pciehp: Disable hotplug interrupt during suspend
@@ -2846,7 +2846,7 @@ index 0693870a9e24..b5c7f5ef597a 100644
 -- 
 2.29.2
 
-From ed33df1614b05b1127623ca6dec2ec4a1e9a1eea Mon Sep 17 00:00:00 2001
+From bc8dfb27a486e4afc2e0bcb9a27e89fdc183f0e1 Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:41:46 -0500
 Subject: [PATCH] PCI: pciehp: Do not handle events if interrupts are masked
@@ -2886,7 +2886,7 @@ index b5c7f5ef597a..242b9f30210a 100644
 -- 
 2.29.2
 
-From f21218c7b8c0b5c606aa2a0f0da398d53503668d Mon Sep 17 00:00:00 2001
+From 7e37bef4dddd050d8611e536b80337a6c4588d79 Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:41:47 -0500
 Subject: [PATCH] PCI/portdrv: Resume upon exit from system suspend if left
@@ -2937,7 +2937,7 @@ index 23a5a0c2c3fe..5badf8a1ce0a 100644
 -- 
 2.29.2
 
-From ca0658f9dcbecf8d424a37a6d992bfc70642cd49 Mon Sep 17 00:00:00 2001
+From bff40ff4e52db854a3d4bf943939ee00ae909924 Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:41:48 -0500
 Subject: [PATCH] PCI/portdrv: Add runtime PM hooks for port service drivers
@@ -3047,7 +3047,7 @@ index 5badf8a1ce0a..59d2567e2db2 100644
 -- 
 2.29.2
 
-From 7a6d3ad5044368aa3e321865b84342095534a4cb Mon Sep 17 00:00:00 2001
+From 0cec9ae415162d94f471bc115cb1806eaacd0b2a Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:41:49 -0500
 Subject: [PATCH] PCI: pciehp: Implement runtime PM callbacks
@@ -3102,7 +3102,7 @@ index 8e6e4ce869fb..e5de25ebc4cf 100644
 -- 
 2.29.2
 
-From 400f2a32ece4bbc63942a807599fe18a9638eb48 Mon Sep 17 00:00:00 2001
+From 8fa74de4de275d2787b6fe1bd6b54317a7e9262a Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:57:05 -0500
 Subject: [PATCH] ACPI / property: Allow multiple property compatible _DSD
@@ -3395,7 +3395,7 @@ index cd412817654f..4e2e30e340fe 100644
 -- 
 2.29.2
 
-From 7400e7447c7d664ec44553c30845f78eb4dba02f Mon Sep 17 00:00:00 2001
+From d86b95d8ba497fcf2603dec3e9b27ad02ce3540e Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 27 Sep 2018 16:57:14 -0500
 Subject: [PATCH] PCI / ACPI: Whitelist D3 for more PCIe hotplug ports
@@ -3558,7 +3558,7 @@ index e9ede82ee2c2..0a5efc437bd1 100644
 -- 
 2.29.2
 
-From 197cb9800ad2f570f1ab05ee784a194cd1bab4a9 Mon Sep 17 00:00:00 2001
+From fdb0dedf32e0938476d2d535f74f2c60b912153f Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Mon, 7 Jan 2019 16:09:40 +0300
 Subject: [PATCH] PCI: pciehp: Assign ctrl->slot_ctrl before writing it to
@@ -3610,7 +3610,7 @@ index 242b9f30210a..7074d4923811 100644
 -- 
 2.29.2
 
-From 17c2f4837da2691fbebd7a2aa2b57e02765a55c9 Mon Sep 17 00:00:00 2001
+From 48de934cc780df3d6abdd2ceea6be56a4a457dc8 Mon Sep 17 00:00:00 2001
 From: Mika Westerberg <mika.westerberg@linux.intel.com>
 Date: Thu, 31 Jan 2019 20:07:46 +0300
 Subject: [PATCH] PCI: pciehp: Disable Data Link Layer State Changed event on

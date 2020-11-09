@@ -1,4 +1,4 @@
-From 8fc807b70c6f047564a8947cba8aa5ef80f4fe2f Mon Sep 17 00:00:00 2001
+From e2e709cca03b39fb7dac119e525cb025761504b0 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Sat, 31 Oct 2020 20:46:33 +0100
 Subject: [PATCH 6/6] PCI: Add sysfs attribute for PCI device power state

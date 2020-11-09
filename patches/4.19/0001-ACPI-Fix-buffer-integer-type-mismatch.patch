@@ -1,4 +1,4 @@
-From dd036550cebcc53d08f8000fe892a0ae8e022e2c Mon Sep 17 00:00:00 2001
+From 2b14dafd32cffc0b59b9e4ef2759014cab208431 Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
 Date: Mon, 26 Aug 2019 01:15:40 +0200
 Subject: [PATCH] ACPI: Fix buffer/integer type mismatch

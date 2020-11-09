@@ -1,4 +1,4 @@
-From a6592cbdd1910c8c2568258cf797438b316f84f6 Mon Sep 17 00:00:00 2001
+From 7c6e369c2854f47afece2c5f428721ee461ee85d Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Thu, 29 Oct 2020 22:04:38 +0100
 Subject: [PATCH 4/6] PCI: Allow D3cold for hot-plug ports on Surface Books
