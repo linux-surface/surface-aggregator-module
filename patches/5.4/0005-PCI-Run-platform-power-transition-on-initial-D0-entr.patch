@@ -1,4 +1,4 @@
-From 9921a3c3b56a28b337f53989944786953eb1afa7 Mon Sep 17 00:00:00 2001
+From 029aea9b90a1e6cb6a34390ecab6c4eccd68a226 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Mon, 9 Nov 2020 14:23:00 +0100
 Subject: [PATCH 5/6] PCI: Run platform power transition on initial D0 entry
@@ -38,25 +38,21 @@ and appropriate actions need to be taken.
 
 Signed-off-by: Maximilian Luz <luzmaximilian@gmail.com>
 ---
- drivers/pci/pci.c | 6 +++++-
- 1 file changed, 5 insertions(+), 1 deletion(-)
+ drivers/pci/pci.c | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
 
 diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
-index 15566ec8f75d..45cb86a8324b 100644
+index 15566ec8f75d..9b0a591fc60b 100644
 --- a/drivers/pci/pci.c
 +++ b/drivers/pci/pci.c
-@@ -1596,9 +1596,13 @@ static int do_pci_enable_device(struct pci_dev *dev, int bars)
+@@ -1596,9 +1596,7 @@ static int do_pci_enable_device(struct pci_dev *dev, int bars)
  	u16 cmd;
  	u8 pin;
  
 -	err = pci_set_power_state(dev, PCI_D0);
-+<<<<<<< Updated upstream
-+	err = pci_power_up(dev);
- 	if (err < 0 && err != -EIO)
- 		return err;
-+=======
-+	pci_set_power_state(dev, PCI_D0);
-+>>>>>>> Stashed changes
+-	if (err < 0 && err != -EIO)
+-		return err;
++	pci_power_up(dev);
  
  	bridge = pci_upstream_bridge(dev);
  	if (bridge)
