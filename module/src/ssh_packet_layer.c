@@ -163,8 +163,10 @@
  *
  * >> General Notes <<
  *
- * To avoid deadlocks, if both queue and pending locks are required, the
- * pending lock must be acquired before the queue lock.
+ * - To avoid deadlocks, if both queue and pending locks are required, the
+ *   pending lock must be acquired before the queue lock.
+ *
+ * - The packet priority must be accessed only while holding the queue lock.
  */
 
 /*
@@ -694,20 +696,20 @@ static void ssh_ptl_timeout_start(struct ssh_packet *packet)
 }
 
 
+/* must be called with queue lock held */
 static void ssh_packet_next_try(struct ssh_packet *p)
 {
-	u8 priority = READ_ONCE(p->priority);
-	u8 base = ssh_packet_priority_get_base(priority);
-	u8 try = ssh_packet_priority_get_try(priority);
+	u8 base = ssh_packet_priority_get_base(p->priority);
+	u8 try = ssh_packet_priority_get_try(p->priority);
 
-	WRITE_ONCE(p->priority, __SSH_PACKET_PRIORITY(base, try + 1));
+	p->priority = __SSH_PACKET_PRIORITY(base, try + 1);
 }
 
 /* must be called with queue lock held */
 static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 {
 	struct list_head *head;
-	u8 priority = READ_ONCE(p->priority);
+	struct ssh_packet *q;
 
 	/*
 	 * We generally assume that there are less control (ACK/NAK) packets
@@ -722,24 +724,23 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	 * search from back to front.
 	 */
 
-	if (priority > SSH_PACKET_PRIORITY(DATA, 0)) {
+	if (p->priority > SSH_PACKET_PRIORITY(DATA, 0)) {
 		list_for_each(head, &p->ptl->queue.head) {
-			p = list_entry(head, struct ssh_packet, queue_node);
+			q = list_entry(head, struct ssh_packet, queue_node);
 
-			if (READ_ONCE(p->priority) < priority)
+			if (q->priority < p->priority)
 				break;
 		}
 	} else {
 		list_for_each_prev(head, &p->ptl->queue.head) {
-			p = list_entry(head, struct ssh_packet, queue_node);
+			q = list_entry(head, struct ssh_packet, queue_node);
 
-			if (READ_ONCE(p->priority) >= priority) {
+			if (q->priority >= p->priority) {
 				head = head->next;
 				break;
 			}
 		}
 	}
-
 
 	return head;
 }
@@ -933,6 +934,15 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
 
+		/*
+		 * Update number of tries. This directly influences the
+		 * priority in case the packet is re-submitted (e.g. via
+		 * timeout/NAK). Note that all reads and writes to the
+		 * priority after the first submission are guarded by the
+		 * queue lock.
+		 */
+		ssh_packet_next_try(p);
+
 		packet = p;
 		break;
 	}
@@ -956,14 +966,6 @@ static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	} else {
 		ptl_dbg(ptl, "ptl: transmitting non-sequenced packet %p\n", p);
 	}
-
-	/*
-	 * Update number of tries. This directly influences the priority in case
-	 * the packet is re-submitted (e.g. via timeout/NAK). Note that this is
-	 * the only place where we update the priority in-flight. As this runs
-	 * only on the tx-thread, this read-modify-write procedure is safe.
-	 */
-	ssh_packet_next_try(p);
 
 	return p;
 }
@@ -1305,14 +1307,33 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	return 0;
 }
 
-/* must be called with pending lock held */
+/*
+ * __ssh_ptl_resubmit() - Re-submit a packet to the transport layer.
+ * @packet: The packet to re-submit.
+ *
+ * Re-submits the given packet: Checks if it can be re-submitted and queues it
+ * if it can, resetting the packet timestamp in the process. Must be called
+ * with the pending lock held.
+ *
+ * Return: Returns %-ECANCELED if the packet has exceeded its number of tries,
+ * %-EINVAL if the packet has been locked, %-EALREADY if the packet is already
+ * on the queue, and %-ESHUTDOWN if the transmission layer has been shut down.
+ */
 static int __ssh_ptl_resubmit(struct ssh_packet *packet)
 {
 	int status;
+	u8 try;
 
 	trace_ssam_packet_resubmit(packet);
 
 	spin_lock(&packet->ptl->queue.lock);
+
+	/* Check if the packet is out of tries. */
+	try = ssh_packet_priority_get_try(packet->priority);
+	if (try >= SSH_PTL_MAX_PACKET_TRIES) {
+		spin_unlock(&packet->ptl->queue.lock);
+		return -ECANCELED;
+	}
 
 	status = __ssh_ptl_queue_push(packet);
 	if (status) {
@@ -1341,7 +1362,6 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 {
 	struct ssh_packet *p;
 	bool resub = false;
-	u8 try;
 
 	/*
 	 * Note: We deliberately do not remove/attempt to cancel and complete
@@ -1358,19 +1378,10 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 
 	// re-queue all pending packets
 	list_for_each_entry(p, &ptl->pending.head, pending_node) {
-		// avoid further transitions if locked
-		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
-			continue;
-
-		// do not re-schedule if packet is out of tries
-		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
-		if (try >= SSH_PTL_MAX_PACKET_TRIES)
-			continue;
-
 		/*
-		 * Re-submission fails if the packet has been locked, is
-		 * already queued, or the layer is being shut down. No need to
-		 * re-schedule tx-thread in those cases.
+		 * Re-submission fails if the packet is out of tries, has been
+		 * locked, is already queued, or the layer is being shut down.
+		 * No need to re-schedule tx-thread in those cases.
 		 */
 		if (!__ssh_ptl_resubmit(p))
 			resub = true;
@@ -1458,6 +1469,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	ktime_t timeout = ptl->rtx_timeout.timeout;
 	ktime_t next = KTIME_MAX;
 	bool resub = false;
+	int status;
 
 	trace_ssam_ptl_timeout_reap("pending", atomic_read(&ptl->pending.count));
 
@@ -1478,7 +1490,6 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 
 	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		ktime_t expires = ssh_packet_get_expiration(p, timeout);
-		u8 try;
 
 		/*
 		 * Check if the timeout hasn't expired yet. Find out next
@@ -1489,29 +1500,27 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 			continue;
 		}
 
-		// check if we still have some tries left
-		try = ssh_packet_priority_get_try(READ_ONCE(p->priority));
-		if (likely(try < SSH_PTL_MAX_PACKET_TRIES)) {
-			trace_ssam_packet_timeout(p);
+		trace_ssam_packet_timeout(p);
 
-			/*
-			 * Submission fails if the packet has been locked, is
-			 * already queued, or the layer is being shut down.
-			 * No need to re-schedule tx-thread in those cases.
-			 */
-			if (!__ssh_ptl_resubmit(p))
-				resub = true;
+		status = __ssh_ptl_resubmit(p);
 
+		/*
+		 * Re-submission fails if the packet is out of tries, has been
+		 * locked, is already queued, or the layer is being shut down.
+		 * No need to re-schedule tx-thread in those cases.
+		 */
+		if (!status)
+			resub = true;
+
+		/* Go to next packet if this packet is not out of tries. */
+		if (status != -ECANCELED)
 			continue;
-		}
 
 		// no more tries left: cancel the packet
 
 		// if someone else has locked the packet already, don't use it
 		if (test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
-
-		trace_ssam_packet_timeout(p);
 
 		/*
 		 * We have now marked the packet as locked. Thus it cannot be
