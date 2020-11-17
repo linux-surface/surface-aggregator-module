@@ -341,9 +341,9 @@ struct ssam_nf_refcount_entry {
  * event type/ID, allocating a new entry for this event ID if necessary. A
  * newly allocated entry will have a refcount of one.
  *
- * Return: Returns the refcount entry on success. Returns ``ERR_PTR(-ENOSPC)``
- * if there have already been %INT_MAX events of the specified ID and type
- * registered, or ``ERR_PTR(-ENOMEM)`` if the entry could not be allocated.
+ * Return: Returns the refcount entry on success. Returns an error pointer
+ * with %-ENOSPC if there have already been %INT_MAX events of the specified
+ * ID and type registered, or %-ENOMEM if the entry could not be allocated.
  */
 static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
 		struct ssam_nf *nf, struct ssam_event_registry reg,
