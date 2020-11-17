@@ -684,7 +684,12 @@ static void ssh_packet_next_try(struct ssh_packet *p)
 	u8 base = ssh_packet_priority_get_base(p->priority);
 	u8 try = ssh_packet_priority_get_try(p->priority);
 
-	p->priority = __SSH_PACKET_PRIORITY(base, try + 1);
+	/*
+	 * Ensure that we write the priority in one go via WRITE_ONCE() so we
+	 * can access it via READ_ONCE() for tracing. Note that other access
+	 * is guarded by the queue lock, so no need to use READ_ONCE() there.
+	 */
+	WRITE_ONCE(p->priority, __SSH_PACKET_PRIORITY(base, try + 1));
 }
 
 /* must be called with queue lock held */
