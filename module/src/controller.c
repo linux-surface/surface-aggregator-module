@@ -187,8 +187,8 @@ static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_blo
 {
 	struct ssam_notifier_block **link = &nh->head;
 
-	while ((*link) != NULL) {
-		if (unlikely((*link) == nb)) {
+	while (*link) {
+		if (unlikely(*link == nb)) {
 			WARN(1, "double register detected");
 			return -EINVAL;
 		}
@@ -222,8 +222,8 @@ static struct ssam_notifier_block **__ssam_nfblk_find_link(
 {
 	struct ssam_notifier_block **link = &nh->head;
 
-	while ((*link) != NULL) {
-		if ((*link) == nb)
+	while (*link) {
+		if (*link == nb)
 			return link;
 
 		link = &((*link)->next);
