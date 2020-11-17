@@ -539,6 +539,13 @@ static void ssam_nf_destroy(struct ssam_nf *nf)
 #define SSAM_CPLT_WQ_NAME	"ssam_cpltq"
 
 /*
+ * SSAM_CPLT_WQ_BATCH - Maximum number of event item completions executed per
+ * work execution. Used to prevent livelocking of the workqueue. Value chosen
+ * via educated guess, may be adjusted.
+ */
+#define SSAM_CPLT_WQ_BATCH	10
+
+/*
  * SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN - Maximum payload length for a cached
  * &struct ssam_event_item.
  *
@@ -777,7 +784,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 	struct ssam_event_item *item;
 	struct ssam_nf *nf;
 	struct device *dev;
-	unsigned int iterations = 10;
+	unsigned int iterations = SSAM_CPLT_WQ_BATCH;
 
 	queue = container_of(work, struct ssam_event_queue, work);
 	nf = &queue->cplt->event.notif;
