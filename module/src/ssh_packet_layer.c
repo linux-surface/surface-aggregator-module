@@ -167,6 +167,9 @@
  *   pending lock must be acquired before the queue lock.
  *
  * - The packet priority must be accessed only while holding the queue lock.
+ *
+ * - The packet timestamp must be accessed only while holding the pending
+ *   lock.
  */
 
 /*
@@ -675,27 +678,6 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 		mod_delayed_work(system_wq, &ptl->rtx_timeout.reaper, delta);
 }
 
-static void ssh_ptl_timeout_start(struct ssh_packet *packet)
-{
-	struct ssh_ptl *ptl = packet->ptl;
-	ktime_t timestamp = ktime_get_coarse_boottime();
-	ktime_t timeout = ptl->rtx_timeout.timeout;
-
-	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state))
-		return;
-
-	WRITE_ONCE(packet->timestamp, timestamp);
-	/*
-	 * Ensure timestamp is set before starting the reaper. Paired with
-	 * implicit barrier following check on ssh_packet_get_expiration() in
-	 * ssh_ptl_timeout_reap().
-	 */
-	smp_mb__after_atomic();
-
-	ssh_ptl_timeout_reaper_mod(packet->ptl, timestamp, timestamp + timeout);
-}
-
-
 /* must be called with queue lock held */
 static void ssh_packet_next_try(struct ssh_packet *p)
 {
@@ -801,10 +783,19 @@ static void ssh_ptl_queue_remove(struct ssh_packet *packet)
 static void ssh_ptl_pending_push(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
+	const ktime_t timestamp = ktime_get_coarse_boottime();
+	const ktime_t timeout = ptl->rtx_timeout.timeout;
+
+	/*
+	 * Note: We can get the time for the timestamp before acquiring the
+	 * lock as this is the only place we're setting it and this function
+	 * is called only from the transmitter thread. Thus it is not possible
+	 * to overwrite the timestamp with an outdated value below.
+	 */
 
 	spin_lock(&ptl->pending.lock);
 
-	// if we are cancelling/completing this packet, do not add it
+	// if we are canceling/completing this packet, do not add it
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state)) {
 		spin_unlock(&ptl->pending.lock);
 		return;
@@ -816,10 +807,15 @@ static void ssh_ptl_pending_push(struct ssh_packet *packet)
 		return;
 	}
 
+	packet->timestamp = timestamp;
+
 	atomic_inc(&ptl->pending.count);
 	list_add_tail(&ssh_packet_get(packet)->pending_node, &ptl->pending.head);
 
 	spin_unlock(&ptl->pending.lock);
+
+	// arm/update timeout reaper
+	ssh_ptl_timeout_reaper_mod(packet->ptl, timestamp, timestamp + timeout);
 }
 
 static void ssh_ptl_pending_remove(struct ssh_packet *packet)
@@ -962,7 +958,6 @@ static struct ssh_packet *ssh_ptl_tx_next(struct ssh_ptl *ptl)
 	if (test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state)) {
 		ptl_dbg(ptl, "ptl: transmitting sequenced packet %p\n", p);
 		ssh_ptl_pending_push(p);
-		ssh_ptl_timeout_start(p);
 	} else {
 		ptl_dbg(ptl, "ptl: transmitting non-sequenced packet %p\n", p);
 	}
@@ -1346,13 +1341,7 @@ static int __ssh_ptl_resubmit(struct ssh_packet *packet)
 		return status;
 	}
 
-	/*
-	 * Reset the timestamp. This must be called and executed before the
-	 * pending lock is released. The lock release should be a sufficient
-	 * barrier for this operation, thus there is no need to manually add
-	 * one here.
-	 */
-	WRITE_ONCE(packet->timestamp, KTIME_MAX);
+	packet->timestamp = KTIME_MAX;
 
 	spin_unlock(&packet->ptl->queue.lock);
 	return 0;
@@ -1449,13 +1438,11 @@ void ssh_ptl_cancel(struct ssh_packet *p)
 	}
 }
 
-
+/* must be called with pending lock held */
 static ktime_t ssh_packet_get_expiration(struct ssh_packet *p, ktime_t timeout)
 {
-	ktime_t timestamp = READ_ONCE(p->timestamp);
-
-	if (timestamp != KTIME_MAX)
-		return ktime_add(timestamp, timeout);
+	if (p->timestamp != KTIME_MAX)
+		return ktime_add(p->timestamp, timeout);
 	else
 		return KTIME_MAX;
 }
