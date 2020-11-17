@@ -454,6 +454,10 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	if (test_bit(SSH_REQUEST_SF_LOCKED_BIT, &rqst->state))
 		return;
 
+	/*
+	 * Note: The timestamp gets set only once. This happens on the packet
+	 * callback. All other access to it is read-only.
+	 */
 	WRITE_ONCE(rqst->timestamp, timestamp);
 	/*
 	 * Ensure timestamp is set before starting the reaper. Paired with
@@ -785,6 +789,10 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 
 	// if we expect a response, we just need to start the timeout
 	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &r->state)) {
+		/*
+		 * Note: This is the only place where the timestamp gets set,
+		 * all other access to it is read-only.
+		 */
 		ssh_rtl_timeout_start(r);
 		return;
 	}
