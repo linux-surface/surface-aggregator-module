@@ -110,6 +110,8 @@ static inline void ssam_trace_ptr_uid(const void *ptr, char *uid_str)
 {
 	char buf[2 * sizeof(void *) + 1];
 
+	BUILD_BUG_ON(ARRAY_SIZE(buf) < SSAM_PTR_UID_LEN);
+
 	snprintf(buf, ARRAY_SIZE(buf), "%p", ptr);
 	memcpy(uid_str, &buf[ARRAY_SIZE(buf) - SSAM_PTR_UID_LEN],
 	       SSAM_PTR_UID_LEN);
