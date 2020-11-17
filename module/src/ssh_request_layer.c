@@ -10,6 +10,7 @@
 #include <linux/completion.h>
 #include <linux/error-injection.h>
 #include <linux/ktime.h>
+#include <linux/limits.h>
 #include <linux/list.h>
 #include <linux/slab.h>
 #include <linux/spinlock.h>
@@ -87,7 +88,7 @@ static u16 ssh_request_get_rqid(struct ssh_request *rqst)
 static u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 {
 	if (!rqst->packet.data.ptr)
-		return (u32)-1;
+		return U32_MAX;
 
 	return ssh_request_get_rqid(rqst);
 }

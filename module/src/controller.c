@@ -11,6 +11,7 @@
 #include <linux/gpio/consumer.h>
 #include <linux/interrupt.h>
 #include <linux/kref.h>
+#include <linux/limits.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
 #include <linux/rbtree.h>
@@ -1085,11 +1086,11 @@ static int ssam_controller_caps_load_from_acpi(
 	int status;
 
 	// set defaults
-	caps->ssh_power_profile = (u32)-1;
-	caps->screen_on_sleep_idle_timeout = (u32)-1;
-	caps->screen_off_sleep_idle_timeout = (u32)-1;
+	caps->ssh_power_profile = U32_MAX;
+	caps->screen_on_sleep_idle_timeout = U32_MAX;
+	caps->screen_off_sleep_idle_timeout = U32_MAX;
 	caps->d3_closes_handle = false;
-	caps->ssh_buffer_size = (u32)-1;
+	caps->ssh_buffer_size = U32_MAX;
 
 	status = ssam_dsm_get_functions(handle, &funcs);
 	if (status)
