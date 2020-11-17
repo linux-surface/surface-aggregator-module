@@ -167,8 +167,8 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 #endif /* _SURFACE_AGGREGATOR_TRACE_HELPERS */
 
 #define ssam_trace_get_command_field_u8(packet, field) \
-	((!packet || packet->data.len < SSH_COMMAND_MESSAGE_LENGTH(0)) \
-	 ? 0 : p->data.ptr[SSH_MSGOFFSET_COMMAND(field)])
+	((!(packet) || (packet)->data.len < SSH_COMMAND_MESSAGE_LENGTH(0)) \
+	 ? 0 : (packet)->data.ptr[SSH_MSGOFFSET_COMMAND(field)])
 
 #define ssam_show_generic_u8_field(value)				\
 	__print_symbolic(value,						\
