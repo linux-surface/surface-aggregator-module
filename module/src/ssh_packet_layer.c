@@ -1118,8 +1118,7 @@ void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
  */
 int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 {
-	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl,
-				     "ssam_serial_hub-tx");
+	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl, "ssam_serial_hub-tx");
 	if (IS_ERR(ptl->tx.thread))
 		return PTR_ERR(ptl->tx.thread);
 
