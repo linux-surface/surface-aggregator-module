@@ -1004,8 +1004,11 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
 
 
 #define SSAM_SSH_DSM_REVISION	0
-static const guid_t SSAM_SSH_DSM_GUID = GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
-		0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
+
+/* d5e383e1-d892-4a76-89fc-f6aaae7ed5b5 */
+static const guid_t SSAM_SSH_DSM_GUID =
+	GUID_INIT(0xd5e383e1, 0xd892, 0x4a76,
+		  0x89, 0xfc, 0xf6, 0xaa, 0xae, 0x7e, 0xd5, 0xb5);
 
 enum ssh_dsm_fn {
 	SSH_DSM_FN_SSH_POWER_PROFILE             = 0x05,
