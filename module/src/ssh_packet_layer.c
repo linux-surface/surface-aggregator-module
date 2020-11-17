@@ -432,7 +432,7 @@ static void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 	if (likely(!ssh_ptl_should_corrupt_rx_syn()))
 		return;
 
-	trace_ssam_ei_rx_corrupt_syn("data_length", data->len);
+	trace_ssam_ei_rx_corrupt_syn(data->len);
 
 	data->ptr[1] = 0xb3;	// set second byte of SYN to "random" value
 }
@@ -1460,7 +1460,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 	bool resub = false;
 	int status;
 
-	trace_ssam_ptl_timeout_reap("pending", atomic_read(&ptl->pending.count));
+	trace_ssam_ptl_timeout_reap(atomic_read(&ptl->pending.count));
 
 	/*
 	 * Mark reaper as "not pending". This is done before checking any
