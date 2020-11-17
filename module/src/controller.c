@@ -1030,7 +1030,7 @@ static int ssam_dsm_get_functions(acpi_handle handle, u64 *funcs)
 				      SSAM_SSH_DSM_REVISION, 0, NULL,
 				      ACPI_TYPE_BUFFER);
 	if (!obj)
-		return -EFAULT;
+		return -EIO;
 
 	for (i = 0; i < obj->buffer.length && i < 8; i++)
 		mask |= (((u64)obj->buffer.pointer[i]) << (i * 8));
@@ -1054,7 +1054,7 @@ static int ssam_dsm_load_u32(acpi_handle handle, u64 funcs, u64 func, u32 *ret)
 				      SSAM_SSH_DSM_REVISION, func, NULL,
 				      ACPI_TYPE_INTEGER);
 	if (!obj)
-		return -EFAULT;
+		return -EIO;
 
 	val = obj->integer.value;
 	ACPI_FREE(obj);
