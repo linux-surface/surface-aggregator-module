@@ -1796,7 +1796,7 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	int status;
 
 	u16 rqid = ssh_tc_to_rqid(id.target_category);
-	u8 buf[1] = { 0x00 };
+	u8 buf = 0;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
@@ -1815,9 +1815,9 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	rqst.length = sizeof(params);
 	rqst.payload = (u8 *)&params;
 
-	result.capacity = ARRAY_SIZE(buf);
+	result.capacity = sizeof(buf);
 	result.length = 0;
-	result.pointer = buf;
+	result.pointer = &buf;
 
 	status = ssam_retry(ssam_request_sync_onstack, ctrl, &rqst, &result,
 			    sizeof(params));
@@ -1827,11 +1827,10 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 			 id.instance, reg.target_category);
 	}
 
-	if (buf[0] != 0x00) {
+	if (buf) {
 		ssam_err(ctrl, "unexpected result while enabling event source: "
 			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			 buf[0], id.target_category, id.instance,
-			 reg.target_category);
+			 buf, id.target_category, id.instance, reg.target_category);
 		return -EPROTO;
 	}
 
@@ -1866,7 +1865,7 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	int status;
 
 	u16 rqid = ssh_tc_to_rqid(id.target_category);
-	u8 buf[1] = { 0x00 };
+	u8 buf = 0;
 
 	// only allow RQIDs that lie within event spectrum
 	if (!ssh_rqid_is_event(rqid))
@@ -1885,9 +1884,9 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	rqst.length = sizeof(params);
 	rqst.payload = (u8 *)&params;
 
-	result.capacity = ARRAY_SIZE(buf);
+	result.capacity = sizeof(buf);
 	result.length = 0;
-	result.pointer = buf;
+	result.pointer = &buf;
 
 	status = ssam_retry(ssam_request_sync_onstack, ctrl, &rqst, &result,
 			    sizeof(params));
@@ -1897,11 +1896,10 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 			 id.instance, reg.target_category);
 	}
 
-	if (buf[0] != 0x00) {
+	if (buf) {
 		ssam_err(ctrl, "unexpected result while disabling event source: "
 			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			 buf[0], id.target_category, id.instance,
-			 reg.target_category);
+			 buf, id.target_category, id.instance, reg.target_category);
 		return -EPROTO;
 	}
 
