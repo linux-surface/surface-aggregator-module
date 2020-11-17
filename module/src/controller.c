@@ -509,7 +509,7 @@ static int ssam_nf_init(struct ssam_nf *nf)
 	}
 
 	if (status) {
-		for (i = i - 1; i >= 0; i--)
+		while (i--)
 			ssam_nf_head_destroy(&nf->head[i]);
 
 		return status;
@@ -777,21 +777,21 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 	struct ssam_event_item *item;
 	struct ssam_nf *nf;
 	struct device *dev;
-	int i;
+	unsigned int iterations = 10;
 
 	queue = container_of(work, struct ssam_event_queue, work);
 	nf = &queue->cplt->event.notif;
 	dev = queue->cplt->dev;
 
 	// limit number of processed events to avoid livelocking
-	for (i = 0; i < 10; i++) {
+	do {
 		item = ssam_event_queue_pop(queue);
 		if (item == NULL)
 			return;
 
 		ssam_nf_call(nf, dev, item->rqid, &item->event);
 		ssam_event_item_free(item);
-	}
+	} while (--iterations);
 
 	if (!ssam_event_queue_is_empty(queue))
 		ssam_cplt_submit(queue->cplt, &queue->work);
