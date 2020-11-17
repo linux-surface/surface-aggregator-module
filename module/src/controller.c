@@ -1038,7 +1038,7 @@ static int ssam_dsm_get_functions(acpi_handle handle, u64 *funcs)
 	for (i = 0; i < obj->buffer.length && i < 8; i++)
 		mask |= (((u64)obj->buffer.pointer[i]) << (i * 8));
 
-	if (mask & 0x01)
+	if (mask & BIT(0))
 		*funcs = mask;
 
 	ACPI_FREE(obj);
