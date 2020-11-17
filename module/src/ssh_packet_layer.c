@@ -1283,6 +1283,9 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	/*
 	 * The ptl reference only gets set on or before the first submission.
 	 * After the first submission, it has to be read-only.
+	 *
+	 * Note that ptl may already be set from upper-layer request
+	 * submission, thus we cannot expect it to be NULL.
 	 */
 	ptl_old = READ_ONCE(p->ptl);
 	if (ptl_old == NULL)
