@@ -64,7 +64,7 @@ struct ssam_nf_head {
  *            registration and deregistration.
  * @refcount: The root of the RB-tree used for reference-counting enabled
  *            events/notifications.
- * @head:     The list of notifier heads for event/notifiaction callbacks.
+ * @head:     The list of notifier heads for event/notification callbacks.
  */
 struct ssam_nf {
 	struct mutex lock;

@@ -405,9 +405,9 @@ static int ssam_serial_hub_pm_prepare(struct device *dev)
 	/*
 	 * Try to signal display-off, This will quiesce events.
 	 *
-	 * Note: Signalling display-off/display-on should normally be done from
-	 * some sort of display state notifier. As that is not available, signal
-	 * it here.
+	 * Note: Signaling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available,
+	 * signal it here.
 	 */
 
 	status = ssam_ctrl_notif_display_off(c);
@@ -425,9 +425,9 @@ static void ssam_serial_hub_pm_complete(struct device *dev)
 	/*
 	 * Try to signal display-on. This will restore events.
 	 *
-	 * Note: Signalling display-off/display-on should normally be done from
-	 * some sort of display state notifier. As that is not available, signal
-	 * it here.
+	 * Note: Signaling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available,
+	 * signal it here.
 	 */
 
 	status = ssam_ctrl_notif_display_on(c);
@@ -477,9 +477,9 @@ static int ssam_serial_hub_pm_resume(struct device *dev)
 	 * case of errors, log them and try to restore normal operation state
 	 * as far as possible.
 	 *
-	 * Note: Signalling display-off/display-on should normally be done from
-	 * some sort of display state notifier. As that is not available, signal
-	 * it here.
+	 * Note: Signaling display-off/display-on should normally be done from
+	 * some sort of display state notifier. As that is not available,
+	 * signal it here.
 	 */
 
 	ssam_irq_disarm_wakeup(c);

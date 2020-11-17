@@ -63,16 +63,16 @@
  * - the timeout work item.
  *
  * Normal operation is as follows: The initial reference of the packet is
- * obtained by submitting the packet and queueing it. The receiver thread
- * takes packets from the queue. By doing this, it does not increment the
- * refcount but takes over the reference (removing it from the queue). If the
- * packet is sequenced (i.e. needs to be ACKed by the client), the transmitter
- * thread sets-up the timeout and adds the packet to the pending set before
- * starting to transmit it. As the timeout is handled by a reaper task, no
- * additional reference for it is needed. After the transmit is done, the
- * reference held by the transmitter thread is dropped. If the packet is
- * unsequenced (i.e. does not need an ACK), the packet is completed by the
- * transmitter thread before dropping that reference.
+ * obtained by submitting the packet and queuing it. The receiver thread takes
+ * packets from the queue. By doing this, it does not increment the refcount
+ * but takes over the reference (removing it from the queue). If the packet is
+ * sequenced (i.e. needs to be ACKed by the client), the transmitter thread
+ * sets-up the timeout and adds the packet to the pending set before starting
+ * to transmit it. As the timeout is handled by a reaper task, no additional
+ * reference for it is needed. After the transmit is done, the reference held
+ * by the transmitter thread is dropped. If the packet is unsequenced (i.e.
+ * does not need an ACK), the packet is completed by the transmitter thread
+ * before dropping that reference.
  *
  * On receival of an ACK, the receiver thread removes and obtains the
  * reference to the packet from the pending set. The receiver thread will then
@@ -219,8 +219,8 @@
  * ssh_ptl_should_drop_ack_packet() - Error injection hook to drop ACK packets.
  *
  * Useful to test detection and handling of automated re-transmits by the EC.
- * Specifically of packets that the EC consideres not-ACKed but the driver
- * already consideres ACKed (due to dropped ACK). In this case, the EC
+ * Specifically of packets that the EC considers not-ACKed but the driver
+ * already considers ACKed (due to dropped ACK). In this case, the EC
  * re-transmits the packet-to-be-ACKed and the driver should detect it as
  * duplicate/already handled. Note that the driver should still send an ACK
  * for the re-transmitted packet.
@@ -271,7 +271,7 @@ static noinline int ssh_ptl_should_fail_write(void)
 ALLOW_ERROR_INJECTION(ssh_ptl_should_fail_write, ERRNO);
 
 /**
- * ssh_ptl_should_corrupt_tx_data() - Error injection hook to simualte invalid
+ * ssh_ptl_should_corrupt_tx_data() - Error injection hook to simulate invalid
  * data being sent to the EC.
  *
  * Hook to simulate corrupt/invalid data being sent from host (driver) to EC.
@@ -710,16 +710,16 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	u8 priority = READ_ONCE(p->priority);
 
 	/*
-	 * We generally assume that there are less control (ACK/NAK) packets and
-	 * re-submitted data packets as there are normal data packets (at least
-	 * in situations in which many packets are queued; if there aren't many
-	 * packets queued the decision on how to iterate should be basically
-	 * irrellevant; the number of control/data packets is more or less
-	 * limited via the maximum number of pending packets). Thus, when
-	 * inserting a control or re-submitted data packet, (determined by their
-	 * priority), we search from front to back. Normal data packets are,
-	 * usually queued directly at the tail of the queue, so for those search
-	 * from back to front.
+	 * We generally assume that there are less control (ACK/NAK) packets
+	 * and re-submitted data packets as there are normal data packets (at
+	 * least in situations in which many packets are queued; if there
+	 * aren't many packets queued the decision on how to iterate should be
+	 * basically irrelevant; the number of control/data packets is more or
+	 * less limited via the maximum number of pending packets). Thus, when
+	 * inserting a control or re-submitted data packet, (determined by
+	 * their priority), we search from front to back. Normal data packets
+	 * are, usually queued directly at the tail of the queue, so for those
+	 * search from back to front.
 	 */
 
 	if (priority > SSH_PACKET_PRIORITY(DATA, 0)) {
@@ -754,7 +754,7 @@ static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return -ESHUTDOWN;
 
-	// avoid further transitions when cancelling/completing
+	// avoid further transitions when canceling/completing
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state))
 		return -EINVAL;
 
@@ -882,7 +882,7 @@ static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &packet->state))
 		return !atomic_read(&ptl->pending.count);
 
-	// we can alwas process non-blocking packets
+	// we can always process non-blocking packets
 	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &packet->state))
 		return true;
 
@@ -902,7 +902,7 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 	spin_lock(&ptl->queue.lock);
 	list_for_each_entry_safe(p, n, &ptl->queue.head, queue_node) {
 		/*
-		 * If we are cancelling or completing this packet, ignore it.
+		 * If we are canceling or completing this packet, ignore it.
 		 * It's going to be removed from this queue shortly.
 		 */
 		if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
@@ -1368,8 +1368,8 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 			continue;
 
 		/*
-		 * Submission fails if the packet has been locked, is already
-		 * queued, or the layer is being shut down. No need to
+		 * Re-submission fails if the packet has been locked, is
+		 * already queued, or the layer is being shut down. No need to
 		 * re-schedule tx-thread in those cases.
 		 */
 		if (!__ssh_ptl_resubmit(p))
@@ -1390,11 +1390,11 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
  * callbacks will be called. This may occur during execution of this function
  * or may occur at any point later.
  *
- * Note that it is not guaranteed that the packet will actually be cancelled
- * if the packet is concurrently completed by another process. The only
- * guarantee of this function is that the packet will be completed (with
- * success, failure, or cancellation) and released from the transport layer in
- * a reasonable time-frame.
+ * Note that it is not guaranteed that the packet will actually be canceled if
+ * the packet is concurrently completed by another process. The only guarantee
+ * of this function is that the packet will be completed (with success,
+ * failure, or cancellation) and released from the transport layer in a
+ * reasonable time-frame.
  *
  * May be called before the packet has been submitted, in which case any later
  * packet submission fails.
@@ -1565,7 +1565,7 @@ static bool ssh_ptl_rx_retransmit_check(struct ssh_ptl *ptl, u8 seq)
 		return true;
 	}
 
-	// update list of blocked seuence IDs
+	// update list of blocked sequence IDs
 	ptl->rx.blocked.seqs[ptl->rx.blocked.offset] = seq;
 	ptl->rx.blocked.offset = (ptl->rx.blocked.offset + 1)
 				  % ARRAY_SIZE(ptl->rx.blocked.seqs);
@@ -1657,12 +1657,12 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 		 *   detected when handling data frames.
 		 * - This path will also be executed on invalid CRCs: When an
 		 *   invalid CRC is encountered, the code below will skip data
-		 *   until direclty after the SYN. This causes the search for
+		 *   until directly after the SYN. This causes the search for
 		 *   the next SYN, which is generally not placed directly after
 		 *   the last one.
 		 *
 		 *   Open question: Should we send this in case of invalid
-		 *   payload CRCs if the frame-type is nonsequential (current
+		 *   payload CRCs if the frame-type is non-sequential (current
 		 *   implementation) or should we drop that frame without
 		 *   telling the EC?
 		 */
@@ -1801,7 +1801,7 @@ int ssh_ptl_rx_stop(struct ssh_ptl *ptl)
  * @n:   Size of the data to push to the layer, in bytes.
  *
  * Pushes data from a lower-layer transport to the receiver fifo buffer of the
- * packet layer and notifies the reveiver thread. Calls to this function are
+ * packet layer and notifies the receiver thread. Calls to this function are
  * ignored once the packet layer has been shut down.
  *
  * Return: Returns the number of bytes transferred (positive or zero) on
@@ -1848,7 +1848,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 * Ensure that the layer gets marked as shut-down before actually
 	 * stopping it. In combination with the check in ssh_ptl_queue_push(),
 	 * this guarantees that no new packets can be added and all already
-	 * queued packets are properly cancelled. In combination with the check
+	 * queued packets are properly canceled. In combination with the check
 	 * in ssh_ptl_rx_rcvbuf(), this guarantees that received data is
 	 * properly cut off.
 	 */
@@ -1870,14 +1870,14 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 * and pending set.
 	 *
 	 * Note: We still need locks here because someone could still be
-	 * cancelling packets.
+	 * canceling packets.
 	 *
 	 * Note 2: We can re-use queue_node (or pending_node) if we mark the
 	 * packet as locked an then remove it from the queue (or pending set
-	 * respecitvely). Marking the packet as locked avoids re-queueing
+	 * respectively). Marking the packet as locked avoids re-queuing
 	 * (which should already be prevented by having stopped the treads...)
 	 * and not setting QUEUED_BIT (or PENDING_BIT) prevents removal from a
-	 * new list via other threads (e.g. canellation).
+	 * new list via other threads (e.g. cancellation).
 	 *
 	 * Note 3: There may be overlap between complete_p and complete_q.
 	 * This is handled via test_and_set_bit() on the "completed" flag

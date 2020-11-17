@@ -133,7 +133,7 @@ static_assert(sizeof(struct ssh_command) == 8);
 #define SSH_MSG_LEN_CTRL	SSH_MSG_LEN_BASE
 
 /**
- * SSH_MESSAGE_LENGTH() - Comute length of SSH message.
+ * SSH_MESSAGE_LENGTH() - Compute length of SSH message.
  * @payload_size: Length of the payload inside the SSH frame.
  *
  * Return: Returns the length of a SSH message with payload of specified size.
@@ -322,7 +322,7 @@ enum ssam_ssh_tc {
 /**
  * enum ssh_packet_base_priority - Base priorities for &struct ssh_packet.
  * @SSH_PACKET_PRIORITY_FLUSH: Base priority for flush packets.
- * @SSH_PACKET_PRIORITY_DATA:  Base priority for normal data paackets.
+ * @SSH_PACKET_PRIORITY_DATA:  Base priority for normal data packets.
  * @SSH_PACKET_PRIORITY_NAK:   Base priority for NAK packets.
  * @SSH_PACKET_PRIORITY_ACK:   Base priority for ACK packets.
  */
@@ -442,7 +442,8 @@ struct ssh_packet_ops {
  *            (or enclosing request) has not been submitted yet.
  * @refcnt:   Reference count of the packet.
  * @priority: Priority of the packet. Must be computed via
- *            SSH_PACKET_PRIORITY().
+ *            SSH_PACKET_PRIORITY(). Must only be accessed while holding the
+ *            queue lock after first submission.
  * @data:     Raw message data.
  * @data.len: Length of the raw message data.
  * @data.ptr: Pointer to the raw message data buffer.
@@ -452,7 +453,8 @@ struct ssh_packet_ops {
  * @timestamp: Timestamp specifying when the latest transmission of a
  *            currently pending packet has been started. May be %KTIME_MAX
  *            before or in-between transmission attempts. Used for the packet
- *            timeout implementation.
+ *            timeout implementation. Must only be accessed while holding the
+ *            pending lock after first submission.
  * @queue_node:	The list node for the packet queue.
  * @pending_node: The list node for the set of pending packets.
  * @ops:      Packet operations.
@@ -576,10 +578,11 @@ struct ssh_request_ops {
  * @state:  State and type flags describing current request state (dynamic)
  *          and type (static). See &enum ssh_request_flags for possible
  *          options.
- * @timestamp: Timestamp specifying when we start waiting on the respnse of the
- *          request. This is set once the underlying packet has been completed
- *          and may be %KTIME_MAX before that, or when the request does not
- *          expect a response. Used for the request timeout implementation.
+ * @timestamp: Timestamp specifying when we start waiting on the response of
+ *          the request. This is set once the underlying packet has been
+ *          completed and may be %KTIME_MAX before that, or when the request
+ *          does not expect a response. Used for the request timeout
+ *          implementation.
  * @ops:    Request Operations.
  */
 struct ssh_request {
