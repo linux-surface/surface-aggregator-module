@@ -349,8 +349,8 @@ static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 	}
 
 	if (status) {
-		dev_err(&serdev->dev, "setup: failed to set parity (value: 0x%02x,"
-			" error: %d)\n", uart->parity, status);
+		dev_err(&serdev->dev, "setup: failed to set parity (value: 0x%02x, error: %d)\n",
+			uart->parity, status);
 		return AE_ERROR;
 	}
 

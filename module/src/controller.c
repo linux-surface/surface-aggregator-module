@@ -2052,8 +2052,8 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from D0-exit notification:"
-			 " 0x%02x\n", response);
+		ssam_err(ctrl, "unexpected response from D0-exit notification: 0x%02x\n",
+			 response);
 		return -EPROTO;
 	}
 
@@ -2094,8 +2094,8 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from D0-entry notification:"
-			 " 0x%02x\n", response);
+		ssam_err(ctrl, "unexpected response from D0-entry notification: 0x%02x\n",
+			 response);
 		return -EPROTO;
 	}
 
@@ -2144,10 +2144,9 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		return PTR_ERR(entry);
 	}
 
-	ssam_dbg(ctrl, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x,"
-		 " rc: %d)\n", n->event.reg.target_category,
-		 n->event.id.target_category, n->event.id.instance,
-		 entry->refcount);
+	ssam_dbg(ctrl, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, rc: %d)\n",
+		 n->event.reg.target_category, n->event.id.target_category,
+		 n->event.id.instance, entry->refcount);
 
 	status = __ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
@@ -2229,10 +2228,9 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		return -ENOENT;
 	}
 
-	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x,"
-		 " rc: %d)\n", n->event.reg.target_category,
-		 n->event.id.target_category, n->event.id.instance,
-		 entry->refcount);
+	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, rc: %d)\n",
+		 n->event.reg.target_category, n->event.id.target_category,
+		 n->event.id.instance, entry->refcount);
 
 	if (entry->flags != n->event.flags) {
 		ssam_warn(ctrl, "inconsistent flags when enabling event: got 0x%02x,"
