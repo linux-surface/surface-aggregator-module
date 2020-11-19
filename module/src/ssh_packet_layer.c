@@ -922,10 +922,7 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 
 		/*
 		 * We are allowed to change the state now. Remove it from the
-		 * queue and mark it as being transmitted. Note that we cannot
-		 * add it to the set of pending packets yet, as queue locks must
-		 * always be acquired before packet locks (otherwise we might
-		 * run into a deadlock).
+		 * queue and mark it as being transmitted.
 		 */
 
 		list_del(&p->queue_node);
