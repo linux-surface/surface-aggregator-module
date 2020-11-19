@@ -805,7 +805,7 @@ static int san_probe(struct platform_device *pdev)
 
 	ctrl = ssam_client_bind(&pdev->dev);
 	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl) == -ENXIO ? -EPROBE_DEFER : PTR_ERR(ctrl);
+		return PTR_ERR(ctrl) == -ENODEV ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
 	status = san_consumer_links_setup(pdev);
 	if (status)

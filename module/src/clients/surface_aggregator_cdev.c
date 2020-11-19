@@ -204,7 +204,7 @@ static int ssam_dbg_device_probe(struct platform_device *pdev)
 
 	ctrl = ssam_client_bind(&pdev->dev);
 	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl) == -ENXIO ? -EPROBE_DEFER : PTR_ERR(ctrl);
+		return PTR_ERR(ctrl) == -ENODEV ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
 	cdev = kzalloc(sizeof(*cdev), GFP_KERNEL);
 	if (!cdev)

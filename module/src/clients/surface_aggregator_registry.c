@@ -572,7 +572,7 @@ static int ssam_platform_hub_probe(struct platform_device *pdev)
 	 */
 	ctrl = ssam_client_bind(&pdev->dev);
 	if (IS_ERR(ctrl))
-		return PTR_ERR(ctrl) == -ENXIO ? -EPROBE_DEFER : PTR_ERR(ctrl);
+		return PTR_ERR(ctrl) == -ENODEV ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
 	status = software_node_register_node_group(nodes);
 	if (status)

@@ -102,8 +102,8 @@ EXPORT_SYMBOL_GPL(ssam_device_alloc);
  * @sdev: The SSAM client device to be added.
  *
  * Added client devices must be guaranteed to always have a valid and active
- * controller. Thus, this function will fail with %-ENXIO if the controller of
- * the device has not been initialized yet, has been suspended, or has been
+ * controller. Thus, this function will fail with %-ENODEV if the controller
+ * of the device has not been initialized yet, has been suspended, or has been
  * shut down.
  *
  * The caller of this function should ensure that the corresponding call to
@@ -147,7 +147,7 @@ int ssam_device_add(struct ssam_device *sdev)
 
 	if (sdev->ctrl->state != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_stateunlock(sdev->ctrl);
-		return -ENXIO;
+		return -ENODEV;
 	}
 
 	status = device_add(&sdev->dev);

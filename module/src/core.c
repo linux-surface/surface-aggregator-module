@@ -120,7 +120,7 @@ static void ssam_clear_controller(void)
  * The device link does not have to be destructed manually. It is removed
  * automatically once the driver of the client device unbinds.
  *
- * Return: Returns zero on success, %-ENXIO if the controller is not ready or
+ * Return: Returns zero on success, %-ENODEV if the controller is not ready or
  * going to be removed soon, or %-ENOMEM if the device link could not be
  * created for other reasons.
  */
@@ -134,13 +134,13 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 
 	if (c->state != SSAM_CONTROLLER_STARTED) {
 		ssam_controller_stateunlock(c);
-		return -ENXIO;
+		return -ENODEV;
 	}
 
 	ctrldev = ssam_controller_device(c);
 	if (!ctrldev) {
 		ssam_controller_stateunlock(c);
-		return -ENXIO;
+		return -ENODEV;
 	}
 
 	link = device_link_add(client, ctrldev, flags);
@@ -150,14 +150,14 @@ int ssam_client_link(struct ssam_controller *c, struct device *client)
 	}
 
 	/*
-	 * Return -ENXIO if supplier driver is on its way to be removed. In this
-	 * case, the controller won't be around for much longer and the device
-	 * link is not going to save us any more, as unbinding is already in
-	 * progress.
+	 * Return -ENODEV if supplier driver is on its way to be removed. In
+	 * this case, the controller won't be around for much longer and the
+	 * device link is not going to save us any more, as unbinding is
+	 * already in progress.
 	 */
 	if (READ_ONCE(link->status) == DL_STATE_SUPPLIER_UNBIND) {
 		ssam_controller_stateunlock(c);
-		return -ENXIO;
+		return -ENODEV;
 	}
 
 	ssam_controller_stateunlock(c);
@@ -196,8 +196,8 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
  * The created device link does not have to be destructed manually. It is
  * removed automatically once the driver of the client device unbinds.
  *
- * Return: Returns the controller on success, an error pointer with %-ENXIO if
- * the controller is not present, not ready or going to be removed soon, or
+ * Return: Returns the controller on success, an error pointer with %-ENODEV
+ * if the controller is not present, not ready or going to be removed soon, or
  * %-ENOMEM if the device link could not be created for other reasons.
  */
 struct ssam_controller *ssam_client_bind(struct device *client)
@@ -207,7 +207,7 @@ struct ssam_controller *ssam_client_bind(struct device *client)
 
 	c = ssam_get_controller();
 	if (!c)
-		return ERR_PTR(-ENXIO);
+		return ERR_PTR(-ENODEV);
 
 	status = ssam_client_link(c, client);
 
