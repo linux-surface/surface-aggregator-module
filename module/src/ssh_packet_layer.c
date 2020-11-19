@@ -1015,8 +1015,7 @@ static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 static void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
 {
 	wait_event_interruptible(ptl->tx.thread_wq,
-		READ_ONCE(ptl->tx.thread_signal) || kthread_should_stop());
-	WRITE_ONCE(ptl->tx.thread_signal, false);
+		xchg(&ptl->tx.thread_signal, false) || kthread_should_stop());
 }
 
 static int ssh_ptl_tx_threadfn(void *data)
