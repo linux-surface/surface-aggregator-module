@@ -1778,6 +1778,45 @@ struct ssh_notification_params {
 
 static_assert(sizeof(struct ssh_notification_params) == 5);
 
+static int __ssam_ssh_event_request(struct ssam_controller *ctrl,
+				    struct ssam_event_registry reg, u8 cid,
+				    struct ssam_event_id id, u8 flags)
+{
+	struct ssh_notification_params params;
+	struct ssam_request rqst;
+	struct ssam_response result;
+	int status;
+
+	u16 rqid = ssh_tc_to_rqid(id.target_category);
+	u8 buf = 0;
+
+	// only allow RQIDs that lie within event spectrum
+	if (!ssh_rqid_is_event(rqid))
+		return -EINVAL;
+
+	params.target_category = id.target_category;
+	params.instance_id = id.instance;
+	params.flags = flags;
+	put_unaligned_le16(rqid, &params.request_id);
+
+	rqst.target_category = reg.target_category;
+	rqst.target_id = reg.target_id;
+	rqst.command_id = cid;
+	rqst.instance_id = 0x00;
+	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
+	rqst.length = sizeof(params);
+	rqst.payload = (u8 *)&params;
+
+	result.capacity = sizeof(buf);
+	result.length = 0;
+	result.pointer = &buf;
+
+	status = ssam_retry(ssam_request_sync_onstack, ctrl, &rqst, &result,
+			    sizeof(params));
+
+	return status < 0 ? status : buf;
+}
+
 /**
  * ssam_ssh_event_enable() - Enable SSH event.
  * @ctrl:  The controller for which to enable the event.
@@ -1799,52 +1838,25 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 				 struct ssam_event_registry reg,
 				 struct ssam_event_id id, u8 flags)
 {
-	struct ssh_notification_params params;
-	struct ssam_request rqst;
-	struct ssam_response result;
 	int status;
 
-	u16 rqid = ssh_tc_to_rqid(id.target_category);
-	u8 buf = 0;
+	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
-	// only allow RQIDs that lie within event spectrum
-	if (!ssh_rqid_is_event(rqid))
-		return -EINVAL;
-
-	params.target_category = id.target_category;
-	params.instance_id = id.instance;
-	params.flags = flags;
-	put_unaligned_le16(rqid, &params.request_id);
-
-	rqst.target_category = reg.target_category;
-	rqst.target_id = reg.target_id;
-	rqst.command_id = reg.cid_enable;
-	rqst.instance_id = 0x00;
-	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(params);
-	rqst.payload = (u8 *)&params;
-
-	result.capacity = sizeof(buf);
-	result.length = 0;
-	result.pointer = &buf;
-
-	status = ssam_retry(ssam_request_sync_onstack, ctrl, &rqst, &result,
-			    sizeof(params));
-	if (status) {
+	if (status < 0 && status != -EINVAL) {
 		ssam_err(ctrl, "failed to enable event source (tc: 0x%02x, "
 			 "iid: 0x%02x, reg: 0x%02x)\n", id.target_category,
 			 id.instance, reg.target_category);
 	}
 
-	if (buf) {
+	if (status > 0) {
 		ssam_err(ctrl, "unexpected result while enabling event source: "
 			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			 buf, id.target_category, id.instance, reg.target_category);
+			 status, id.target_category, id.instance,
+			 reg.target_category);
 		return -EPROTO;
 	}
 
 	return status;
-
 }
 
 /**
@@ -1868,47 +1880,21 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 				  struct ssam_event_registry reg,
 				  struct ssam_event_id id, u8 flags)
 {
-	struct ssh_notification_params params;
-	struct ssam_request rqst;
-	struct ssam_response result;
 	int status;
 
-	u16 rqid = ssh_tc_to_rqid(id.target_category);
-	u8 buf = 0;
+	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
-	// only allow RQIDs that lie within event spectrum
-	if (!ssh_rqid_is_event(rqid))
-		return -EINVAL;
-
-	params.target_category = id.target_category;
-	params.instance_id = id.instance;
-	params.flags = flags;
-	put_unaligned_le16(rqid, &params.request_id);
-
-	rqst.target_category = reg.target_category;
-	rqst.target_id = reg.target_id;
-	rqst.command_id = reg.cid_disable;
-	rqst.instance_id = 0x00;
-	rqst.flags = SSAM_REQUEST_HAS_RESPONSE;
-	rqst.length = sizeof(params);
-	rqst.payload = (u8 *)&params;
-
-	result.capacity = sizeof(buf);
-	result.length = 0;
-	result.pointer = &buf;
-
-	status = ssam_retry(ssam_request_sync_onstack, ctrl, &rqst, &result,
-			    sizeof(params));
-	if (status) {
+	if (status < 0 && status != -EINVAL) {
 		ssam_err(ctrl, "failed to disable event source (tc: 0x%02x, "
 			 "iid: 0x%02x, reg: 0x%02x)\n", id.target_category,
 			 id.instance, reg.target_category);
 	}
 
-	if (buf) {
+	if (status > 0) {
 		ssam_err(ctrl, "unexpected result while disabling event source: "
 			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
-			 buf, id.target_category, id.instance, reg.target_category);
+			 status, id.target_category, id.instance,
+			 reg.target_category);
 		return -EPROTO;
 	}
 
