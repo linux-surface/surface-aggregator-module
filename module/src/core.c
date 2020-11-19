@@ -74,7 +74,7 @@ EXPORT_SYMBOL_GPL(ssam_get_controller);
  * Set the main controller reference to the given pointer if the reference
  * hasn't been set already.
  *
- * Return: Returns zero on success or %-EBUSY if the reference has already
+ * Return: Returns zero on success or %-EEXIST if the reference has already
  * been set.
  */
 static int ssam_try_set_controller(struct ssam_controller *ctrl)
@@ -85,7 +85,7 @@ static int ssam_try_set_controller(struct ssam_controller *ctrl)
 	if (!__ssam_controller)
 		__ssam_controller = ctrl;
 	else
-		status = -EBUSY;
+		status = -EEXIST;
 	spin_unlock(&__ssam_controller_lock);
 
 	return status;
