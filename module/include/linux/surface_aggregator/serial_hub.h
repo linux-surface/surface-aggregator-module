@@ -280,8 +280,18 @@ struct ssam_span {
 	size_t len;
 };
 
+/*
+ * Known SSH/EC target categories.
+ *
+ * List of currently known target category values; "Known" as in we know they
+ * exist and are valid on at least some device/model. Detailed functionality
+ * or the full category name is only known for some of these categories and
+ * is detailed in the respective comment below.
+ *
+ * These values and abbreviations have been extracted from strings inside the
+ * Windows driver.
+ */
 enum ssam_ssh_tc {
-	/* Known SSH/EC target categories. */
 				// category 0x00 is invalid for EC use
 	SSAM_SSH_TC_SAM = 0x01,	// generic system functionality, real-time clock
 	SSAM_SSH_TC_BAT = 0x02,	// battery/power subsystem
@@ -315,7 +325,7 @@ enum ssam_ssh_tc {
 	SSAM_SSH_TC_AUD = 0x1e,
 	SSAM_SSH_TC_SMC = 0x1f,
 	SSAM_SSH_TC_KPD = 0x20,
-	SSAM_SSH_TC_REG = 0x21,
+	SSAM_SSH_TC_REG = 0x21,	// extended event registry
 };
 
 
