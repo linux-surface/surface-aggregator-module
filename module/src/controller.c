@@ -107,7 +107,7 @@ static u16 ssh_rqid_next(struct ssh_rqid_counter *c)
 
 
 /**
- * ssam_event_matches_notifier() - Test if an event matches a notifier;
+ * ssam_event_matches_notifier() - Test if an event matches a notifier.
  * @notif: The event notifier to test against.
  * @event: The event to test.
  *
@@ -453,7 +453,7 @@ static bool ssam_nf_refcount_empty(struct ssam_nf *nf)
  *
  * Execute registered callbacks in order of their priority until either no
  * callback is left or a callback returns a value with the %SSAM_NOTIF_STOP
- * bit set. Note that this bit is set automatically when converting non.zero
+ * bit set. Note that this bit is set automatically when converting non-zero
  * error values via ssam_notifier_from_errno() to notifier values.
  *
  * Also note that any callback that could handle an event should return a value
