@@ -1024,9 +1024,8 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 	while (!kthread_should_stop()) {
 		unsigned char *buf;
-		bool drop = false;
-		size_t len = 0;
-		int status = 0;
+		ssize_t len = 0;
+		ssize_t status = 0;
 
 		// if we don't have a packet, get the next and add it to pending
 		if (IS_ERR_OR_NULL(ptl->tx.packet)) {
