@@ -341,6 +341,11 @@ struct ssam_nf_refcount_entry {
  * event type/ID, allocating a new entry for this event ID if necessary. A
  * newly allocated entry will have a refcount of one.
  *
+ * Note: Must be synchronized by the caller with regards to other
+ * ssam_nf_refcount_inc() and ssam_nf_refcount_dec() calls, e.g. via
+ * ``nf->lock``. Note that this lock should also be used to ensure the
+ * corresponding EC requests are sent, if necessary.
+ *
  * Return: Returns the refcount entry on success. Returns an error pointer
  * with %-ENOSPC if there have already been %INT_MAX events of the specified
  * ID and type registered, or %-ENOMEM if the entry could not be allocated.
@@ -398,6 +403,11 @@ static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
  * Decrements the reference-/activation-count of the specified event,
  * returning its entry. If the returned entry has a refcount of zero, the
  * caller is responsible for freeing it using kfree().
+ *
+ * Note: Must be synchronized by the caller with regards to other
+ * ssam_nf_refcount_inc() and ssam_nf_refcount_dec() calls, e.g. via
+ * ``nf->lock``. Note that this lock should also be used to ensure the
+ * corresponding EC requests are sent, if necessary.
  *
  * Return: Returns the refcount entry on success or %NULL if the entry has not
  * been found.
