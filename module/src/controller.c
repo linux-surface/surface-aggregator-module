@@ -179,7 +179,7 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
  * Note: This function must be synchronized by the caller with respect to other
  * insert and/or remove calls.
  *
- * Return: Returns zero on success, %-EINVAL if the notifier block has already
+ * Return: Returns zero on success, %-EEXIST if the notifier block has already
  * been registered.
  */
 static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
@@ -189,7 +189,7 @@ static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_blo
 	while (*link) {
 		if (unlikely(*link == nb)) {
 			WARN(1, "double register detected");
-			return -EINVAL;
+			return -EEXIST;
 		}
 
 		if (nb->priority > (*link)->priority)
