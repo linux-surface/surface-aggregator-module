@@ -156,7 +156,8 @@ static_assert(sizeof(struct ssh_command) == 8);
  * @field: The field for which the offset should be computed.
  *
  * Return: Returns the offset of the specified &struct ssh_frame field in the
- * raw SSH message data as.
+ * raw SSH message data as. Takes SYN bytes (u16) preceding the frame into
+ * account.
  */
 #define SSH_MSGOFFSET_FRAME(field) \
 	(sizeof(u16) + offsetof(struct ssh_frame, field))
@@ -167,7 +168,8 @@ static_assert(sizeof(struct ssh_command) == 8);
  * @field: The field for which the offset should be computed.
  *
  * Return: Returns the offset of the specified &struct ssh_command field in
- * the raw SSH message data.
+ * the raw SSH message data. Takes SYN bytes (u16) preceding the frame and the
+ * frame CRC (u16) between frame and command into account.
  */
 #define SSH_MSGOFFSET_COMMAND(field) \
 	(2ull * sizeof(u16) + sizeof(struct ssh_frame) \
