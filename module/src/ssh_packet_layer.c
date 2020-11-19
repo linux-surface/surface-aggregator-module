@@ -183,7 +183,16 @@
 #define SSH_PTL_MAX_PACKET_TRIES		3
 
 /*
- * SSH_PTL_PACKET_TIMEOUT - Packet timeout.
+ * SSH_PTL_TX_TIMEOUT - Packet transmission timeout.
+ *
+ * Timeout in jiffies for packet transmission via the underlying serial
+ * device. If transmitting the packet takes longer than this timeout, the
+ * packet will be completed with -ETIMEDOUT. It will not be re-submitted.
+ */
+#define SSH_PTL_TX_TIMEOUT			HZ
+
+/*
+ * SSH_PTL_PACKET_TIMEOUT - Packet response timeout.
  *
  * Timeout as ktime_t delta for ACKs. If we have not received an ACK in this
  * time-frame after starting transmission, the packet will be re-submitted.
@@ -1012,29 +1021,33 @@ static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 	wake_up_all(&packet->ptl->tx.packet_wq);
 }
 
-static void ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl)
+static long ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl, long timeout)
 {
-	wait_event_interruptible(ptl->tx.thread_wq,
-		xchg(&ptl->tx.thread_signal, false) || kthread_should_stop());
+	return wait_event_interruptible_timeout(ptl->tx.thread_wq,
+		xchg(&ptl->tx.thread_signal, false) || kthread_should_stop(),
+		timeout);
 }
 
 static int ssh_ptl_tx_threadfn(void *data)
 {
 	struct ssh_ptl *ptl = data;
+	long timeout = 0;
 
 	while (!kthread_should_stop()) {
 		unsigned char *buf;
 		ssize_t len = 0;
 		ssize_t status = 0;
+		bool drop;
 
 		// if we don't have a packet, get the next and add it to pending
 		if (IS_ERR_OR_NULL(ptl->tx.packet)) {
 			ptl->tx.packet = ssh_ptl_tx_next(ptl);
 			ptl->tx.offset = 0;
+			timeout = SSH_PTL_TX_TIMEOUT;
 
 			// if no packet can be processed, we are done
 			if (IS_ERR(ptl->tx.packet)) {
-				ssh_ptl_tx_threadfn_wait(ptl);
+				ssh_ptl_tx_threadfn_wait(ptl, MAX_SCHEDULE_TIMEOUT);
 				continue;
 			}
 		}
@@ -1059,21 +1072,31 @@ static int ssh_ptl_tx_threadfn(void *data)
 			status = ssh_ptl_write_buf(ptl, ptl->tx.packet, buf, len);
 		}
 
-		if (status < 0) {
-			// complete packet with error
-			ssh_ptl_tx_compl_error(ptl->tx.packet, status);
-			ssh_packet_put(ptl->tx.packet);
-			ptl->tx.packet = NULL;
-
-		} else if (status == len) {
+		if (status == len) {
 			// complete packet and/or mark as transmitted
 			ssh_ptl_tx_compl_success(ptl->tx.packet);
 			ssh_packet_put(ptl->tx.packet);
 			ptl->tx.packet = NULL;
 
-		} else {	// need more buffer space
+		} else if (status >= 0) {
+			// need more buffer space
 			ptl->tx.offset += status;
-			ssh_ptl_tx_threadfn_wait(ptl);
+
+			timeout = ssh_ptl_tx_threadfn_wait(ptl, timeout);
+			if (kthread_should_stop())
+				break;
+
+			if (timeout < 0)
+				status = -EINTR;
+			else if (timeout == 0)
+				status = -ETIMEDOUT;
+		}
+
+		if (status < 0) {
+			// complete packet with error
+			ssh_ptl_tx_compl_error(ptl->tx.packet, status);
+			ssh_packet_put(ptl->tx.packet);
+			ptl->tx.packet = NULL;
 		}
 	}
 
