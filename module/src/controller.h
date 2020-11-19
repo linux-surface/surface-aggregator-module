@@ -253,7 +253,7 @@ int ssam_controller_receive_buf(struct ssam_controller *ctrl,
  */
 static inline void ssam_controller_write_wakeup(struct ssam_controller *ctrl)
 {
-	ssh_ptl_tx_wakeup(&ctrl->rtl.ptl);
+	ssh_ptl_tx_wakeup_transfer(&ctrl->rtl.ptl);
 }
 
 

@@ -1021,11 +1021,39 @@ static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 	wake_up_all(&packet->ptl->tx.packet_wq);
 }
 
-static long ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl, long timeout)
+static long ssh_ptl_tx_wait_packet(struct ssh_ptl *ptl)
 {
-	return wait_event_interruptible_timeout(ptl->tx.thread_wq,
-		xchg(&ptl->tx.thread_signal, false) || kthread_should_stop(),
-		timeout);
+	int status;
+
+	status = wait_for_completion_interruptible(&ptl->tx.thread_cplt_pkt);
+
+	reinit_completion(&ptl->tx.thread_cplt_pkt);
+
+	/*
+	 * Ensure completion is cleared before continuing to avoid lost update
+	 * problems.
+	 */
+	smp_mb__after_atomic();
+
+	return status;
+}
+
+static long ssh_ptl_tx_wait_transfer(struct ssh_ptl *ptl, long timeout)
+{
+	long status;
+
+	status =  wait_for_completion_interruptible_timeout(
+			&ptl->tx.thread_cplt_tx, timeout);
+
+	reinit_completion(&ptl->tx.thread_cplt_tx);
+
+	/*
+	 * Ensure completion is cleared before continuing to avoid lost update
+	 * problems.
+	 */
+	smp_mb__after_atomic();
+
+	return status;
 }
 
 static int ssh_ptl_tx_packet(struct ssh_ptl *ptl, struct ssh_packet *packet)
@@ -1064,8 +1092,8 @@ static int ssh_ptl_tx_packet(struct ssh_ptl *ptl, struct ssh_packet *packet)
 
 		offset += status;
 
-		timeout = ssh_ptl_tx_threadfn_wait(ptl, timeout);
-		if (kthread_should_stop())
+		timeout = ssh_ptl_tx_wait_transfer(ptl, timeout);
+		if (kthread_should_stop() || !atomic_read(&ptl->tx.running))
 			return -ESHUTDOWN;
 
 		if (timeout < 0)
@@ -1080,7 +1108,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 {
 	struct ssh_ptl *ptl = data;
 
-	while (!kthread_should_stop()) {
+	while (!kthread_should_stop() && atomic_read(&ptl->tx.running)) {
 		struct ssh_packet *packet;
 		int status;
 
@@ -1089,7 +1117,7 @@ static int ssh_ptl_tx_threadfn(void *data)
 
 		// if no packet can be processed, we are done
 		if (IS_ERR(packet)) {
-			ssh_ptl_tx_threadfn_wait(ptl, MAX_SCHEDULE_TIMEOUT);
+			ssh_ptl_tx_wait_packet(ptl);
 			continue;
 		}
 
@@ -1107,26 +1135,20 @@ static int ssh_ptl_tx_threadfn(void *data)
 }
 
 /**
- * ssh_ptl_tx_wakeup() - Wake up packet transmitter thread.
+ * ssh_ptl_tx_wakeup_packet() - Wake up packet transmitter thread for new
+ * packet.
  * @ptl: The packet transport layer.
  *
- * Wakes up the packet transmitter thread. If the packet transport layer has
- * been shut down, calls to this function will be ignored.
+ * Wakes up the packet transmitter thread, notifying it that a new packet has
+ * arrived and is ready for transfer. If the packet transport layer has been
+ * shut down, calls to this function will be ignored.
  */
-void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
+static void ssh_ptl_tx_wakeup_packet(struct ssh_ptl *ptl)
 {
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return;
 
-	WRITE_ONCE(ptl->tx.thread_signal, true);
-	/*
-	 * Ensure that the signal is set before we wake the transmitter
-	 * thread to prevent lost updates: If the signal is not set,
-	 * when the thread checks it in ssh_ptl_tx_threadfn_wait(), it
-	 * may go back to sleep.
-	 */
-	smp_mb__after_atomic();
-	wake_up(&ptl->tx.thread_wq);
+	complete(&ptl->tx.thread_cplt_pkt);
 }
 
 /**
@@ -1137,6 +1159,8 @@ void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl)
  */
 int ssh_ptl_tx_start(struct ssh_ptl *ptl)
 {
+	atomic_set_release(&ptl->tx.running, 1);
+
 	ptl->tx.thread = kthread_run(ssh_ptl_tx_threadfn, ptl, "ssam_serial_hub-tx");
 	if (IS_ERR(ptl->tx.thread))
 		return PTR_ERR(ptl->tx.thread);
@@ -1154,7 +1178,19 @@ int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 {
 	int status = 0;
 
-	if (ptl->tx.thread) {
+	if (!IS_ERR_OR_NULL(ptl->tx.thread)) {
+		/* Tell thread to stop. */
+		atomic_set_release(&ptl->tx.running, 0);
+
+		/*
+		 * Wake up thread in case it is paused. Do not use wakeup
+		 * helpers as this may be called when the shutdown bit has
+		 * already been set.
+		 */
+		complete(&ptl->tx.thread_cplt_pkt);
+		complete(&ptl->tx.thread_cplt_tx);
+
+		/* Finally, wait for thread to stop. */
 		status = kthread_stop(ptl->tx.thread);
 		ptl->tx.thread = NULL;
 	}
@@ -1266,7 +1302,7 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	ssh_packet_put(p);
 
 	if (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING)
-		ssh_ptl_tx_wakeup(ptl);
+		ssh_ptl_tx_wakeup_packet(ptl);
 }
 
 
@@ -1317,7 +1353,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 
 	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state)
 	    || (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING))
-		ssh_ptl_tx_wakeup(ptl);
+		ssh_ptl_tx_wakeup_packet(ptl);
 
 	return 0;
 }
@@ -1399,7 +1435,7 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 	spin_unlock(&ptl->pending.lock);
 
 	if (resub)
-		ssh_ptl_tx_wakeup(ptl);
+		ssh_ptl_tx_wakeup_packet(ptl);
 }
 
 /**
@@ -1451,7 +1487,7 @@ void ssh_ptl_cancel(struct ssh_packet *p)
 		ssh_ptl_remove_and_complete(p, -ECANCELED);
 
 		if (atomic_read(&p->ptl->pending.count) < SSH_PTL_MAX_PENDING)
-			ssh_ptl_tx_wakeup(p->ptl);
+			ssh_ptl_tx_wakeup_packet(p->ptl);
 
 	} else if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 		__ssh_ptl_complete(p, -ECANCELED);
@@ -1564,7 +1600,7 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		ssh_ptl_timeout_reaper_mod(ptl, now, next);
 
 	if (resub)
-		ssh_ptl_tx_wakeup(ptl);
+		ssh_ptl_tx_wakeup_packet(ptl);
 }
 
 
@@ -1978,8 +2014,9 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 	atomic_set_release(&ptl->pending.count, 0);
 
 	ptl->tx.thread = NULL;
-	ptl->tx.thread_signal = false;
-	init_waitqueue_head(&ptl->tx.thread_wq);
+	atomic_set(&ptl->tx.running, 0);
+	init_completion(&ptl->tx.thread_cplt_pkt);
+	init_completion(&ptl->tx.thread_cplt_tx);
 	init_waitqueue_head(&ptl->tx.packet_wq);
 
 	ptl->rx.thread = NULL;

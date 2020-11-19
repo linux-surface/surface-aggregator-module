@@ -55,9 +55,10 @@ struct ssh_ptl_ops {
  * @pending.head:  List-head of the pending set/list.
  * @pending.count: Number of currently pending packets.
  * @tx:            Transmitter subsystem.
- * @tx.thread_signal: Signal notifying transmitter thread of data to be sent.
+ * @tx.running:    Flag indicating (desired) transmitter thread state.
  * @tx.thread:     Transmitter thread.
- * @tx.thread_wq:  Waitqueue-head for transmitter thread.
+ * @tx.thread_cplt_tx:  Completion for transmitter thread waiting on transfer.
+ * @tx.thread_cplt_pkt: Completion for transmitter thread waiting on packets.
  * @tx.packet_wq:  Waitqueue-head for packet transmit completion.
  * @rx:            Receiver subsystem.
  * @rx.thread:     Receiver thread.
@@ -89,9 +90,10 @@ struct ssh_ptl {
 	} pending;
 
 	struct {
-		bool thread_signal;
+		atomic_t running;
 		struct task_struct *thread;
-		struct wait_queue_head thread_wq;
+		struct completion thread_cplt_tx;
+		struct completion thread_cplt_pkt;
 		struct wait_queue_head packet_wq;
 	} tx;
 
@@ -160,7 +162,23 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p);
 void ssh_ptl_cancel(struct ssh_packet *p);
 
 int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n);
-void ssh_ptl_tx_wakeup(struct ssh_ptl *ptl);
+
+/**
+ * ssh_ptl_tx_wakeup_transfer() - Wake up packet transmitter thread for
+ * transfer.
+ * @ptl: The packet transport layer.
+ *
+ * Wakes up the packet transmitter thread, notifying it that the underlying
+ * transport has more space for data to be transmitted. If the packet
+ * transport layer has been shut down, calls to this function will be ignored.
+ */
+static inline void ssh_ptl_tx_wakeup_transfer(struct ssh_ptl *ptl)
+{
+	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
+		return;
+
+	complete(&ptl->tx.thread_cplt_tx);
+}
 
 void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 		     u8 priority, const struct ssh_packet_ops *ops);
