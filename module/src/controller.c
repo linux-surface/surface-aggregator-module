@@ -1618,7 +1618,7 @@ int ssam_request_sync_submit(struct ssam_controller *ctrl,
 	 */
 	if (WARN_ON(READ_ONCE(ctrl->state) != SSAM_CONTROLLER_STARTED)) {
 		ssh_request_put(&rqst->base);
-		return -ENXIO;
+		return -ENODEV;
 	}
 
 	status = ssh_rtl_submit(&ctrl->rtl, &rqst->base);
