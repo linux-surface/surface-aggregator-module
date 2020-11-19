@@ -792,7 +792,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 	// limit number of processed events to avoid livelocking
 	do {
 		item = ssam_event_queue_pop(queue);
-		if (item == NULL)
+		if (!item)
 			return;
 
 		ssam_nf_call(nf, dev, item->rqid, &item->event);
