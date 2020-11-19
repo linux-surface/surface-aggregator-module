@@ -289,7 +289,7 @@ static DEVICE_ATTR_RO(firmware_version);
 
 static struct attribute *ssam_sam_attrs[] = {
 	&dev_attr_firmware_version.attr,
-	NULL,
+	NULL
 };
 
 static const struct attribute_group ssam_sam_group = {
