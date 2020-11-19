@@ -1233,6 +1233,16 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 	return 0;
 }
 
+/*
+ * SSAM_CTRL_SHUTDOWN_FLUSH_TIMEOUT - Timeout for flushing requests during
+ * shutdown.
+ *
+ * Chosen to be larger than one full request timeout, including packets timing
+ * out. This value should give ample time to complete any outstanding requests
+ * during normal operation and account for the odd package timeout.
+ */
+#define SSAM_CTRL_SHUTDOWN_FLUSH_TIMEOUT	msecs_to_jiffies(5000)
+
 /**
  * ssam_controller_shutdown() - Shut down the controller.
  * @ctrl: The controller.
@@ -1264,7 +1274,7 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 		return;
 
 	// try to flush pending events and requests while everything still works
-	status = ssh_rtl_flush(&ctrl->rtl, msecs_to_jiffies(5000));
+	status = ssh_rtl_flush(&ctrl->rtl, SSAM_CTRL_SHUTDOWN_FLUSH_TIMEOUT);
 	if (status) {
 		ssam_err(ctrl, "failed to flush request transport layer: %d\n",
 			 status);
