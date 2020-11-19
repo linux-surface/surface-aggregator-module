@@ -997,7 +997,8 @@ static void ssam_handle_event(struct ssh_rtl *rtl,
 	item->event.instance_id = cmd->iid;
 	memcpy(&item->event.data[0], data->ptr, data->len);
 
-	WARN_ON(ssam_cplt_submit_event(&ctrl->cplt, item));
+	if (WARN_ON(ssam_cplt_submit_event(&ctrl->cplt, item)))
+		ssam_event_item_free(item);
 }
 
 static const struct ssh_rtl_ops ssam_rtl_ops = {
