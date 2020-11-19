@@ -803,9 +803,9 @@ static int san_probe(struct platform_device *pdev)
 	acpi_status astatus;
 	int status;
 
-	status = ssam_client_bind(&pdev->dev, &ctrl);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
+	ctrl = ssam_client_bind(&pdev->dev);
+	if (IS_ERR(ctrl))
+		return PTR_ERR(ctrl) == -ENXIO ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
 	status = san_consumer_links_setup(pdev);
 	if (status)

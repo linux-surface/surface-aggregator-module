@@ -570,9 +570,9 @@ static int ssam_platform_hub_probe(struct platform_device *pdev)
 	 * controller is removed. This also guarantees proper ordering for
 	 * suspend/resume of the devices on this hub.
 	 */
-	status = ssam_client_bind(&pdev->dev, &ctrl);
-	if (status)
-		return status == -ENXIO ? -EPROBE_DEFER : status;
+	ctrl = ssam_client_bind(&pdev->dev);
+	if (IS_ERR(ctrl))
+		return PTR_ERR(ctrl) == -ENXIO ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
 	status = software_node_register_node_group(nodes);
 	if (status)

@@ -168,7 +168,6 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
 /**
  * ssam_client_bind() - Bind an arbitrary client device to the controller.
  * @client: The client device.
- * @ctrl: A pointer to where the controller reference should be returned.
  *
  * Link an arbitrary client device to the controller by creating a device link
  * between it as consumer and the main controller device as provider. This
@@ -178,10 +177,10 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
  *
  * This function does essentially the same as ssam_client_link(), except that
  * it first fetches the main controller reference, then creates the link, and
- * finally returns this reference in the @ctrl parameter. Note that this
- * function does not increment the reference counter of the controller, as,
- * due to the link, the controller lifetime is assured as long as the driver
- * of the client device is bound.
+ * finally returns this reference. Note that this function does not increment
+ * the reference counter of the controller, as, due to the link, the
+ * controller lifetime is assured as long as the driver of the client device
+ * is bound.
  *
  * It is not valid to use the controller reference obtained by this method
  * outside of the driver bound to the client device at the time of calling
@@ -197,18 +196,18 @@ EXPORT_SYMBOL_GPL(ssam_client_link);
  * The created device link does not have to be destructed manually. It is
  * removed automatically once the driver of the client device unbinds.
  *
- * Return: Returns zero on success, %-ENXIO if the controller is not present,
- * not ready or going to be removed soon, or %-ENOMEM if the device link could
- * not be created for other reasons.
+ * Return: Returns the controller on success, an error pointer with %-ENXIO if
+ * the controller is not present, not ready or going to be removed soon, or
+ * %-ENOMEM if the device link could not be created for other reasons.
  */
-int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
+struct ssam_controller *ssam_client_bind(struct device *client)
 {
 	struct ssam_controller *c;
 	int status;
 
 	c = ssam_get_controller();
 	if (!c)
-		return -ENXIO;
+		return ERR_PTR(-ENXIO);
 
 	status = ssam_client_link(c, client);
 
@@ -221,8 +220,7 @@ int ssam_client_bind(struct device *client, struct ssam_controller **ctrl)
 	 */
 	ssam_controller_put(c);
 
-	*ctrl = status == 0 ? c : NULL;
-	return status;
+	return status >= 0 ? c : ERR_PTR(status);
 }
 EXPORT_SYMBOL_GPL(ssam_client_bind);
 

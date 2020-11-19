@@ -107,8 +107,8 @@ struct ssam_controller;
 
 
 struct ssam_controller *ssam_get_controller(void);
+struct ssam_controller *ssam_client_bind(struct device *client);
 int ssam_client_link(struct ssam_controller *ctrl, struct device *client);
-int ssam_client_bind(struct device *client, struct ssam_controller **ctrl);
 
 struct device *ssam_controller_device(struct ssam_controller *c);
 
