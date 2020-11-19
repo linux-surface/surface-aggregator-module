@@ -631,13 +631,13 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 	struct ssam_event_item *item;
 
 	if (len <= SSAM_EVENT_ITEM_CACHE_PAYLOAD_LEN) {
-		item = kmem_cache_alloc(ssam_event_item_cache, GFP_KERNEL);
+		item = kmem_cache_alloc(ssam_event_item_cache, flags);
 		if (!item)
 			return NULL;
 
 		item->ops.free = __ssam_event_item_free_cached;
 	} else {
-		item = kzalloc(sizeof(*item) + len, GFP_KERNEL);
+		item = kzalloc(sizeof(*item) + len, flags);
 		if (!item)
 			return NULL;
 
