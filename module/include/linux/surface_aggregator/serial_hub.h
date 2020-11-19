@@ -571,7 +571,8 @@ struct ssh_request;
  *
  *            In case of failure, the reason for the failure is indicated by
  *            the value of the provided status code argument (``status``). This
- *            value will be zero in case of success.
+ *            value will be zero in case of success and a regular errno
+ *            otherwise.
  *
  *            Note that a call to this callback does not guarantee that the
  *            request is not in use by the transport systems any more.
