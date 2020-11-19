@@ -283,7 +283,8 @@ static ssize_t firmware_version_show(struct device *dev,
 	b = ((version >> 8) & 0xffff);
 	c = version & 0xff;
 
-	return snprintf(buf, PAGE_SIZE - 1, "%u.%u.%u\n", a, b, c);
+	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
+	return scnprintf(buf, PAGE_SIZE, "%u.%u.%u\n", a, b, c);
 }
 static DEVICE_ATTR_RO(firmware_version);
 

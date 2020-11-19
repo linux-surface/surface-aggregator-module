@@ -20,7 +20,8 @@ static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
 
-	return snprintf(buf, PAGE_SIZE - 1, "ssam:d%02Xc%02Xt%02Xi%02xf%02X\n",
+	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
+	return scnprintf(buf, PAGE_SIZE, "ssam:d%02Xc%02Xt%02Xi%02xf%02X\n",
 			sdev->uid.domain, sdev->uid.category, sdev->uid.target,
 			sdev->uid.instance, sdev->uid.function);
 }

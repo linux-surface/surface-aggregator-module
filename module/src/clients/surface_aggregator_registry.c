@@ -344,7 +344,8 @@ static ssize_t ssam_base_hub_state_show(struct device *dev,
 	connected = hub->state == SSAM_BASE_HUB_CONNECTED;
 	mutex_unlock(&hub->lock);
 
-	return snprintf(buf, PAGE_SIZE - 1, "%d\n", connected);
+	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
+	return scnprintf(buf, PAGE_SIZE, "%d\n", connected);
 }
 
 static struct device_attribute ssam_base_hub_attr_state =
