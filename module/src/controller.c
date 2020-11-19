@@ -1005,7 +1005,7 @@ static const struct ssh_rtl_ops ssam_rtl_ops = {
 };
 
 
-static bool ssam_notifier_empty(struct ssam_controller *ctrl);
+static bool ssam_notifier_is_empty(struct ssam_controller *ctrl);
 static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
 
 
@@ -1277,7 +1277,7 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	 * driver that set them up at this point. If this warning occurs, some
 	 * client driver has not done that...
 	 */
-	WARN_ON(!ssam_notifier_empty(ctrl));
+	WARN_ON(!ssam_notifier_is_empty(ctrl));
 
 	/*
 	 * Nevertheless, we should still take care of drivers that don't behave
@@ -2330,13 +2330,13 @@ void ssam_notifier_restore_registered(struct ssam_controller *ctrl)
 }
 
 /**
- * ssam_notifier_empty() - Check if there are any registered notifiers.
+ * ssam_notifier_is_empty() - Check if there are any registered notifiers.
  * @ctrl: The controller to check on.
  *
  * Return: Returns %true if there are currently no notifiers registered on the
  * controller, %false otherwise.
  */
-static bool ssam_notifier_empty(struct ssam_controller *ctrl)
+static bool ssam_notifier_is_empty(struct ssam_controller *ctrl)
 {
 	struct ssam_nf *nf = &ctrl->cplt.event.notif;
 	bool result;
