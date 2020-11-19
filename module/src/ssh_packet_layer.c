@@ -1028,83 +1028,79 @@ static long ssh_ptl_tx_threadfn_wait(struct ssh_ptl *ptl, long timeout)
 		timeout);
 }
 
+static int ssh_ptl_tx_packet(struct ssh_ptl *ptl, struct ssh_packet *packet)
+{
+	long timeout = SSH_PTL_TX_TIMEOUT;
+	size_t offset = 0;
+
+	// note: flush-packets don't have any data
+	if (unlikely(!packet->data.ptr))
+		return 0;
+
+	// error injection: drop packet to simulate transmission problem
+	if (ssh_ptl_should_drop_packet(packet))
+		return 0;
+
+	// error injection: simulate invalid packet data
+	ssh_ptl_tx_inject_invalid_data(packet);
+
+	ptl_dbg(ptl, "tx: sending data (length: %zu)\n", packet->data.len);
+	print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1,
+			     packet->data.ptr, packet->data.len, false);
+
+	do {
+		ssize_t status, len;
+		u8 *buf;
+
+		buf = packet->data.ptr + offset;
+		len = packet->data.len - offset;
+
+		status = ssh_ptl_write_buf(ptl, packet, buf, len);
+		if (status < 0)
+			return status;
+
+		if (status == len)
+			return 0;
+
+		offset += status;
+
+		timeout = ssh_ptl_tx_threadfn_wait(ptl, timeout);
+		if (kthread_should_stop())
+			return -ESHUTDOWN;
+
+		if (timeout < 0)
+			return -EINTR;
+
+		if (timeout == 0)
+			return -ETIMEDOUT;
+	} while (true);
+}
+
 static int ssh_ptl_tx_threadfn(void *data)
 {
 	struct ssh_ptl *ptl = data;
-	long timeout = 0;
 
 	while (!kthread_should_stop()) {
-		unsigned char *buf;
-		ssize_t len = 0;
-		ssize_t status = 0;
-		bool drop;
+		struct ssh_packet *packet;
+		int status;
 
-		// if we don't have a packet, get the next and add it to pending
-		if (IS_ERR_OR_NULL(ptl->tx.packet)) {
-			ptl->tx.packet = ssh_ptl_tx_next(ptl);
-			ptl->tx.offset = 0;
-			timeout = SSH_PTL_TX_TIMEOUT;
+		// try to get the next packet
+		packet = ssh_ptl_tx_next(ptl);
 
-			// if no packet can be processed, we are done
-			if (IS_ERR(ptl->tx.packet)) {
-				ssh_ptl_tx_threadfn_wait(ptl, MAX_SCHEDULE_TIMEOUT);
-				continue;
-			}
+		// if no packet can be processed, we are done
+		if (IS_ERR(packet)) {
+			ssh_ptl_tx_threadfn_wait(ptl, MAX_SCHEDULE_TIMEOUT);
+			continue;
 		}
 
-		// error injection: drop packet to simulate transmission problem
-		if (ptl->tx.offset == 0)
-			drop = ssh_ptl_should_drop_packet(ptl->tx.packet);
+		// transfer and complete packet
+		status = ssh_ptl_tx_packet(ptl, packet);
+		if (status)
+			ssh_ptl_tx_compl_error(packet, status);
+		else
+			ssh_ptl_tx_compl_success(packet);
 
-		// error injection: simulate invalid packet data
-		if (ptl->tx.offset == 0 && !drop)
-			ssh_ptl_tx_inject_invalid_data(ptl->tx.packet);
-
-		// note: flush-packets don't have any data
-		if (likely(ptl->tx.packet->data.ptr && !drop)) {
-			buf = ptl->tx.packet->data.ptr + ptl->tx.offset;
-			len = ptl->tx.packet->data.len - ptl->tx.offset;
-
-			ptl_dbg(ptl, "tx: sending data (length: %zu)\n", len);
-			print_hex_dump_debug("tx: ", DUMP_PREFIX_OFFSET, 16, 1,
-					     buf, len, false);
-
-			status = ssh_ptl_write_buf(ptl, ptl->tx.packet, buf, len);
-		}
-
-		if (status == len) {
-			// complete packet and/or mark as transmitted
-			ssh_ptl_tx_compl_success(ptl->tx.packet);
-			ssh_packet_put(ptl->tx.packet);
-			ptl->tx.packet = NULL;
-
-		} else if (status >= 0) {
-			// need more buffer space
-			ptl->tx.offset += status;
-
-			timeout = ssh_ptl_tx_threadfn_wait(ptl, timeout);
-			if (kthread_should_stop())
-				break;
-
-			if (timeout < 0)
-				status = -EINTR;
-			else if (timeout == 0)
-				status = -ETIMEDOUT;
-		}
-
-		if (status < 0) {
-			// complete packet with error
-			ssh_ptl_tx_compl_error(ptl->tx.packet, status);
-			ssh_packet_put(ptl->tx.packet);
-			ptl->tx.packet = NULL;
-		}
-	}
-
-	// cancel active packet before we actually stop
-	if (!IS_ERR_OR_NULL(ptl->tx.packet)) {
-		ssh_ptl_tx_compl_error(ptl->tx.packet, -ESHUTDOWN);
-		ssh_packet_put(ptl->tx.packet);
-		ptl->tx.packet = NULL;
+		ssh_packet_put(packet);
 	}
 
 	return 0;
@@ -1983,8 +1979,6 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	ptl->tx.thread = NULL;
 	ptl->tx.thread_signal = false;
-	ptl->tx.packet = NULL;
-	ptl->tx.offset = 0;
 	init_waitqueue_head(&ptl->tx.thread_wq);
 	init_waitqueue_head(&ptl->tx.packet_wq);
 

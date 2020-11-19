@@ -59,8 +59,6 @@ struct ssh_ptl_ops {
  * @tx.thread:     Transmitter thread.
  * @tx.thread_wq:  Waitqueue-head for transmitter thread.
  * @tx.packet_wq:  Waitqueue-head for packet transmit completion.
- * @tx.packet:     Currently sent packet.
- * @tx.offset:     Data-offset into the packet currently being transmitted.
  * @rx:            Receiver subsystem.
  * @rx.thread:     Receiver thread.
  * @rx.wq:         Waitqueue-head for receiver thread.
@@ -95,8 +93,6 @@ struct ssh_ptl {
 		struct task_struct *thread;
 		struct wait_queue_head thread_wq;
 		struct wait_queue_head packet_wq;
-		struct ssh_packet *packet;
-		size_t offset;
 	} tx;
 
 	struct {
