@@ -1203,7 +1203,6 @@ static void ssh_ptl_wait_until_transmitted(struct ssh_packet *packet)
 static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 {
 	struct ssh_packet *p;
-	int status = 0;
 
 	p = ssh_ptl_ack_pop(ptl, seq);
 	if (IS_ERR(p)) {
@@ -1230,9 +1229,11 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	 * has not been updated from "transmitting" to "transmitted" yet.
 	 * In that case, we need to wait for this transition to occur in order
 	 * to determine between success or failure.
+	 *
+	 * On transmission failure, the packet will be locked after this call.
+	 * On success, the transmitted bit will be set.
 	 */
-	if (test_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state))
-		ssh_ptl_wait_until_transmitted(p);
+	ssh_ptl_wait_until_transmitted(p);
 
 	/*
 	 * The packet will already be locked in case of a transmission error or
@@ -1240,16 +1241,14 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	 * packet.
 	 */
 	if (unlikely(test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))) {
+		if (unlikely(!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state)))
+			ptl_err(ptl, "ptl: received ACK before packet had been fully transmitted\n");
+
 		ssh_packet_put(p);
 		return;
 	}
 
-	if (unlikely(!test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &p->state))) {
-		ptl_err(ptl, "ptl: received ACK before packet had been fully transmitted\n");
-		status = -EREMOTEIO;
-	}
-
-	ssh_ptl_remove_and_complete(p, status);
+	ssh_ptl_remove_and_complete(p, 0);
 	ssh_packet_put(p);
 
 	if (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING)
