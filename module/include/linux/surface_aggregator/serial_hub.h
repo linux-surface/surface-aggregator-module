@@ -45,8 +45,8 @@
 enum ssh_frame_type {
 	SSH_FRAME_TYPE_DATA_SEQ = 0x80,
 	SSH_FRAME_TYPE_DATA_NSQ = 0x00,
-	SSH_FRAME_TYPE_ACK	= 0x40,
-	SSH_FRAME_TYPE_NAK	= 0x04,
+	SSH_FRAME_TYPE_ACK      = 0x40,
+	SSH_FRAME_TYPE_NAK      = 0x04,
 };
 
 /**
