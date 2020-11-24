@@ -35,6 +35,9 @@ all:
 clean:
 	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) clean
 
+install:
+	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) modules_install
+
 %.check:
 	@$(CHECKPATCH) $(basename $@) || true
 
