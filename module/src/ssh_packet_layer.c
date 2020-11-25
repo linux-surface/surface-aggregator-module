@@ -13,6 +13,7 @@
 #include <linux/kref.h>
 #include <linux/kthread.h>
 #include <linux/ktime.h>
+#include <linux/limits.h>
 #include <linux/list.h>
 #include <linux/serdev.h>
 #include <linux/slab.h>
@@ -2030,7 +2031,7 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	// initialize list of recent/blocked SEQs with invalid sequence IDs
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blocked.seqs); i++)
-		ptl->rx.blocked.seqs[i] = 0xFFFF;
+		ptl->rx.blocked.seqs[i] = U16_MAX;
 	ptl->rx.blocked.offset = 0;
 
 	status = kfifo_alloc(&ptl->rx.fifo, SSH_PTL_RX_FIFO_LEN, GFP_KERNEL);
