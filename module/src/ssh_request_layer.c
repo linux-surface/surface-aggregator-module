@@ -313,17 +313,25 @@ static bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
 	return schedule_work(&rtl->tx.work);
 }
 
+/*
+ * SSAM_SSH_RQST_TX_BATCH - Maximum number of requests processed per work
+ * execution. Used to prevent livelocking of the workqueue. Value chosen via
+ * educated guess, may be adjusted.
+ */
+#define SSAM_SSH_RQST_TX_BATCH	10
+
 static void ssh_rtl_tx_work_fn(struct work_struct *work)
 {
 	struct ssh_rtl *rtl = to_ssh_rtl(work, tx.work);
-	int i, status;
+	unsigned int iterations = SSAM_SSH_RQST_TX_BATCH;
+	int status;
 
 	/*
 	 * Try to be nice and not block/live-lock the workqueue: Run a maximum
 	 * of 10 tries, then re-submit if necessary. This should not be
 	 * necessary for normal execution, but guarantee it anyway.
 	 */
-	for (i = 0; i < 10; i++) {
+	do {
 		status = ssh_rtl_tx_try_process_one(rtl);
 		if (status == -ENOENT || status == -EBUSY)
 			return;		// no more requests to process
@@ -338,7 +346,7 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 		}
 
 		WARN_ON(status != 0 && status != -EAGAIN);
-	}
+	} while (--iterations);
 
 	// out of tries, reschedule
 	ssh_rtl_tx_schedule(rtl);
