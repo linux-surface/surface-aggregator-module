@@ -795,9 +795,9 @@ static void ssh_ptl_queue_remove(struct ssh_packet *packet)
 }
 
 
-static void ssh_ptl_pending_push(struct ssh_packet *packet)
+static void ssh_ptl_pending_push(struct ssh_packet *p)
 {
-	struct ssh_ptl *ptl = packet->ptl;
+	struct ssh_ptl *ptl = p->ptl;
 	const ktime_t timestamp = ktime_get_coarse_boottime();
 	const ktime_t timeout = ptl->rtx_timeout.timeout;
 
@@ -811,26 +811,28 @@ static void ssh_ptl_pending_push(struct ssh_packet *packet)
 	spin_lock(&ptl->pending.lock);
 
 	// if we are canceling/completing this packet, do not add it
-	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state)) {
+	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
 		spin_unlock(&ptl->pending.lock);
 		return;
 	}
 
-	// in case it is already pending (e.g. re-submission), do not add it
-	if (test_and_set_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state)) {
-		spin_unlock(&ptl->pending.lock);
-		return;
+	/*
+	 * On re-submission, the packet has already been added the pending
+	 * set. We still need to update the timestamp as the packet timeout is
+	 * reset for each (re-)submission.
+	 */
+	p->timestamp = timestamp;
+
+	/* In case it is already pending (e.g. re-submission), do not add it. */
+	if (!test_and_set_bit(SSH_PACKET_SF_PENDING_BIT, &p->state)) {
+		atomic_inc(&ptl->pending.count);
+		list_add_tail(&ssh_packet_get(p)->pending_node, &ptl->pending.head);
 	}
-
-	packet->timestamp = timestamp;
-
-	atomic_inc(&ptl->pending.count);
-	list_add_tail(&ssh_packet_get(packet)->pending_node, &ptl->pending.head);
 
 	spin_unlock(&ptl->pending.lock);
 
-	// arm/update timeout reaper
-	ssh_ptl_timeout_reaper_mod(packet->ptl, timestamp, timestamp + timeout);
+	/* Arm/update timeout reaper. */
+	ssh_ptl_timeout_reaper_mod(ptl, timestamp, timestamp + timeout);
 }
 
 static void ssh_ptl_pending_remove(struct ssh_packet *packet)
