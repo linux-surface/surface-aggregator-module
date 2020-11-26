@@ -112,9 +112,9 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 	if (WARN_ON(msgb->ptr + sizeof(struct ssh_frame) > msgb->end))
 		return;
 
-	put_unaligned(ty,  begin + offsetof(struct ssh_frame, type));
-	put_unaligned(len, begin + offsetof(struct ssh_frame, len));
-	put_unaligned(seq, begin + offsetof(struct ssh_frame, seq));
+	put_unaligned(ty,               &((struct ssh_frame *)begin)->type);
+	put_unaligned(cpu_to_le16(len), &((struct ssh_frame *)begin)->len);
+	put_unaligned(seq,              &((struct ssh_frame *)begin)->seq);
 
 	msgb->ptr += sizeof(struct ssh_frame);
 	msgb_push_crc(msgb, begin, msgb->ptr - begin);
@@ -178,13 +178,13 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq, u16 rqid,
 
 	p = msgb->ptr;
 
-	put_unaligned(SSH_PLD_TYPE_CMD,      p + offsetof(struct ssh_command, type));
-	put_unaligned(rqst->target_category, p + offsetof(struct ssh_command, tc));
-	put_unaligned(rqst->target_id,       p + offsetof(struct ssh_command, tid_out));
-	put_unaligned(0x00,                  p + offsetof(struct ssh_command, tid_in));
-	put_unaligned(rqst->instance_id,     p + offsetof(struct ssh_command, iid));
-	put_unaligned(rqid,                  p + offsetof(struct ssh_command, rqid));
-	put_unaligned(rqst->command_id,      p + offsetof(struct ssh_command, cid));
+	put_unaligned(SSH_PLD_TYPE_CMD,      &((struct ssh_command *)p)->type);
+	put_unaligned(rqst->target_category, &((struct ssh_command *)p)->tc);
+	put_unaligned(rqst->target_id,       &((struct ssh_command *)p)->tid_out);
+	put_unaligned(0x00,                  &((struct ssh_command *)p)->tid_in);
+	put_unaligned(rqst->instance_id,     &((struct ssh_command *)p)->iid);
+	put_unaligned(cpu_to_le16(rqid),     &((struct ssh_command *)p)->rqid);
+	put_unaligned(rqst->command_id,      &((struct ssh_command *)p)->cid);
 
 	msgb->ptr += sizeof(struct ssh_command);
 
