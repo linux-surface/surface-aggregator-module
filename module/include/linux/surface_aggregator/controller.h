@@ -105,7 +105,6 @@ struct ssam_response {
 
 struct ssam_controller;
 
-
 struct ssam_controller *ssam_get_controller(void);
 struct ssam_controller *ssam_client_bind(struct device *client);
 int ssam_client_link(struct ssam_controller *ctrl, struct device *client);
@@ -216,7 +215,6 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 				  const struct ssam_request *spec,
 				  struct ssam_response *rsp,
 				  struct ssam_span *buf);
-
 
 /**
  * ssam_request_sync_onstack - Execute a synchronous request on the stack.
@@ -650,7 +648,6 @@ enum ssam_notif_flags {
 	SSAM_NOTIF_STOP    = BIT(1),
 };
 
-
 struct ssam_event_notifier;
 
 typedef u32 (*ssam_notifier_fn_t)(struct ssam_event_notifier *nf,
@@ -774,7 +771,6 @@ enum ssam_event_mask {
 		| SSAM_EVENT_MASK_INSTANCE,
 };
 
-
 /**
  * SSAM_EVENT_REGISTRY() - Define a new event registry.
  * @tc:      Target category for the event registry requests.
@@ -801,7 +797,6 @@ enum ssam_event_mask {
 
 #define SSAM_EVENT_REGISTRY_REG \
 	SSAM_EVENT_REGISTRY(SSAM_SSH_TC_REG, 0x02, 0x01, 0x02)
-
 
 /**
  * struct ssam_event_notifier - Notifier block for SSAM events.

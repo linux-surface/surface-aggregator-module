@@ -105,7 +105,6 @@ static u16 ssh_rqid_next(struct ssh_rqid_counter *c)
  * discover and identify new/currently unimplemented features.
  */
 
-
 /**
  * ssam_event_matches_notifier() - Test if an event matches a notifier.
  * @notif: The event notifier to test against.
@@ -328,7 +327,6 @@ struct ssam_nf_refcount_entry {
 	int refcount;
 	u8 flags;
 };
-
 
 /**
  * ssam_nf_refcount_inc() - Increment reference-/activation-count of the given
@@ -650,7 +648,6 @@ static struct ssam_event_item *ssam_event_item_alloc(size_t len, gfp_t flags)
 	return item;
 }
 
-
 /**
  * ssam_event_queue_push() - Push an event item to the event queue.
  * @q:    The event queue.
@@ -926,7 +923,6 @@ void ssam_controller_put(struct ssam_controller *c)
 }
 EXPORT_SYMBOL_GPL(ssam_controller_put);
 
-
 /**
  * ssam_controller_statelock() - Lock the controller against state transitions.
  * @c: The controller to lock.
@@ -988,7 +984,6 @@ void ssam_controller_unlock(struct ssam_controller *c)
 	up_write(&c->lock);
 }
 
-
 static void ssam_handle_event(struct ssh_rtl *rtl,
 			      const struct ssh_command *cmd,
 			      const struct ssam_span *data)
@@ -1015,10 +1010,8 @@ static const struct ssh_rtl_ops ssam_rtl_ops = {
 	.handle_event = ssam_handle_event,
 };
 
-
 static bool ssam_notifier_is_empty(struct ssam_controller *ctrl);
 static void ssam_notifier_unregister_all(struct ssam_controller *ctrl);
-
 
 #define SSAM_SSH_DSM_REVISION	0
 
@@ -1472,7 +1465,6 @@ ssize_t ssam_request_write_data(struct ssam_span *buf,
 }
 EXPORT_SYMBOL_GPL(ssam_request_write_data);
 
-
 static void ssam_request_sync_complete(struct ssh_request *rqst,
 				       const struct ssh_command *cmd,
 				       const struct ssam_span *data, int status)
@@ -1520,7 +1512,6 @@ static const struct ssh_request_ops ssam_request_sync_ops = {
 	.release = ssam_request_sync_release,
 	.complete = ssam_request_sync_complete,
 };
-
 
 /**
  * ssam_request_sync_alloc() - Allocate a synchronous request.
@@ -2194,7 +2185,6 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 
 	mutex_unlock(&nf->lock);
 	return 0;
-
 }
 EXPORT_SYMBOL_GPL(ssam_notifier_register);
 

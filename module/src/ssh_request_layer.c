@@ -25,7 +25,6 @@
 
 #include "trace.h"
 
-
 /*
  * SSH_RTL_REQUEST_TIMEOUT - Request timeout.
  *
@@ -78,7 +77,6 @@ static inline bool ssh_rtl_should_drop_response(void)
 
 #endif
 
-
 static u16 ssh_request_get_rqid(struct ssh_request *rqst)
 {
 	return get_unaligned_le16(rqst->packet.data.ptr
@@ -92,7 +90,6 @@ static u32 ssh_request_get_rqid_safe(struct ssh_request *rqst)
 
 	return ssh_request_get_rqid(rqst);
 }
-
 
 static void ssh_rtl_queue_remove(struct ssh_request *rqst)
 {
@@ -121,7 +118,6 @@ static bool ssh_rtl_queue_empty(struct ssh_rtl *rtl)
 
 	return empty;
 }
-
 
 static void ssh_rtl_pending_remove(struct ssh_request *rqst)
 {
@@ -165,7 +161,6 @@ static int ssh_rtl_tx_pending_push(struct ssh_request *rqst)
 	return 0;
 }
 
-
 static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 {
 	struct ssh_rtl *rtl = ssh_request_rtl(rqst);
@@ -192,7 +187,6 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 
 	rqst->ops->complete(rqst, cmd, data, 0);
 }
-
 
 static bool ssh_rtl_tx_can_process(struct ssh_request *rqst)
 {
@@ -352,7 +346,6 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 	ssh_rtl_tx_schedule(rtl);
 }
 
-
 /**
  * ssh_rtl_submit() - Submit a request to the transport layer.
  * @rtl:  The request transport layer.
@@ -477,7 +470,6 @@ static void ssh_rtl_timeout_start(struct ssh_request *rqst)
 	ssh_rtl_timeout_reaper_mod(rtl, timestamp, timestamp + timeout);
 }
 
-
 static void ssh_rtl_complete(struct ssh_rtl *rtl,
 			     const struct ssh_command *command,
 			     const struct ssam_span *command_data)
@@ -591,7 +583,6 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 
 	ssh_rtl_tx_schedule(rtl);
 }
-
 
 static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 {
@@ -763,7 +754,6 @@ bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 	return canceled;
 }
 
-
 static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 {
 	struct ssh_request *r = to_ssh_request(p);
@@ -822,7 +812,6 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 
 	ssh_rtl_tx_schedule(ssh_request_rtl(r));
 }
-
 
 static ktime_t ssh_request_get_expiration(struct ssh_request *r, ktime_t timeout)
 {
@@ -916,7 +905,6 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	ssh_rtl_tx_schedule(rtl);
 }
 
-
 static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 			     const struct ssam_span *data)
 {
@@ -963,7 +951,6 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 	}
 }
 
-
 static void ssh_rtl_packet_release(struct ssh_packet *p)
 {
 	struct ssh_request *rqst;
@@ -1008,7 +995,6 @@ void ssh_request_init(struct ssh_request *rqst, enum ssam_request_flags flags,
 	rqst->timestamp = KTIME_MAX;
 	rqst->ops = ops;
 }
-
 
 /**
  * ssh_rtl_init() - Initialize request transport layer.
@@ -1181,7 +1167,6 @@ int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 
 	return rqst.status == -ECANCELED ? -ETIMEDOUT : rqst.status;
 }
-
 
 /**
  * ssh_rtl_shutdown() - Shut down request transport layer.

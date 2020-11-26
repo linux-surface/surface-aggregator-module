@@ -14,7 +14,6 @@
 #include "bus.h"
 #include "controller.h"
 
-
 static ssize_t modalias_show(struct device *dev, struct device_attribute *attr,
 			     char *buf)
 {
@@ -58,7 +57,6 @@ const struct device_type ssam_device_type = {
 	.release = ssam_device_release,
 };
 EXPORT_SYMBOL_GPL(ssam_device_type);
-
 
 /**
  * ssam_device_alloc() - Allocate and initialize a SSAM client device.
@@ -168,7 +166,6 @@ void ssam_device_remove(struct ssam_device *sdev)
 	device_unregister(&sdev->dev);
 }
 EXPORT_SYMBOL_GPL(ssam_device_remove);
-
 
 /**
  * ssam_device_id_compatible() - Check if a device ID matches a UID.
@@ -305,7 +302,6 @@ const void *ssam_device_get_match_data(const struct ssam_device *dev)
 }
 EXPORT_SYMBOL_GPL(ssam_device_get_match_data);
 
-
 static int ssam_bus_match(struct device *dev, struct device_driver *drv)
 {
 	struct ssam_device_driver *sdrv = to_ssam_device_driver(drv);
@@ -341,7 +337,6 @@ struct bus_type ssam_bus_type = {
 };
 EXPORT_SYMBOL_GPL(ssam_bus_type);
 
-
 /**
  * __ssam_device_driver_register() - Register a SSAM client device driver.
  * @sdrv:  The driver to register.
@@ -372,7 +367,6 @@ void ssam_device_driver_unregister(struct ssam_device_driver *sdrv)
 	driver_unregister(&sdrv->driver);
 }
 EXPORT_SYMBOL_GPL(ssam_device_driver_unregister);
-
 
 static int ssam_remove_device(struct device *dev, void *_data)
 {
@@ -406,7 +400,6 @@ void ssam_controller_remove_clients(struct ssam_controller *ctrl)
 	dev = ssam_controller_device(ctrl);
 	device_for_each_child_reverse(dev, NULL, ssam_remove_device);
 }
-
 
 /**
  * ssam_bus_register() - Register and set-up the SSAM client device bus.

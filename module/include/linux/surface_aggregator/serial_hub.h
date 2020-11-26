@@ -392,7 +392,6 @@ static inline u8 ssh_packet_priority_get_base(u8 priority)
 	return (priority & 0xf0) >> 4;
 }
 
-
 enum ssh_packet_flags {
 	/* state flags */
 	SSH_PACKET_SF_LOCKED_BIT,
@@ -426,7 +425,6 @@ enum ssh_packet_flags {
 		| BIT(SSH_PACKET_TY_SEQUENCED_BIT)
 		| BIT(SSH_PACKET_TY_BLOCKING_BIT),
 };
-
 
 struct ssh_ptl;
 struct ssh_packet;
@@ -548,7 +546,6 @@ enum ssh_request_flags {
 		  BIT(SSH_REQUEST_TY_FLUSH_BIT)
 		| BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),
 };
-
 
 struct ssh_rtl;
 struct ssh_request;

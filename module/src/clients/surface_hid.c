@@ -22,7 +22,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
 
-
 enum surface_hid_descriptor_entry {
 	SURFACE_HID_DESC_HID    = 0,
 	SURFACE_HID_DESC_REPORT = 1,

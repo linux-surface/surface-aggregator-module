@@ -24,7 +24,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_acpi_notify.h"
 
-
 struct san_data {
 	struct device *dev;
 	struct ssam_controller *ctrl;

@@ -809,7 +809,6 @@ out:
 	return status;
 }
 
-
 static ssize_t spwr_battery_alarm_show(struct device *dev,
 				       struct device_attribute *attr,
 				       char *buf)
@@ -848,7 +847,6 @@ static const struct device_attribute alarm_attr = {
 	.show = spwr_battery_alarm_show,
 	.store = spwr_battery_alarm_store,
 };
-
 
 static void spwr_ac_init(struct spwr_ac_device *ac,
 			    struct ssam_device *sdev,

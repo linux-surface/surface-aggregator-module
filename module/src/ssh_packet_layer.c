@@ -28,7 +28,6 @@
 
 #include "trace.h"
 
-
 /*
  * To simplify reasoning about the code below, we define a few concepts. The
  * system below is similar to a state-machine for packets, however, there are
@@ -227,7 +226,6 @@
  */
 #define SSH_PTL_RX_FIFO_LEN			4096
 
-
 #ifdef CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION
 
 /**
@@ -326,7 +324,6 @@ static noinline bool ssh_ptl_should_corrupt_rx_data(void)
 	return false;
 }
 ALLOW_ERROR_INJECTION(ssh_ptl_should_corrupt_rx_data, TRUE);
-
 
 static bool __ssh_ptl_should_drop_ack_packet(struct ssh_packet *packet)
 {
@@ -509,7 +506,6 @@ static inline void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 
 #endif /* CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION */
 
-
 static void __ssh_ptl_packet_release(struct kref *kref)
 {
 	struct ssh_packet *p = container_of(kref, struct ssh_packet, refcnt);
@@ -559,7 +555,6 @@ static u8 ssh_packet_get_seq(struct ssh_packet *packet)
 	return packet->data.ptr[SSH_MSGOFFSET_FRAME(seq)];
 }
 
-
 /**
  * ssh_packet_init() - Initialize SSH packet.
  * @packet:   The packet to initialize.
@@ -591,7 +586,6 @@ void ssh_packet_init(struct ssh_packet *packet, unsigned long type,
 
 	packet->ops = ops;
 }
-
 
 static struct kmem_cache *ssh_ctrl_packet_cache;
 
@@ -664,7 +658,6 @@ static const struct ssh_packet_ops ssh_ptl_ctrl_packet_ops = {
 	.complete = NULL,
 	.release = ssh_ctrl_packet_free,
 };
-
 
 static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 				       ktime_t expires)
@@ -748,7 +741,6 @@ static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 	struct ssh_ptl *ptl = packet->ptl;
 	struct list_head *head;
 
-
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return -ESHUTDOWN;
 
@@ -793,7 +785,6 @@ static void ssh_ptl_queue_remove(struct ssh_packet *packet)
 	spin_unlock(&ptl->queue.lock);
 	ssh_packet_put(packet);
 }
-
 
 static void ssh_ptl_pending_push(struct ssh_packet *p)
 {
@@ -854,7 +845,6 @@ static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 	ssh_packet_put(packet);
 }
 
-
 /* warning: does not check/set "completed" bit */
 static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
@@ -887,7 +877,6 @@ static void ssh_ptl_remove_and_complete(struct ssh_packet *p, int status)
 
 	__ssh_ptl_complete(p, status);
 }
-
 
 static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 {
@@ -1201,7 +1190,6 @@ int ssh_ptl_tx_stop(struct ssh_ptl *ptl)
 	return status;
 }
 
-
 static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 {
 	struct ssh_packet *packet = ERR_PTR(-ENOENT);
@@ -1307,7 +1295,6 @@ static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
 	if (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING)
 		ssh_ptl_tx_wakeup_packet(ptl);
 }
-
 
 /**
  * ssh_ptl_submit() - Submit a packet to the transport layer.
@@ -1606,7 +1593,6 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		ssh_ptl_tx_wakeup_packet(ptl);
 }
 
-
 static bool ssh_ptl_rx_retransmit_check(struct ssh_ptl *ptl, u8 seq)
 {
 	int i;
@@ -1875,7 +1861,6 @@ int ssh_ptl_rx_rcvbuf(struct ssh_ptl *ptl, const u8 *buf, size_t n)
 
 	return used;
 }
-
 
 /**
  * ssh_ptl_shutdown() - Shut down the packet transport layer.

@@ -226,7 +226,6 @@ struct ssam_controller {
 #define ssam_warn(ctrl, fmt, ...) rtl_warn(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
 #define ssam_err(ctrl, fmt, ...)  rtl_err(&(ctrl)->rtl, fmt, ##__VA_ARGS__)
 
-
 /**
  * ssam_controller_receive_buf() - Provide input-data to the controller.
  * @ctrl: The controller.
@@ -255,7 +254,6 @@ static inline void ssam_controller_write_wakeup(struct ssam_controller *ctrl)
 {
 	ssh_ptl_tx_wakeup_transfer(&ctrl->rtl.ptl);
 }
-
 
 int ssam_controller_init(struct ssam_controller *ctrl, struct serdev_device *s);
 int ssam_controller_start(struct ssam_controller *ctrl);

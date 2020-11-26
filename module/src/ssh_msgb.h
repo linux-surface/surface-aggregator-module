@@ -14,7 +14,6 @@
 #include "../include/linux/surface_aggregator/controller.h"
 #include "../include/linux/surface_aggregator/serial_hub.h"
 
-
 /**
  * struct msgbuf - Buffer struct to construct SSH messages.
  * @begin: Pointer to the beginning of the allocated buffer space.

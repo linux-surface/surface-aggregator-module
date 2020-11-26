@@ -148,7 +148,6 @@ struct ssam_device_id {
 #define SSAM_VDEV(cat, tid, iid, fun) \
 	SSAM_DEVICE(SSAM_DOMAIN_VIRTUAL, SSAM_VIRTUAL_TC_##cat, tid, iid, fun)
 
-
 /**
  * SSAM_SDEV() - Initialize a &struct ssam_device_id as physical SSH device
  * with the given parameters.
@@ -171,7 +170,6 @@ struct ssam_device_id {
  */
 #define SSAM_SDEV(cat, tid, iid, fun) \
 	SSAM_DEVICE(SSAM_DOMAIN_SERIALHUB, SSAM_SSH_TC_##cat, tid, iid, fun)
-
 
 /**
  * struct ssam_device - SSAM client device.
@@ -204,7 +202,6 @@ struct ssam_device_driver {
 
 extern struct bus_type ssam_bus_type;
 extern const struct device_type ssam_device_type;
-
 
 /**
  * is_ssam_device() - Check if the given device is a SSAM client device.
@@ -323,7 +320,6 @@ static inline void ssam_device_set_drvdata(struct ssam_device *sdev, void *data)
 {
 	dev_set_drvdata(&sdev->dev, data);
 }
-
 
 int __ssam_device_driver_register(struct ssam_device_driver *d, struct module *o);
 void ssam_device_driver_unregister(struct ssam_device_driver *d);

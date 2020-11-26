@@ -104,7 +104,6 @@ static void ssam_clear_controller(void)
 	spin_unlock(&__ssam_controller_lock);
 }
 
-
 /**
  * ssam_client_link() - Link an arbitrary client device to the controller.
  * @c: The controller to link to.
@@ -760,7 +759,6 @@ static void ssam_serial_hub_remove(struct serdev_device *serdev)
 
 	device_set_wakeup_capable(&serdev->dev, false);
 }
-
 
 static const struct acpi_device_id ssam_serial_hub_match[] = {
 	{ "MSHW0084", 0 },

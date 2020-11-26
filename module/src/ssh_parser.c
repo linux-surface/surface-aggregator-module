@@ -13,7 +13,6 @@
 #include "../include/linux/surface_aggregator/serial_hub.h"
 #include "ssh_parser.h"
 
-
 /**
  * sshp_validate_crc() - Validate a CRC in raw message data.
  * @src: The span of data over which the CRC should be computed.

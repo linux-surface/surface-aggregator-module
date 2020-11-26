@@ -575,7 +575,6 @@ static const struct file_operations surface_dtx_fops = {
 
 static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay);
 
-
 struct sdtx_status_event {
 	struct sdtx_event e;
 	__u16 v;
@@ -788,7 +787,6 @@ static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long dela
 {
 	schedule_delayed_work(&ddev->mode_work, delay);
 }
-
 
 static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 					    struct ssam_bas_base_info info)
