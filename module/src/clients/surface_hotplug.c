@@ -197,16 +197,12 @@ static int surface_hotplug_probe(struct platform_device *pdev)
 	struct shps_device *sdev;
 	int status, i;
 
-	if (gpiod_count(&pdev->dev, NULL) < 0) {
-		dev_err(&pdev->dev, "gpiod_count returned < 0\n");
+	if (gpiod_count(&pdev->dev, NULL) < 0)
 		return -ENODEV;
-	}
 
 	status = devm_acpi_dev_add_driver_gpios(&pdev->dev, shps_acpi_gpios);
-	if (status) {
-		dev_err(&pdev->dev, "failed to add gpios: %d\n", status);
+	if (status)
 		return status;
-	}
 
 	sdev = devm_kzalloc(&pdev->dev, sizeof(*sdev), GFP_KERNEL);
 	if (!sdev)
