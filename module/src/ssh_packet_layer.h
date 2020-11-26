@@ -119,8 +119,10 @@ struct ssh_ptl {
 
 #define __ssam_prcond(func, p, fmt, ...)		\
 	do {						\
-		if (p)					\
-			func(p, fmt, ##__VA_ARGS__);	\
+		typeof(p) __p = (p);			\
+							\
+		if (__p)				\
+			func(__p, fmt, ##__VA_ARGS__);	\
 	} while (0)
 
 #define ptl_dbg(p, fmt, ...)  dev_dbg(&(p)->serdev->dev, fmt, ##__VA_ARGS__)
