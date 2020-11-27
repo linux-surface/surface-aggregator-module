@@ -122,9 +122,9 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
 	if (WARN_ON(msgb->ptr + sizeof(struct ssh_frame) > msgb->end))
 		return;
 
-	__msgb_push_u8(msgb, ty);	/* frame type */
-	__msgb_push_u16(msgb, len);	/* frame payload length */
-	__msgb_push_u8(msgb, seq);	/* frame sequence ID */
+	__msgb_push_u8(msgb, ty);	/* Frame type. */
+	__msgb_push_u16(msgb, len);	/* Frame payload length. */
+	__msgb_push_u8(msgb, seq);	/* Frame sequence ID. */
 
 	msgb_push_crc(msgb, begin, msgb->ptr - begin);
 }
@@ -136,13 +136,13 @@ static inline void msgb_push_frame(struct msgbuf *msgb, u8 ty, u16 len, u8 seq)
  */
 static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
 {
-	// SYN
+	/* SYN. */
 	msgb_push_syn(msgb);
 
-	// ACK-type frame + CRC
+	/* ACK-type frame + CRC. */
 	msgb_push_frame(msgb, SSH_FRAME_TYPE_ACK, 0x00, seq);
 
-	// payload CRC (ACK-type frames do not have a payload)
+	/* Payload CRC (ACK-type frames do not have a payload). */
 	msgb_push_crc(msgb, msgb->ptr, 0);
 }
 
@@ -152,13 +152,13 @@ static inline void msgb_push_ack(struct msgbuf *msgb, u8 seq)
  */
 static inline void msgb_push_nak(struct msgbuf *msgb)
 {
-	// SYN
+	/* SYN. */
 	msgb_push_syn(msgb);
 
-	// NAK-type frame + CRC
+	/* NAK-type frame + CRC. */
 	msgb_push_frame(msgb, SSH_FRAME_TYPE_NAK, 0x00, 0x00);
 
-	// payload CRC (ACK-type frames do not have a payload)
+	/* Payload CRC (ACK-type frames do not have a payload). */
 	msgb_push_crc(msgb, msgb->ptr, 0);
 }
 
@@ -175,30 +175,30 @@ static inline void msgb_push_cmd(struct msgbuf *msgb, u8 seq, u16 rqid,
 	const u8 type = SSH_FRAME_TYPE_DATA_SEQ;
 	u8 *cmd;
 
-	// SYN
+	/* SYN. */
 	msgb_push_syn(msgb);
 
-	// command frame + crc
+	/* Command frame + CRC. */
 	msgb_push_frame(msgb, type, sizeof(struct ssh_command) + rqst->length, seq);
 
-	// frame payload: command struct + payload
+	/* Frame payload: Command struct + payload. */
 	if (WARN_ON(msgb->ptr + sizeof(struct ssh_command) > msgb->end))
 		return;
 
 	cmd = msgb->ptr;
 
-	__msgb_push_u8(msgb, SSH_PLD_TYPE_CMD);		/* payload type */
-	__msgb_push_u8(msgb, rqst->target_category);	/* target category */
-	__msgb_push_u8(msgb, rqst->target_id);		/* target ID (out) */
-	__msgb_push_u8(msgb, 0x00);			/* target ID (in) */
-	__msgb_push_u8(msgb, rqst->instance_id);	/* instance ID */
-	__msgb_push_u16(msgb, rqid);			/* request ID */
-	__msgb_push_u8(msgb, rqst->command_id);		/* command ID */
+	__msgb_push_u8(msgb, SSH_PLD_TYPE_CMD);		/* Payload type. */
+	__msgb_push_u8(msgb, rqst->target_category);	/* Target category. */
+	__msgb_push_u8(msgb, rqst->target_id);		/* Target ID (out). */
+	__msgb_push_u8(msgb, 0x00);			/* Target ID (in). */
+	__msgb_push_u8(msgb, rqst->instance_id);	/* Instance ID. */
+	__msgb_push_u16(msgb, rqid);			/* Request ID. */
+	__msgb_push_u8(msgb, rqst->command_id);		/* Command ID. */
 
-	// command payload
+	/* Command payload. */
 	msgb_push_buf(msgb, rqst->payload, rqst->length);
 
-	// crc for command struct + payload
+	/* CRC for command struct + payload. */
 	msgb_push_crc(msgb, cmd, msgb->ptr - cmd);
 }
 

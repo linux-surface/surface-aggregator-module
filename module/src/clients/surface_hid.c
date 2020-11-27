@@ -29,13 +29,13 @@ enum surface_hid_descriptor_entry {
 };
 
 struct surface_hid_descriptor {
-	__u8 desc_len;			// = 9
-	__u8 desc_type;			// = HID_DT_HID
+	__u8 desc_len;			/* = 9 */
+	__u8 desc_type;			/* = HID_DT_HID */
 	__le16 hid_version;
 	__u8 country_code;
-	__u8 num_descriptors;		// = 1
+	__u8 num_descriptors;		/* = 1 */
 
-	__u8 report_desc_type;		// = HID_DT_REPORT
+	__u8 report_desc_type;		/* = HID_DT_REPORT */
 	__le16 report_desc_len;
 } __packed;
 
@@ -150,7 +150,7 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 		offset = get_unaligned_le32(&slice->offset);
 		length = get_unaligned_le32(&slice->length);
 
-		// don't mess stuff up in case we receive garbage
+		/* Don't mess stuff up in case we receive garbage. */
 		if (length > buffer_len || offset > len)
 			return -EPROTO;
 
@@ -271,7 +271,7 @@ static int shid_set_feature_report(struct surface_hid_device *shid,
 
 /* -- SAM interface (KBD). -------------------------------------------------- */
 
-#define KBD_FEATURE_REPORT_SIZE		7  // 6 + report ID
+#define KBD_FEATURE_REPORT_SIZE		7  /* 6 + report ID */
 
 enum surface_kbd_cid {
 	SURFACE_KBD_CID_GET_DESCRIPTOR     = 0x00,
@@ -417,19 +417,19 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 report_id,
 	unsigned int offset, size;
 	int i;
 
-	// get led field
+	/* Get led field. */
 	field = hidinput_get_led_field(hid);
 	if (!field)
 		return -ENOENT;
 
-	// check if we got the correct report
+	/* Check if we got the correct report. */
 	if (len != hid_report_len(field->report))
 		return -ENOENT;
 
 	if (report_id != field->report->id)
 		return -ENOENT;
 
-	// get caps lock led index
+	/* Get caps lock led index. */
 	for (i = 0; i < field->report_count; i++)
 		if ((field->usage[i].hid & 0xffff) == 0x02)
 			break;
@@ -437,7 +437,7 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 report_id,
 	if (i == field->report_count)
 		return -ENOENT;
 
-	// extract value
+	/* Extract value. */
 	size = field->report_size;
 	offset = field->report_offset + i * size;
 	return !!hid_field_extract(hid, data + 1, size, offset);
@@ -451,7 +451,7 @@ static int skbd_output_report(struct surface_hid_device *shid, u8 report_id,
 
 	caps_led = skbd_get_caps_led_value(shid->hid, report_id, data, len);
 	if (caps_led < 0)
-		return -EIO;	// only caps output reports are supported
+		return -EIO;	/* Only caps output reports are supported. */
 
 	status = ssam_kbd_set_caps_led(shid, caps_led);
 	if (status < 0)
@@ -567,7 +567,7 @@ static void surface_hid_stop(struct hid_device *hid)
 {
 	struct surface_hid_device *shid = hid->driver_data;
 
-	// Note: This call will log errors for us, so ignore them here.
+	/* Note: This call will log errors for us, so ignore them here. */
 	ssam_notifier_unregister(shid->ctrl, &shid->notif);
 }
 
@@ -830,7 +830,7 @@ static int surface_kbd_probe(struct platform_device *pdev)
 	struct ssam_controller *ctrl;
 	struct surface_hid_device *shid;
 
-	// add device link to EC
+	/* Add device link to EC. */
 	ctrl = ssam_client_bind(&pdev->dev);
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl) == -ENODEV ? -EPROBE_DEFER : PTR_ERR(ctrl);

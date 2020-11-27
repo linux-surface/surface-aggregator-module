@@ -132,16 +132,16 @@ static irqreturn_t shps_handle_irq(int irq, void *data)
 	struct shps_device *sdev = platform_get_drvdata(pdev);
 	int type;
 
-	// figure out which IRQ we're handling
+	/* Figure out which IRQ we're handling. */
 	for (type = 0; type < SHPS_NUM_IRQS; type++)
 		if (irq == sdev->irq[type])
 			break;
 
-	// we should have found our interrupt, if not: this is a bug
+	/* We should have found our interrupt, if not: this is a bug. */
 	if (WARN(type >= SHPS_NUM_IRQS, "invalid IRQ number: %d\n", irq))
 		return IRQ_HANDLED;
 
-	// forward interrupt to ACPI via DSM
+	/* Forward interrupt to ACPI via DSM. */
 	shps_dsm_notify_irq(pdev, type);
 	return IRQ_HANDLED;
 }
@@ -155,11 +155,11 @@ static int shps_setup_irq(struct platform_device *pdev, enum shps_irq_type type)
 	const int dsm = SHPS_DSM_FN_IRQ_BASE_PRESENCE + type;
 	int status, irq;
 
-	// initialize as "not present"
+	/* Initialize as "not present". */
 	sdev->gpio[type] = NULL;
 	sdev->irq[type] = SHPS_IRQ_NOT_PRESENT;
 
-	// only set up interrupts that we actually need
+	/* Only set up interrupts that we actually need. */
 	if (!acpi_check_dsm(handle, &shps_dsm_guid, SHPS_DSM_REVISION, BIT(dsm))) {
 		dev_dbg(&pdev->dev, "IRQ notification via DSM not present (irq=%d)\n",
 			type);
@@ -210,7 +210,7 @@ static int surface_hotplug_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, sdev);
 
-	// set up IRQs
+	/* Set up IRQs. */
 	for (i = 0; i < SHPS_NUM_IRQS; i++) {
 		mutex_init(&sdev->lock[i]);
 
@@ -222,7 +222,7 @@ static int surface_hotplug_probe(struct platform_device *pdev)
 		}
 	}
 
-	// ensure everything is up-to-date
+	/* Ensure everything is up-to-date. */
 	for (i = 0; i < SHPS_NUM_IRQS; i++)
 		if (sdev->irq[i] != SHPS_IRQ_NOT_PRESENT)
 			shps_dsm_notify_irq(pdev, i);
@@ -235,7 +235,7 @@ static int surface_hotplug_remove(struct platform_device *pdev)
 	struct shps_device *sdev = platform_get_drvdata(pdev);
 	int i;
 
-	// ensure that IRQs have been fully handled and won't trigger any more
+	/* Ensure that IRQs have been fully handled and won't trigger any more. */
 	for (i = 0; i < SHPS_NUM_IRQS; i++)
 		if (sdev->irq[i] != SHPS_IRQ_NOT_PRESENT)
 			disable_irq(sdev->irq[i]);

@@ -92,7 +92,7 @@ struct ssam_event_item {
 		void (*free)(struct ssam_event_item *event);
 	} ops;
 
-	struct ssam_event event;	// must be last
+	struct ssam_event event;	/* must be last */
 };
 
 /**

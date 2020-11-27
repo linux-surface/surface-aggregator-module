@@ -167,7 +167,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 
 	trace_ssam_request_complete(rqst, status);
 
-	// rtl/ptl may not be set if we're canceling before submitting
+	/* rtl/ptl may not be set if we're canceling before submitting. */
 	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x, status: %d)\n",
 		     ssh_request_get_rqid_safe(rqst), status);
 
@@ -205,7 +205,7 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 
 	spin_lock(&rtl->queue.lock);
 
-	// find first non-locked request and remove it
+	/* Find first non-locked request and remove it. */
 	list_for_each_entry_safe(p, n, &rtl->queue.head, node) {
 		if (unlikely(test_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state)))
 			continue;
@@ -215,9 +215,9 @@ static struct ssh_request *ssh_rtl_tx_next(struct ssh_rtl *rtl)
 			break;
 		}
 
-		// remove from queue and mark as transmitting
+		/* Remove from queue and mark as transmitting. */
 		set_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &p->state);
-		// ensure state never gets zero
+		/* Ensure state never gets zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &p->state);
 
@@ -236,19 +236,19 @@ static int ssh_rtl_tx_try_process_one(struct ssh_rtl *rtl)
 	struct ssh_request *rqst;
 	int status;
 
-	// get and prepare next request for transmit
+	/* Get and prepare next request for transmit. */
 	rqst = ssh_rtl_tx_next(rtl);
 	if (IS_ERR(rqst))
 		return PTR_ERR(rqst);
 
-	// add to/mark as pending
+	/* Add it to/mark it as pending. */
 	status = ssh_rtl_tx_pending_push(rqst);
 	if (status) {
 		ssh_request_put(rqst);
 		return -EAGAIN;
 	}
 
-	// submit packet
+	/* Submit packet. */
 	status = ssh_ptl_submit(&rtl->ptl, &rqst->packet);
 	if (status == -ESHUTDOWN) {
 		/*
@@ -328,7 +328,7 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 	do {
 		status = ssh_rtl_tx_try_process_one(rtl);
 		if (status == -ENOENT || status == -EBUSY)
-			return;		// no more requests to process
+			return;		/* No more requests to process. */
 
 		if (status == -ESHUTDOWN) {
 			/*
@@ -342,7 +342,7 @@ static void ssh_rtl_tx_work_fn(struct work_struct *work)
 		WARN_ON(status != 0 && status != -EAGAIN);
 	} while (--iterations);
 
-	// out of tries, reschedule
+	/* Out of tries, reschedule. */
 	ssh_rtl_tx_schedule(rtl);
 }
 
@@ -431,7 +431,7 @@ static void ssh_rtl_timeout_reaper_mod(struct ssh_rtl *rtl, ktime_t now,
 	ktime_t aexp = ktime_add(expires, SSH_RTL_REQUEST_TIMEOUT_RESOLUTION);
 	ktime_t old_exp, old_act;
 
-	// re-adjust / schedule reaper if it is above resolution delta
+	/* Re-adjust/schedule reaper if it is above resolution delta. */
 	old_act = READ_ONCE(rtl->rtx_timeout.expires);
 	if (ktime_after(aexp, old_act))
 		return;
@@ -441,7 +441,7 @@ static void ssh_rtl_timeout_reaper_mod(struct ssh_rtl *rtl, ktime_t now,
 		old_act = cmpxchg64(&rtl->rtx_timeout.expires, old_exp, expires);
 	} while (old_exp != old_act && ktime_before(aexp, old_act));
 
-	// if we updated the reaper expiration, modify work timeout
+	/* If we updated the reaper expiration, modify work timeout. */
 	if (old_exp == old_act && old_act != expires)
 		mod_delayed_work(system_wq, &rtl->rtx_timeout.reaper, delta);
 }
@@ -486,11 +486,11 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	 */
 	spin_lock(&rtl->pending.lock);
 	list_for_each_entry_safe(p, n, &rtl->pending.head, node) {
-		// we generally expect requests to be processed in order
+		/* We generally expect requests to be processed in order. */
 		if (unlikely(ssh_request_get_rqid(p) != rqid))
 			continue;
 
-		// simulate response timeout
+		/* Simulate response timeout. */
 		if (ssh_rtl_should_drop_response()) {
 			spin_unlock(&rtl->pending.lock);
 
@@ -506,7 +506,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		 */
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &p->state);
 		set_bit(SSH_REQUEST_SF_RSPRCVD_BIT, &p->state);
-		// ensure state never gets zero
+		/* Ensure state never gets zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_PENDING_BIT, &p->state);
 
@@ -524,7 +524,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 		return;
 	}
 
-	// if the request hasn't been completed yet, we will do this now
+	/* If the request hasn't been completed yet, we will do this now. */
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state)) {
 		ssh_request_put(r);
 		ssh_rtl_tx_schedule(rtl);
@@ -651,7 +651,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 
 	spin_unlock(&rtl->queue.lock);
 
-	ssh_request_put(r);	// drop reference obtained from queue
+	ssh_request_put(r);	/* Drop reference obtained from queue. */
 
 	if (test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 		return true;
@@ -662,7 +662,7 @@ static bool ssh_rtl_cancel_nonpending(struct ssh_request *r)
 
 static bool ssh_rtl_cancel_pending(struct ssh_request *r)
 {
-	// if the packet is already locked, it's going to be removed shortly
+	/* If the packet is already locked, it's going to be removed shortly. */
 	if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
 		return true;
 
@@ -746,7 +746,7 @@ bool ssh_rtl_cancel(struct ssh_request *rqst, bool pending)
 	else
 		canceled = ssh_rtl_cancel_nonpending(rqst);
 
-	// note: rtl may be NULL if request has not been submitted yet
+	/* Note: rtl may be NULL if request has not been submitted yet. */
 	rtl = ssh_request_rtl(rqst);
 	if (canceled && rtl)
 		ssh_rtl_tx_schedule(rtl);
@@ -779,13 +779,13 @@ static void ssh_rtl_packet_callback(struct ssh_packet *p, int status)
 		return;
 	}
 
-	// update state: mark as transmitted and clear transmitting
+	/* Update state: Mark as transmitted and clear transmitting. */
 	set_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state);
-	// ensure state never gets zero
+	/* Ensure state never gets zero. */
 	smp_mb__before_atomic();
 	clear_bit(SSH_REQUEST_SF_TRANSMITTING_BIT, &r->state);
 
-	// if we expect a response, we just need to start the timeout
+	/* If we expect a response, we just need to start the timeout. */
 	if (test_bit(SSH_REQUEST_TY_HAS_RESPONSE_BIT, &r->state)) {
 		/*
 		 * Note: This is the only place where the timestamp gets set,
@@ -860,7 +860,7 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 			continue;
 		}
 
-		// avoid further transitions if locked
+		/* Avoid further transitions if locked. */
 		if (test_and_set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state))
 			continue;
 
@@ -880,7 +880,7 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 	}
 	spin_unlock(&rtl->pending.lock);
 
-	// cancel and complete the request
+	/* Cancel and complete the request. */
 	list_for_each_entry_safe(r, n, &claimed, node) {
 		trace_ssam_request_timeout(r);
 
@@ -892,12 +892,15 @@ static void ssh_rtl_timeout_reap(struct work_struct *work)
 		if (!test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			ssh_rtl_complete_with_status(r, -ETIMEDOUT);
 
-		// drop the reference we've obtained by removing it from pending
+		/*
+		 * Drop the reference we've obtained by removing it from the
+		 * pending set.
+		 */
 		list_del(&r->node);
 		ssh_request_put(r);
 	}
 
-	// ensure that reaper doesn't run again immediately
+	/* Ensure that the reaper doesn't run again immediately. */
 	next = max(next, ktime_add(now, SSH_RTL_REQUEST_TIMEOUT_RESOLUTION));
 	if (next != KTIME_MAX)
 		ssh_rtl_timeout_reaper_mod(rtl, now, next);
@@ -1196,11 +1199,11 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 	 */
 	smp_mb__after_atomic();
 
-	// remove requests from queue
+	/* Remove requests from queue. */
 	spin_lock(&rtl->queue.lock);
 	list_for_each_entry_safe(r, n, &rtl->queue.head, node) {
 		set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
-		// ensure state never gets zero
+		/* Ensure state never gets zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_REQUEST_SF_QUEUED_BIT, &r->state);
 
@@ -1234,7 +1237,7 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 		spin_lock(&rtl->pending.lock);
 		list_for_each_entry_safe(r, n, &rtl->pending.head, node) {
 			set_bit(SSH_REQUEST_SF_LOCKED_BIT, &r->state);
-			// ensure state never gets zero
+			/* Ensure state never gets zero. */
 			smp_mb__before_atomic();
 			clear_bit(SSH_REQUEST_SF_PENDING_BIT, &r->state);
 
@@ -1244,13 +1247,19 @@ void ssh_rtl_shutdown(struct ssh_rtl *rtl)
 		spin_unlock(&rtl->pending.lock);
 	}
 
-	// finally, cancel and complete the requests we claimed before
+	/* Finally, cancel and complete the requests we claimed before. */
 	list_for_each_entry_safe(r, n, &claimed, node) {
-		// test_and_set because we still might compete with cancellation
+		/*
+		 * We need test_and_set() because we still might compete with
+		 * cancellation.
+		 */
 		if (!test_and_set_bit(SSH_REQUEST_SF_COMPLETED_BIT, &r->state))
 			ssh_rtl_complete_with_status(r, -ESHUTDOWN);
 
-		// drop reference we've obtained by removing it from the lists
+		/*
+		 * Drop the reference we've obtained by removing it from the
+		 * lists.
+		 */
 		list_del(&r->node);
 		ssh_request_put(r);
 	}

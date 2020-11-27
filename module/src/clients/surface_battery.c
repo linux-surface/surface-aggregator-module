@@ -119,7 +119,7 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_btp, __le32, {
 	.command_id      = 0x04,
 });
 
-/* Get platform power soruce for battery (DPTF PSRC) */
+/* Get platform power source for battery (DPTF PSRC). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0d,
@@ -259,7 +259,7 @@ static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 
 	status = ssam_retry(ssam_bat_get_bix, bat->sdev, &bat->bix);
 
-	// enforce NULL terminated strings in case anything goes wrong...
+	/* Enforce NULL terminated strings in case anything goes wrong... */
 	bat->bix.model[ARRAY_SIZE(bat->bix.model) - 1] = 0;
 	bat->bix.serial[ARRAY_SIZE(bat->bix.serial) - 1] = 0;
 	bat->bix.type[ARRAY_SIZE(bat->bix.type) - 1] = 0;
@@ -413,7 +413,7 @@ static int spwr_battery_recheck_full(struct spwr_battery_device *bat)
 	if (status)
 		goto out;
 
-	// if battery has been attached, (re-)initialize alarm
+	/* If battery has been attached, (re-)initialize alarm. */
 	if (!present && spwr_battery_present(bat)) {
 		u32 cap_warn = get_unaligned_le32(&bat->bix.design_cap_warn);
 
@@ -496,7 +496,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 	dev_dbg(&bat->sdev->dev, "power event (cid = 0x%02x, iid = %d, tid = %d)\n",
 		event->command_id, event->instance_id, event->target_id);
 
-	// handled here, needs to be handled for all targets/instances
+	/* Handled here, needs to be handled for all targets/instances. */
 	if (event->command_id == SAM_EVENT_CID_BAT_ADP) {
 		status = spwr_battery_recheck_adapter(bat);
 		return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
@@ -700,7 +700,7 @@ static int spwr_battery_get_property(struct power_supply *psy,
 	if (status)
 		goto out;
 
-	// abort if battery is not present
+	/* Abort if battery is not present. */
 	if (!spwr_battery_present(bat) && psp != POWER_SUPPLY_PROP_PRESENT) {
 		status = -ENODEV;
 		goto out;
@@ -884,7 +884,7 @@ static int spwr_ac_register(struct spwr_ac_device *ac)
 	__le32 sta;
 	int status;
 
-	// make sure the device is there and functioning properly
+	/* Make sure the device is there and functioning properly. */
 	status = ssam_retry(ssam_bat_get_sta, ac->sdev, &sta);
 	if (status)
 		return status;
@@ -947,7 +947,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat)
 	__le32 sta;
 	int status;
 
-	// make sure the device is there and functioning properly
+	/* Make sure the device is there and functioning properly. */
 	status = ssam_retry(ssam_bat_get_sta, bat->sdev, &sta);
 	if (status)
 		return status;

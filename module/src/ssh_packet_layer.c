@@ -364,7 +364,7 @@ static bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 
 static bool ssh_ptl_should_drop_packet(struct ssh_packet *packet)
 {
-	// ignore packets that don't carry any data (i.e. flush)
+	/* Ignore packets that don't carry any data (i.e. flush). */
 	if (!packet->data.ptr || !packet->data.len)
 		return false;
 
@@ -403,11 +403,11 @@ static int ssh_ptl_write_buf(struct ssh_ptl *ptl, struct ssh_packet *packet,
 
 static void ssh_ptl_tx_inject_invalid_data(struct ssh_packet *packet)
 {
-	// ignore packets that don't carry any data (i.e. flush)
+	/* Ignore packets that don't carry any data (i.e. flush). */
 	if (!packet->data.ptr || !packet->data.len)
 		return;
 
-	// only allow sequenced data packets to be modified
+	/* Only allow sequenced data packets to be modified. */
 	if (packet->data.ptr[SSH_MSGOFFSET_FRAME(type)] != SSH_FRAME_TYPE_DATA_SEQ)
 		return;
 
@@ -432,7 +432,7 @@ static void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 {
 	struct ssam_span frame;
 
-	// check if there actually is something to corrupt
+	/* Check if there actually is something to corrupt. */
 	if (!sshp_find_syn(data, &frame))
 		return;
 
@@ -441,7 +441,7 @@ static void ssh_ptl_rx_inject_invalid_syn(struct ssh_ptl *ptl,
 
 	trace_ssam_ei_rx_corrupt_syn(data->len);
 
-	data->ptr[1] = 0xb3;	// set second byte of SYN to "random" value
+	data->ptr[1] = 0xb3;	/* Set second byte of SYN to "random" value. */
 }
 
 static void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
@@ -450,11 +450,11 @@ static void ssh_ptl_rx_inject_invalid_data(struct ssh_ptl *ptl,
 	size_t payload_len, message_len;
 	struct ssh_frame *sshf;
 
-	// ignore incomplete messages, will get handled once it's complete
+	/* Ignore incomplete messages, will get handled once it's complete. */
 	if (frame->len < SSH_MESSAGE_LENGTH(0))
 		return;
 
-	// ignore incomplete messages, part 2
+	/* Ignore incomplete messages, part 2. */
 	payload_len = get_unaligned_le16(&frame->ptr[SSH_MSGOFFSET_FRAME(len)]);
 	message_len = SSH_MESSAGE_LENGTH(payload_len);
 	if (frame->len < message_len)
@@ -666,7 +666,7 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 	ktime_t aexp = ktime_add(expires, SSH_PTL_PACKET_TIMEOUT_RESOLUTION);
 	ktime_t old_exp, old_act;
 
-	// re-adjust / schedule reaper if it is above resolution delta
+	/* Re-adjust / schedule reaper if it is above resolution delta. */
 	old_act = READ_ONCE(ptl->rtx_timeout.expires);
 	if (ktime_after(aexp, old_act))
 		return;
@@ -676,12 +676,12 @@ static void ssh_ptl_timeout_reaper_mod(struct ssh_ptl *ptl, ktime_t now,
 		old_act = cmpxchg64(&ptl->rtx_timeout.expires, old_exp, expires);
 	} while (old_exp != old_act && ktime_before(aexp, old_act));
 
-	// if we updated the reaper expiration, modify work timeout
+	/* If we updated the reaper expiration, modify work timeout. */
 	if (old_exp == old_act && old_act != expires)
 		mod_delayed_work(system_wq, &ptl->rtx_timeout.reaper, delta);
 }
 
-/* must be called with queue lock held */
+/* Must be called with queue lock held. */
 static void ssh_packet_next_try(struct ssh_packet *p)
 {
 	u8 base = ssh_packet_priority_get_base(p->priority);
@@ -695,7 +695,7 @@ static void ssh_packet_next_try(struct ssh_packet *p)
 	WRITE_ONCE(p->priority, __SSH_PACKET_PRIORITY(base, try + 1));
 }
 
-/* must be called with queue lock held */
+/* Must be called with queue lock held. */
 static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 {
 	struct list_head *head;
@@ -735,7 +735,7 @@ static struct list_head *__ssh_ptl_queue_find_entrypoint(struct ssh_packet *p)
 	return head;
 }
 
-/* must be called with queue lock held */
+/* Must be called with queue lock held. */
 static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 {
 	struct ssh_ptl *ptl = packet->ptl;
@@ -744,11 +744,11 @@ static int __ssh_ptl_queue_push(struct ssh_packet *packet)
 	if (test_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state))
 		return -ESHUTDOWN;
 
-	// avoid further transitions when canceling/completing
+	/* Avoid further transitions when canceling/completing. */
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state))
 		return -EINVAL;
 
-	// if this packet has already been queued, do not add it
+	/* If this packet has already been queued, do not add it. */
 	if (test_and_set_bit(SSH_PACKET_SF_QUEUED_BIT, &packet->state))
 		return -EALREADY;
 
@@ -801,7 +801,7 @@ static void ssh_ptl_pending_push(struct ssh_packet *p)
 
 	spin_lock(&ptl->pending.lock);
 
-	// if we are canceling/completing this packet, do not add it
+	/* If we are canceling/completing this packet, do not add it. */
 	if (test_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state)) {
 		spin_unlock(&ptl->pending.lock);
 		return;
@@ -845,7 +845,7 @@ static void ssh_ptl_pending_remove(struct ssh_packet *packet)
 	ssh_packet_put(packet);
 }
 
-/* warning: does not check/set "completed" bit */
+/* Warning: Does not check/set "completed" bit. */
 static void __ssh_ptl_complete(struct ssh_packet *p, int status)
 {
 	struct ssh_ptl *ptl = READ_ONCE(p->ptl);
@@ -885,15 +885,15 @@ static bool ssh_ptl_tx_can_process(struct ssh_packet *packet)
 	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &packet->state))
 		return !atomic_read(&ptl->pending.count);
 
-	// we can always process non-blocking packets
+	/* We can always process non-blocking packets. */
 	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &packet->state))
 		return true;
 
-	// if we are already waiting for this packet, send it again
+	/* If we are already waiting for this packet, send it again. */
 	if (test_bit(SSH_PACKET_SF_PENDING_BIT, &packet->state))
 		return true;
 
-	// otherwise: check if we have the capacity to send
+	/* Otherwise: Check if we have the capacity to send. */
 	return atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING;
 }
 
@@ -929,7 +929,7 @@ static struct ssh_packet *ssh_ptl_tx_pop(struct ssh_ptl *ptl)
 		list_del(&p->queue_node);
 
 		set_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &p->state);
-		// ensure that state never gets zero
+		/* Ensure that state never gets zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
 
@@ -974,13 +974,13 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 
 	ptl_dbg(ptl, "ptl: successfully transmitted packet %p\n", packet);
 
-	// transition state to "transmitted"
+	/* Transition state to "transmitted". */
 	set_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &packet->state);
-	// ensure that state never gets zero
+	/* Ensure that state never gets zero. */
 	smp_mb__before_atomic();
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
-	// if the packet is unsequenced, we're done: lock and complete
+	/* If the packet is unsequenced, we're done: Lock and complete. */
 	if (!test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &packet->state)) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state);
 		ssh_ptl_remove_and_complete(packet, 0);
@@ -995,9 +995,9 @@ static void ssh_ptl_tx_compl_success(struct ssh_packet *packet)
 
 static void ssh_ptl_tx_compl_error(struct ssh_packet *packet, int status)
 {
-	// transmission failure: lock the packet and try to complete it
+	/* Transmission failure: Lock the packet and try to complete it. */
 	set_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state);
-	// ensure that state never gets zero
+	/* Ensure that state never gets zero. */
 	smp_mb__before_atomic();
 	clear_bit(SSH_PACKET_SF_TRANSMITTING_BIT, &packet->state);
 
@@ -1053,15 +1053,15 @@ static int ssh_ptl_tx_packet(struct ssh_ptl *ptl, struct ssh_packet *packet)
 	long timeout = SSH_PTL_TX_TIMEOUT;
 	size_t offset = 0;
 
-	// note: flush-packets don't have any data
+	/* Note: Flush-packets don't have any data. */
 	if (unlikely(!packet->data.ptr))
 		return 0;
 
-	// error injection: drop packet to simulate transmission problem
+	/* Error injection: drop packet to simulate transmission problem. */
 	if (ssh_ptl_should_drop_packet(packet))
 		return 0;
 
-	// error injection: simulate invalid packet data
+	/* Error injection: simulate invalid packet data. */
 	ssh_ptl_tx_inject_invalid_data(packet);
 
 	ptl_dbg(ptl, "tx: sending data (length: %zu)\n", packet->data.len);
@@ -1104,16 +1104,16 @@ static int ssh_ptl_tx_threadfn(void *data)
 		struct ssh_packet *packet;
 		int status;
 
-		// try to get the next packet
+		/* Try to get the next packet. */
 		packet = ssh_ptl_tx_next(ptl);
 
-		// if no packet can be processed, we are done
+		/* If no packet can be processed, we are done. */
 		if (IS_ERR(packet)) {
 			ssh_ptl_tx_wait_packet(ptl);
 			continue;
 		}
 
-		// transfer and complete packet
+		/* Transfer and complete packet. */
 		status = ssh_ptl_tx_packet(ptl, packet);
 		if (status)
 			ssh_ptl_tx_compl_error(packet, status);
@@ -1219,7 +1219,7 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 		 * removing its node and decrementing the pending counter.
 		 */
 		set_bit(SSH_PACKET_SF_ACKED_BIT, &p->state);
-		// ensure that state never gets zero
+		/* Ensure that state never gets zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
 
@@ -1316,7 +1316,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 
 	trace_ssam_packet_submit(p);
 
-	// validate packet fields
+	/* Validate packet fields. */
 	if (test_bit(SSH_PACKET_TY_FLUSH_BIT, &p->state)) {
 		if (p->data.ptr || test_bit(SSH_PACKET_TY_SEQUENCED_BIT, &p->state))
 			return -EINVAL;
@@ -1335,7 +1335,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	if (ptl_old == NULL)
 		WRITE_ONCE(p->ptl, ptl);
 	else if (WARN_ON(ptl_old != ptl))
-		return -EALREADY;	// submitted on different PTL
+		return -EALREADY;	/* Submitted on different PTL. */
 
 	status = ssh_ptl_queue_push(p);
 	if (status)
@@ -1411,7 +1411,7 @@ static void ssh_ptl_resubmit_pending(struct ssh_ptl *ptl)
 
 	spin_lock(&ptl->pending.lock);
 
-	// re-queue all pending packets
+	/* Re-queue all pending packets. */
 	list_for_each_entry(p, &ptl->pending.head, pending_node) {
 		/*
 		 * Re-submission fails if the packet is out of tries, has been
@@ -1549,9 +1549,12 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 		if (status != -ECANCELED)
 			continue;
 
-		// no more tries left: cancel the packet
+		/* No more tries left: Cancel the packet. */
 
-		// if someone else has locked the packet already, don't use it
+		/*
+		 * If someone else has locked the packet already, don't use it
+		 * and let the other party complete it.
+		 */
 		if (test_and_set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state))
 			continue;
 
@@ -1572,19 +1575,22 @@ static void ssh_ptl_timeout_reap(struct work_struct *work)
 
 	spin_unlock(&ptl->pending.lock);
 
-	// cancel and complete the packet
+	/* Cancel and complete the packet. */
 	list_for_each_entry_safe(p, n, &claimed, pending_node) {
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state)) {
 			ssh_ptl_queue_remove(p);
 			__ssh_ptl_complete(p, -ETIMEDOUT);
 		}
 
-		// drop the reference we've obtained by removing it from pending
+		/*
+		 * Drop the reference we've obtained by removing it from
+		 * the pending set.
+		 */
 		list_del(&p->pending_node);
 		ssh_packet_put(p);
 	}
 
-	// ensure that reaper doesn't run again immediately
+	/* Ensure that reaper doesn't run again immediately. */
 	next = max(next, ktime_add(now, SSH_PTL_PACKET_TIMEOUT_RESOLUTION));
 	if (next != KTIME_MAX)
 		ssh_ptl_timeout_reaper_mod(ptl, now, next);
@@ -1597,7 +1603,10 @@ static bool ssh_ptl_rx_retransmit_check(struct ssh_ptl *ptl, u8 seq)
 {
 	int i;
 
-	// check if SEQ has been seen recently (i.e. packet was re-transmitted)
+	/*
+	 * Check if SEQ has been seen recently (i.e. packet was
+	 * re-transmitted and we should ignore it).
+	 */
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blocked.seqs); i++) {
 		if (likely(ptl->rx.blocked.seqs[i] != seq))
 			continue;
@@ -1606,7 +1615,7 @@ static bool ssh_ptl_rx_retransmit_check(struct ssh_ptl *ptl, u8 seq)
 		return true;
 	}
 
-	// update list of blocked sequence IDs
+	/* Update list of blocked sequence IDs. */
 	ptl->rx.blocked.seqs[ptl->rx.blocked.offset] = seq;
 	ptl->rx.blocked.offset = (ptl->rx.blocked.offset + 1)
 				  % ARRAY_SIZE(ptl->rx.blocked.seqs);
@@ -1680,10 +1689,10 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 	bool syn_found;
 	int status;
 
-	// error injection: modify data to simulate corrupt SYN bytes
+	/* Error injection: Modify data to simulate corrupt SYN bytes. */
 	ssh_ptl_rx_inject_invalid_syn(ptl, source);
 
-	// find SYN
+	/* Find SYN. */
 	syn_found = sshp_find_syn(source, &aligned);
 
 	if (unlikely(aligned.ptr - source->ptr) > 0) {
@@ -1713,15 +1722,15 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 	if (unlikely(!syn_found))
 		return aligned.ptr - source->ptr;
 
-	// error injection: modify data to simulate corruption
+	/* Error injection: Modify data to simulate corruption. */
 	ssh_ptl_rx_inject_invalid_data(ptl, &aligned);
 
-	// parse and validate frame
+	/* Parse and validate frame. */
 	status = sshp_parse_frame(&ptl->serdev->dev, &aligned, &frame, &payload,
 				  SSH_PTL_RX_BUF_LEN);
-	if (status)	// invalid frame: skip to next syn
+	if (status)	/* Invalid frame: skip to next SYN. */
 		return aligned.ptr - source->ptr + sizeof(u16);
-	if (!frame)	// not enough data
+	if (!frame)	/* Not enough data. */
 		return aligned.ptr - source->ptr;
 
 	trace_ssam_rx_frame_received(frame);
@@ -1767,7 +1776,7 @@ static int ssh_ptl_rx_threadfn(void *data)
 		if (kthread_should_stop())
 			break;
 
-		// copy from fifo to evaluation buffer
+		/* Copy from fifo to evaluation buffer. */
 		n = sshp_buf_read_from_fifo(&ptl->rx.buf, &ptl->rx.fifo);
 
 		ptl_dbg(ptl, "rx: received data (size: %zu)\n", n);
@@ -1775,17 +1784,17 @@ static int ssh_ptl_rx_threadfn(void *data)
 				     ptl->rx.buf.ptr + ptl->rx.buf.len - n,
 				     n, false);
 
-		// parse until we need more bytes or buffer is empty
+		/* Parse until we need more bytes or buffer is empty. */
 		while (offs < ptl->rx.buf.len) {
 			sshp_buf_span_from(&ptl->rx.buf, offs, &span);
 			n = ssh_ptl_rx_eval(ptl, &span);
 			if (n == 0)
-				break;	// need more bytes
+				break;	/* Need more bytes. */
 
 			offs += n;
 		}
 
-		// throw away the evaluated parts
+		/* Throw away the evaluated parts. */
 		sshp_buf_drop(&ptl->rx.buf, offs);
 	}
 
@@ -1882,7 +1891,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	struct ssh_packet *p, *n;
 	int status;
 
-	// ensure that no new packets (including ACK/NAK) can be submitted
+	/* Ensure that no new packets (including ACK/NAK) can be submitted. */
 	set_bit(SSH_PTL_SF_SHUTDOWN_BIT, &ptl->state);
 	/*
 	 * Ensure that the layer gets marked as shut-down before actually
@@ -1924,11 +1933,11 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	 * (also handles cancellation).
 	 */
 
-	// mark queued packets as locked and move them to complete_q
+	/* Mark queued packets as locked and move them to complete_q. */
 	spin_lock(&ptl->queue.lock);
 	list_for_each_entry_safe(p, n, &ptl->queue.head, queue_node) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
-		// ensure that state does not get zero
+		/* Ensure that state does not get zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_QUEUED_BIT, &p->state);
 
@@ -1937,11 +1946,11 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	}
 	spin_unlock(&ptl->queue.lock);
 
-	// mark pending packets as locked and move them to complete_p
+	/* Mark pending packets as locked and move them to complete_p. */
 	spin_lock(&ptl->pending.lock);
 	list_for_each_entry_safe(p, n, &ptl->pending.head, pending_node) {
 		set_bit(SSH_PACKET_SF_LOCKED_BIT, &p->state);
-		// ensure that state does not get zero
+		/* Ensure that state does not get zero. */
 		smp_mb__before_atomic();
 		clear_bit(SSH_PACKET_SF_PENDING_BIT, &p->state);
 
@@ -1951,7 +1960,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 	atomic_set(&ptl->pending.count, 0);
 	spin_unlock(&ptl->pending.lock);
 
-	// complete and drop packets on complete_q
+	/* Complete and drop packets on complete_q. */
 	list_for_each_entry(p, &complete_q, queue_node) {
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
 			__ssh_ptl_complete(p, -ESHUTDOWN);
@@ -1959,7 +1968,7 @@ void ssh_ptl_shutdown(struct ssh_ptl *ptl)
 		ssh_packet_put(p);
 	}
 
-	// complete and drop packets on complete_p
+	/* Complete and drop packets on complete_p. */
 	list_for_each_entry(p, &complete_p, pending_node) {
 		if (!test_and_set_bit(SSH_PACKET_SF_COMPLETED_BIT, &p->state))
 			__ssh_ptl_complete(p, -ESHUTDOWN);
@@ -2016,7 +2025,7 @@ int ssh_ptl_init(struct ssh_ptl *ptl, struct serdev_device *serdev,
 
 	ptl->ops = *ops;
 
-	// initialize list of recent/blocked SEQs with invalid sequence IDs
+	/* Initialize list of recent/blocked SEQs with invalid sequence IDs. */
 	for (i = 0; i < ARRAY_SIZE(ptl->rx.blocked.seqs); i++)
 		ptl->rx.blocked.seqs[i] = U16_MAX;
 	ptl->rx.blocked.offset = 0;

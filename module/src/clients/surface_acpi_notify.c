@@ -177,7 +177,7 @@ enum sam_event_cid_tmp {
 struct san_event_work {
 	struct delayed_work work;
 	struct device *dev;
-	struct ssam_event event;	// must be last
+	struct ssam_event event;	/* must be last */
 };
 
 static int san_acpi_notify_event(struct device *dev, u64 func,
@@ -410,39 +410,39 @@ struct gsb_data_in {
 } __packed;
 
 struct gsb_data_rqsx {
-	u8 cv;				// command value (san_gsb_request_cv)
-	u8 tc;				// target category
-	u8 tid;				// target ID
-	u8 iid;				// instance ID
-	u8 snc;				// expect-response-flag?
-	u8 cid;				// command ID
-	u16 cdl;			// payload length
-	u8 pld[];			// payload
+	u8 cv;				/* Command value (san_gsb_request_cv). */
+	u8 tc;				/* Target category. */
+	u8 tid;				/* Target ID. */
+	u8 iid;				/* Instance ID. */
+	u8 snc;				/* Expect-response-flag. */
+	u8 cid;				/* Command ID. */
+	u16 cdl;			/* Payload length. */
+	u8 pld[];			/* Payload. */
 } __packed;
 
 struct gsb_data_etwl {
-	u8 cv;				// command value (should be 0x02)
-	u8 etw3;			// unknown
-	u8 etw4;			// unknown
-	u8 msg[];			// error message (ASCIIZ)
+	u8 cv;				/* Command value (should be 0x02). */
+	u8 etw3;			/* Unknown. */
+	u8 etw4;			/* Unknown. */
+	u8 msg[];			/* Error message (ASCIIZ). */
 } __packed;
 
 struct gsb_data_out {
-	u8 status;			// _SSH communication status
-	u8 len;				// _SSH payload length
-	u8 pld[];			// _SSH payload
+	u8 status;			/* _SSH communication status. */
+	u8 len;				/* _SSH payload length. */
+	u8 pld[];			/* _SSH payload. */
 } __packed;
 
 union gsb_buffer_data {
-	struct gsb_data_in   in;	// common input
-	struct gsb_data_rqsx rqsx;	// RQSX input
-	struct gsb_data_etwl etwl;	// ETWL input
-	struct gsb_data_out  out;	// output
+	struct gsb_data_in   in;	/* Common input. */
+	struct gsb_data_rqsx rqsx;	/* RQSX input. */
+	struct gsb_data_etwl etwl;	/* ETWL input. */
+	struct gsb_data_out  out;	/* Output. */
 };
 
 struct gsb_buffer {
-	u8 status;			// GSB AttribRawProcess status
-	u8 len;				// GSB AttribRawProcess length
+	u8 status;			/* GSB AttribRawProcess status. */
+	u8 len;				/* GSB AttribRawProcess length. */
 	union gsb_buffer_data data;
 } __packed;
 
@@ -472,7 +472,7 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *b)
 		(unsigned int)(b->len - sizeof(struct gsb_data_etwl)),
 		(char *)etwl->msg);
 
-	// indicate success
+	/* Indicate success. */
 	b->status = 0x00;
 	b->len = 0x00;
 
@@ -579,7 +579,7 @@ static acpi_status san_rqst(struct san_data *d, struct gsb_buffer *buffer)
 	rsp.length = 0;
 	rsp.pointer = &rspbuf[0];
 
-	// handle suspended device
+	/* Handle suspended device. */
 	if (d->dev->power.is_suspended) {
 		dev_warn(d->dev, "rqst: device is suspended, not executing\n");
 		return san_rqst_fixup_suspended(d, &rqst, buffer);
@@ -644,7 +644,7 @@ static acpi_status san_opreg_handler(u32 function,
 		return AE_OK;
 	}
 
-	// buffer must have at least contain the command-value
+	/* Buffer must have at least contain the command-value. */
 	if (buffer->len == 0) {
 		dev_err(d->dev, "request-package too small\n");
 		return AE_OK;
@@ -766,13 +766,13 @@ static acpi_status san_consumer_setup(acpi_handle handle, u32 lvl,
 	if (!is_san_consumer(pdev, handle))
 		return AE_OK;
 
-	// ignore ACPI devices that are not present
+	/* Ignore ACPI devices that are not present. */
 	if (acpi_bus_get_device(handle, &adev) != 0)
 		return AE_OK;
 
 	san_consumer_dbg(&pdev->dev, handle, "creating device link\n");
 
-	// try to set up device links, ignore but log errors
+	/* Try to set up device links, ignore but log errors. */
 	link = device_link_add(&adev->dev, &pdev->dev, flags);
 	if (!link) {
 		san_consumer_warn(&pdev->dev, handle,

@@ -760,7 +760,7 @@ static void ssam_event_queue_work_fn(struct work_struct *work)
 	nf = &queue->cplt->event.notif;
 	dev = queue->cplt->dev;
 
-	// limit number of processed events to avoid livelocking
+	/* Limit number of processed events to avoid livelocking. */
 	do {
 		item = ssam_event_queue_pop(queue);
 		if (!item)
@@ -1062,17 +1062,19 @@ static int ssam_controller_caps_load_from_acpi(
 	u64 funcs;
 	int status;
 
-	// set defaults
+	/* Set defaults. */
 	caps->ssh_power_profile = U32_MAX;
 	caps->screen_on_sleep_idle_timeout = U32_MAX;
 	caps->screen_off_sleep_idle_timeout = U32_MAX;
 	caps->d3_closes_handle = false;
 	caps->ssh_buffer_size = U32_MAX;
 
+	/* Pre-load supported DSM functions. */
 	status = ssam_dsm_get_functions(handle, &funcs);
 	if (status)
 		return status;
 
+	/* Load actual values from ACPI, if present. */
 	status = ssam_dsm_load_u32(handle, funcs, SSH_DSM_FN_SSH_POWER_PROFILE,
 				   &caps->ssh_power_profile);
 	if (status)
@@ -1147,12 +1149,12 @@ int ssam_controller_init(struct ssam_controller *ctrl,
 	ssh_seq_reset(&ctrl->counter.seq);
 	ssh_rqid_reset(&ctrl->counter.rqid);
 
-	// initialize event/request completion system
+	/* Initialize event/request completion system. */
 	status = ssam_cplt_init(&ctrl->cplt, &serdev->dev);
 	if (status)
 		return status;
 
-	// initialize request and packet transport layers
+	/* Initialize request and packet transport layers. */
 	status = ssh_rtl_init(&ctrl->rtl, serdev, &ssam_rtl_ops);
 	if (status) {
 		ssam_cplt_destroy(&ctrl->cplt);
@@ -1240,14 +1242,20 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	if (s == SSAM_CONTROLLER_UNINITIALIZED || s == SSAM_CONTROLLER_STOPPED)
 		return;
 
-	// try to flush pending events and requests while everything still works
+	/*
+	 * Try to flush pending events and requests while everything still
+	 * works. Note: There may still be packets and/or requests in the
+	 * system after this call (e.g. via control packets submitted by the
+	 * packet transport layer or flush timeout / failure, ...). Those will
+	 * be handled with the ssh_rtl_shutdown() call below.
+	 */
 	status = ssh_rtl_flush(&ctrl->rtl, SSAM_CTRL_SHUTDOWN_FLUSH_TIMEOUT);
 	if (status) {
 		ssam_err(ctrl, "failed to flush request transport layer: %d\n",
 			 status);
 	}
 
-	// try to flush out all currently completing requests and events
+	/* Try to flush all currently completing requests and events. */
 	ssam_cplt_flush(&ctrl->cplt);
 
 	/*
@@ -1263,7 +1271,10 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 	 */
 	ssam_notifier_unregister_all(ctrl);
 
-	// cancel rem. requests, ensure no new ones can be queued, stop threads
+	/*
+	 * Cancel remaining requests. Ensure no new ones can be queued and stop
+	 * threads.
+	 */
 	ssh_rtl_shutdown(&ctrl->rtl);
 
 	/*
@@ -1305,7 +1316,7 @@ void ssam_controller_destroy(struct ssam_controller *ctrl)
 	 * ensure that those remaining are being completed and freed.
 	 */
 
-	// actually free resources
+	/* Actually free resources. */
 	ssam_cplt_destroy(&ctrl->cplt);
 	ssh_rtl_destroy(&ctrl->rtl);
 
@@ -1447,7 +1458,7 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 		return;
 	}
 
-	if (!data)	// handle requests without a response
+	if (!data)	/* Handle requests without a response. */
 		return;
 
 	if (!r->resp || !r->resp->pointer) {
@@ -1766,7 +1777,7 @@ static int __ssam_ssh_event_request(struct ssam_controller *ctrl,
 	u16 rqid = ssh_tc_to_rqid(id.target_category);
 	u8 buf = 0;
 
-	// only allow RQIDs that lie within event spectrum
+	/* Only allow RQIDs that lie within the event spectrum. */
 	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
@@ -2303,7 +2314,7 @@ void ssam_notifier_restore_registered(struct ssam_controller *ctrl)
 
 		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
 
-		// ignore errors, will get logged in call
+		/* Ignore errors, will get logged in call. */
 		ssam_ssh_event_enable(ctrl, e->key.reg, e->key.id, e->flags);
 	}
 	mutex_unlock(&nf->lock);
@@ -2344,7 +2355,7 @@ static void ssam_notifier_unregister_all(struct ssam_controller *ctrl)
 
 	mutex_lock(&nf->lock);
 	rbtree_postorder_for_each_entry_safe(e, n, &nf->refcount, node) {
-		// ignore errors, will get logged in call
+		/* Ignore errors, will get logged in call. */
 		ssam_ssh_event_disable(ctrl, e->key.reg, e->key.id, e->flags);
 		kfree(e);
 	}

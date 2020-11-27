@@ -425,7 +425,7 @@ DECLARE_EVENT_CLASS(ssam_request_class,
 	TP_fast_assign(
 		const struct ssh_packet *p = &request->packet;
 
-		// use packet for UID so we can match requests to packets
+		/* Use packet for UID so we can match requests to packets. */
 		__entry->state = READ_ONCE(request->state);
 		__entry->rqid = ssam_trace_get_request_id(p);
 		ssam_trace_ptr_uid(p, __entry->uid);
@@ -469,7 +469,7 @@ DECLARE_EVENT_CLASS(ssam_request_status_class,
 	TP_fast_assign(
 		const struct ssh_packet *p = &request->packet;
 
-		// use packet for UID so we can match requests to packets
+		/* Use packet for UID so we can match requests to packets. */
 		__entry->state = READ_ONCE(request->state);
 		__entry->rqid = ssam_trace_get_request_id(p);
 		__entry->status = status;

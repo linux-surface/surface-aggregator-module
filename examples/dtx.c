@@ -26,14 +26,14 @@ int main()
 		return -1;
 	}
 
-	// enable events
+	/* Enable events. */
 	status = ioctl(fd, SDTX_IOCTL_EVENTS_ENABLE);
 	if (status < 0) {
 		printf("error: Failed to enable events: %s\n", strerror(errno));
 		return -1;
 	}
 
-	// read events
+	/* Read events. */
 	while (true) {
 		struct sdtx_event *event = (struct sdtx_event *)&buffer[0];
 		ssize_t n;
@@ -52,7 +52,7 @@ int main()
 			       event->code, event->length);
 
 			if (event->code == SDTX_EVENT_REQUEST) {
-				// send confirmation command
+				/* Send confirmation command. */
 				status = ioctl(fd, SDTX_IOCTL_LATCH_CONFIRM);
 				if (status < 0) {
 					printf("error: Failed to send command: %s\n",
