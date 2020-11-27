@@ -320,7 +320,7 @@ static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 	serdev_device_set_baudrate(serdev, uart->default_baud_rate);
 
 	/* serdev currently only supports RTSCTS flow control. */
-	if (uart->flow_control & (~((u8) ACPI_UART_FLOW_CONTROL_HW))) {
+	if (uart->flow_control & (~((u8)ACPI_UART_FLOW_CONTROL_HW))) {
 		dev_warn(&serdev->dev, "setup: unsupported flow control (value: %#04x)\n",
 			 uart->flow_control);
 	}
