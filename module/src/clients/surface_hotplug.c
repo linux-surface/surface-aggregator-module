@@ -3,11 +3,11 @@
  * Surface Book (gen. 2 and later) hot-plug driver.
  *
  * Surface Book devices (can) have a hot-pluggable discrete GPU (dGPU). This
- * driver is responsible for out-of-band hot-plug event signalling on these
+ * driver is responsible for out-of-band hot-plug event signaling on these
  * devices. It is specifically required when the hot-plug device is in D3cold
  * and can thus not generate PCIe hot-plug events itself.
  *
- * Event signalling is handled via ACPI, which will generate the appropriate
+ * Event signaling is handled via ACPI, which will generate the appropriate
  * device-check notifications to be picked up by the PCIe hot-plug driver.
  *
  * Copyright (C) 2019-2020 Maximilian Luz <luzmaximilian@gmail.com>
@@ -262,5 +262,5 @@ static struct platform_driver surface_hotplug_driver = {
 module_platform_driver(surface_hotplug_driver);
 
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
-MODULE_DESCRIPTION("Surface Hot-Plug Signalling Driver for Surface Book Devices");
+MODULE_DESCRIPTION("Surface Hot-Plug Signaling Driver for Surface Book Devices");
 MODULE_LICENSE("GPL");

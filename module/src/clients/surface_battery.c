@@ -26,7 +26,7 @@
 
 static unsigned int cache_time = 1000;
 module_param(cache_time, uint, 0644);
-MODULE_PARM_DESC(cache_time, "battery state chaching time in milliseconds [default: 1000]");
+MODULE_PARM_DESC(cache_time, "battery state caching time in milliseconds [default: 1000]");
 
 
 /* -- SAM Interface. -------------------------------------------------------- */

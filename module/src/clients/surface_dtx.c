@@ -5,7 +5,7 @@
  * Provides a user-space interface to properly handle clipboard/tablet
  * (containing screen and processor) detachment from the base of the device
  * (containing the keyboard and optionally a discrete GPU). Allows to
- * acknowledge (to speed things up), abort (e.g. in case the dGPU is stil in
+ * acknowledge (to speed things up), abort (e.g. in case the dGPU is still in
  * use), or request detachment via user-space.
  *
  * Copyright (C) 2019-2020 Maximilian Luz <luzmaximilian@gmail.com>
@@ -971,7 +971,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	 * be able to detect state changes there if no change event has been
 	 * received between driver initialization and first device suspension.
 	 *
-	 * Note that we also need to do this before registring the event
+	 * Note that we also need to do this before registering the event
 	 * notifier, as that may access the state values.
 	 */
 	status = ssam_retry(ssam_bas_get_base, ddev->ctrl, &ddev->state.base);
@@ -1020,7 +1020,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 
 	/*
 	 * Update device state in case it has changed between getting the
-	 * initial mode and registring the event notifier.
+	 * initial mode and registering the event notifier.
 	 */
 	sdtx_update_device_state(ddev, 0);
 	return 0;
@@ -1118,7 +1118,7 @@ static void surface_dtx_pm_complete(struct device *dev)
 	 * display-off state) and release them when resumed (i.e. transitioned
 	 * to display-on state). During hibernation, however, the EC will be
 	 * shut down and does not store events. Furthermore, events might be
-	 * dropped during prolonged suspension (it is scurrently unknown how
+	 * dropped during prolonged suspension (it is currently unknown how
 	 * big this event buffer is and how it behaves on overruns).
 	 *
 	 * To prevent any problems, we update the device state here. We do
