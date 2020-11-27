@@ -147,6 +147,7 @@ static int san_dgpu_notifier_call(struct san_dgpu_event *evt)
 
 #define SAN_DSM_REVISION	0
 
+/* 93b666c5-70c6-469f-a215-3d487c91ab3c */
 static const guid_t SAN_DSM_UUID =
 	GUID_INIT(0x93b666c5, 0x70c6, 0x469f, 0xa2, 0x15, 0x3d,
 		  0x48, 0x7c, 0x91, 0xab, 0x3c);

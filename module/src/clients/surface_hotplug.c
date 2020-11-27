@@ -38,6 +38,7 @@ static const struct acpi_gpio_mapping shps_acpi_gpios[] = {
 	{ },
 };
 
+/* 5515a847-ed55-4b27-8352-cd320e10360a */
 static const guid_t shps_dsm_guid =
 	GUID_INIT(0x5515a847, 0xed55, 0x4b27, 0x83, 0x52, 0xcd,
 		  0x32, 0x0e, 0x10, 0x36, 0x0a);
