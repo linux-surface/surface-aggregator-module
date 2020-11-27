@@ -205,13 +205,13 @@ static inline u32 ssam_trace_get_request_tc(const struct ssh_packet *p)
 	)
 
 #define ssam_show_request_type(flags)					\
-	__print_flags(flags & SSH_REQUEST_FLAGS_TY_MASK, "",		\
+	__print_flags((flags) & SSH_REQUEST_FLAGS_TY_MASK, "",		\
 		{ BIT(SSH_REQUEST_TY_FLUSH_BIT),	"F" },		\
 		{ BIT(SSH_REQUEST_TY_HAS_RESPONSE_BIT),	"R" }		\
 	)
 
 #define ssam_show_request_state(flags)					\
-	__print_flags(flags & SSH_REQUEST_FLAGS_SF_MASK, "",		\
+	__print_flags((flags) & SSH_REQUEST_FLAGS_SF_MASK, "",		\
 		{ BIT(SSH_REQUEST_SF_LOCKED_BIT),	"L" },		\
 		{ BIT(SSH_REQUEST_SF_QUEUED_BIT),	"Q" },		\
 		{ BIT(SSH_REQUEST_SF_PENDING_BIT),	"P" },		\

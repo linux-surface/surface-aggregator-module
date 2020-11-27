@@ -138,7 +138,7 @@ static_assert(sizeof(struct ssh_command) == 8);
  *
  * Return: Returns the length of a SSH message with payload of specified size.
  */
-#define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + payload_size)
+#define SSH_MESSAGE_LENGTH(payload_size) (SSH_MSG_LEN_BASE + (payload_size))
 
 /**
  * SSH_COMMAND_MESSAGE_LENGTH() - Compute length of SSH command message.
@@ -148,7 +148,7 @@ static_assert(sizeof(struct ssh_command) == 8);
  * specified size.
  */
 #define SSH_COMMAND_MESSAGE_LENGTH(payload_size) \
-	SSH_MESSAGE_LENGTH(sizeof(struct ssh_command) + payload_size)
+	SSH_MESSAGE_LENGTH(sizeof(struct ssh_command) + (payload_size))
 
 /**
  * SSH_MSGOFFSET_FRAME() - Compute offset in SSH message to specified field in
