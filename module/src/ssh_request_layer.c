@@ -52,6 +52,12 @@
  */
 #define SSH_RTL_MAX_PENDING		3
 
+/*
+ * SSH_RTL_TX_BATCH - Maximum number of requests processed per work execution.
+ * Used to prevent livelocking of the workqueue. Value chosen via educated
+ * guess, may be adjusted.
+ */
+#define SSH_RTL_TX_BATCH		10
 
 #ifdef CONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION
 
@@ -307,17 +313,10 @@ static bool ssh_rtl_tx_schedule(struct ssh_rtl *rtl)
 	return schedule_work(&rtl->tx.work);
 }
 
-/*
- * SSAM_SSH_RQST_TX_BATCH - Maximum number of requests processed per work
- * execution. Used to prevent livelocking of the workqueue. Value chosen via
- * educated guess, may be adjusted.
- */
-#define SSAM_SSH_RQST_TX_BATCH	10
-
 static void ssh_rtl_tx_work_fn(struct work_struct *work)
 {
 	struct ssh_rtl *rtl = to_ssh_rtl(work, tx.work);
-	unsigned int iterations = SSAM_SSH_RQST_TX_BATCH;
+	unsigned int iterations = SSH_RTL_TX_BATCH;
 	int status;
 
 	/*
