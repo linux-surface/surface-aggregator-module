@@ -393,10 +393,10 @@ static bool spwr_battery_is_full(struct spwr_battery_device *bat)
 	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
 
-	return full_cap != SPWR_BATTERY_VALUE_UNKNOWN && full_cap != 0
-		&& remaining_cap != SPWR_BATTERY_VALUE_UNKNOWN
-		&& remaining_cap >= full_cap
-		&& state == 0;
+	return full_cap != SPWR_BATTERY_VALUE_UNKNOWN && full_cap != 0 &&
+		remaining_cap != SPWR_BATTERY_VALUE_UNKNOWN &&
+		remaining_cap >= full_cap &&
+		state == 0;
 }
 
 static int spwr_battery_recheck_full(struct spwr_battery_device *bat)

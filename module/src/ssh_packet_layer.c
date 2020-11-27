@@ -1237,8 +1237,8 @@ static struct ssh_packet *ssh_ptl_ack_pop(struct ssh_ptl *ptl, u8 seq_id)
 static void ssh_ptl_wait_until_transmitted(struct ssh_packet *packet)
 {
 	wait_event(packet->ptl->tx.packet_wq,
-		   test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &packet->state)
-		   || test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state));
+		   test_bit(SSH_PACKET_SF_TRANSMITTED_BIT, &packet->state) ||
+		   test_bit(SSH_PACKET_SF_LOCKED_BIT, &packet->state));
 }
 
 static void ssh_ptl_acknowledge(struct ssh_ptl *ptl, u8 seq)
@@ -1341,8 +1341,8 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	if (status)
 		return status;
 
-	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state)
-	    || (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING))
+	if (!test_bit(SSH_PACKET_TY_BLOCKING_BIT, &p->state) ||
+	    (atomic_read(&ptl->pending.count) < SSH_PTL_MAX_PENDING))
 		ssh_ptl_tx_wakeup_packet(ptl);
 
 	return 0;
@@ -1771,8 +1771,8 @@ static int ssh_ptl_rx_threadfn(void *data)
 		size_t n;
 
 		wait_event_interruptible(ptl->rx.wq,
-					 !kfifo_is_empty(&ptl->rx.fifo)
-					 || kthread_should_stop());
+					 !kfifo_is_empty(&ptl->rx.fifo) ||
+					 kthread_should_stop());
 		if (kthread_should_stop())
 			break;
 

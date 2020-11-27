@@ -474,9 +474,9 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf,
 				return -EAGAIN;
 
 			status = wait_event_interruptible(ddev->waitq,
-					!kfifo_is_empty(&client->buffer)
-					|| test_bit(SDTX_DEVICE_SHUTDOWN_BIT,
-						    &ddev->flags));
+					!kfifo_is_empty(&client->buffer) ||
+					test_bit(SDTX_DEVICE_SHUTDOWN_BIT,
+						 &ddev->flags));
 			if (status < 0)
 				return status;
 
@@ -658,8 +658,8 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 		clear_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->flags);
 
 		/* If state has not changed: do not send new event. */
-		if (ddev->state.base.state == in->data[0]
-		    && ddev->state.base.base_id == in->data[1])
+		if (ddev->state.base.state == in->data[0] &&
+		    ddev->state.base.base_id == in->data[1])
 			goto out;
 
 		ddev->state.base.state = in->data[0];
@@ -717,10 +717,10 @@ out:
 
 static bool sdtx_device_mode_invalid(u8 mode, u8 base_state)
 {
-	return ((base_state == SSAM_BAS_BASE_STATE_ATTACHED)
-			&& (mode == SDTX_DEVICE_MODE_TABLET))
-		|| ((base_state == SSAM_BAS_BASE_STATE_DETACH_SUCCESS)
-			&& (mode != SDTX_DEVICE_MODE_TABLET));
+	return ((base_state == SSAM_BAS_BASE_STATE_ATTACHED) &&
+		(mode == SDTX_DEVICE_MODE_TABLET)) ||
+	       ((base_state == SSAM_BAS_BASE_STATE_DETACH_SUCCESS) &&
+		(mode != SDTX_DEVICE_MODE_TABLET));
 }
 
 static void sdtx_device_mode_workfn(struct work_struct *work)
@@ -795,8 +795,8 @@ static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 	struct sdtx_base_info_event event;
 
 	/* Prevent duplicate events. */
-	if (ddev->state.base.state == info.state
-	    && ddev->state.base.base_id == info.base_id)
+	if (ddev->state.base.state == info.state &&
+	    ddev->state.base.base_id == info.base_id)
 		return;
 
 	ddev->state.base = info;

@@ -209,13 +209,13 @@ static bool ssam_device_id_compatible(const struct ssam_device_id *id,
  */
 static bool ssam_device_id_is_null(const struct ssam_device_id *id)
 {
-	return id->match_flags == 0
-		&& id->domain == 0
-		&& id->category == 0
-		&& id->target == 0
-		&& id->instance == 0
-		&& id->function == 0
-		&& id->driver_data == 0;
+	return id->match_flags == 0 &&
+		id->domain == 0 &&
+		id->category == 0 &&
+		id->target == 0 &&
+		id->instance == 0 &&
+		id->function == 0 &&
+		id->driver_data == 0;
 }
 
 /**

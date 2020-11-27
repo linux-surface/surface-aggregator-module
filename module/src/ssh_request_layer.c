@@ -1165,8 +1165,8 @@ int ssh_rtl_flush(struct ssh_rtl *rtl, unsigned long timeout)
 		wait_for_completion(&rqst.completion);
 	}
 
-	WARN_ON(rqst.status != 0 && rqst.status != -ECANCELED
-		&& rqst.status != -ESHUTDOWN && rqst.status != -EINTR);
+	WARN_ON(rqst.status != 0 && rqst.status != -ECANCELED &&
+		rqst.status != -ESHUTDOWN && rqst.status != -EINTR);
 
 	return rqst.status == -ECANCELED ? -ETIMEDOUT : rqst.status;
 }
