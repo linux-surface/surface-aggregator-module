@@ -319,9 +319,10 @@ static bool san_evt_bat(const struct ssam_event *event, struct device *dev)
 		return false;
 	}
 
-	if (status)
+	if (status) {
 		dev_err(dev, "error handling power event (cid = %#04x)\n",
 			event->command_id);
+	}
 
 	return true;
 }
