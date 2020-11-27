@@ -54,7 +54,7 @@ static inline size_t msgb_bytes_used(const struct msgbuf *msgb)
 
 static inline void __msgb_push_u8(struct msgbuf *msgb, u8 value)
 {
-	*(msgb->ptr) = value;
+	*msgb->ptr = value;
 	msgb->ptr += sizeof(u8);
 }
 
