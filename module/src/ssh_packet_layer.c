@@ -356,7 +356,7 @@ static bool __ssh_ptl_should_drop_dsq_packet(struct ssh_packet *packet)
 
 	trace_ssam_ei_tx_drop_dsq_packet(packet);
 	ptl_info(packet->ptl,
-		"packet error injection: dropping sequenced data packet %p\n",
+		 "packet error injection: dropping sequenced data packet %p\n",
 		 packet);
 
 	return true;
@@ -1018,7 +1018,6 @@ static long ssh_ptl_tx_wait_packet(struct ssh_ptl *ptl)
 	int status;
 
 	status = wait_for_completion_interruptible(&ptl->tx.thread_cplt_pkt);
-
 	reinit_completion(&ptl->tx.thread_cplt_pkt);
 
 	/*
@@ -1034,9 +1033,8 @@ static long ssh_ptl_tx_wait_transfer(struct ssh_ptl *ptl, long timeout)
 {
 	long status;
 
-	status =  wait_for_completion_interruptible_timeout(
-			&ptl->tx.thread_cplt_tx, timeout);
-
+	status = wait_for_completion_interruptible_timeout(&ptl->tx.thread_cplt_tx,
+							   timeout);
 	reinit_completion(&ptl->tx.thread_cplt_tx);
 
 	/*

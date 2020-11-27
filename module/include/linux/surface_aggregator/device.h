@@ -250,13 +250,10 @@ struct ssam_device_driver *to_ssam_device_driver(struct device_driver *d)
 	return container_of(d, struct ssam_device_driver, driver);
 }
 
+const struct ssam_device_id *ssam_device_id_match(const struct ssam_device_id *table,
+						  const struct ssam_device_uid uid);
 
-const struct ssam_device_id *ssam_device_id_match(
-		const struct ssam_device_id *table,
-		const struct ssam_device_uid uid);
-
-const struct ssam_device_id *ssam_device_get_match(
-		const struct ssam_device *dev);
+const struct ssam_device_id *ssam_device_get_match(const struct ssam_device *dev);
 
 const void *ssam_device_get_match_data(const struct ssam_device *dev);
 

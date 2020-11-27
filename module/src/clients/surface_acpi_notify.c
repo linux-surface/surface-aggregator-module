@@ -480,8 +480,9 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *b)
 	return AE_OK;
 }
 
-static struct gsb_data_rqsx *san_validate_rqsx(struct device *dev,
-		const char *type, struct gsb_buffer *b)
+static
+struct gsb_data_rqsx *san_validate_rqsx(struct device *dev, const char *type,
+					struct gsb_buffer *b)
 {
 	struct gsb_data_rqsx *rqsx = &b->data.rqsx;
 
@@ -627,9 +628,9 @@ static acpi_status san_rqsg(struct san_data *d, struct gsb_buffer *buffer)
 	return AE_OK;
 }
 
-static acpi_status san_opreg_handler(u32 function,
-		acpi_physical_address command, u32 bits, u64 *value64,
-		void *opreg_context, void *region_context)
+static acpi_status san_opreg_handler(u32 function, acpi_physical_address command,
+				     u32 bits, u64 *value64, void *opreg_context,
+				     void *region_context)
 {
 	struct san_data *d = to_san_data(opreg_context, info);
 	struct gsb_buffer *buffer = (struct gsb_buffer *)value64;
@@ -776,8 +777,7 @@ static acpi_status san_consumer_setup(acpi_handle handle, u32 lvl,
 	/* Try to set up device links, ignore but log errors. */
 	link = device_link_add(&adev->dev, &pdev->dev, flags);
 	if (!link) {
-		san_consumer_warn(&pdev->dev, handle,
-				  "failed to create device link\n");
+		san_consumer_warn(&pdev->dev, handle, "failed to create device link\n");
 		return AE_OK;
 	}
 
@@ -821,7 +821,8 @@ static int san_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, data);
 
 	astatus = acpi_install_address_space_handler(san, ACPI_ADR_SPACE_GSBUS,
-			&san_opreg_handler, NULL, &data->info);
+						     &san_opreg_handler, NULL,
+						     &data->info);
 	if (ACPI_FAILURE(astatus))
 		return -ENXIO;
 

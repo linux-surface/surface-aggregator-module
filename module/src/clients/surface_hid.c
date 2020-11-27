@@ -380,7 +380,7 @@ static bool ssam_kbd_is_input_event(const struct ssam_event *event)
 }
 
 static u32 ssam_kbd_event_fn(struct ssam_event_notifier *nf,
-				const struct ssam_event *event)
+			     const struct ssam_event *event)
 {
 	struct surface_hid_device *shid;
 	int status;
@@ -603,9 +603,9 @@ static int surface_hid_parse(struct hid_device *hid)
 	return status;
 }
 
-static int surface_hid_raw_request(struct hid_device *hid,
-		unsigned char reportnum, u8 *buf, size_t len,
-		unsigned char rtype, int reqtype)
+static int surface_hid_raw_request(struct hid_device *hid, unsigned char reportnum,
+				   u8 *buf, size_t len, unsigned char rtype,
+				   int reqtype)
 {
 	struct surface_hid_device *shid = hid->driver_data;
 

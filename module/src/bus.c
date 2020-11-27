@@ -226,9 +226,8 @@ static bool ssam_device_id_is_null(const struct ssam_device_id *id)
  * Find the first match for the provided device UID in the provided ID table
  * and return it. Returns %NULL if no match could be found.
  */
-const struct ssam_device_id *ssam_device_id_match(
-		const struct ssam_device_id *table,
-		const struct ssam_device_uid uid)
+const struct ssam_device_id *ssam_device_id_match(const struct ssam_device_id *table,
+						  const struct ssam_device_uid uid)
 {
 	const struct ssam_device_id *id;
 
@@ -256,8 +255,7 @@ EXPORT_SYMBOL_GPL(ssam_device_id_match);
  * Return: Returns the first match for the UID of the device in the device
  * driver's match table, or %NULL if no such match could be found.
  */
-const struct ssam_device_id *ssam_device_get_match(
-		const struct ssam_device *dev)
+const struct ssam_device_id *ssam_device_get_match(const struct ssam_device *dev)
 {
 	const struct ssam_device_driver *sdrv;
 

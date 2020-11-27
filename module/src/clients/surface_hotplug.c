@@ -101,7 +101,7 @@ static void shps_dsm_notify_irq(struct platform_device *pdev,
 	param.integer.value = value;
 
 	result = acpi_evaluate_dsm(handle, &shps_dsm_guid, SHPS_DSM_REVISION,
-			SHPS_DSM_FN_IRQ_BASE_PRESENCE + type, &param);
+				   SHPS_DSM_FN_IRQ_BASE_PRESENCE + type, &param);
 
 	if (!result) {
 		mutex_unlock(&sdev->lock[type]);
@@ -149,6 +149,7 @@ static irqreturn_t shps_handle_irq(int irq, void *data)
 
 static int shps_setup_irq(struct platform_device *pdev, enum shps_irq_type type)
 {
+	unsigned long flags = IRQF_ONESHOT | IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING;
 	struct shps_device *sdev = platform_get_drvdata(pdev);
 	struct gpio_desc *gpiod;
 	acpi_handle handle = ACPI_HANDLE(&pdev->dev);
@@ -180,8 +181,7 @@ static int shps_setup_irq(struct platform_device *pdev, enum shps_irq_type type)
 		return -ENOMEM;
 
 	status = devm_request_threaded_irq(&pdev->dev, irq, NULL, shps_handle_irq,
-			IRQF_ONESHOT | IRQF_TRIGGER_FALLING | IRQF_TRIGGER_RISING,
-			irq_name, pdev);
+					   flags, irq_name, pdev);
 	if (status)
 		return status;
 

@@ -312,9 +312,9 @@ struct ssam_nf_refcount_entry {
  * with %-ENOSPC if there have already been %INT_MAX events of the specified
  * ID and type registered, or %-ENOMEM if the entry could not be allocated.
  */
-static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
-		struct ssam_nf *nf, struct ssam_event_registry reg,
-		struct ssam_event_id id)
+static struct ssam_nf_refcount_entry
+*ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
+		      struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
@@ -374,9 +374,9 @@ static struct ssam_nf_refcount_entry *ssam_nf_refcount_inc(
  * Return: Returns the refcount entry on success or %NULL if the entry has not
  * been found.
  */
-static struct ssam_nf_refcount_entry *ssam_nf_refcount_dec(
-		struct ssam_nf *nf, struct ssam_event_registry reg,
-		struct ssam_event_id id)
+static struct ssam_nf_refcount_entry
+*ssam_nf_refcount_dec(struct ssam_nf *nf, struct ssam_event_registry reg,
+		      struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
@@ -671,8 +671,9 @@ static bool ssam_event_queue_is_empty(struct ssam_event_queue *q)
  * this function returns %NULL. If the target ID is not supported, this
  * function will fall back to the default target ID (``tid = 1``).
  */
-static struct ssam_event_queue *ssam_cplt_get_event_queue(
-		struct ssam_cplt *cplt, u8 tid, u16 rqid)
+static
+struct ssam_event_queue *ssam_cplt_get_event_queue(struct ssam_cplt *cplt,
+						   u8 tid, u16 rqid)
 {
 	u16 event = ssh_rqid_to_event(rqid);
 	u16 tidx = ssh_tid_to_index(tid);
@@ -1055,8 +1056,9 @@ static int ssam_dsm_load_u32(acpi_handle handle, u64 funcs, u64 func, u32 *ret)
  *
  * Return: Returns zero on success, a negative error code on failure.
  */
-static int ssam_controller_caps_load_from_acpi(
-		acpi_handle handle, struct ssam_controller_caps *caps)
+static
+int ssam_controller_caps_load_from_acpi(acpi_handle handle,
+					struct ssam_controller_caps *caps)
 {
 	u32 d3_closes_handle = false;
 	u64 funcs;
