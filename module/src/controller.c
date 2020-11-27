@@ -2264,7 +2264,7 @@ int ssam_notifier_disable_registered(struct ssam_controller *ctrl)
 	int status;
 
 	mutex_lock(&nf->lock);
-	for (n = rb_first(&nf->refcount); n != NULL; n = rb_next(n)) {
+	for (n = rb_first(&nf->refcount); n; n = rb_next(n)) {
 		struct ssam_nf_refcount_entry *e;
 
 		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
@@ -2278,7 +2278,7 @@ int ssam_notifier_disable_registered(struct ssam_controller *ctrl)
 	return 0;
 
 err:
-	for (n = rb_prev(n); n != NULL; n = rb_prev(n)) {
+	for (n = rb_prev(n); n; n = rb_prev(n)) {
 		struct ssam_nf_refcount_entry *e;
 
 		e = rb_entry(n, struct ssam_nf_refcount_entry, node);
@@ -2308,7 +2308,7 @@ void ssam_notifier_restore_registered(struct ssam_controller *ctrl)
 	struct rb_node *n;
 
 	mutex_lock(&nf->lock);
-	for (n = rb_first(&nf->refcount); n != NULL; n = rb_next(n)) {
+	for (n = rb_first(&nf->refcount); n; n = rb_next(n)) {
 		struct ssam_nf_refcount_entry *e;
 
 		e = rb_entry(n, struct ssam_nf_refcount_entry, node);

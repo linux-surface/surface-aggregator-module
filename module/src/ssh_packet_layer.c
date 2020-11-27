@@ -1332,7 +1332,7 @@ int ssh_ptl_submit(struct ssh_ptl *ptl, struct ssh_packet *p)
 	 * submission, thus we cannot expect it to be NULL.
 	 */
 	ptl_old = READ_ONCE(p->ptl);
-	if (ptl_old == NULL)
+	if (!ptl_old)
 		WRITE_ONCE(p->ptl, ptl);
 	else if (WARN_ON(ptl_old != ptl))
 		return -EALREADY;	/* Submitted on different PTL. */

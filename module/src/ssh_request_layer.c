@@ -388,7 +388,7 @@ int ssh_rtl_submit(struct ssh_rtl *rtl, struct ssh_request *rqst)
 	 * push operation has been completed (via lock) due to that. Only then,
 	 * we can safely try to remove it.
 	 */
-	if (cmpxchg(&rqst->packet.ptl, NULL, &rtl->ptl) != NULL) {
+	if (cmpxchg(&rqst->packet.ptl, NULL, &rtl->ptl)) {
 		spin_unlock(&rtl->queue.lock);
 		return -EALREADY;
 	}
