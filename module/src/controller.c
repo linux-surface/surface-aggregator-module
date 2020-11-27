@@ -442,7 +442,7 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 	int status, nf_ret;
 
 	if (!ssh_rqid_is_event(rqid)) {
-		dev_warn(dev, "event: unsupported rqid: 0x%04x\n", rqid);
+		dev_warn(dev, "event: unsupported rqid: %#06x\n", rqid);
 		return;
 	}
 
@@ -452,14 +452,14 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 
 	if (status < 0) {
 		dev_err(dev, "event: error handling event: %d "
-			"(tc: 0x%02x, tid: 0x%02x, cid: 0x%02x, iid: 0x%02x)\n",
+			"(tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			status, event->target_category, event->target_id,
 			event->command_id, event->instance_id);
 	}
 
 	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
-		dev_warn(dev, "event: unhandled event (rqid: 0x%02x, "
-			 "tc: 0x%02x, tid: 0x%02x, cid: 0x%02x, iid: 0x%02x)\n",
+		dev_warn(dev, "event: unhandled event (rqid: %#04x, "
+			 "tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			 rqid, event->target_category, event->target_id,
 			 event->command_id, event->instance_id);
 	}
@@ -678,7 +678,7 @@ static struct ssam_event_queue *ssam_cplt_get_event_queue(
 	u16 tidx = ssh_tid_to_index(tid);
 
 	if (!ssh_rqid_is_event(rqid)) {
-		dev_err(cplt->dev, "event: unsupported request ID: 0x%04x\n", rqid);
+		dev_err(cplt->dev, "event: unsupported request ID: %#06x\n", rqid);
 		return NULL;
 	}
 
@@ -1830,14 +1830,14 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
 	if (status < 0 && status != -EINVAL) {
-		ssam_err(ctrl, "failed to enable event source (tc: 0x%02x, "
-			 "iid: 0x%02x, reg: 0x%02x)\n", id.target_category,
+		ssam_err(ctrl, "failed to enable event source (tc: %#04x, "
+			 "iid: %#04x, reg: %#04x)\n", id.target_category,
 			 id.instance, reg.target_category);
 	}
 
 	if (status > 0) {
 		ssam_err(ctrl, "unexpected result while enabling event source: "
-			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 "%#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
 			 status, id.target_category, id.instance,
 			 reg.target_category);
 		return -EPROTO;
@@ -1872,14 +1872,14 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
 	if (status < 0 && status != -EINVAL) {
-		ssam_err(ctrl, "failed to disable event source (tc: 0x%02x, "
-			 "iid: 0x%02x, reg: 0x%02x)\n", id.target_category,
+		ssam_err(ctrl, "failed to disable event source (tc: %#04x, "
+			 "iid: %#04x, reg: %#04x)\n", id.target_category,
 			 id.instance, reg.target_category);
 	}
 
 	if (status > 0) {
 		ssam_err(ctrl, "unexpected result while disabling event source: "
-			 "0x%02x (tc: 0x%02x, iid: 0x%02x, reg: 0x%02x)\n",
+			 "%#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
 			 status, id.target_category, id.instance,
 			 reg.target_category);
 		return -EPROTO;
@@ -1951,7 +1951,7 @@ int ssam_ctrl_notif_display_off(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from display-off notification: 0x%02x\n",
+		ssam_err(ctrl, "unexpected response from display-off notification: %#04x\n",
 			 response);
 		return -EPROTO;
 	}
@@ -1990,7 +1990,7 @@ int ssam_ctrl_notif_display_on(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from display-on notification: 0x%02x\n",
+		ssam_err(ctrl, "unexpected response from display-on notification: %#04x\n",
 			 response);
 		return -EPROTO;
 	}
@@ -2032,7 +2032,7 @@ int ssam_ctrl_notif_d0_exit(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from D0-exit notification: 0x%02x\n",
+		ssam_err(ctrl, "unexpected response from D0-exit notification: %#04x\n",
 			 response);
 		return -EPROTO;
 	}
@@ -2074,7 +2074,7 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
 		return status;
 
 	if (response != 0) {
-		ssam_err(ctrl, "unexpected response from D0-entry notification: 0x%02x\n",
+		ssam_err(ctrl, "unexpected response from D0-entry notification: %#04x\n",
 			 response);
 		return -EPROTO;
 	}
@@ -2124,7 +2124,7 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		return PTR_ERR(entry);
 	}
 
-	ssam_dbg(ctrl, "enabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, rc: %d)\n",
+	ssam_dbg(ctrl, "enabling event (reg: %#04x, tc: %#04x, iid: %#04x, rc: %d)\n",
 		 n->event.reg.target_category, n->event.id.target_category,
 		 n->event.id.instance, entry->refcount);
 
@@ -2152,8 +2152,8 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		entry->flags = n->event.flags;
 
 	} else if (entry->flags != n->event.flags) {
-		ssam_warn(ctrl, "inconsistent flags when enabling event: got 0x%02x,"
-			  " expected 0x%02x (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x)",
+		ssam_warn(ctrl, "inconsistent flags when enabling event: got %#04x,"
+			  " expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)",
 			  n->event.flags, entry->flags, n->event.reg.target_category,
 			  n->event.id.target_category, n->event.id.instance);
 	}
@@ -2211,13 +2211,13 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		goto remove;
 	}
 
-	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, rc: %d)\n",
+	ssam_dbg(ctrl, "disabling event (reg: %#04x, tc: %#04x, iid: %#04x, rc: %d)\n",
 		 n->event.reg.target_category, n->event.id.target_category,
 		 n->event.id.instance, entry->refcount);
 
 	if (entry->flags != n->event.flags) {
-		ssam_warn(ctrl, "inconsistent flags when enabling event: got 0x%02x,"
-			  " expected 0x%02x (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x)",
+		ssam_warn(ctrl, "inconsistent flags when enabling event: got %#04x,"
+			  " expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)",
 			  n->event.flags, entry->flags, n->event.reg.target_category,
 			  n->event.id.target_category, n->event.id.instance);
 	}

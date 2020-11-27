@@ -460,7 +460,7 @@ struct ssam_request_spec_md {
 		if (rsp.length != sizeof(rtype)) {				\
 			struct device *dev = ssam_controller_device(ctrl);	\
 			dev_err(dev, "rqst: invalid response length, expected "	\
-				"%zu, got %zu (tc: 0x%02x, cid: 0x%02x)",	\
+				"%zu, got %zu (tc: %#04x, cid: %#04x)",		\
 				sizeof(rtype), rsp.length, rqst.target_category,\
 				rqst.command_id);				\
 			return -EIO;						\
@@ -604,7 +604,7 @@ struct ssam_request_spec_md {
 		if (rsp.length != sizeof(rtype)) {				\
 			struct device *dev = ssam_controller_device(ctrl);	\
 			dev_err(dev, "rqst: invalid response length, expected "	\
-				"%zu, got %zu (tc: 0x%02x, cid: 0x%02x)",	\
+				"%zu, got %zu (tc: %#04x, cid: %#04x)",		\
 				sizeof(rtype), rsp.length, rqst.target_category,\
 				rqst.command_id);				\
 			return -EIO;						\

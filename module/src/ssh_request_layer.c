@@ -168,7 +168,7 @@ static void ssh_rtl_complete_with_status(struct ssh_request *rqst, int status)
 	trace_ssam_request_complete(rqst, status);
 
 	/* rtl/ptl may not be set if we're canceling before submitting. */
-	rtl_dbg_cond(rtl, "rtl: completing request (rqid: 0x%04x, status: %d)\n",
+	rtl_dbg_cond(rtl, "rtl: completing request (rqid: %#06x, status: %d)\n",
 		     ssh_request_get_rqid_safe(rqst), status);
 
 	rqst->ops->complete(rqst, NULL, NULL, status);
@@ -182,7 +182,7 @@ static void ssh_rtl_complete_with_rsp(struct ssh_request *rqst,
 
 	trace_ssam_request_complete(rqst, 0);
 
-	rtl_dbg(rtl, "rtl: completing request with response (rqid: 0x%04x)\n",
+	rtl_dbg(rtl, "rtl: completing request with response (rqid: %#06x)\n",
 		ssh_request_get_rqid(rqst));
 
 	rqst->ops->complete(rqst, cmd, data, 0);
@@ -519,7 +519,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	spin_unlock(&rtl->pending.lock);
 
 	if (!r) {
-		rtl_warn(rtl, "rtl: dropping unexpected command message (rqid = 0x%04x)\n",
+		rtl_warn(rtl, "rtl: dropping unexpected command message (rqid = %#06x)\n",
 			 rqid);
 		return;
 	}
@@ -552,7 +552,7 @@ static void ssh_rtl_complete(struct ssh_rtl *rtl,
 	 * run on the same thread. Thus an exact determination is impossible.
 	 */
 	if (!test_bit(SSH_REQUEST_SF_TRANSMITTED_BIT, &r->state)) {
-		rtl_err(rtl, "rtl: received response before ACK for request (rqid = 0x%04x)\n",
+		rtl_err(rtl, "rtl: received response before ACK for request (rqid = %#06x)\n",
 			rqid);
 
 		/*
@@ -913,7 +913,7 @@ static void ssh_rtl_rx_event(struct ssh_rtl *rtl, const struct ssh_command *cmd,
 {
 	trace_ssam_rx_event_received(cmd, data->len);
 
-	rtl_dbg(rtl, "rtl: handling event (rqid: 0x%04x)\n",
+	rtl_dbg(rtl, "rtl: handling event (rqid: %#06x)\n",
 		get_unaligned_le16(&cmd->rqid));
 
 	rtl->ops.handle_event(rtl, cmd, data);
@@ -948,7 +948,7 @@ static void ssh_rtl_rx_data(struct ssh_ptl *p, const struct ssam_span *data)
 		break;
 
 	default:
-		ptl_err(p, "rtl: rx: unknown frame payload type (type: 0x%02x)\n",
+		ptl_err(p, "rtl: rx: unknown frame payload type (type: %#04x)\n",
 			data->ptr[0]);
 		break;
 	}

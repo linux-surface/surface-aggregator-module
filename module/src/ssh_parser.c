@@ -173,7 +173,7 @@ int sshp_parse_frame(const struct device *dev, const struct ssam_span *source,
 	*frame = (struct ssh_frame *)sf.ptr;
 	*payload = sp;
 
-	dev_dbg(dev, "rx: parser: valid frame found (type: 0x%02x, len: %u)\n",
+	dev_dbg(dev, "rx: parser: valid frame found (type: %#04x, len: %u)\n",
 		(*frame)->type, (*frame)->len);
 
 	return 0;
@@ -221,7 +221,7 @@ int sshp_parse_command(const struct device *dev, const struct ssam_span *source,
 	command_data->ptr = source->ptr + sizeof(struct ssh_command);
 	command_data->len = source->len - sizeof(struct ssh_command);
 
-	dev_dbg(dev, "rx: parser: valid command found (tc: 0x%02x, cid: 0x%02x)\n",
+	dev_dbg(dev, "rx: parser: valid command found (tc: %#04x, cid: %#04x)\n",
 		(*command)->tc, (*command)->cid);
 
 	return 0;

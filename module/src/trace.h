@@ -282,7 +282,7 @@ DECLARE_EVENT_CLASS(ssam_frame_class,
 		__entry->len = get_unaligned_le16(&frame->len);
 	),
 
-	TP_printk("ty=%s, seq=0x%02x, len=%u",
+	TP_printk("ty=%s, seq=%#04x, len=%u",
 		ssam_show_frame_type(__entry->type),
 		__entry->seq,
 		__entry->len
@@ -316,7 +316,7 @@ DECLARE_EVENT_CLASS(ssam_command_class,
 		__entry->len = len;
 	),
 
-	TP_printk("rqid=0x%04x, tc=%s, cid=0x%02x, iid=0x%02x, len=%u",
+	TP_printk("rqid=%#06x, tc=%s, cid=%#04x, iid=%#04x, len=%u",
 		__entry->rqid,
 		ssam_show_ssh_tc(__entry->tc),
 		__entry->cid,
@@ -352,7 +352,7 @@ DECLARE_EVENT_CLASS(ssam_packet_class,
 		__entry->seq = ssam_trace_get_packet_seq(packet);
 	),
 
-	TP_printk("uid=%s, seq=%s, ty=%s, pri=0x%02x, len=%u, sta=%s",
+	TP_printk("uid=%s, seq=%s, ty=%s, pri=%#04x, len=%u, sta=%s",
 		__entry->uid,
 		ssam_show_packet_seq(__entry->seq),
 		ssam_show_packet_type(__entry->state),
@@ -391,7 +391,7 @@ DECLARE_EVENT_CLASS(ssam_packet_status_class,
 		__entry->seq = ssam_trace_get_packet_seq(packet);
 	),
 
-	TP_printk("uid=%s, seq=%s, ty=%s, pri=0x%02x, len=%u, sta=%s, status=%d",
+	TP_printk("uid=%s, seq=%s, ty=%s, pri=%#04x, len=%u, sta=%s, status=%d",
 		__entry->uid,
 		ssam_show_packet_seq(__entry->seq),
 		ssam_show_packet_type(__entry->state),

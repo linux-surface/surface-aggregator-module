@@ -493,7 +493,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 
 	bat = container_of(nf, struct spwr_battery_device, notif);
 
-	dev_dbg(&bat->sdev->dev, "power event (cid = 0x%02x, iid = %d, tid = %d)\n",
+	dev_dbg(&bat->sdev->dev, "power event (cid = %#04x, iid = %#04x, tid = %#04x)\n",
 		event->command_id, event->instance_id, event->target_id);
 
 	/* Handled here, needs to be handled for all targets/instances. */
@@ -547,7 +547,7 @@ static u32 spwr_notify_ac(struct ssam_event_notifier *nf,
 
 	ac = container_of(nf, struct spwr_ac_device, notif);
 
-	dev_dbg(&ac->sdev->dev, "power event (cid = 0x%02x, iid = %d, tid = %d)\n",
+	dev_dbg(&ac->sdev->dev, "power event (cid = %#04x, iid = %#04x, tid = %#04x)\n",
 		event->command_id, event->instance_id, event->target_id);
 
 	/*

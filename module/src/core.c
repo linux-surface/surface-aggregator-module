@@ -321,7 +321,7 @@ static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 
 	/* serdev currently only supports RTSCTS flow control. */
 	if (uart->flow_control & (~((u8) ACPI_UART_FLOW_CONTROL_HW))) {
-		dev_warn(&serdev->dev, "setup: unsupported flow control (value: 0x%02x)\n",
+		dev_warn(&serdev->dev, "setup: unsupported flow control (value: %#04x)\n",
 			 uart->flow_control);
 	}
 
@@ -341,13 +341,13 @@ static acpi_status ssam_serdev_setup_via_acpi_crs(struct acpi_resource *rsc,
 		status = serdev_device_set_parity(serdev, SERDEV_PARITY_ODD);
 		break;
 	default:
-		dev_warn(&serdev->dev, "setup: unsupported parity (value: 0x%02x)\n",
+		dev_warn(&serdev->dev, "setup: unsupported parity (value: %#04x)\n",
 			 uart->parity);
 		break;
 	}
 
 	if (status) {
-		dev_err(&serdev->dev, "setup: failed to set parity (value: 0x%02x, error: %d)\n",
+		dev_err(&serdev->dev, "setup: failed to set parity (value: %#04x, error: %d)\n",
 			uart->parity, status);
 		return AE_ERROR;
 	}

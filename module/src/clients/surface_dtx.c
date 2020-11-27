@@ -223,7 +223,7 @@ static u16 sdtx_translate_base_state(struct sdtx_device *ddev, u8 state)
 		return SDTX_DETACH_NOT_FEASIBLE;
 
 	default:
-		dev_err(ddev->dev, "unknown base state: 0x%02x\n", state);
+		dev_err(ddev->dev, "unknown base state: %#04x\n", state);
 		return SDTX_UNKNOWN(state);
 	}
 }
@@ -247,7 +247,7 @@ static u16 sdtx_translate_latch_status(struct sdtx_device *ddev, u8 status)
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
-		dev_err(ddev->dev, "unknown latch status: 0x%02x\n", status);
+		dev_err(ddev->dev, "unknown latch status: %#04x\n", status);
 		return SDTX_UNKNOWN(status);
 	}
 }
@@ -271,7 +271,7 @@ static u16 sdtx_translate_cancel_reason(struct sdtx_device *ddev, u8 reason)
 		return SDTX_ERR_FAILED_TO_CLOSE;
 
 	default:
-		dev_err(ddev->dev, "unknown cancel reason: 0x%02x\n", reason);
+		dev_err(ddev->dev, "unknown cancel reason: %#04x\n", reason);
 		return SDTX_UNKNOWN(reason);
 	}
 }
@@ -644,8 +644,9 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf,
 	};
 
 	if (in->length != len) {
-		dev_err(ddev->dev, "unexpected payload size for event 0x%02x: "
-			"got %u, expected %zu", in->command_id, in->length, len);
+		dev_err(ddev->dev,
+			"unexpected payload size for event %#04x: got %u, expected %zu\n",
+			in->command_id, in->length, len);
 		return 0;
 	}
 

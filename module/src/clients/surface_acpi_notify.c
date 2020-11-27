@@ -190,7 +190,7 @@ static int san_acpi_notify_event(struct device *dev, u64 func,
 	if (!acpi_check_dsm(san, &SAN_DSM_UUID, SAN_DSM_REVISION, 1 << func))
 		return 0;
 
-	dev_dbg(dev, "notify event 0x%02llx\n", func);
+	dev_dbg(dev, "notify event %#04llx\n", func);
 
 	obj = acpi_evaluate_dsm_typed(san, &SAN_DSM_UUID, SAN_DSM_REVISION,
 				      func, param, ACPI_TYPE_BUFFER);
@@ -320,7 +320,7 @@ static bool san_evt_bat(const struct ssam_event *event, struct device *dev)
 	}
 
 	if (status)
-		dev_err(dev, "error handling power event (cid = %x)\n",
+		dev_err(dev, "error handling power event (cid = %#04x)\n",
 			event->command_id);
 
 	return true;
@@ -387,7 +387,7 @@ static bool san_evt_tmp(const struct ssam_event *event, struct device *dev)
 	}
 
 	if (status) {
-		dev_err(dev, "error handling thermal event (cid = %x)\n",
+		dev_err(dev, "error handling thermal event (cid = %#04x)\n",
 			event->command_id);
 	}
 
@@ -468,7 +468,7 @@ static acpi_status san_etwl(struct san_data *d, struct gsb_buffer *b)
 		return AE_OK;
 	}
 
-	dev_err(d->dev, "ETWL(0x%02x, 0x%02x): %.*s\n", etwl->etw3, etwl->etw4,
+	dev_err(d->dev, "ETWL(%#04x, %#04x): %.*s\n", etwl->etw3, etwl->etw4,
 		(unsigned int)(b->len - sizeof(struct gsb_data_etwl)),
 		(char *)etwl->msg);
 
@@ -635,12 +635,12 @@ static acpi_status san_opreg_handler(u32 function,
 	int accessor_type = (function & 0xFFFF0000) >> 16;
 
 	if (command != SAN_GSB_COMMAND) {
-		dev_warn(d->dev, "unsupported command: 0x%02llx\n", command);
+		dev_warn(d->dev, "unsupported command: %#04llx\n", command);
 		return AE_OK;
 	}
 
 	if (accessor_type != ACPI_GSB_ACCESS_ATTRIB_RAW_PROCESS) {
-		dev_err(d->dev, "invalid access type: 0x%02x\n", accessor_type);
+		dev_err(d->dev, "invalid access type: %#04x\n", accessor_type);
 		return AE_OK;
 	}
 
@@ -661,7 +661,7 @@ static acpi_status san_opreg_handler(u32 function,
 		return san_rqsg(d, buffer);
 
 	default:
-		dev_warn(d->dev, "unsupported SAN0 request (cv: 0x%02x)\n",
+		dev_warn(d->dev, "unsupported SAN0 request (cv: %#04x)\n",
 			 buffer->data.in.cv);
 		return AE_OK;
 	}

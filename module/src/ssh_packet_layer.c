@@ -1753,7 +1753,7 @@ static size_t ssh_ptl_rx_eval(struct ssh_ptl *ptl, struct ssam_span *source)
 		break;
 
 	default:
-		ptl_warn(ptl, "ptl: received frame with unknown type 0x%02x\n",
+		ptl_warn(ptl, "ptl: received frame with unknown type %#04x\n",
 			 frame->type);
 		break;
 	}
