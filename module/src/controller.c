@@ -451,15 +451,15 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 	status = ssam_notifier_to_errno(nf_ret);
 
 	if (status < 0) {
-		dev_err(dev, "event: error handling event: %d "
-			"(tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
+		dev_err(dev,
+			"event: error handling event: %d (tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			status, event->target_category, event->target_id,
 			event->command_id, event->instance_id);
 	}
 
 	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
-		dev_warn(dev, "event: unhandled event (rqid: %#04x, "
-			 "tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
+		dev_warn(dev,
+			 "event: unhandled event (rqid: %#04x, tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			 rqid, event->target_category, event->target_id,
 			 event->command_id, event->instance_id);
 	}
@@ -1468,8 +1468,9 @@ static void ssam_request_sync_complete(struct ssh_request *rqst,
 	}
 
 	if (data->len > r->resp->capacity) {
-		rtl_err(rtl, "rsp: response buffer too small, capacity: %zu bytes,"
-			" got: %zu bytes\n", r->resp->capacity, data->len);
+		rtl_err(rtl,
+			"rsp: response buffer too small, capacity: %zu bytes, got: %zu bytes\n",
+			r->resp->capacity, data->len);
 		r->status = -ENOSPC;
 		return;
 	}
@@ -1830,16 +1831,15 @@ static int ssam_ssh_event_enable(struct ssam_controller *ctrl,
 	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
 	if (status < 0 && status != -EINVAL) {
-		ssam_err(ctrl, "failed to enable event source (tc: %#04x, "
-			 "iid: %#04x, reg: %#04x)\n", id.target_category,
-			 id.instance, reg.target_category);
+		ssam_err(ctrl,
+			 "failed to enable event source (tc: %#04x, iid: %#04x, reg: %#04x)\n",
+			 id.target_category, id.instance, reg.target_category);
 	}
 
 	if (status > 0) {
-		ssam_err(ctrl, "unexpected result while enabling event source: "
-			 "%#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
-			 status, id.target_category, id.instance,
-			 reg.target_category);
+		ssam_err(ctrl,
+			 "unexpected result while enabling event source: %#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
+			 status, id.target_category, id.instance, reg.target_category);
 		return -EPROTO;
 	}
 
@@ -1872,16 +1872,15 @@ static int ssam_ssh_event_disable(struct ssam_controller *ctrl,
 	status = __ssam_ssh_event_request(ctrl, reg, reg.cid_enable, id, flags);
 
 	if (status < 0 && status != -EINVAL) {
-		ssam_err(ctrl, "failed to disable event source (tc: %#04x, "
-			 "iid: %#04x, reg: %#04x)\n", id.target_category,
-			 id.instance, reg.target_category);
+		ssam_err(ctrl,
+			 "failed to disable event source (tc: %#04x, iid: %#04x, reg: %#04x)\n",
+			 id.target_category, id.instance, reg.target_category);
 	}
 
 	if (status > 0) {
-		ssam_err(ctrl, "unexpected result while disabling event source: "
-			 "%#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
-			 status, id.target_category, id.instance,
-			 reg.target_category);
+		ssam_err(ctrl,
+			 "unexpected result while disabling event source: %#04x (tc: %#04x, iid: %#04x, reg: %#04x)\n",
+			 status, id.target_category, id.instance, reg.target_category);
 		return -EPROTO;
 	}
 
@@ -2152,8 +2151,8 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		entry->flags = n->event.flags;
 
 	} else if (entry->flags != n->event.flags) {
-		ssam_warn(ctrl, "inconsistent flags when enabling event: got %#04x,"
-			  " expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)",
+		ssam_warn(ctrl,
+			  "inconsistent flags when enabling event: got %#04x, expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)\n",
 			  n->event.flags, entry->flags, n->event.reg.target_category,
 			  n->event.id.target_category, n->event.id.instance);
 	}
@@ -2216,8 +2215,8 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		 n->event.id.instance, entry->refcount);
 
 	if (entry->flags != n->event.flags) {
-		ssam_warn(ctrl, "inconsistent flags when enabling event: got %#04x,"
-			  " expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)",
+		ssam_warn(ctrl,
+			  "inconsistent flags when disabling event: got %#04x, expected %#04x (reg: %#04x, tc: %#04x, iid: %#04x)\n",
 			  n->event.flags, entry->flags, n->event.reg.target_category,
 			  n->event.id.target_category, n->event.id.instance);
 	}

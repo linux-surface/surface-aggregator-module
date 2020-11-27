@@ -164,8 +164,9 @@ static int ssam_hid_get_descriptor(struct surface_hid_device *shid, u8 entry,
 	}
 
 	if (offset != len) {
-		dev_err(shid->dev, "unexpected descriptor length: got %u, "
-			"expected %zu\n", offset, len);
+		dev_err(shid->dev,
+			"unexpected descriptor length: got %u, expected %zu\n",
+			offset, len);
 		return -EPROTO;
 	}
 
@@ -306,8 +307,9 @@ static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry,
 		return status;
 
 	if (rsp.length != len) {
-		dev_err(shid->dev, "invalid descriptor length: got %zu, "
-			"expected, %zu\n", rsp.length, len);
+		dev_err(shid->dev,
+			"invalid descriptor length: got %zu, expected, %zu\n",
+			rsp.length, len);
 		return -EPROTO;
 	}
 
@@ -357,8 +359,9 @@ static int ssam_kbd_get_feature_report(struct surface_hid_device *shid, u8 *buf,
 		return status;
 
 	if (rsp.length != len) {
-		dev_err(shid->dev, "invalid feature report length: got %zu, "
-			"expected, %zu\n", rsp.length, len);
+		dev_err(shid->dev,
+			"invalid feature report length: got %zu, expected, %zu\n",
+			rsp.length, len);
 		return -EPROTO;
 	}
 
@@ -505,29 +508,30 @@ static int surface_hid_load_hid_descriptor(struct surface_hid_device *shid)
 		return status;
 
 	if (shid->hid_desc.desc_len != sizeof(shid->hid_desc)) {
-		dev_err(shid->dev, "unexpected HID descriptor length: got %u, "
-			"expected %zu\n", shid->hid_desc.desc_len,
-			sizeof(shid->hid_desc));
+		dev_err(shid->dev,
+			"unexpected HID descriptor length: got %u, expected %zu\n",
+			shid->hid_desc.desc_len, sizeof(shid->hid_desc));
 		return -EPROTO;
 	}
 
 	if (shid->hid_desc.desc_type != HID_DT_HID) {
-		dev_err(shid->dev, "unexpected HID descriptor type: got %#04x, "
-			"expected %#04x\n", shid->hid_desc.desc_type,
-			HID_DT_HID);
+		dev_err(shid->dev,
+			"unexpected HID descriptor type: got %#04x, expected %#04x\n",
+			shid->hid_desc.desc_type, HID_DT_HID);
 		return -EPROTO;
 	}
 
 	if (shid->hid_desc.num_descriptors != 1) {
-		dev_err(shid->dev, "unexpected number of descriptors: got %u, "
-			"expected 1\n", shid->hid_desc.num_descriptors);
+		dev_err(shid->dev,
+			"unexpected number of descriptors: got %u, expected 1\n",
+			shid->hid_desc.num_descriptors);
 		return -EPROTO;
 	}
 
 	if (shid->hid_desc.report_desc_type != HID_DT_REPORT) {
-		dev_err(shid->dev, "unexpected report descriptor type: got %#04x, "
-			"expected %#04x\n", shid->hid_desc.report_desc_type,
-			HID_DT_REPORT);
+		dev_err(shid->dev,
+			"unexpected report descriptor type: got %#04x, expected %#04x\n",
+			shid->hid_desc.report_desc_type, HID_DT_REPORT);
 		return -EPROTO;
 	}
 
@@ -544,9 +548,9 @@ static int surface_hid_load_device_attributes(struct surface_hid_device *shid)
 		return status;
 
 	if (get_unaligned_le32(&shid->attrs.length) != sizeof(shid->attrs)) {
-		dev_err(shid->dev, "unexpected attribute length: got %u, "
-			"expected %zu\n", get_unaligned_le32(&shid->attrs.length),
-			sizeof(shid->attrs));
+		dev_err(shid->dev,
+			"unexpected attribute length: got %u, expected %zu\n",
+			get_unaligned_le32(&shid->attrs.length), sizeof(shid->attrs));
 		return -EPROTO;
 	}
 

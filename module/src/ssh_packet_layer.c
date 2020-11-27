@@ -392,8 +392,8 @@ static int ssh_ptl_write_buf(struct ssh_ptl *ptl, struct ssh_packet *packet,
 	if (unlikely(status)) {
 		trace_ssam_ei_tx_fail_write(packet, status);
 		ptl_info(packet->ptl,
-			 "packet error injection: simulating transmit error %d,"
-			 " packet %p\n", status, packet);
+			 "packet error injection: simulating transmit error %d, packet %p\n",
+			 status, packet);
 
 		return status;
 	}

@@ -105,20 +105,21 @@ static void shps_dsm_notify_irq(struct platform_device *pdev,
 
 	if (!result) {
 		mutex_unlock(&sdev->lock[type]);
-		dev_err(&pdev->dev, "IRQ notification via DSM failed"
-			" (irq=%d, gpio=%d)\n", type, value);
+		dev_err(&pdev->dev,
+			"IRQ notification via DSM failed (irq=%d, gpio=%d)\n",
+			type, value);
 		return;
 	}
 
 	if (result->type != ACPI_TYPE_BUFFER) {
-		dev_err(&pdev->dev, "IRQ notification via DSM failed:"
-			" unexpected result type (irq=%d, gpio=%d)\n",
+		dev_err(&pdev->dev,
+			"IRQ notification via DSM failed: unexpected result type (irq=%d, gpio=%d)\n",
 			type, value);
 	}
 
 	if (result->buffer.length != 1 || result->buffer.pointer[0] != 0) {
-		dev_err(&pdev->dev, "IRQ notification via DSM failed:"
-			"unexpected result value (irq=%d, gpio=%d)\n",
+		dev_err(&pdev->dev,
+			"IRQ notification via DSM failed: unexpected result value (irq=%d, gpio=%d)\n",
 			type, value);
 	}
 
