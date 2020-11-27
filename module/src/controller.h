@@ -49,12 +49,11 @@ struct ssh_rqid_counter {
 /**
  * struct ssam_nf_head - Notifier head for SSAM events.
  * @srcu: The SRCU struct for synchronization.
- * @head: Head-pointer for the single-linked list of notifier blocks registered
- *        under this head.
+ * @head: List-head for notifier blocks registered under this head.
  */
 struct ssam_nf_head {
 	struct srcu_struct srcu;
-	struct ssam_notifier_block __rcu *head;
+	struct list_head head;
 };
 
 /**

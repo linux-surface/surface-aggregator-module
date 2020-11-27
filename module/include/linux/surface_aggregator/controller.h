@@ -653,7 +653,7 @@ typedef u32 (*ssam_notifier_fn_t)(struct ssam_event_notifier *nf,
 /**
  * struct ssam_notifier_block - Base notifier block for SSAM event
  * notifications.
- * @next:     The next notifier block in order of priority.
+ * @node:     The node for the list of notifiers.
  * @fn:       The callback function of this notifier. This function takes the
  *            respective notifier block and event as input and should return
  *            a notifier value, which can either be obtained from the flags
@@ -666,7 +666,7 @@ typedef u32 (*ssam_notifier_fn_t)(struct ssam_event_notifier *nf,
  *            priority) callbacks.
  */
 struct ssam_notifier_block {
-	struct ssam_notifier_block __rcu *next;
+	struct list_head node;
 	ssam_notifier_fn_t fn;
 	int priority;
 };

@@ -14,6 +14,7 @@
 #include <linux/limits.h>
 #include <linux/list.h>
 #include <linux/mutex.h>
+#include <linux/rculist.h>
 #include <linux/rbtree.h>
 #include <linux/rwsem.h>
 #include <linux/serdev.h>
@@ -145,24 +146,17 @@ static bool ssam_event_matches_notifier(const struct ssam_event_notifier *n,
  */
 static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *event)
 {
-	struct ssam_notifier_block *nb, *next_nb;
 	struct ssam_event_notifier *nf;
 	int ret = 0, idx;
 
 	idx = srcu_read_lock(&nh->srcu);
 
-	nb = rcu_dereference_raw(nh->head);
-	while (nb) {
-		nf = container_of(nb, struct ssam_event_notifier, base);
-		next_nb = rcu_dereference_raw(nb->next);
-
+	list_for_each_entry_rcu(nf, &nh->head, base.node) {
 		if (ssam_event_matches_notifier(nf, event)) {
-			ret = (ret & SSAM_NOTIF_STATE_MASK) | nb->fn(nf, event);
+			ret = (ret & SSAM_NOTIF_STATE_MASK) | nf->base.fn(nf, event);
 			if (ret & SSAM_NOTIF_STOP)
 				break;
 		}
-
-		nb = next_nb;
 	}
 
 	srcu_read_unlock(&nh->srcu, idx);
@@ -170,108 +164,78 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
 }
 
 /**
- * __ssam_nfblk_insert() - Insert a new notifier block into the given notifier
+ * ssam_nfblk_insert() - Insert a new notifier block into the given notifier
  * list.
  * @nh: The notifier head into which the block should be inserted.
  * @nb: The notifier block to add.
  *
  * Note: This function must be synchronized by the caller with respect to other
- * insert and/or remove calls.
+ * insert, find, and/or remove calls.
  *
  * Return: Returns zero on success, %-EEXIST if the notifier block has already
  * been registered.
  */
-static int __ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+static int ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 {
-	struct ssam_notifier_block **link = &nh->head;
+	struct ssam_notifier_block *p;
+	struct list_head *h;
 
-	while (*link) {
-		if (unlikely(*link == nb)) {
+	/* Runs under lock, no need for RCU variant. */
+	list_for_each(h, &nh->head) {
+		p = list_entry(h, struct ssam_notifier_block, node);
+
+		if (unlikely(p == nb)) {
 			WARN(1, "double register detected");
 			return -EEXIST;
 		}
 
-		if (nb->priority > (*link)->priority)
+		if (nb->priority > p->priority)
 			break;
-
-		link = &((*link)->next);
 	}
 
-	nb->next = *link;
-	rcu_assign_pointer(*link, nb);
-
+	list_add_tail_rcu(&nb->node, h);
 	return 0;
 }
 
 /**
- * __ssam_nfblk_find_link() - Find a notifier block link on the given list.
- * @nh: The notifier head on which the search should be conducted.
+ * ssam_nfblk_find() - Check if a notifier block is registered on the given
+ * notifier head.
+ * list.
+ * @nh: The notifier head on which to search.
  * @nb: The notifier block to search for.
  *
- * Note: This function must be synchronized by the caller with respect to
- * insert and/or remove calls.
+ * Note: This function must be synchronized by the caller with respect to other
+ * insert, find, and/or remove calls.
  *
- * Return: Returns a pointer to the link (i.e. pointer pointing) to the given
- * notifier block, from the previous node in the list, or %NULL if the given
- * notifier block is not contained in the notifier list.
+ * Return: Returns true if the given notifier block is registered on the given
+ * notifier head, false otherwise.
  */
-static struct ssam_notifier_block **__ssam_nfblk_find_link(
-		struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
+static bool ssam_nfblk_find(struct ssam_nf_head *nh, struct ssam_notifier_block *nb)
 {
-	struct ssam_notifier_block **link = &nh->head;
+	struct ssam_notifier_block *p;
 
-	while (*link) {
-		if (*link == nb)
-			return link;
-
-		link = &((*link)->next);
+	/* Runs under lock, no need for RCU variant. */
+	list_for_each_entry(p, &nh->head, node) {
+		if (p == nb)
+			return true;
 	}
 
-	return NULL;
+	return false;
 }
 
 /**
- * __ssam_nfblk_erase() - Erase a notifier block link in the given notifier
- * list.
- * @link: The link to be erased.
+ * ssam_nfblk_remove() - Remove a notifier block from its notifier list.
+ * @nb: The notifier block to be removed.
  *
  * Note: This function must be synchronized by the caller with respect to
- * other insert and/or remove/erase/find calls. The caller _must_ ensure SRCU
+ * other insert, find and/or remove calls. The caller _must_ ensure SRCU
  * synchronization by calling synchronize_srcu() with ``nh->srcu`` after
  * leaving the critical section, to ensure that the removed notifier block is
  * not in use any more.
  */
-static void __ssam_nfblk_erase(struct ssam_notifier_block **link)
+static void ssam_nfblk_remove(struct ssam_notifier_block *nb)
 {
-	rcu_assign_pointer(*link, (*link)->next);
-}
-
-
-/**
- * __ssam_nfblk_remove() - Remove a notifier block from the given notifier list.
- * @nh: The notifier head from which the block should be removed.
- * @nb: The notifier block to remove.
- *
- * Note: This function must be synchronized by the caller with respect to
- * other insert and/or remove calls. On success, the caller *must* ensure SRCU
- * synchronization by calling synchronize_srcu() with ``nh->srcu`` after
- * leaving the critical section, to ensure that the removed notifier block is
- * not in use any more.
- *
- * Return: Returns zero on success, %-ENOENT if the specified notifier block
- * could not be found on the notifier list.
- */
-static int __ssam_nfblk_remove(struct ssam_nf_head *nh,
-			       struct ssam_notifier_block *nb)
-{
-	struct ssam_notifier_block **link;
-
-	link = __ssam_nfblk_find_link(nh, nb);
-	if (!link)
-		return -ENOENT;
-
-	__ssam_nfblk_erase(link);
-	return 0;
+	list_del_rcu(&nb->node);
 }
 
 /**
@@ -286,7 +250,7 @@ static int ssam_nf_head_init(struct ssam_nf_head *nh)
 	if (status)
 		return status;
 
-	nh->head = NULL;
+	INIT_LIST_HEAD(&nh->head);
 	return 0;
 }
 
@@ -2153,7 +2117,7 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		 n->event.reg.target_category, n->event.id.target_category,
 		 n->event.id.instance, entry->refcount);
 
-	status = __ssam_nfblk_insert(nf_head, &n->base);
+	status = ssam_nfblk_insert(nf_head, &n->base);
 	if (status) {
 		entry = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 		if (entry->refcount == 0)
@@ -2167,7 +2131,7 @@ int ssam_notifier_register(struct ssam_controller *ctrl,
 		status = ssam_ssh_event_enable(ctrl, n->event.reg, n->event.id,
 					       n->event.flags);
 		if (status) {
-			__ssam_nfblk_remove(nf_head, &n->base);
+			ssam_nfblk_remove(&n->base);
 			kfree(ssam_nf_refcount_dec(nf, n->event.reg, n->event.id));
 			mutex_unlock(&nf->lock);
 			synchronize_srcu(&nf_head->srcu);
@@ -2206,7 +2170,6 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 			     struct ssam_event_notifier *n)
 {
 	u16 rqid = ssh_tc_to_rqid(n->event.id.target_category);
-	struct ssam_notifier_block **link;
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_head *nf_head;
 	struct ssam_nf *nf;
@@ -2220,16 +2183,21 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 
 	mutex_lock(&nf->lock);
 
-	link = __ssam_nfblk_find_link(nf_head, &n->base);
-	if (!link) {
+	if (!ssam_nfblk_find(nf_head, &n->base)) {
 		mutex_unlock(&nf->lock);
 		return -ENOENT;
 	}
 
 	entry = ssam_nf_refcount_dec(nf, n->event.reg, n->event.id);
 	if (WARN_ON(!entry)) {
-		mutex_unlock(&nf->lock);
-		return -ENOENT;
+		/*
+		 * If this does not return an entry, there's a logic error
+		 * somewhere: The notifier block is registered, but the event
+		 * refcount entry is not there. Remove the notifier block
+		 * anyways.
+		 */
+		status = -ENOENT;
+		goto remove;
 	}
 
 	ssam_dbg(ctrl, "disabling event (reg: 0x%02x, tc: 0x%02x, iid: 0x%02x, rc: %d)\n",
@@ -2249,7 +2217,8 @@ int ssam_notifier_unregister(struct ssam_controller *ctrl,
 		kfree(entry);
 	}
 
-	__ssam_nfblk_erase(link);
+remove:
+	ssam_nfblk_remove(&n->base);
 	mutex_unlock(&nf->lock);
 	synchronize_srcu(&nf_head->srcu);
 
