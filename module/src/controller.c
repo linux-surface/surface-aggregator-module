@@ -1558,14 +1558,23 @@ EXPORT_SYMBOL_GPL(ssam_request_sync_free);
  * message data. This has to be done explicitly after this call via
  * ssam_request_sync_set_data() and the actual message data has to be written
  * via ssam_request_write_data().
+ *
+ * Return: Returns zero on success or %-EINVAL if the given flags are invalid.
  */
-void ssam_request_sync_init(struct ssam_request_sync *rqst,
-			    enum ssam_request_flags flags)
+int ssam_request_sync_init(struct ssam_request_sync *rqst,
+			   enum ssam_request_flags flags)
 {
-	ssh_request_init(&rqst->base, flags, &ssam_request_sync_ops);
+	int status;
+
+	status = ssh_request_init(&rqst->base, flags, &ssam_request_sync_ops);
+	if (status)
+		return status;
+
 	init_completion(&rqst->comp);
 	rqst->resp = NULL;
 	rqst->status = 0;
+
+	return 0;
 }
 EXPORT_SYMBOL_GPL(ssam_request_sync_init);
 
@@ -1644,7 +1653,10 @@ int ssam_request_sync(struct ssam_controller *ctrl,
 	if (status)
 		return status;
 
-	ssam_request_sync_init(rqst, spec->flags);
+	status = ssam_request_sync_init(rqst, spec->flags);
+	if (status)
+		return status;
+
 	ssam_request_sync_set_resp(rqst, rsp);
 
 	len = ssam_request_write_data(&buf, ctrl, spec);
@@ -1694,7 +1706,10 @@ int ssam_request_sync_with_buffer(struct ssam_controller *ctrl,
 	ssize_t len;
 	int status;
 
-	ssam_request_sync_init(&rqst, spec->flags);
+	status = ssam_request_sync_init(&rqst, spec->flags);
+	if (status)
+		return status;
+
 	ssam_request_sync_set_resp(&rqst, rsp);
 
 	len = ssam_request_write_data(buf, ctrl, spec);
