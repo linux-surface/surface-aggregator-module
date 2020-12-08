@@ -721,7 +721,7 @@ static bool ssh_rtl_cancel_pending(struct ssh_request *r)
  * thread, which may happen during, but also some time after execution of the
  * cancel function.
  *
- * Return: Returns %true iff the given request has been canceled or completed,
+ * Return: Returns %true if the given request has been canceled or completed,
  * either by this function or prior to calling this function, %false
  * otherwise. If @pending is %true, this function will always return %true.
  */
