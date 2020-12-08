@@ -1477,7 +1477,7 @@ void ssh_ptl_cancel(struct ssh_packet *p)
 	}
 }
 
-/* must be called with pending lock held */
+/* Must be called with pending lock held */
 static ktime_t ssh_packet_get_expiration(struct ssh_packet *p, ktime_t timeout)
 {
 	if (p->timestamp != KTIME_MAX)

@@ -111,7 +111,7 @@ static u16 ssh_rqid_next(struct ssh_rqid_counter *c)
  * @n: The event notifier to test against.
  * @event: The event to test.
  *
- * Return: Returns %true iff the given event matches the given notifier
+ * Return: Returns %true if the given event matches the given notifier
  * according to the rules set in the notifier's event mask, %false otherwise.
  */
 static bool ssam_event_matches_notifier(const struct ssam_event_notifier *n,
@@ -170,7 +170,7 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
  * @nb: The notifier block to add.
  *
  * Note: This function must be synchronized by the caller with respect to other
- * insert, find, and/or remove calls.
+ * insert, find, and/or remove calls by holding ``struct ssam_nf.lock``.
  *
  * Return: Returns zero on success, %-EEXIST if the notifier block has already
  * been registered.
@@ -205,7 +205,7 @@ static int ssam_nfblk_insert(struct ssam_nf_head *nh, struct ssam_notifier_block
  * @nb: The notifier block to search for.
  *
  * Note: This function must be synchronized by the caller with respect to other
- * insert, find, and/or remove calls.
+ * insert, find, and/or remove calls by holding ``struct ssam_nf.lock``.
  *
  * Return: Returns true if the given notifier block is registered on the given
  * notifier head, false otherwise.
@@ -228,10 +228,10 @@ static bool ssam_nfblk_find(struct ssam_nf_head *nh, struct ssam_notifier_block 
  * @nb: The notifier block to be removed.
  *
  * Note: This function must be synchronized by the caller with respect to
- * other insert, find and/or remove calls. The caller _must_ ensure SRCU
- * synchronization by calling synchronize_srcu() with ``nh->srcu`` after
- * leaving the critical section, to ensure that the removed notifier block is
- * not in use any more.
+ * other insert, find, and/or remove calls by holding ``struct ssam_nf.lock``.
+ * Furthermore, the caller _must_ ensure SRCU synchronization by calling
+ * synchronize_srcu() with ``nh->srcu`` after leaving the critical section, to
+ * ensure that the removed notifier block is not in use any more.
  */
 static void ssam_nfblk_remove(struct ssam_notifier_block *nb)
 {
@@ -303,10 +303,7 @@ struct ssam_nf_refcount_entry {
  * event type/ID, allocating a new entry for this event ID if necessary. A
  * newly allocated entry will have a refcount of one.
  *
- * Note: Must be synchronized by the caller with regards to other
- * ssam_nf_refcount_inc() and ssam_nf_refcount_dec() calls, e.g. via
- * ``nf->lock``. Note that this lock should also be used to ensure the
- * corresponding EC requests are sent, if necessary.
+ * Note: ``nf->lock`` must be held when calling this function.
  *
  * Return: Returns the refcount entry on success. Returns an error pointer
  * with %-ENOSPC if there have already been %INT_MAX events of the specified
@@ -366,10 +363,7 @@ ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
  * returning its entry. If the returned entry has a refcount of zero, the
  * caller is responsible for freeing it using kfree().
  *
- * Note: Must be synchronized by the caller with regards to other
- * ssam_nf_refcount_inc() and ssam_nf_refcount_dec() calls, e.g. via
- * ``nf->lock``. Note that this lock should also be used to ensure the
- * corresponding EC requests are sent, if necessary.
+ * Note: ``nf->lock`` must be held when calling this function.
  *
  * Return: Returns the refcount entry on success or %NULL if the entry has not
  * been found.
@@ -1181,8 +1175,8 @@ int ssam_controller_init(struct ssam_controller *ctrl,
  * hooked up to the serdev core via &struct serdev_device_ops. Please refer
  * to ssam_controller_init() for more details on controller initialization.
  *
- * This function must be called from an exclusive context with regards to the
- * state, if necessary, by locking the controller via ssam_controller_lock().
+ * This function must be called with the main controller lock held (i.e. by
+ * calling ssam_controller_lock()).
  */
 int ssam_controller_start(struct ssam_controller *ctrl)
 {
@@ -1233,8 +1227,8 @@ int ssam_controller_start(struct ssam_controller *ctrl)
  * notifiers being unregistered, these events will be dropped when the
  * controller is subsequently destroyed via ssam_controller_destroy().
  *
- * This function must be called from an exclusive context with regards to the
- * state, if necessary, by locking the controller via ssam_controller_lock().
+ * This function must be called with the main controller lock held (i.e. by
+ * calling ssam_controller_lock()).
  */
 void ssam_controller_shutdown(struct ssam_controller *ctrl)
 {
@@ -1300,8 +1294,8 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
  * to other processes. This function is called automatically when the
  * reference count of the controller reaches zero.
  *
- * Must be called from an exclusive context with regards to the controller
- * state.
+ * This function must be called with the main controller lock held (i.e. by
+ * calling ssam_controller_lock()).
  */
 void ssam_controller_destroy(struct ssam_controller *ctrl)
 {
