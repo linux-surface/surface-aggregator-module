@@ -1007,6 +1007,14 @@ static int ssam_dsm_get_functions(acpi_handle handle, u64 *funcs)
 
 	*funcs = 0;
 
+	/*
+	 * The _DSM function is only present on newer models. It is not
+	 * present on 5th and 6th generation devices (i.e. up to and including
+	 * Surface Pro 6, Surface Laptop 2, Surface Book 2).
+	 *
+	 * If the _DSM is not present, indicate that no function is supported.
+	 * This will result in default values being set.
+	 */
 	if (!acpi_has_method(handle, "_DSM"))
 		return 0;
 
