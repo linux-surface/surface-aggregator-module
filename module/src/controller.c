@@ -152,7 +152,8 @@ static int ssam_nfblk_call_chain(struct ssam_nf_head *nh, struct ssam_event *eve
 
 	idx = srcu_read_lock(&nh->srcu);
 
-	list_for_each_entry_rcu(nf, &nh->head, base.node) {
+	list_for_each_entry_rcu(nf, &nh->head, base.node,
+				srcu_read_lock_held(&nh->srcu)) {
 		if (ssam_event_matches_notifier(nf, event)) {
 			ret = (ret & SSAM_NOTIF_STATE_MASK) | nf->base.fn(nf, event);
 			if (ret & SSAM_NOTIF_STOP)
