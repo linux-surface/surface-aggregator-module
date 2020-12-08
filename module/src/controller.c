@@ -312,9 +312,9 @@ struct ssam_nf_refcount_entry {
  * with %-ENOSPC if there have already been %INT_MAX events of the specified
  * ID and type registered, or %-ENOMEM if the entry could not be allocated.
  */
-static struct ssam_nf_refcount_entry
-*ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
-		      struct ssam_event_id id)
+static struct ssam_nf_refcount_entry *
+ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
+		     struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
@@ -374,9 +374,9 @@ static struct ssam_nf_refcount_entry
  * Return: Returns the refcount entry on success or %NULL if the entry has not
  * been found.
  */
-static struct ssam_nf_refcount_entry
-*ssam_nf_refcount_dec(struct ssam_nf *nf, struct ssam_event_registry reg,
-		      struct ssam_event_id id)
+static struct ssam_nf_refcount_entry *
+ssam_nf_refcount_dec(struct ssam_nf *nf, struct ssam_event_registry reg,
+		     struct ssam_event_id id)
 {
 	struct ssam_nf_refcount_entry *entry;
 	struct ssam_nf_refcount_key key;
