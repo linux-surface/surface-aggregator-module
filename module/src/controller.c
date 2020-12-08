@@ -338,6 +338,7 @@ ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
 			entry->refcount++;
 			return entry;
 		} else {
+			WARN_ON(1);
 			return ERR_PTR(-ENOSPC);
 		}
 	}
