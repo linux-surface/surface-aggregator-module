@@ -455,9 +455,7 @@ static void ssam_nf_call(struct ssam_nf *nf, struct device *dev, u16 rqid,
 			"event: error handling event: %d (tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			status, event->target_category, event->target_id,
 			event->command_id, event->instance_id);
-	}
-
-	if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
+	} else if (!(nf_ret & SSAM_NOTIF_HANDLED)) {
 		dev_warn(dev,
 			 "event: unhandled event (rqid: %#04x, tc: %#04x, tid: %#04x, cid: %#04x, iid: %#04x)\n",
 			 rqid, event->target_category, event->target_id,
