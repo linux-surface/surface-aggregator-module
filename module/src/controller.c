@@ -13,6 +13,7 @@
 #include <linux/kref.h>
 #include <linux/limits.h>
 #include <linux/list.h>
+#include <linux/lockdep.h>
 #include <linux/mutex.h>
 #include <linux/rculist.h>
 #include <linux/rbtree.h>
@@ -319,6 +320,8 @@ ssam_nf_refcount_inc(struct ssam_nf *nf, struct ssam_event_registry reg,
 	struct rb_node *parent = NULL;
 	int cmp;
 
+	lockdep_assert_held(&nf->lock);
+
 	key.reg = reg;
 	key.id = id;
 
@@ -376,6 +379,8 @@ ssam_nf_refcount_dec(struct ssam_nf *nf, struct ssam_event_registry reg,
 	struct ssam_nf_refcount_key key;
 	struct rb_node *node = nf->refcount.rb_node;
 	int cmp;
+
+	lockdep_assert_held(&nf->lock);
 
 	key.reg = reg;
 	key.id = id;
@@ -853,7 +858,15 @@ static void __ssam_controller_release(struct kref *kref)
 {
 	struct ssam_controller *ctrl = to_ssam_controller(kref, kref);
 
+	/*
+	 * The lock-call here is to satisfy lockdep. At this point we really
+	 * expect this to be the last remaining reference to the controller.
+	 * Anything else is a bug.
+	 */
+	ssam_controller_lock(ctrl);
 	ssam_controller_destroy(ctrl);
+	ssam_controller_unlock(ctrl);
+
 	kfree(ctrl);
 }
 
@@ -1182,6 +1195,8 @@ int ssam_controller_start(struct ssam_controller *ctrl)
 {
 	int status;
 
+	lockdep_assert_held_write(&ctrl->lock);
+
 	if (ctrl->state != SSAM_CONTROLLER_INITIALIZED)
 		return -EINVAL;
 
@@ -1234,6 +1249,8 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
 {
 	enum ssam_controller_state s = ctrl->state;
 	int status;
+
+	lockdep_assert_held_write(&ctrl->lock);
 
 	if (s == SSAM_CONTROLLER_UNINITIALIZED || s == SSAM_CONTROLLER_STOPPED)
 		return;
@@ -1299,6 +1316,8 @@ void ssam_controller_shutdown(struct ssam_controller *ctrl)
  */
 void ssam_controller_destroy(struct ssam_controller *ctrl)
 {
+	lockdep_assert_held_write(&ctrl->lock);
+
 	if (ctrl->state == SSAM_CONTROLLER_UNINITIALIZED)
 		return;
 
