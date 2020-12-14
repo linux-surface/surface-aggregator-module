@@ -1,7 +1,7 @@
-From b4cfede2478fe2302cee3cba5973ac77e162de4f Mon Sep 17 00:00:00 2001
+From 492de1eb0316315f43bbf3f6f858ed09697509fd Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Sun, 20 Sep 2020 04:12:58 +0200
-Subject: [PATCH 3/6] misc: Surface Aggregator: Add file2alias support for
+Subject: [PATCH 3/3] misc: Surface Aggregator: Add file2alias support for
  Surface Aggregator client devices
 
 Implement file2alias support for Surface System Aggregator Module (SSAM)

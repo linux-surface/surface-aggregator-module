@@ -1,7 +1,7 @@
-From a5ce29f45a4f09e66ec55eaf61b1cb98cafebef9 Mon Sep 17 00:00:00 2001
+From 9a2e60ec43a25ad51c01e0cb9480f904a36d32c5 Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Tue, 24 Sep 2019 17:38:12 +0200
-Subject: [PATCH 2/6] serdev: Add ACPI devices by ResourceSource field
+Subject: [PATCH 2/3] serdev: Add ACPI devices by ResourceSource field
 
 When registering a serdev controller, ACPI needs to be checked for
 devices attached to it. Currently, all immediate children of the ACPI

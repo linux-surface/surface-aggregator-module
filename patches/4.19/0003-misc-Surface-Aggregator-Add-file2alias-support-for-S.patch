@@ -1,12 +1,14 @@
-From d8726642bb354f53d47f2798d2cdde0a6c05847e Mon Sep 17 00:00:00 2001
+From 9317eab73cab546f8bd078b55e4d20637f6e5fec Mon Sep 17 00:00:00 2001
 From: Maximilian Luz <luzmaximilian@gmail.com>
 Date: Sun, 20 Sep 2020 04:12:58 +0200
-Subject: [PATCH] misc: Surface Aggregator: Add file2alias support for Surface
- Aggregator client devices
+Subject: [PATCH 3/3] misc: Surface Aggregator: Add file2alias support for
+ Surface Aggregator client devices
 
 Implement file2alias support for Surface System Aggregator Module (SSAM)
 client devices. This allows modules to be auto-loaded for specific
 devices via their respective module alias.
+
+Signed-off-by: Maximilian Luz <luzmaximilian@gmail.com>
 ---
  include/linux/mod_devicetable.h   | 18 ++++++++++++++++++
  scripts/mod/devicetable-offsets.c |  8 ++++++++

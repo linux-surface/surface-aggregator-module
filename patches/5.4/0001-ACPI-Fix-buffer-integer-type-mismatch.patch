@@ -1,7 +1,7 @@
-From cdeab2f8cf7a653b37e5074e6b2d81294b53ac92 Mon Sep 17 00:00:00 2001
+From 0a19a4653f2488e834627f430034bee26efe6dad Mon Sep 17 00:00:00 2001
 From: qzed <qzed@users.noreply.github.com>
 Date: Mon, 26 Aug 2019 01:11:08 +0200
-Subject: [PATCH 1/6] ACPI: Fix buffer/integer type mismatch
+Subject: [PATCH 1/3] ACPI: Fix buffer/integer type mismatch
 
 This is actually not a bug in the kernel, but rather Microsoft not
 conforming with the ACPI specification.
