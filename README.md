@@ -15,7 +15,8 @@ If you have a Surface Book 2 you might also want to have a look at the [dtx-daem
 | Surface Laptop         | battery status, keyboard                                                     | -                             |
 | Surface Laptop 2       | battery status, keyboard                                                     | -                             |
 | Surface Laptop 3 (13") | battery status, keyboard, performance-modes                                  | -                             |
-| Surface Laptop 3 (15") | battery status, keyboard  performance-modes                                  | -                             |
+| Surface Laptop 3 (15") | battery status, keyboard, performance-modes                                  | -                             |
+| Surface Laptop Go      | battery status, performance-modes (NB: keyboard supported OOTB upstream)     | -                             |
 | Surface Pro 2017       | battery status, performance-modes                                            | -                             |
 | Surface Pro 6          | battery status, performance-modes                                            | -                             |
 | Surface Pro 7          | battery status, performance-modes                                            | -                             |
