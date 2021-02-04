@@ -246,7 +246,7 @@ static int ssam_hub_add_device(struct device *parent, struct ssam_controller *ct
 
 	status = ssam_uid_from_string(fwnode_get_name(node), &uid);
 	if (status)
-		return -ENODEV;
+		return status;
 
 	sdev = ssam_device_alloc(ctrl, uid);
 	if (!sdev)
@@ -269,8 +269,14 @@ static int ssam_hub_add_devices(struct device *parent, struct ssam_controller *c
 	int status;
 
 	fwnode_for_each_child_node(node, child) {
+		/*
+		 * Try to add the device specified in the firmware node. If
+		 * this fails with -EINVAL, the node does not specify any SSAM
+		 * device, so ignore it and continue with the next one.
+		 */
+
 		status = ssam_hub_add_device(parent, ctrl, child);
-		if (status && status != -ENODEV)
+		if (status && status != -EINVAL)
 			goto err;
 	}
 
