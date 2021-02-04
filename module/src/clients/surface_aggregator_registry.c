@@ -605,19 +605,21 @@ static int ssam_platform_hub_probe(struct platform_device *pdev)
 		return status;
 
 	root = software_node_fwnode(&ssam_node_root);
-	if (!root)
+	if (!root) {
+		software_node_unregister_node_group(nodes);
 		return -ENOENT;
+	}
 
 	set_secondary_fwnode(&pdev->dev, root);
 
 	status = ssam_hub_add_devices(&pdev->dev, ctrl, root);
 	if (status) {
+		set_secondary_fwnode(&pdev->dev, NULL);
 		software_node_unregister_node_group(nodes);
-		return status;
 	}
 
 	platform_set_drvdata(pdev, nodes);
-	return 0;
+	return status;
 }
 
 static int ssam_platform_hub_remove(struct platform_device *pdev)
