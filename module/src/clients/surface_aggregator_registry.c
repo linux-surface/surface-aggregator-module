@@ -403,8 +403,7 @@ static int __ssam_base_hub_update(struct ssam_base_hub *hub, enum ssam_base_hub_
 
 	if (hub->state == SSAM_BASE_HUB_CONNECTED)
 		status = ssam_hub_add_devices(&hub->sdev->dev, hub->sdev->ctrl, node);
-
-	if (hub->state != SSAM_BASE_HUB_CONNECTED || status)
+	else
 		ssam_hub_remove_devices(&hub->sdev->dev);
 
 	if (status)
