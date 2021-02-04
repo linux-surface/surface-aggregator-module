@@ -490,11 +490,11 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 	hub->notif.event.mask = SSAM_EVENT_MASK_NONE;
 	hub->notif.event.flags = SSAM_EVENT_SEQUENCED;
 
+	ssam_device_set_drvdata(sdev, hub);
+
 	status = ssam_notifier_register(sdev->ctrl, &hub->notif);
 	if (status)
 		return status;
-
-	ssam_device_set_drvdata(sdev, hub);
 
 	status = ssam_base_hub_update(hub);
 	if (status) {
