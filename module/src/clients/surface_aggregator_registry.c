@@ -52,7 +52,7 @@ static const struct software_node ssam_node_bat_sb3base = {
 	.parent = &ssam_node_hub_base,
 };
 
-static const struct software_node ssam_node_tmp_perf = {
+static const struct software_node ssam_node_tmp_pprof = {
 	.name = "ssam:01:03:01:00:01",
 	.parent = &ssam_node_hub_main,
 };
@@ -100,7 +100,7 @@ static const struct software_node ssam_node_hid_base_iid6 = {
 static const struct software_node *ssam_node_group_sb2[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
@@ -108,7 +108,7 @@ static const struct software_node *ssam_node_group_sb3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
 	&ssam_node_hub_base,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_bat_sb3base,
@@ -123,21 +123,21 @@ static const struct software_node *ssam_node_group_sb3[] = {
 static const struct software_node *ssam_node_group_sl1[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
 static const struct software_node *ssam_node_group_sl2[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
 static const struct software_node *ssam_node_group_sl3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_hid_main_keyboard,
@@ -149,7 +149,7 @@ static const struct software_node *ssam_node_group_sl3[] = {
 static const struct software_node *ssam_node_group_slg1[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	NULL,
@@ -158,21 +158,21 @@ static const struct software_node *ssam_node_group_slg1[] = {
 static const struct software_node *ssam_node_group_sp5[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
 static const struct software_node *ssam_node_group_sp6[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
 static const struct software_node *ssam_node_group_sp7[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_perf,
+	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	NULL,
