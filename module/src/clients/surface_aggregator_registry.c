@@ -302,7 +302,7 @@ enum ssam_base_hub_state {
 struct ssam_base_hub {
 	struct ssam_device *sdev;
 
-	struct mutex lock;
+	struct mutex lock;  /* Guards state update checks and transitions. */
 	enum ssam_base_hub_state state;
 
 	struct ssam_event_notifier notif;
