@@ -494,20 +494,23 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 
 	status = ssam_notifier_register(sdev->ctrl, &hub->notif);
 	if (status)
-		return status;
+		goto err_register;
 
 	status = ssam_base_hub_update(hub);
-	if (status) {
-		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
-		return status;
-	}
+	if (status)
+		goto err_update;
 
 	status = sysfs_create_group(&sdev->dev.kobj, &ssam_base_hub_group);
-	if (status) {
-		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
-		ssam_hub_remove_devices(&sdev->dev);
-	}
+	if (status)
+		goto err_update;
 
+	return 0;
+
+err_update:
+	ssam_notifier_unregister(sdev->ctrl, &hub->notif);
+	ssam_hub_remove_devices(&sdev->dev);
+err_register:
+	mutex_destroy(&hub->lock);
 	return status;
 }
 
