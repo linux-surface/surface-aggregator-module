@@ -339,8 +339,7 @@ static int ssam_base_hub_query_state(struct ssam_base_hub *hub, enum ssam_base_h
 static ssize_t ssam_base_hub_state_show(struct device *dev, struct device_attribute *attr,
 					char *buf)
 {
-	struct ssam_device *sdev = to_ssam_device(dev);
-	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
+	struct ssam_base_hub *hub = dev_get_drvdata(dev);
 	bool connected;
 
 	mutex_lock(&hub->lock);
