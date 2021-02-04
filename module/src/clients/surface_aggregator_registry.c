@@ -212,8 +212,7 @@ static void ssam_hub_remove_devices(struct device *parent)
 	device_for_each_child_reverse(parent, NULL, ssam_hub_remove_devices_fn);
 }
 
-static int ssam_hub_add_device(struct device *parent,
-			       struct ssam_controller *ctrl,
+static int ssam_hub_add_device(struct device *parent, struct ssam_controller *ctrl,
 			       struct fwnode_handle *node)
 {
 	struct ssam_device_uid uid;
@@ -238,8 +237,7 @@ static int ssam_hub_add_device(struct device *parent,
 	return status;
 }
 
-static int ssam_hub_add_devices(struct device *parent,
-				struct ssam_controller *ctrl,
+static int ssam_hub_add_devices(struct device *parent, struct ssam_controller *ctrl,
 				struct fwnode_handle *node)
 {
 	struct fwnode_handle *child;
@@ -318,15 +316,14 @@ static SSAM_DEFINE_SYNC_REQUEST_R(ssam_bas_query_opmode, u8, {
 #define SSAM_BAS_OPMODE_TABLET		0x00
 #define SSAM_EVENT_BAS_CID_CONNECTION	0x0c
 
-static int ssam_base_hub_query_state(struct ssam_device *sdev,
-				     enum ssam_base_hub_state *state)
+static int ssam_base_hub_query_state(struct ssam_base_hub *hub, enum ssam_base_hub_state *state)
 {
 	u8 opmode;
 	int status;
 
-	status = ssam_retry(ssam_bas_query_opmode, sdev->ctrl, &opmode);
+	status = ssam_retry(ssam_bas_query_opmode, hub->sdev->ctrl, &opmode);
 	if (status < 0) {
-		dev_err(&sdev->dev, "failed to query base state: %d\n", status);
+		dev_err(&hub->sdev->dev, "failed to query base state: %d\n", status);
 		return status;
 	}
 
@@ -338,8 +335,7 @@ static int ssam_base_hub_query_state(struct ssam_device *sdev,
 	return 0;
 }
 
-static ssize_t ssam_base_hub_state_show(struct device *dev,
-					struct device_attribute *attr,
+static ssize_t ssam_base_hub_state_show(struct device *dev, struct device_attribute *attr,
 					char *buf)
 {
 	struct ssam_device *sdev = to_ssam_device(dev);
@@ -366,38 +362,43 @@ const struct attribute_group ssam_base_hub_group = {
 	.attrs = ssam_base_hub_attrs,
 };
 
-static int ssam_base_hub_update(struct ssam_device *sdev,
-				enum ssam_base_hub_state new)
+static int __ssam_base_hub_update(struct ssam_base_hub *hub, enum ssam_base_hub_state new)
 {
-	struct ssam_base_hub *hub = ssam_device_get_drvdata(sdev);
-	struct fwnode_handle *node = dev_fwnode(&sdev->dev);
+	struct fwnode_handle *node = dev_fwnode(&hub->sdev->dev);
 	int status = 0;
 
-	mutex_lock(&hub->lock);
-	if (hub->state == new) {
-		mutex_unlock(&hub->lock);
+	if (hub->state == new)
 		return 0;
-	}
 	hub->state = new;
 
 	if (hub->state == SSAM_BASE_HUB_CONNECTED)
-		status = ssam_hub_add_devices(&sdev->dev, sdev->ctrl, node);
+		status = ssam_hub_add_devices(&hub->sdev->dev, hub->sdev->ctrl, node);
 
 	if (hub->state != SSAM_BASE_HUB_CONNECTED || status)
-		ssam_hub_remove_devices(&sdev->dev);
+		ssam_hub_remove_devices(&hub->sdev->dev);
 
-	mutex_unlock(&hub->lock);
-
-	if (status) {
-		dev_err(&sdev->dev, "failed to update base-hub devices: %d\n",
-			status);
-	}
+	if (status)
+		dev_err(&hub->sdev->dev, "failed to update base-hub devices: %d\n", status);
 
 	return status;
 }
 
-static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf,
-			       const struct ssam_event *event)
+static int ssam_base_hub_update(struct ssam_base_hub *hub)
+{
+	enum ssam_base_hub_state state;
+	int status;
+
+	mutex_lock(&hub->lock);
+
+	status = ssam_base_hub_query_state(hub, &state);
+	if (!status)
+		status = __ssam_base_hub_update(hub, state);
+
+	mutex_unlock(&hub->lock);
+	return status;
+}
+
+static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
 	struct ssam_base_hub *hub;
 	struct ssam_device *sdev;
@@ -420,7 +421,9 @@ static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf,
 	else
 		new = SSAM_BASE_HUB_DISCONNECTED;
 
-	ssam_base_hub_update(sdev, new);
+	mutex_lock(&hub->lock);
+	__ssam_base_hub_update(hub, new);
+	mutex_unlock(&hub->lock);
 
 	/*
 	 * Do not return SSAM_NOTIF_HANDLED: The event should be picked up and
@@ -432,21 +435,12 @@ static u32 ssam_base_hub_notif(struct ssam_event_notifier *nf,
 
 static int __maybe_unused ssam_base_hub_resume(struct device *dev)
 {
-	struct ssam_device *sdev = to_ssam_device(dev);
-	enum ssam_base_hub_state state;
-	int status;
-
-	status = ssam_base_hub_query_state(sdev, &state);
-	if (status)
-		return status;
-
-	return ssam_base_hub_update(sdev, state);
+	return ssam_base_hub_update(dev_get_drvdata(dev));
 }
 static SIMPLE_DEV_PM_OPS(ssam_base_hub_pm_ops, NULL, ssam_base_hub_resume);
 
 static int ssam_base_hub_probe(struct ssam_device *sdev)
 {
-	enum ssam_base_hub_state state;
 	struct ssam_base_hub *hub;
 	int status;
 
@@ -473,13 +467,7 @@ static int ssam_base_hub_probe(struct ssam_device *sdev)
 
 	ssam_device_set_drvdata(sdev, hub);
 
-	status = ssam_base_hub_query_state(sdev, &state);
-	if (status) {
-		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
-		return status;
-	}
-
-	status = ssam_base_hub_update(sdev, state);
+	status = ssam_base_hub_update(hub);
 	if (status) {
 		ssam_notifier_unregister(sdev->ctrl, &hub->notif);
 		return status;
