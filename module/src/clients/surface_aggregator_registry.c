@@ -23,80 +23,96 @@
 
 /* -- Device registry. ------------------------------------------------------ */
 
+/* Root node */
 static const struct software_node ssam_node_root = {
 	.name = "ssam_platform_hub",
 };
 
+/* Main device hub */
 static const struct software_node ssam_node_hub_main = {
 	.name = "ssam:00:00:01:00:00",
 	.parent = &ssam_node_root,
 };
 
+/* Base device hub (devices attached to Surface Book 3 base) */
 static const struct software_node ssam_node_hub_base = {
 	.name = "ssam:00:00:02:00:00",
 	.parent = &ssam_node_root,
 };
 
+/* AC adapter */
 static const struct software_node ssam_node_bat_ac = {
 	.name = "ssam:01:02:01:01:01",
 	.parent = &ssam_node_hub_main,
 };
 
+/* Primary battery */
 static const struct software_node ssam_node_bat_main = {
 	.name = "ssam:01:02:01:01:00",
 	.parent = &ssam_node_hub_main,
 };
 
+/* Secondary battery (Surface Book 3) */
 static const struct software_node ssam_node_bat_sb3base = {
 	.name = "ssam:01:02:02:01:00",
 	.parent = &ssam_node_hub_base,
 };
 
+/* Platform profile / performance-mode */
 static const struct software_node ssam_node_tmp_pprof = {
 	.name = "ssam:01:03:01:00:01",
 	.parent = &ssam_node_hub_main,
 };
 
+/* DTX (detachment system, Surface Book 3) */
 static const struct software_node ssam_node_bas_dtx = {
 	.name = "ssam:01:11:01:00:00",
 	.parent = &ssam_node_hub_main,
 };
 
+/* HID keyboard (main hub) */
 static const struct software_node ssam_node_hid_main_keyboard = {
 	.name = "ssam:01:15:02:01:00",
 	.parent = &ssam_node_hub_main,
 };
 
+/* HID touchpad (main hub) */
 static const struct software_node ssam_node_hid_main_touchpad = {
 	.name = "ssam:01:15:02:03:00",
 	.parent = &ssam_node_hub_main,
 };
 
+/* HID device instance 5 (unknown HID device, attached to main hub) */
 static const struct software_node ssam_node_hid_main_iid5 = {
 	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_main,
 };
 
+/* HID keyboard (attached to base) */
 static const struct software_node ssam_node_hid_base_keyboard = {
 	.name = "ssam:01:15:02:01:00",
 	.parent = &ssam_node_hub_base,
 };
 
+/* HID touchpad (attached to base) */
 static const struct software_node ssam_node_hid_base_touchpad = {
 	.name = "ssam:01:15:02:03:00",
 	.parent = &ssam_node_hub_base,
 };
 
+/* HID device instance 5 (unknown HID device, attached to base) */
 static const struct software_node ssam_node_hid_base_iid5 = {
 	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_base,
 };
 
+/* HID device instance 6 (unknown HID device, attached to base) */
 static const struct software_node ssam_node_hid_base_iid6 = {
 	.name = "ssam:01:15:02:06:00",
 	.parent = &ssam_node_hub_base,
 };
 
+/* Devices for Surface Book 2 */
 static const struct software_node *ssam_node_group_sb2[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -104,6 +120,7 @@ static const struct software_node *ssam_node_group_sb2[] = {
 	NULL,
 };
 
+/* Devices for Surface Book 3 */
 static const struct software_node *ssam_node_group_sb3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -120,6 +137,7 @@ static const struct software_node *ssam_node_group_sb3[] = {
 	NULL,
 };
 
+/* Devices for Surface Laptop 1 */
 static const struct software_node *ssam_node_group_sl1[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -127,6 +145,7 @@ static const struct software_node *ssam_node_group_sl1[] = {
 	NULL,
 };
 
+/* Devices for Surface Laptop 2 */
 static const struct software_node *ssam_node_group_sl2[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -134,6 +153,7 @@ static const struct software_node *ssam_node_group_sl2[] = {
 	NULL,
 };
 
+/* Devices for Surface Laptop 3 */
 static const struct software_node *ssam_node_group_sl3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -146,6 +166,7 @@ static const struct software_node *ssam_node_group_sl3[] = {
 	NULL,
 };
 
+/* Devices for Surface Laptop Go */
 static const struct software_node *ssam_node_group_slg1[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -155,6 +176,7 @@ static const struct software_node *ssam_node_group_slg1[] = {
 	NULL,
 };
 
+/* Devices for Surface Pro 5 */
 static const struct software_node *ssam_node_group_sp5[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -162,6 +184,7 @@ static const struct software_node *ssam_node_group_sp5[] = {
 	NULL,
 };
 
+/* Devices for Surface Pro 6 */
 static const struct software_node *ssam_node_group_sp6[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
@@ -169,6 +192,7 @@ static const struct software_node *ssam_node_group_sp6[] = {
 	NULL,
 };
 
+/* Devices for Surface Pro 7 */
 static const struct software_node *ssam_node_group_sp7[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
