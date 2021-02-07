@@ -23,6 +23,18 @@
 
 /* -- Device registry. ------------------------------------------------------ */
 
+/*
+ * SSAM device names follow the SSAM module alias, meaning they are prefixed
+ * with 'ssam:', followed by domain, category, target ID, instance ID, and
+ * function, each encoded as two-digit hexadecimal, separated by ':'. In other
+ * words, it follows the scheme
+ *
+ *      ssam:dd:cc:tt:ii:ff
+ *
+ * Where, 'dd', 'cc', 'tt', 'ii', and 'ff' are the two-digit hexadecimal
+ * values mentioned above, respectively.
+ */
+
 /* Root node. */
 static const struct software_node ssam_node_root = {
 	.name = "ssam_platform_hub",
