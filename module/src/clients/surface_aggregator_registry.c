@@ -70,13 +70,13 @@ static const struct software_node ssam_node_bat_sb3base = {
 	.parent = &ssam_node_hub_base,
 };
 
-/* Platform profile / performance-mode. */
+/* Platform profile / performance-mode device. */
 static const struct software_node ssam_node_tmp_pprof = {
 	.name = "ssam:01:03:01:00:01",
 	.parent = &ssam_node_hub_main,
 };
 
-/* DTX (detachment system, Surface Book 3). */
+/* DTX / detachment-system device (Surface Book 3). */
 static const struct software_node ssam_node_bas_dtx = {
 	.name = "ssam:01:11:01:00:00",
 	.parent = &ssam_node_hub_main,
@@ -94,31 +94,31 @@ static const struct software_node ssam_node_hid_main_touchpad = {
 	.parent = &ssam_node_hub_main,
 };
 
-/* HID device instance 5 (unknown HID device, attached to main hub). */
+/* HID device instance 5 (unknown HID device, main hub). */
 static const struct software_node ssam_node_hid_main_iid5 = {
 	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_main,
 };
 
-/* HID keyboard (attached to base). */
+/* HID keyboard (base hub). */
 static const struct software_node ssam_node_hid_base_keyboard = {
 	.name = "ssam:01:15:02:01:00",
 	.parent = &ssam_node_hub_base,
 };
 
-/* HID touchpad (attached to base). */
+/* HID touchpad (base hub). */
 static const struct software_node ssam_node_hid_base_touchpad = {
 	.name = "ssam:01:15:02:03:00",
 	.parent = &ssam_node_hub_base,
 };
 
-/* HID device instance 5 (unknown HID device, attached to base). */
+/* HID device instance 5 (unknown HID device, base hub). */
 static const struct software_node ssam_node_hid_base_iid5 = {
 	.name = "ssam:01:15:02:05:00",
 	.parent = &ssam_node_hub_base,
 };
 
-/* HID device instance 6 (unknown HID device, attached to base). */
+/* HID device instance 6 (unknown HID device, base hub). */
 static const struct software_node ssam_node_hid_base_iid6 = {
 	.name = "ssam:01:15:02:06:00",
 	.parent = &ssam_node_hub_base,
