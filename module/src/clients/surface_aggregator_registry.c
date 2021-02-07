@@ -548,7 +548,7 @@ static struct ssam_device_driver ssam_base_hub_driver = {
 /* -- SSAM platform/meta-hub driver. ---------------------------------------- */
 
 static const struct acpi_device_id ssam_platform_hub_match[] = {
-	/* Surface Pro 4, 5, and 6 */
+	/* Surface Pro 4, 5, and 6 (OMBR < 0x10) */
 	{ "MSHW0081", (unsigned long)ssam_node_group_sp5 },
 
 	/* Surface Pro 6 (OMBR >= 0x10) */
