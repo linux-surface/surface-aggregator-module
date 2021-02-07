@@ -137,15 +137,15 @@ static const struct software_node *ssam_node_group_sb3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
 	&ssam_node_hub_base,
-	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_bat_sb3base,
+	&ssam_node_tmp_pprof,
+	&ssam_node_bas_dtx,
 	&ssam_node_hid_base_keyboard,
 	&ssam_node_hid_base_touchpad,
 	&ssam_node_hid_base_iid5,
 	&ssam_node_hid_base_iid6,
-	&ssam_node_bas_dtx,
 	NULL,
 };
 
@@ -169,9 +169,9 @@ static const struct software_node *ssam_node_group_sl2[] = {
 static const struct software_node *ssam_node_group_sl3[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
+	&ssam_node_tmp_pprof,
 	&ssam_node_hid_main_keyboard,
 	&ssam_node_hid_main_touchpad,
 	&ssam_node_hid_main_iid5,
@@ -182,9 +182,9 @@ static const struct software_node *ssam_node_group_sl3[] = {
 static const struct software_node *ssam_node_group_slg1[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
@@ -208,9 +208,9 @@ static const struct software_node *ssam_node_group_sp6[] = {
 static const struct software_node *ssam_node_group_sp7[] = {
 	&ssam_node_root,
 	&ssam_node_hub_main,
-	&ssam_node_tmp_pprof,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
+	&ssam_node_tmp_pprof,
 	NULL,
 };
 
