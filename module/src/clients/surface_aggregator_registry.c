@@ -13,8 +13,8 @@
 #include <linux/limits.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/notifier.h>
 #include <linux/platform_device.h>
+#include <linux/property.h>
 #include <linux/types.h>
 
 #include "../../include/linux/surface_aggregator/controller.h"
