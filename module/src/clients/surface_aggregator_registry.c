@@ -655,7 +655,7 @@ static int __init ssam_device_hub_init(void)
 
 	status = platform_driver_register(&ssam_platform_hub_driver);
 	if (status)
-		goto err_platform;
+		return status;
 
 	status = ssam_device_driver_register(&ssam_hub_driver);
 	if (status)
@@ -671,7 +671,6 @@ err_base:
 	ssam_device_driver_unregister(&ssam_hub_driver);
 err_main:
 	platform_driver_unregister(&ssam_platform_hub_driver);
-err_platform:
 	return status;
 }
 module_init(ssam_device_hub_init);
