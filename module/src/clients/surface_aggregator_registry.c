@@ -3,7 +3,8 @@
  * Surface System Aggregator Module (SSAM) client device registry.
  *
  * Registry for non-platform/non-ACPI SSAM client devices, i.e. devices that
- * cannot be auto-detected. Provides device-hubs for these devices.
+ * cannot be auto-detected. Provides device-hubs and performs instantiation
+ * for these devices.
  *
  * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
  */
