@@ -436,6 +436,7 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	list_del(&client->node);
 	up_write(&client->ddev->client_lock);
 
+	/* Free client. */
 	sdtx_device_put(client->ddev);
 	mutex_destroy(&client->read_lock);
 	kfree(client);
