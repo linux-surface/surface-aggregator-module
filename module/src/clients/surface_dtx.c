@@ -412,7 +412,12 @@ static int surface_dtx_open(struct inode *inode, struct file *file)
 	/* Attach client. */
 	down_write(&ddev->client_lock);
 
-	/* Do not add a new client if the device has been shut down. */
+	/*
+	 * Do not add a new client if the device has been shut down. Note that
+	 * it's enough to hold the client_lock here as, during shutdown, we
+	 * only acquire that lock and remove clients after marking the device
+	 * as shut down.
+	 */
 	if (test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags)) {
 		up_write(&ddev->client_lock);
 		sdtx_device_put(client->ddev);
