@@ -11,8 +11,6 @@
  * Copyright (C) 2019-2021 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
-#include <linux/acpi.h>
-#include <linux/delay.h>
 #include <linux/fs.h>
 #include <linux/input.h>
 #include <linux/ioctl.h>
@@ -21,11 +19,12 @@
 #include <linux/kref.h>
 #include <linux/miscdevice.h>
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/platform_device.h>
 #include <linux/poll.h>
 #include <linux/rwsem.h>
 #include <linux/slab.h>
-#include <linux/spinlock.h>
+#include <linux/workqueue.h>
 
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
