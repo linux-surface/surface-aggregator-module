@@ -5,7 +5,7 @@
  * Provides support for HID input devices connected via the Surface System
  * Aggregator Module.
  *
- * Copyright (C) 2019-2020 Blaž Hrastnik <blaz@mxxn.io>,
+ * Copyright (C) 2019-2021 Blaž Hrastnik <blaz@mxxn.io>,
  *                         Maximilian Luz <luzmaximilian@gmail.com>
  */
 

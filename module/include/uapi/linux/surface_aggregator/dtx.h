@@ -6,7 +6,7 @@
  * device allows user-space to control the clipboard detachment process on
  * Surface Book series devices.
  *
- * Copyright (C) 2020 Maximilian Luz <luzmaximilian@gmail.com>
+ * Copyright (C) 2020-2021 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #ifndef _UAPI_LINUX_SURFACE_AGGREGATOR_DTX_H
