@@ -469,8 +469,7 @@ static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t coun
 
 			status = wait_event_interruptible(ddev->waitq,
 					!kfifo_is_empty(&client->buffer) ||
-					test_bit(SDTX_DEVICE_SHUTDOWN_BIT,
-						 &ddev->flags));
+					test_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags));
 			if (status < 0)
 				return status;
 
