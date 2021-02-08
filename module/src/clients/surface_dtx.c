@@ -323,8 +323,7 @@ static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf
 	return put_user(sdtx_translate_latch_status(ddev, latch), buf);
 }
 
-static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
-				unsigned long arg)
+static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd, unsigned long arg)
 {
 	struct sdtx_device *ddev = client->ddev;
 
@@ -356,8 +355,7 @@ static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
 		return ssam_retry(ssam_bas_latch_cancel, ddev->ctrl);
 
 	case SDTX_IOCTL_GET_BASE_INFO:
-		return sdtx_ioctl_get_base_info(ddev,
-				(struct sdtx_base_info __user *)arg);
+		return sdtx_ioctl_get_base_info(ddev, (struct sdtx_base_info __user *)arg);
 
 	case SDTX_IOCTL_GET_DEVICE_MODE:
 		return sdtx_ioctl_get_device_mode(ddev, (u16 __user *)arg);
@@ -370,8 +368,7 @@ static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd,
 	}
 }
 
-static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
-			      unsigned long arg)
+static long surface_dtx_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	struct sdtx_client *client = file->private_data;
 	long status;
@@ -395,10 +392,8 @@ static long surface_dtx_ioctl(struct file *file, unsigned int cmd,
 
 static int surface_dtx_open(struct inode *inode, struct file *file)
 {
-	struct sdtx_device *ddev;
+	struct sdtx_device *ddev = container_of(file->private_data, struct sdtx_device, mdev);
 	struct sdtx_client *client;
-
-	ddev = container_of(file->private_data, struct sdtx_device, mdev);
 
 	/* Initialize client. */
 	client = kzalloc(sizeof(*client), GFP_KERNEL);
@@ -448,8 +443,7 @@ static int surface_dtx_release(struct inode *inode, struct file *file)
 	return 0;
 }
 
-static ssize_t surface_dtx_read(struct file *file, char __user *buf,
-				size_t count, loff_t *offs)
+static ssize_t surface_dtx_read(struct file *file, char __user *buf, size_t count, loff_t *offs)
 {
 	struct sdtx_client *client = file->private_data;
 	struct sdtx_device *ddev = client->ddev;
@@ -614,8 +608,7 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 	wake_up_interruptible(&ddev->waitq);
 }
 
-static u32 sdtx_notifier(struct ssam_event_notifier *nf,
-			 const struct ssam_event *in)
+static u32 sdtx_notifier(struct ssam_event_notifier *nf, const struct ssam_event *in)
 {
 	struct sdtx_device *ddev = container_of(nf, struct sdtx_device, notif);
 	union sdtx_generic_event event;
@@ -725,13 +718,11 @@ static bool sdtx_device_mode_invalid(u8 mode, u8 base_state)
 
 static void sdtx_device_mode_workfn(struct work_struct *work)
 {
-	struct sdtx_device *ddev;
+	struct sdtx_device *ddev = container_of(work, struct sdtx_device, mode_work.work);
 	struct sdtx_status_event event;
 	struct ssam_bas_base_info base;
 	int status, tablet;
 	u8 mode;
-
-	ddev = container_of(work, struct sdtx_device, mode_work.work);
 
 	/* Get operation mode. */
 	status = ssam_retry(ssam_bas_get_device_mode, ddev->ctrl, &mode);
@@ -864,12 +855,10 @@ static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status
 
 static void sdtx_device_state_workfn(struct work_struct *work)
 {
-	struct sdtx_device *ddev;
+	struct sdtx_device *ddev = container_of(work, struct sdtx_device, state_work.work);
 	struct ssam_bas_base_info base;
 	u8 mode, latch;
 	int status;
-
-	ddev = container_of(work, struct sdtx_device, state_work.work);
 
 	/* Mark everything as dirty. */
 	set_bit(SDTX_DEVICE_DIRTY_BASE_BIT, &ddev->flags);
@@ -978,13 +967,11 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 	if (status)
 		return status;
 
-	status = ssam_retry(ssam_bas_get_device_mode, ddev->ctrl,
-			    &ddev->state.device_mode);
+	status = ssam_retry(ssam_bas_get_device_mode, ddev->ctrl, &ddev->state.device_mode);
 	if (status)
 		return status;
 
-	status = ssam_retry(ssam_bas_get_latch_status, ddev->ctrl,
-			    &ddev->state.latch_status);
+	status = ssam_retry(ssam_bas_get_latch_status, ddev->ctrl, &ddev->state.latch_status);
 	if (status)
 		return status;
 
@@ -1033,8 +1020,7 @@ err_mdev:
 	return status;
 }
 
-static struct sdtx_device *sdtx_device_setup(struct device *dev,
-					     struct ssam_controller *ctrl)
+static struct sdtx_device *sdtx_device_setup(struct device *dev, struct ssam_controller *ctrl)
 {
 	struct sdtx_device *ddev;
 	int status;

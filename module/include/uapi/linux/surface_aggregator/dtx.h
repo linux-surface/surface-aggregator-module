@@ -29,7 +29,7 @@
 #define SDTX_ERR_HW(code)		((code) | SDTX_CATEGORY_HARDWARE_ERROR)
 #define SDTX_UNKNOWN(code)		((code) | SDTX_CATEGORY_UNKNOWN)
 
-#define SDTX_SUCCESS(value)	(SDTX_CATEGORY(value) == SDTX_CATEGORY_STATUS)
+#define SDTX_SUCCESS(value)		(SDTX_CATEGORY(value) == SDTX_CATEGORY_STATUS)
 
 /* Latch status values */
 #define SDTX_LATCH_CLOSED		SDTX_STATUS(0x00)
