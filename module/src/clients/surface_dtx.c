@@ -286,6 +286,8 @@ static int sdtx_ioctl_get_base_info(struct sdtx_device *ddev,
 	struct sdtx_base_info info;
 	int status;
 
+	lockdep_assert_held_read(&ddev->lock);
+
 	status = ssam_retry(ssam_bas_get_base, ddev->ctrl, &raw);
 	if (status < 0)
 		return status;
@@ -304,6 +306,8 @@ static int sdtx_ioctl_get_device_mode(struct sdtx_device *ddev, u16 __user *buf)
 	u8 mode;
 	int status;
 
+	lockdep_assert_held_read(&ddev->lock);
+
 	status = ssam_retry(ssam_bas_get_device_mode, ddev->ctrl, &mode);
 	if (status < 0)
 		return status;
@@ -316,6 +320,8 @@ static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf
 	u8 latch;
 	int status;
 
+	lockdep_assert_held_read(&ddev->lock);
+
 	status = ssam_retry(ssam_bas_get_latch_status, ddev->ctrl, &latch);
 	if (status < 0)
 		return status;
@@ -326,6 +332,8 @@ static int sdtx_ioctl_get_latch_status(struct sdtx_device *ddev, u16 __user *buf
 static long __surface_dtx_ioctl(struct sdtx_client *client, unsigned int cmd, unsigned long arg)
 {
 	struct sdtx_device *ddev = client->ddev;
+
+	lockdep_assert_held_read(&ddev->lock);
 
 	switch (cmd) {
 	case SDTX_IOCTL_EVENTS_ENABLE:
