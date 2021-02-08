@@ -567,8 +567,6 @@ static const struct file_operations surface_dtx_fops = {
 #define SDTX_DEVICE_MODE_DELAY_CONNECT	msecs_to_jiffies(100)
 #define SDTX_DEVICE_MODE_DELAY_RECHECK	msecs_to_jiffies(100)
 
-static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay);
-
 struct sdtx_status_event {
 	struct sdtx_event e;
 	__u16 v;
@@ -584,6 +582,8 @@ union sdtx_generic_event {
 	struct sdtx_status_event status;
 	struct sdtx_base_info_event base;
 };
+
+static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long delay);
 
 /* Must be executed with ddev->write_lock held. */
 static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
