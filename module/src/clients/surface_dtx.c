@@ -1042,6 +1042,12 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 {
 	struct sdtx_client *client;
 
+	/*
+	 * Mark device as shut-down. Prevent new clients from being added and
+	 * new operations from being executed.
+	 */
+	set_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags);
+
 	/* Disable notifiers, prevent new events from arriving. */
 	ssam_notifier_unregister(ddev->ctrl, &ddev->notif);
 
@@ -1053,12 +1059,6 @@ static void sdtx_device_destroy(struct sdtx_device *ddev)
 
 	/* With mode_work canceled, we can unregister the mode_switch. */
 	input_unregister_device(ddev->mode_switch);
-
-	/*
-	 * Mark device as shut-down. Prevent new clients from being added and
-	 * new operations from being executed.
-	 */
-	set_bit(SDTX_DEVICE_SHUTDOWN_BIT, &ddev->flags);
 
 	/* Wake up async clients. */
 	down_write(&ddev->client_lock);
