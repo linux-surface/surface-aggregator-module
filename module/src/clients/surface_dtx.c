@@ -1205,6 +1205,7 @@ static struct ssam_device_driver surface_dtx_ssam_driver = {
 	.match_table = surface_dtx_ssam_match,
 	.driver = {
 		.name = "surface_dtx",
+		.pm = &surface_dtx_pm_ops,
 		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
 	},
 };
