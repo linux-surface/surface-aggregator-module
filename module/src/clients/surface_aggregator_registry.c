@@ -494,7 +494,7 @@ static void ssam_base_hub_remove(struct ssam_device *sdev)
 }
 
 static const struct ssam_device_id ssam_base_hub_match[] = {
-	{ SSAM_VDEV(HUB, 0x02, 0x00, 0x00) },
+	{ SSAM_VDEV(HUB, 0x02, SSAM_ANY_IID, 0x00) },
 	{ },
 };
 
