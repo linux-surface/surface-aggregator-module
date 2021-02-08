@@ -1020,7 +1020,7 @@ err_mdev:
 	return status;
 }
 
-static struct sdtx_device *sdtx_device_setup(struct device *dev, struct ssam_controller *ctrl)
+static struct sdtx_device *sdtx_device_create(struct device *dev, struct ssam_controller *ctrl)
 {
 	struct sdtx_device *ddev;
 	int status;
@@ -1140,7 +1140,7 @@ static int surface_dtx_platform_probe(struct platform_device *pdev)
 	if (IS_ERR(ctrl))
 		return PTR_ERR(ctrl) == -ENODEV ? -EPROBE_DEFER : PTR_ERR(ctrl);
 
-	ddev = sdtx_device_setup(&pdev->dev, ctrl);
+	ddev = sdtx_device_create(&pdev->dev, ctrl);
 	if (IS_ERR(ddev))
 		return PTR_ERR(ddev);
 
@@ -1180,7 +1180,7 @@ static int surface_dtx_ssam_probe(struct ssam_device *sdev)
 {
 	struct sdtx_device *ddev;
 
-	ddev = sdtx_device_setup(&sdev->dev, sdev->ctrl);
+	ddev = sdtx_device_create(&sdev->dev, sdev->ctrl);
 	if (IS_ERR(ddev))
 		return PTR_ERR(ddev);
 
