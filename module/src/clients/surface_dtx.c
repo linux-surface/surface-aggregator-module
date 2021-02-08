@@ -782,6 +782,7 @@ static void sdtx_update_device_mode(struct sdtx_device *ddev, unsigned long dela
 	schedule_delayed_work(&ddev->mode_work, delay);
 }
 
+/* Must be executed with ddev->write_lock held. */
 static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 					    struct ssam_bas_base_info info)
 {
@@ -804,6 +805,7 @@ static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 	sdtx_push_event(ddev, &event.e);
 }
 
+/* Must be executed with ddev->write_lock held. */
 static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 {
 	struct sdtx_status_event event;
@@ -842,6 +844,7 @@ static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 	input_sync(ddev->mode_switch);
 }
 
+/* Must be executed with ddev->write_lock held. */
 static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status)
 {
 	struct sdtx_status_event event;
