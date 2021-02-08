@@ -99,7 +99,7 @@ struct sdtx_event {
  * @SDTX_EVENT_LATCH_STATUS:    Latch status change event type.
  * @SDTX_EVENT_DEVICE_MODE:     Device mode change event type.
  *
- * Used in @struct sdtx_event to describe the type of the event. Further event
+ * Used in &struct sdtx_event to describe the type of the event. Further event
  * codes are reserved for future use. Any event parser should be able to
  * gracefully handle unknown events, i.e. by simply skipping them.
  *
