@@ -1031,7 +1031,7 @@ static struct sdtx_device *sdtx_device_create(struct device *dev, struct ssam_co
 
 	status = sdtx_device_init(ddev, dev, ctrl);
 	if (status) {
-		kfree(ddev);
+		sdtx_device_put(ddev);
 		return ERR_PTR(status);
 	}
 
