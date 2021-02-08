@@ -145,7 +145,7 @@ enum sdtx_device_state {
 
 struct sdtx_device {
 	struct kref kref;
-	struct rw_semaphore lock;         /* Guards device reference, ensures orderly shutdown. */
+	struct rw_semaphore lock;         /* Guards device and controller reference. */
 
 	struct device *dev;
 	struct ssam_controller *ctrl;
