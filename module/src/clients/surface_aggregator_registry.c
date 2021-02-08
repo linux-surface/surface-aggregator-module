@@ -41,12 +41,6 @@ static const struct software_node ssam_node_root = {
 	.name = "ssam_platform_hub",
 };
 
-/* Main device hub. */
-static const struct software_node ssam_node_hub_main = {
-	.name = "ssam:00:00:01:00:00",
-	.parent = &ssam_node_root,
-};
-
 /* Base device hub (devices attached to Surface Book 3 base). */
 static const struct software_node ssam_node_hub_base = {
 	.name = "ssam:00:00:02:00:00",
@@ -56,13 +50,13 @@ static const struct software_node ssam_node_hub_base = {
 /* AC adapter. */
 static const struct software_node ssam_node_bat_ac = {
 	.name = "ssam:01:02:01:01:01",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
 /* Primary battery. */
 static const struct software_node ssam_node_bat_main = {
 	.name = "ssam:01:02:01:01:00",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
 /* Secondary battery (Surface Book 3). */
@@ -74,31 +68,31 @@ static const struct software_node ssam_node_bat_sb3base = {
 /* Platform profile / performance-mode device. */
 static const struct software_node ssam_node_tmp_pprof = {
 	.name = "ssam:01:03:01:00:01",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
 /* DTX / detachment-system device (Surface Book 3). */
 static const struct software_node ssam_node_bas_dtx = {
 	.name = "ssam:01:11:01:00:00",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
-/* HID keyboard (main hub). */
+/* HID keyboard. */
 static const struct software_node ssam_node_hid_main_keyboard = {
 	.name = "ssam:01:15:02:01:00",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
-/* HID touchpad (main hub). */
+/* HID touchpad. */
 static const struct software_node ssam_node_hid_main_touchpad = {
 	.name = "ssam:01:15:02:03:00",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
-/* HID device instance 5 (unknown HID device, main hub). */
+/* HID device instance 5 (unknown HID device). */
 static const struct software_node ssam_node_hid_main_iid5 = {
 	.name = "ssam:01:15:02:05:00",
-	.parent = &ssam_node_hub_main,
+	.parent = &ssam_node_root,
 };
 
 /* HID keyboard (base hub). */
@@ -128,7 +122,6 @@ static const struct software_node ssam_node_hid_base_iid6 = {
 /* Devices for Surface Book 2. */
 static const struct software_node *ssam_node_group_sb2[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_tmp_pprof,
 	NULL,
 };
@@ -136,7 +129,6 @@ static const struct software_node *ssam_node_group_sb2[] = {
 /* Devices for Surface Book 3. */
 static const struct software_node *ssam_node_group_sb3[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_hub_base,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
@@ -153,7 +145,6 @@ static const struct software_node *ssam_node_group_sb3[] = {
 /* Devices for Surface Laptop 1. */
 static const struct software_node *ssam_node_group_sl1[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_tmp_pprof,
 	NULL,
 };
@@ -161,7 +152,6 @@ static const struct software_node *ssam_node_group_sl1[] = {
 /* Devices for Surface Laptop 2. */
 static const struct software_node *ssam_node_group_sl2[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_tmp_pprof,
 	NULL,
 };
@@ -169,7 +159,6 @@ static const struct software_node *ssam_node_group_sl2[] = {
 /* Devices for Surface Laptop 3. */
 static const struct software_node *ssam_node_group_sl3[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_tmp_pprof,
@@ -182,7 +171,6 @@ static const struct software_node *ssam_node_group_sl3[] = {
 /* Devices for Surface Laptop Go. */
 static const struct software_node *ssam_node_group_slg1[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_tmp_pprof,
@@ -192,7 +180,6 @@ static const struct software_node *ssam_node_group_slg1[] = {
 /* Devices for Surface Pro 5. */
 static const struct software_node *ssam_node_group_sp5[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_tmp_pprof,
 	NULL,
 };
@@ -200,7 +187,6 @@ static const struct software_node *ssam_node_group_sp5[] = {
 /* Devices for Surface Pro 6. */
 static const struct software_node *ssam_node_group_sp6[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_tmp_pprof,
 	NULL,
 };
@@ -208,7 +194,6 @@ static const struct software_node *ssam_node_group_sp6[] = {
 /* Devices for Surface Pro 7. */
 static const struct software_node *ssam_node_group_sp7[] = {
 	&ssam_node_root,
-	&ssam_node_hub_main,
 	&ssam_node_bat_ac,
 	&ssam_node_bat_main,
 	&ssam_node_tmp_pprof,
@@ -298,39 +283,6 @@ err:
 	ssam_hub_remove_devices(parent);
 	return status;
 }
-
-
-/* -- SSAM main-hub driver. ------------------------------------------------- */
-
-static int ssam_hub_probe(struct ssam_device *sdev)
-{
-	struct fwnode_handle *node = dev_fwnode(&sdev->dev);
-
-	if (!node)
-		return -ENODEV;
-
-	return ssam_hub_add_devices(&sdev->dev, sdev->ctrl, node);
-}
-
-static void ssam_hub_remove(struct ssam_device *sdev)
-{
-	ssam_hub_remove_devices(&sdev->dev);
-}
-
-static const struct ssam_device_id ssam_hub_match[] = {
-	{ SSAM_VDEV(HUB, 0x01, 0x00, 0x00) },
-	{ },
-};
-
-static struct ssam_device_driver ssam_hub_driver = {
-	.probe = ssam_hub_probe,
-	.remove = ssam_hub_remove,
-	.match_table = ssam_hub_match,
-	.driver = {
-		.name = "surface_aggregator_device_hub",
-		.probe_type = PROBE_PREFER_ASYNCHRONOUS,
-	},
-};
 
 
 /* -- SSAM base-hub driver. ------------------------------------------------- */
@@ -670,20 +622,10 @@ static int __init ssam_device_hub_init(void)
 	if (status)
 		return status;
 
-	status = ssam_device_driver_register(&ssam_hub_driver);
-	if (status)
-		goto err_main;
-
 	status = ssam_device_driver_register(&ssam_base_hub_driver);
 	if (status)
-		goto err_base;
+		platform_driver_unregister(&ssam_platform_hub_driver);
 
-	return 0;
-
-err_base:
-	ssam_device_driver_unregister(&ssam_hub_driver);
-err_main:
-	platform_driver_unregister(&ssam_platform_hub_driver);
 	return status;
 }
 module_init(ssam_device_hub_init);
@@ -691,7 +633,6 @@ module_init(ssam_device_hub_init);
 static void __exit ssam_device_hub_exit(void)
 {
 	ssam_device_driver_unregister(&ssam_base_hub_driver);
-	ssam_device_driver_unregister(&ssam_hub_driver);
 	platform_driver_unregister(&ssam_platform_hub_driver);
 }
 module_exit(ssam_device_hub_exit);
