@@ -619,7 +619,7 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf, const struct ssam_event
 	/* Validate event payload length. */
 	switch (in->command_id) {
 	case SAM_EVENT_CID_DTX_CONNECTION:
-		len = 2;
+		len = 2 * sizeof(u8);
 		break;
 
 	case SAM_EVENT_CID_DTX_REQUEST:
@@ -627,11 +627,11 @@ static u32 sdtx_notifier(struct ssam_event_notifier *nf, const struct ssam_event
 		break;
 
 	case SAM_EVENT_CID_DTX_CANCEL:
-		len = 1;
+		len = sizeof(u8);
 		break;
 
 	case SAM_EVENT_CID_DTX_LATCH_STATUS:
-		len = 1;
+		len = sizeof(u8);
 		break;
 
 	default:
