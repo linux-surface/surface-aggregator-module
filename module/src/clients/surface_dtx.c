@@ -591,6 +591,8 @@ static void sdtx_push_event(struct sdtx_device *ddev, struct sdtx_event *evt)
 	const size_t len = sizeof(struct sdtx_event) + evt->length;
 	struct sdtx_client *client;
 
+	lockdep_assert_held(&ddev->write_lock);
+
 	down_read(&ddev->client_lock);
 	list_for_each_entry(client, &ddev->client_list, node) {
 		if (!test_bit(SDTX_CLIENT_EVENTS_ENABLED_BIT, &client->flags))
@@ -785,6 +787,8 @@ static void __sdtx_device_state_update_base(struct sdtx_device *ddev,
 {
 	struct sdtx_base_info_event event;
 
+	lockdep_assert_held(&ddev->write_lock);
+
 	/* Prevent duplicate events. */
 	if (ddev->state.base.state == info.state &&
 	    ddev->state.base.base_id == info.base_id)
@@ -810,6 +814,8 @@ static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 	 * via __sdtx_device_state_update_base(), as we rely on the updated
 	 * base state value in the validity check below.
 	 */
+
+	lockdep_assert_held(&ddev->write_lock);
 
 	if (sdtx_device_mode_invalid(mode, ddev->state.base.state)) {
 		dev_dbg(ddev->dev, "device mode is invalid, trying again\n");
@@ -839,6 +845,8 @@ static void __sdtx_device_state_update_mode(struct sdtx_device *ddev, u8 mode)
 static void __sdtx_device_state_update_latch(struct sdtx_device *ddev, u8 status)
 {
 	struct sdtx_status_event event;
+
+	lockdep_assert_held(&ddev->write_lock);
 
 	/* Prevent duplicate events. */
 	if (ddev->state.latch_status == status)
