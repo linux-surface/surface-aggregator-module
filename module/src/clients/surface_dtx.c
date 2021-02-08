@@ -145,7 +145,7 @@ enum sdtx_device_state {
 
 struct sdtx_device {
 	struct kref kref;
-	struct rw_semaphore lock;
+	struct rw_semaphore lock;         /* Guards device reference, ensures orderly shutdown. */
 
 	struct device *dev;
 	struct ssam_controller *ctrl;
@@ -153,8 +153,8 @@ struct sdtx_device {
 
 	struct miscdevice mdev;
 	wait_queue_head_t waitq;
-	struct mutex write_lock;
-	struct rw_semaphore client_lock;
+	struct mutex write_lock;          /* Guards order of events/notifications. */
+	struct rw_semaphore client_lock;  /* Guards client list.                   */
 	struct list_head client_list;
 
 	struct delayed_work state_work;
@@ -181,7 +181,7 @@ struct sdtx_client {
 
 	struct fasync_struct *fasync;
 
-	struct mutex read_lock;
+	struct mutex read_lock;           /* Guards FIFO buffer read access. */
 	DECLARE_KFIFO(buffer, u8, 512);
 };
 
