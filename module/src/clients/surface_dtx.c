@@ -952,6 +952,7 @@ static int sdtx_device_init(struct sdtx_device *ddev, struct device *dev,
 
 	/* Basic initialization. */
 	kref_init(&ddev->kref);
+	init_rwsem(&ddev->lock);
 	ddev->dev = dev;
 	ddev->ctrl = ctrl;
 
