@@ -29,7 +29,7 @@ module_param(cache_time, uint, 0644);
 MODULE_PARM_DESC(cache_time, "battery state caching time in milliseconds [default: 1000]");
 
 
-/* -- SAM Interface. -------------------------------------------------------- */
+/* -- SAM interface. -------------------------------------------------------- */
 
 enum sam_event_cid_bat {
 	SAM_EVENT_CID_BAT_BIX         = 0x15,
@@ -55,7 +55,7 @@ enum sam_battery_power_unit {
 	SAM_BATTERY_POWER_UNIT_mA     = 1,
 };
 
-/* Equivalent to data returned in ACPI _BIX method, revision 0 */
+/* Equivalent to data returned in ACPI _BIX method, revision 0. */
 struct spwr_bix {
 	u8  revision;
 	__le32 power_unit;
@@ -81,9 +81,7 @@ struct spwr_bix {
 
 static_assert(sizeof(struct spwr_bix) == 119);
 
-#define SPWR_BIX_REVISION		0
-
-/* Equivalent to data returned in ACPI _BST method */
+/* Equivalent to data returned in ACPI _BST method. */
 struct spwr_bst {
 	__le32 state;
 	__le32 present_rate;
@@ -93,33 +91,34 @@ struct spwr_bst {
 
 static_assert(sizeof(struct spwr_bst) == 16);
 
+#define SPWR_BIX_REVISION		0
 #define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
-/* Get battery status (_STA) */
+/* Get battery status (_STA). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_sta, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x01,
 });
 
-/* Get battery static information (_BIX) */
+/* Get battery static information (_BIX). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_bix, struct spwr_bix, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x02,
 });
 
-/* Get battery dynamic information (_BST) */
+/* Get battery dynamic information (_BST). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_bst, struct spwr_bst, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x03,
 });
 
-/* Set battery trip point (_BTP) */
+/* Set battery trip point (_BTP). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_btp, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x04,
 });
 
-/* Get platform power source for battery (DPTF PSRC). */
+/* Get platform power source for battery (_PSR / DPTF PSRC). */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0d,
@@ -130,28 +129,28 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
  * for documentation of the SAM interface.
  */
 
-/* Get maximum platform power for battery (DPTF PMAX) */
+/* Get maximum platform power for battery (DPTF PMAX). */
 __always_unused
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_pmax, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0b,
 });
 
-/* Get adapter rating (DPTF ARTG) */
+/* Get adapter rating (DPTF ARTG). */
 __always_unused
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_artg, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0f,
 });
 
-/* Unknown (DPTF PSOC) */
+/* Unknown (DPTF PSOC). */
 __always_unused
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psoc, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x0c,
 });
 
-/* Unknown (DPTF CHGI/ INT3403 SPPC) */
+/* Unknown (DPTF CHGI/ INT3403 SPPC). */
 __always_unused
 static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
