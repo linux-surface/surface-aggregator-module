@@ -275,8 +275,7 @@ static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 	return ssam_retry(ssam_bat_get_bst, bat->sdev, &bat->bst);
 }
 
-static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat,
-					   u32 value)
+static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 value)
 {
 	__le32 value_le = cpu_to_le32(value);
 
@@ -295,13 +294,11 @@ static int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
 	return status;
 }
 
-static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat,
-					    bool cached)
+static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
 {
-	unsigned long cache_deadline;
+	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
 	int status;
 
-	cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
 	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
 		return 0;
 
@@ -344,10 +341,8 @@ static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
 	if (status)
 		return status;
 
-	if (bat->bix.revision != SPWR_BIX_REVISION) {
-		dev_warn(&bat->sdev->dev, "unsupported battery revision: %u\n",
-			 bat->bix.revision);
-	}
+	if (bat->bix.revision != SPWR_BIX_REVISION)
+		dev_warn(&bat->sdev->dev, "unsupported battery revision: %u\n", bat->bix.revision);
 
 	bat->timestamp = jiffies;
 	return 0;
@@ -474,13 +469,10 @@ static int spwr_ac_recheck(struct spwr_ac_device *ac)
 	return status >= 0 ? 0 : status;
 }
 
-static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
-			   const struct ssam_event *event)
+static u32 spwr_notify_bat(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
-	struct spwr_battery_device *bat;
+	struct spwr_battery_device *bat = container_of(nf, struct spwr_battery_device, notif);
 	int status;
-
-	bat = container_of(nf, struct spwr_battery_device, notif);
 
 	dev_dbg(&bat->sdev->dev, "power event (cid = %#04x, iid = %#04x, tid = %#04x)\n",
 		event->command_id, event->instance_id, event->target_id);
@@ -528,8 +520,7 @@ static u32 spwr_notify_bat(struct ssam_event_notifier *nf,
 	return ssam_notifier_from_errno(status) | SSAM_NOTIF_HANDLED;
 }
 
-static u32 spwr_notify_ac(struct ssam_event_notifier *nf,
-			  const struct ssam_event *event)
+static u32 spwr_notify_ac(struct ssam_event_notifier *nf, const struct ssam_event *event)
 {
 	struct spwr_ac_device *ac;
 	int status;
@@ -570,10 +561,8 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 	if (!status)
 		power_supply_changed(bat->psy);
 
-	if (status) {
-		dev_err(&bat->sdev->dev, "failed to update battery state: %d\n",
-			status);
-	}
+	if (status)
+		dev_err(&bat->sdev->dev, "failed to update battery state: %d\n", status);
 }
 
 static int spwr_battery_prop_status(struct spwr_battery_device *bat)
@@ -647,8 +636,7 @@ static int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
 	return POWER_SUPPLY_CAPACITY_LEVEL_NORMAL;
 }
 
-static int spwr_ac_get_property(struct power_supply *psy,
-				enum power_supply_property psp,
+static int spwr_ac_get_property(struct power_supply *psy, enum power_supply_property psp,
 				union power_supply_propval *val)
 {
 	struct spwr_ac_device *ac = power_supply_get_drvdata(psy);
@@ -675,8 +663,7 @@ out:
 	return status;
 }
 
-static int spwr_battery_get_property(struct power_supply *psy,
-				     enum power_supply_property psp,
+static int spwr_battery_get_property(struct power_supply *psy, enum power_supply_property psp,
 				     union power_supply_propval *val)
 {
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
@@ -798,9 +785,7 @@ out:
 	return status;
 }
 
-static ssize_t spwr_battery_alarm_show(struct device *dev,
-				       struct device_attribute *attr,
-				       char *buf)
+static ssize_t spwr_battery_alarm_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct power_supply *psy = dev_get_drvdata(dev);
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
@@ -808,8 +793,7 @@ static ssize_t spwr_battery_alarm_show(struct device *dev,
 	return sprintf(buf, "%d\n", bat->alarm * 1000);
 }
 
-static ssize_t spwr_battery_alarm_store(struct device *dev,
-					struct device_attribute *attr,
+static ssize_t spwr_battery_alarm_store(struct device *dev, struct device_attribute *attr,
 					const char *buf, size_t count)
 {
 	struct power_supply *psy = dev_get_drvdata(dev);
@@ -898,10 +882,8 @@ static int spwr_ac_unregister(struct spwr_ac_device *ac)
 	return 0;
 }
 
-static void spwr_battery_init(struct spwr_battery_device *bat,
-			      struct ssam_device *sdev,
-			      struct ssam_event_registry registry,
-			      const char *name)
+static void spwr_battery_init(struct spwr_battery_device *bat, struct ssam_device *sdev,
+			      struct ssam_event_registry registry, const char *name)
 {
 	mutex_init(&bat->lock);
 	strncpy(bat->name, name, ARRAY_SIZE(bat->name) - 1);
