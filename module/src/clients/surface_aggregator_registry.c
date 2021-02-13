@@ -362,7 +362,7 @@ static int __ssam_base_hub_update(struct ssam_base_hub *hub, enum ssam_base_hub_
 	struct fwnode_handle *node = dev_fwnode(&hub->sdev->dev);
 	int status = 0;
 
-	lockdep_assert_held(hub->lock);
+	lockdep_assert_held(&hub->lock);
 
 	if (hub->state == new)
 		return 0;
