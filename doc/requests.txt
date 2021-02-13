@@ -312,7 +312,8 @@ List of Unknown Power Subsystem Requests (TC = 0x02)
     0x48   01   0x01  ?        yes       ?                      probing
     0x4d   01   0x01  ?        yes       ?                      probing
     0x4f   012  0x01  ?        yes       ?                      probing
-    0x50   012  0x01  ?        yes       ?                      probing
+    0x50   0    0x01  ?        yes       ?                      probing/rev
+    0x51   0    0x01  yes      no        ?                      rev
     0x52   01   0x01  ?        yes       ?                      probing
 
 Note: IID 01 means the command works both on IID=0 and IID=1, similarly IID
