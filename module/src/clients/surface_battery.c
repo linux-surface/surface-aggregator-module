@@ -955,22 +955,13 @@ static void spwr_battery_unregister(struct spwr_battery_device *bat)
 }
 
 
-/* -- Power management. ----------------------------------------------------- */
+/* -- Battery driver. ------------------------------------------------------- */
 
 static int __maybe_unused surface_battery_resume(struct device *dev)
 {
 	return spwr_battery_recheck_full(dev_get_drvdata(dev));
 }
 SIMPLE_DEV_PM_OPS(surface_battery_pm_ops, NULL, surface_battery_resume);
-
-static int __maybe_unused surface_ac_resume(struct device *dev)
-{
-	return spwr_ac_recheck(dev_get_drvdata(dev));
-}
-SIMPLE_DEV_PM_OPS(surface_ac_pm_ops, NULL, surface_ac_resume);
-
-
-/* -- Battery driver. ------------------------------------------------------- */
 
 static int surface_battery_probe(struct ssam_device *sdev)
 {
@@ -1034,6 +1025,12 @@ static struct ssam_device_driver surface_battery_driver = {
 
 
 /* -- AC driver. ------------------------------------------------------------ */
+
+static int __maybe_unused surface_ac_resume(struct device *dev)
+{
+	return spwr_ac_recheck(dev_get_drvdata(dev));
+}
+SIMPLE_DEV_PM_OPS(surface_ac_pm_ops, NULL, surface_ac_resume);
 
 static int surface_ac_probe(struct ssam_device *sdev)
 {
