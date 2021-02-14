@@ -5,6 +5,7 @@ obj-m += surface_acpi_notify.o
 obj-m += surface_aggregator_cdev.o
 obj-m += surface_aggregator_registry.o
 obj-m += surface_battery.o
+obj-m += surface_charger.o
 obj-m += surface_dtx.o
 obj-m += surface_hid.o
 obj-m += surface_perfmode.o
