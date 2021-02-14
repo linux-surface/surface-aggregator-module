@@ -257,14 +257,14 @@ static int shid_set_feature_report(struct surface_hid_device *shid, u8 rprt_id, 
 
 /* -- SAM interface (KBD). -------------------------------------------------- */
 
-#define KBD_FEATURE_REPORT_SIZE		7  /* 6 + report ID */
+#define KBD_FEATURE_REPORT_SIZE			7  /* 6 + report ID */
 
 enum surface_kbd_cid {
-	SURFACE_KBD_CID_GET_DESCRIPTOR     = 0x00,
-	SURFACE_KBD_CID_SET_CAPSLOCK_LED   = 0x01,
-	SURFACE_KBD_CID_EVT_INPUT_GENERIC  = 0x03,
-	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS  = 0x04,
-	SURFACE_KBD_CID_GET_FEATURE_REPORT = 0x0b,
+	SURFACE_KBD_CID_GET_DESCRIPTOR		= 0x00,
+	SURFACE_KBD_CID_SET_CAPSLOCK_LED	= 0x01,
+	SURFACE_KBD_CID_EVT_INPUT_GENERIC	= 0x03,
+	SURFACE_KBD_CID_EVT_INPUT_HOTKEYS	= 0x04,
+	SURFACE_KBD_CID_GET_FEATURE_REPORT	= 0x0b,
 };
 
 static int ssam_kbd_get_descriptor(struct surface_hid_device *shid, u8 entry, u8 *buf, size_t len)
