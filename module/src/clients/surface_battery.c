@@ -172,17 +172,23 @@ struct spwr_ac_device {
 
 static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
+	lockdep_assert_held(&bat->lock);
+
 	return le32_to_cpu(bat->sta) & SAM_BATTERY_STA_PRESENT;
 }
 
 static int spwr_battery_load_sta(struct spwr_battery_device *bat)
 {
+	lockdep_assert_held(&bat->lock);
+
 	return ssam_retry(ssam_bat_get_sta, bat->sdev, &bat->sta);
 }
 
 static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 {
 	int status;
+
+	lockdep_assert_held(&bat->lock);
 
 	if (!spwr_battery_present(bat))
 		return 0;
@@ -200,6 +206,8 @@ static int spwr_battery_load_bix(struct spwr_battery_device *bat)
 
 static int spwr_battery_load_bst(struct spwr_battery_device *bat)
 {
+	lockdep_assert_held(&bat->lock);
+
 	if (!spwr_battery_present(bat))
 		return 0;
 
@@ -210,6 +218,8 @@ static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 
 {
 	__le32 value_le = cpu_to_le32(value);
 
+	lockdep_assert_held(&bat->lock);
+
 	bat->alarm = value;
 	return ssam_retry(ssam_bat_set_btp, bat->sdev, &value_le);
 }
@@ -218,6 +228,8 @@ static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, boo
 {
 	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
 	int status;
+
+	lockdep_assert_held(&bat->lock);
 
 	if (cached && bat->timestamp && time_is_after_jiffies(cache_deadline))
 		return 0;
@@ -249,6 +261,8 @@ static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
 {
 	int status;
 
+	lockdep_assert_held(&bat->lock);
+
 	status = spwr_battery_load_sta(bat);
 	if (status)
 		return status;
@@ -270,8 +284,10 @@ static int spwr_battery_update_bix_unlocked(struct spwr_battery_device *bat)
 
 static int spwr_ac_update_unlocked(struct spwr_ac_device *ac)
 {
-	int status;
 	u32 old = ac->state;
+	int status;
+
+	lockdep_assert_held(&ac->lock);
 
 	status = ssam_retry(ssam_bat_get_psrc, ac->sdev, &ac->state);
 	if (status < 0)
@@ -295,6 +311,8 @@ static u32 sprw_battery_get_full_cap_safe(struct spwr_battery_device *bat)
 {
 	u32 full_cap = get_unaligned_le32(&bat->bix.last_full_charge_cap);
 
+	lockdep_assert_held(&bat->lock);
+
 	if (full_cap == 0 || full_cap == SPWR_BATTERY_VALUE_UNKNOWN)
 		full_cap = get_unaligned_le32(&bat->bix.design_cap);
 
@@ -306,6 +324,8 @@ static bool spwr_battery_is_full(struct spwr_battery_device *bat)
 	u32 state = get_unaligned_le32(&bat->bst.state);
 	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	lockdep_assert_held(&bat->lock);
 
 	return full_cap != SPWR_BATTERY_VALUE_UNKNOWN && full_cap != 0 &&
 		remaining_cap != SPWR_BATTERY_VALUE_UNKNOWN &&
@@ -533,6 +553,8 @@ static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 	u32 state = get_unaligned_le32(&bat->bst.state);
 	u32 present_rate = get_unaligned_le32(&bat->bst.present_rate);
 
+	lockdep_assert_held(&bat->lock);
+
 	if (state & SAM_BATTERY_STATE_DISCHARGING)
 		return POWER_SUPPLY_STATUS_DISCHARGING;
 
@@ -550,6 +572,8 @@ static int spwr_battery_prop_status(struct spwr_battery_device *bat)
 
 static int spwr_battery_prop_technology(struct spwr_battery_device *bat)
 {
+	lockdep_assert_held(&bat->lock);
+
 	if (!strcasecmp("NiCd", bat->bix.type))
 		return POWER_SUPPLY_TECHNOLOGY_NiCd;
 
@@ -573,6 +597,8 @@ static int spwr_battery_prop_capacity(struct spwr_battery_device *bat)
 	u32 full_cap = sprw_battery_get_full_cap_safe(bat);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
 
+	lockdep_assert_held(&bat->lock);
+
 	if (full_cap == 0 || full_cap == SPWR_BATTERY_VALUE_UNKNOWN)
 		return -ENODEV;
 
@@ -586,6 +612,8 @@ static int spwr_battery_prop_capacity_level(struct spwr_battery_device *bat)
 {
 	u32 state = get_unaligned_le32(&bat->bst.state);
 	u32 remaining_cap = get_unaligned_le32(&bat->bst.remaining_cap);
+
+	lockdep_assert_held(&bat->lock);
 
 	if (state & SAM_BATTERY_STATE_CRITICAL)
 		return POWER_SUPPLY_CAPACITY_LEVEL_CRITICAL;
@@ -906,17 +934,26 @@ static int spwr_battery_register(struct spwr_battery_device *bat)
 	if ((le32_to_cpu(sta) & SAM_BATTERY_STA_OK) != SAM_BATTERY_STA_OK)
 		return -ENODEV;
 
+	/* Satisfy lockdep although we are in an exclusive context here. */
+	mutex_lock(&bat->lock);
+
 	status = spwr_battery_update_bix_unlocked(bat);
-	if (status)
+	if (status) {
+		mutex_unlock(&bat->lock);
 		return status;
+	}
 
 	if (spwr_battery_present(bat)) {
 		u32 cap_warn = get_unaligned_le32(&bat->bix.design_cap_warn);
 
 		status = spwr_battery_set_alarm_unlocked(bat, cap_warn);
-		if (status)
+		if (status) {
+			mutex_unlock(&bat->lock);
 			return status;
+		}
 	}
+
+	mutex_unlock(&bat->lock);
 
 	switch (get_unaligned_le32(&bat->bix.power_unit)) {
 	case SAM_BATTERY_POWER_UNIT_mW:
