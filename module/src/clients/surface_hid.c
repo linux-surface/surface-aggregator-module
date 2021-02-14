@@ -54,14 +54,10 @@ static_assert(sizeof(struct surface_hid_attributes) == 32);
 struct surface_hid_device;
 
 struct surface_hid_device_ops {
-	int (*get_descriptor)(struct surface_hid_device *shid, u8 entry,
-			      u8 *buf, size_t len);
-	int (*output_report)(struct surface_hid_device *shid, u8 report_id,
-			     u8 *data, size_t len);
-	int (*get_feature_report)(struct surface_hid_device *shid, u8 report_id,
-				  u8 *data, size_t len);
-	int (*set_feature_report)(struct surface_hid_device *shid, u8 report_id,
-				  u8 *data, size_t len);
+	int (*get_descriptor)(struct surface_hid_device *shid, u8 entry, u8 *buf, size_t len);
+	int (*output_report)(struct surface_hid_device *shid, u8 rprt_id, u8 *buf, size_t len);
+	int (*get_feature_report)(struct surface_hid_device *shid, u8 rprt_id, u8 *buf, size_t len);
+	int (*set_feature_report)(struct surface_hid_device *shid, u8 rprt_id, u8 *buf, size_t len);
 };
 
 struct surface_hid_device {
