@@ -932,7 +932,7 @@ static int spwr_battery_register(struct spwr_battery_device *bat)
 	default:
 		dev_err(&bat->sdev->dev, "unsupported battery power unit: %u\n",
 			get_unaligned_le32(&bat->bix.power_unit));
-		return -ENOTSUPP;
+		return -EINVAL;
 	}
 
 	psy_cfg.drv_data = bat;
