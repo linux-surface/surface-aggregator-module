@@ -394,7 +394,7 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 rprt_id, u8 *buf, 
 	unsigned int offset, size;
 	int i;
 
-	/* Get led field. */
+	/* Get LED field. */
 	field = hidinput_get_led_field(hid);
 	if (!field)
 		return -ENOENT;
@@ -406,7 +406,7 @@ static int skbd_get_caps_led_value(struct hid_device *hid, u8 rprt_id, u8 *buf, 
 	if (rprt_id != field->report->id)
 		return -ENOENT;
 
-	/* Get caps lock led index. */
+	/* Get caps lock LED index. */
 	for (i = 0; i < field->report_count; i++)
 		if ((field->usage[i].hid & 0xffff) == 0x02)
 			break;
@@ -427,7 +427,7 @@ static int skbd_output_report(struct surface_hid_device *shid, u8 rprt_id, u8 *b
 
 	caps_led = skbd_get_caps_led_value(shid->hid, rprt_id, buf, len);
 	if (caps_led < 0)
-		return -EIO;	/* Only caps output reports are supported. */
+		return -EIO;  /* Only caps LED output reports are supported. */
 
 	status = ssam_kbd_set_caps_led(shid, caps_led);
 	if (status < 0)
