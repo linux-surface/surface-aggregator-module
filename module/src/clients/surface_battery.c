@@ -214,17 +214,6 @@ static int spwr_battery_set_alarm_unlocked(struct spwr_battery_device *bat, u32 
 	return ssam_retry(ssam_bat_set_btp, bat->sdev, &value_le);
 }
 
-static int spwr_battery_set_alarm(struct spwr_battery_device *bat, u32 value)
-{
-	int status;
-
-	mutex_lock(&bat->lock);
-	status = spwr_battery_set_alarm_unlocked(bat, value);
-	mutex_unlock(&bat->lock);
-
-	return status;
-}
-
 static int spwr_battery_update_bst_unlocked(struct spwr_battery_device *bat, bool cached)
 {
 	unsigned long cache_deadline = bat->timestamp + msecs_to_jiffies(cache_time);
@@ -766,8 +755,14 @@ static ssize_t spwr_battery_alarm_show(struct device *dev, struct device_attribu
 {
 	struct power_supply *psy = dev_get_drvdata(dev);
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
+	int status;
 
-	return sprintf(buf, "%d\n", bat->alarm * 1000);
+	mutex_lock(&bat->lock);
+	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
+	status = sprintf(buf, "%d\n", bat->alarm * 1000);
+	mutex_unlock(&bat->lock);
+
+	return status;
 }
 
 static ssize_t spwr_battery_alarm_store(struct device *dev, struct device_attribute *attr,
@@ -782,13 +777,20 @@ static ssize_t spwr_battery_alarm_store(struct device *dev, struct device_attrib
 	if (status)
 		return status;
 
-	if (!spwr_battery_present(bat))
+	mutex_lock(&bat->lock);
+
+	if (!spwr_battery_present(bat)) {
+		mutex_unlock(&bat->lock);
 		return -ENODEV;
+	}
 
-	status = spwr_battery_set_alarm(bat, value / 1000);
-	if (status)
+	status = spwr_battery_set_alarm_unlocked(bat, value / 1000);
+	if (status) {
+		mutex_unlock(&bat->lock);
 		return status;
+	}
 
+	mutex_unlock(&bat->lock);
 	return count;
 }
 
