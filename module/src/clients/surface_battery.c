@@ -123,39 +123,6 @@ static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psrc, __le32, {
 	.command_id      = 0x0d,
 });
 
-/*
- * The following requests are currently unused. They are nevertheless included
- * for documentation of the SAM interface.
- */
-
-/* Get maximum platform power for battery (DPTF PMAX). */
-__always_unused
-static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_pmax, __le32, {
-	.target_category = SSAM_SSH_TC_BAT,
-	.command_id      = 0x0b,
-});
-
-/* Get adapter rating (DPTF ARTG). */
-__always_unused
-static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_artg, __le32, {
-	.target_category = SSAM_SSH_TC_BAT,
-	.command_id      = 0x0f,
-});
-
-/* Unknown (DPTF PSOC). */
-__always_unused
-static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_psoc, __le32, {
-	.target_category = SSAM_SSH_TC_BAT,
-	.command_id      = 0x0c,
-});
-
-/* Unknown (DPTF CHGI/ INT3403 SPPC). */
-__always_unused
-static SSAM_DEFINE_SYNC_REQUEST_CL_W(ssam_bat_set_chgi, __le32, {
-	.target_category = SSAM_SSH_TC_BAT,
-	.command_id      = 0x0e,
-});
-
 
 /* -- Common power-subsystem interface. ------------------------------------- */
 
