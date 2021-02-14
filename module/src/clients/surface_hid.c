@@ -646,7 +646,7 @@ static int surface_hid_device_add(struct surface_hid_device *shid)
 		return PTR_ERR(shid->hid);
 
 	shid->hid->dev.parent = shid->dev;
-	shid->hid->bus = BUS_HOST;		// TODO: BUS_SURFACE
+	shid->hid->bus = BUS_HOST;		/* TODO: BUS_SURFACE? */
 	shid->hid->vendor = cpu_to_le16(shid->attrs.vendor);
 	shid->hid->product = cpu_to_le16(shid->attrs.product);
 	shid->hid->version = cpu_to_le16(shid->hid_desc.hid_version);
