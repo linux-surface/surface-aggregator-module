@@ -7,7 +7,9 @@ obj-m += surface_aggregator_registry.o
 obj-m += surface_battery.o
 obj-m += surface_charger.o
 obj-m += surface_dtx.o
+obj-m += surface_hid_core.o
 obj-m += surface_hid.o
+obj-m += surface_kbd.o
 obj-m += surface_perfmode.o
 
 #ccflags-y += -DDEBUG

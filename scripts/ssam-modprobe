@@ -16,7 +16,9 @@ unload() {
     modprobe -r ac
 
     ${cmd} surface_perfmode
+    ${cmd} surface_kbd
     ${cmd} surface_hid
+    ${cmd} surface_hid_core
     ${cmd} surface_dtx
     ${cmd} surface_battery
     ${cmd} surface_charger
@@ -37,7 +39,9 @@ load() {
     ${cmd} "${client_pfx}"surface_battery"${ext}"
     ${cmd} "${client_pfx}"surface_charger"${ext}"
     ${cmd} "${client_pfx}"surface_dtx"${ext}"
+    ${cmd} "${client_pfx}"surface_hid_core"${ext}"
     ${cmd} "${client_pfx}"surface_hid"${ext}"
+    ${cmd} "${client_pfx}"surface_kbd"${ext}"
     ${cmd} "${client_pfx}"surface_perfmode"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
 
