@@ -463,6 +463,7 @@ static int skbd_get_feature_report(struct surface_hid_device *shid, u8 rprt_id, 
 
 static int skbd_set_feature_report(struct surface_hid_device *shid, u8 rprt_id, u8 *buf, size_t len)
 {
+	/* Not supported. See skbd_get_feature_report() for details. */
 	return -EIO;
 }
 
