@@ -20,8 +20,6 @@
 
 #include "../../include/linux/surface_aggregator/device.h"
 
-#define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
-
 
 /* -- Module parameters. ---------------------------------------------------- */
 
@@ -206,6 +204,11 @@ static enum power_supply_property spwr_battery_props_eng[] = {
 	POWER_SUPPLY_PROP_MANUFACTURER,
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
+
+
+/* -- State management. ----------------------------------------------------- */
+
+#define SPWR_AC_BAT_UPDATE_DELAY	msecs_to_jiffies(5000)
 
 static bool spwr_battery_present(struct spwr_battery_device *bat)
 {
