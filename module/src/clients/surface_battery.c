@@ -93,7 +93,7 @@ static_assert(sizeof(struct spwr_bst) == 16);
 #define SPWR_BIX_REVISION		0
 #define SPWR_BATTERY_VALUE_UNKNOWN	0xffffffff
 
-/* Get battery status (_STA). */
+/* Get battery status (_STA) */
 static SSAM_DEFINE_SYNC_REQUEST_CL_R(ssam_bat_get_sta, __le32, {
 	.target_category = SSAM_SSH_TC_BAT,
 	.command_id      = 0x01,
