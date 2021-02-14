@@ -142,7 +142,7 @@ struct spwr_battery_device {
 
 	struct ssam_event_notifier notif;
 
-	struct mutex lock;
+	struct mutex lock;  /* Guards access to state data below. */
 	unsigned long timestamp;
 
 	__le32 sta;
@@ -160,7 +160,7 @@ struct spwr_ac_device {
 
 	struct ssam_event_notifier notif;
 
-	struct mutex lock;
+	struct mutex lock;  /* Guards access to state below. */
 
 	__le32 state;
 };
