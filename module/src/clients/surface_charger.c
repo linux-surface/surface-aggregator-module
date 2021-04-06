@@ -194,11 +194,6 @@ static void spwr_ac_init(struct spwr_ac_device *ac, struct ssam_device *sdev,
 	ac->psy_desc.get_property = spwr_ac_get_property;
 }
 
-static void spwr_ac_destroy(struct spwr_ac_device *ac)
-{
-	mutex_destroy(&ac->lock);
-}
-
 static int spwr_ac_register(struct spwr_ac_device *ac)
 {
 	struct power_supply_config psy_cfg = {};
@@ -243,7 +238,6 @@ static int surface_ac_probe(struct ssam_device *sdev)
 {
 	const struct spwr_psy_properties *p;
 	struct spwr_ac_device *ac;
-	int status;
 
 	p = ssam_device_get_match_data(sdev);
 	if (!p)
@@ -256,11 +250,7 @@ static int surface_ac_probe(struct ssam_device *sdev)
 	spwr_ac_init(ac, sdev, p->registry, p->name);
 	ssam_device_set_drvdata(sdev, ac);
 
-	status = spwr_ac_register(ac);
-	if (status)
-		spwr_ac_destroy(ac);
-
-	return status;
+	return spwr_ac_register(ac);
 }
 
 static void surface_ac_remove(struct ssam_device *sdev)
@@ -268,7 +258,6 @@ static void surface_ac_remove(struct ssam_device *sdev)
 	struct spwr_ac_device *ac = ssam_device_get_drvdata(sdev);
 
 	spwr_ac_unregister(ac);
-	spwr_ac_destroy(ac);
 }
 
 static const struct spwr_psy_properties spwr_psy_props_adp1 = {
