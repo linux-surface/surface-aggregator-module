@@ -794,26 +794,17 @@ static int spwr_battery_register(struct spwr_battery_device *bat)
 	psy_cfg.drv_data = bat;
 	psy_cfg.attr_grp = spwr_battery_groups;
 
-	bat->psy = power_supply_register(&bat->sdev->dev, &bat->psy_desc, &psy_cfg);
+	bat->psy = devm_power_supply_register(&bat->sdev->dev, &bat->psy_desc, &psy_cfg);
 	if (IS_ERR(bat->psy))
 		return PTR_ERR(bat->psy);
 
-	status = ssam_notifier_register(bat->sdev->ctrl, &bat->notif);
-	if (status)
-		goto err_notif;
-
-	return 0;
-
-err_notif:
-	power_supply_unregister(bat->psy);
-	return status;
+	return ssam_notifier_register(bat->sdev->ctrl, &bat->notif);
 }
 
 static void spwr_battery_unregister(struct spwr_battery_device *bat)
 {
 	ssam_notifier_unregister(bat->sdev->ctrl, &bat->notif);
 	cancel_delayed_work_sync(&bat->update_work);
-	power_supply_unregister(bat->psy);
 }
 
 
