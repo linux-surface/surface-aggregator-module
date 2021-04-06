@@ -796,12 +796,6 @@ static int spwr_battery_register(struct spwr_battery_device *bat)
 	return ssam_notifier_register(bat->sdev->ctrl, &bat->notif);
 }
 
-static void spwr_battery_unregister(struct spwr_battery_device *bat)
-{
-	ssam_notifier_unregister(bat->sdev->ctrl, &bat->notif);
-	cancel_delayed_work_sync(&bat->update_work);
-}
-
 
 /* -- Driver setup. --------------------------------------------------------- */
 
@@ -834,7 +828,8 @@ static void surface_battery_remove(struct ssam_device *sdev)
 {
 	struct spwr_battery_device *bat = ssam_device_get_drvdata(sdev);
 
-	spwr_battery_unregister(bat);
+	ssam_notifier_unregister(sdev->ctrl, &bat->notif);
+	cancel_delayed_work_sync(&bat->update_work);
 }
 
 static const struct spwr_psy_properties spwr_psy_props_bat1 = {
