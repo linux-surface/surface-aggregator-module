@@ -166,6 +166,11 @@ out:
 
 /* -- Device setup. --------------------------------------------------------- */
 
+static char *battery_supplied_to[] = {
+	"BAT1",
+	"BAT2",
+};
+
 static void spwr_ac_init(struct spwr_ac_device *ac, struct ssam_device *sdev,
 			 struct ssam_event_registry registry, const char *name)
 {
@@ -209,6 +214,9 @@ static int spwr_ac_register(struct spwr_ac_device *ac)
 		return -ENODEV;
 
 	psy_cfg.drv_data = ac;
+	psy_cfg.supplied_to = battery_supplied_to;
+	psy_cfg.num_supplicants = ARRAY_SIZE(battery_supplied_to);
+
 	ac->psy = power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
 	if (IS_ERR(ac->psy))
 		return PTR_ERR(ac->psy);
