@@ -219,12 +219,6 @@ static int spwr_ac_register(struct spwr_ac_device *ac)
 	return ssam_notifier_register(ac->sdev->ctrl, &ac->notif);
 }
 
-static int spwr_ac_unregister(struct spwr_ac_device *ac)
-{
-	ssam_notifier_unregister(ac->sdev->ctrl, &ac->notif);
-	return 0;
-}
-
 
 /* -- Driver setup. --------------------------------------------------------- */
 
@@ -257,7 +251,7 @@ static void surface_ac_remove(struct ssam_device *sdev)
 {
 	struct spwr_ac_device *ac = ssam_device_get_drvdata(sdev);
 
-	spwr_ac_unregister(ac);
+	ssam_notifier_unregister(sdev->ctrl, &ac->notif);
 }
 
 static const struct spwr_psy_properties spwr_psy_props_adp1 = {
