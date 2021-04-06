@@ -217,21 +217,16 @@ static int spwr_ac_register(struct spwr_ac_device *ac)
 	psy_cfg.supplied_to = battery_supplied_to;
 	psy_cfg.num_supplicants = ARRAY_SIZE(battery_supplied_to);
 
-	ac->psy = power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
+	ac->psy = devm_power_supply_register(&ac->sdev->dev, &ac->psy_desc, &psy_cfg);
 	if (IS_ERR(ac->psy))
 		return PTR_ERR(ac->psy);
 
-	status = ssam_notifier_register(ac->sdev->ctrl, &ac->notif);
-	if (status)
-		power_supply_unregister(ac->psy);
-
-	return status;
+	return ssam_notifier_register(ac->sdev->ctrl, &ac->notif);
 }
 
 static int spwr_ac_unregister(struct spwr_ac_device *ac)
 {
 	ssam_notifier_unregister(ac->sdev->ctrl, &ac->notif);
-	power_supply_unregister(ac->psy);
 	return 0;
 }
 
