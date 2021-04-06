@@ -655,7 +655,7 @@ out:
 
 /* -- Alarm attribute. ------------------------------------------------------ */
 
-static ssize_t spwr_battery_alarm_show(struct device *dev, struct device_attribute *attr, char *buf)
+static ssize_t alarm_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	struct power_supply *psy = dev_get_drvdata(dev);
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
@@ -669,8 +669,8 @@ static ssize_t spwr_battery_alarm_show(struct device *dev, struct device_attribu
 	return status;
 }
 
-static ssize_t spwr_battery_alarm_store(struct device *dev, struct device_attribute *attr,
-					const char *buf, size_t count)
+static ssize_t alarm_store(struct device *dev, struct device_attribute *attr, const char *buf,
+			   size_t count)
 {
 	struct power_supply *psy = dev_get_drvdata(dev);
 	struct spwr_battery_device *bat = power_supply_get_drvdata(psy);
@@ -698,11 +698,7 @@ static ssize_t spwr_battery_alarm_store(struct device *dev, struct device_attrib
 	return count;
 }
 
-static const struct device_attribute alarm_attr = {
-	.attr = {.name = "alarm", .mode = 0644},
-	.show = spwr_battery_alarm_show,
-	.store = spwr_battery_alarm_store,
-};
+DEVICE_ATTR_RW(alarm);
 
 
 /* -- Device setup. --------------------------------------------------------- */
