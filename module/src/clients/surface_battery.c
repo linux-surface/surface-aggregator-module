@@ -415,13 +415,13 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 	bat = container_of(dwork, struct spwr_battery_device, update_work);
 
 	status = spwr_battery_update_bst(bat, false);
-	if (!status)
-		power_supply_changed(bat->psy);
-
-	if (status)
+	if (status) {
 		dev_err(&bat->sdev->dev, "failed to update battery state: %d\n", status);
-}
+		return;
+	}
 
+	power_supply_changed(bat->psy);
+}
 
 /* -- Properties. ----------------------------------------------------------- */
 
