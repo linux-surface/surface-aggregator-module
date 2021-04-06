@@ -425,7 +425,7 @@ static void spwr_battery_update_bst_workfn(struct work_struct *work)
 
 /* -- Properties. ----------------------------------------------------------- */
 
-static enum power_supply_property spwr_battery_props_chg[] = {
+static const enum power_supply_property spwr_battery_props_chg[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
@@ -443,7 +443,7 @@ static enum power_supply_property spwr_battery_props_chg[] = {
 	POWER_SUPPLY_PROP_SERIAL_NUMBER,
 };
 
-static enum power_supply_property spwr_battery_props_eng[] = {
+static const enum power_supply_property spwr_battery_props_eng[] = {
 	POWER_SUPPLY_PROP_STATUS,
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_TECHNOLOGY,
