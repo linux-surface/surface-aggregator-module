@@ -132,7 +132,7 @@ static u32 spwr_notify_ac(struct ssam_event_notifier *nf, const struct ssam_even
 
 /* -- Properties. ----------------------------------------------------------- */
 
-static enum power_supply_property spwr_ac_props[] = {
+static const enum power_supply_property spwr_ac_props[] = {
 	POWER_SUPPLY_PROP_ONLINE,
 };
 
