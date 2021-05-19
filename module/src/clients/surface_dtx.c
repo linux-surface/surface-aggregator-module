@@ -1199,8 +1199,6 @@ static struct platform_driver surface_dtx_platform_driver = {
 
 /* -- SSAM device driver. --------------------------------------------------- */
 
-#ifdef CONFIG_SURFACE_AGGREGATOR_BUS
-
 static int surface_dtx_ssam_probe(struct ssam_device *sdev)
 {
 	struct sdtx_device *ddev;
@@ -1244,19 +1242,6 @@ static void ssam_dtx_driver_unregister(void)
 {
 	ssam_device_driver_unregister(&surface_dtx_ssam_driver);
 }
-
-#else /* CONFIG_SURFACE_AGGREGATOR_BUS */
-
-static int ssam_dtx_driver_register(void)
-{
-	return 0;
-}
-
-static void ssam_dtx_driver_unregister(void)
-{
-}
-
-#endif /* CONFIG_SURFACE_AGGREGATOR_BUS */
 
 
 /* -- Module setup. --------------------------------------------------------- */
