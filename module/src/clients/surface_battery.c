@@ -672,8 +672,7 @@ static ssize_t alarm_show(struct device *dev, struct device_attribute *attr, cha
 	int status;
 
 	mutex_lock(&bat->lock);
-	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
-	status = scnprintf(buf, PAGE_SIZE, "%d\n", bat->alarm * 1000);
+	status = sysfs_emit(buf, "%d\n", bat->alarm * 1000);
 	mutex_unlock(&bat->lock);
 
 	return status;

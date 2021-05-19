@@ -344,8 +344,7 @@ static ssize_t ssam_base_hub_state_show(struct device *dev, struct device_attrib
 	struct ssam_base_hub *hub = dev_get_drvdata(dev);
 	bool connected = hub->state == SSAM_BASE_HUB_CONNECTED;
 
-	// FIXME: we should use sysfs_emit here, but that's not available on < 5.10
-	return scnprintf(buf, PAGE_SIZE, "%d\n", connected);
+	return sysfs_emit(buf, "%d\n", connected);
 }
 
 static struct device_attribute ssam_base_hub_attr_state =
