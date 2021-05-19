@@ -10,7 +10,7 @@ obj-m += surface_dtx.o
 obj-m += surface_hid_core.o
 obj-m += surface_hid.o
 obj-m += surface_kbd.o
-obj-m += surface_perfmode.o
+obj-m += surface_platform_profile.o
 
 #ccflags-y += -DDEBUG
 ccflags-y += -Wall -Wextra
