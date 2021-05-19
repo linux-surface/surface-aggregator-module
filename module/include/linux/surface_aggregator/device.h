@@ -59,29 +59,6 @@ struct ssam_device_uid {
 	u8 function;
 };
 
-#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-
-// TODO: the following definitions and struct belongs into mod_devicetable with
-//       file2alias support
-
-#define SSAM_MATCH_TARGET	0x1
-#define SSAM_MATCH_INSTANCE	0x2
-#define SSAM_MATCH_FUNCTION	0x4
-
-struct ssam_device_id {
-	u8 match_flags;		/* which fields to match against */
-
-	u8 domain;		/* device domain          */
-	u8 category;		/* device target category */
-	u8 target;		/* device target ID       */
-	u8 instance;		/* device instance ID     */
-	u8 function;		/* device function        */
-
-	kernel_ulong_t driver_data;
-};
-
-#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
-
 /*
  * Special values for device matching.
  *

@@ -873,8 +873,3 @@ module_ssam_device_driver(surface_battery_driver);
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Battery driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
-
-#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:d01c02t02i01f00");
-MODULE_ALIAS("ssam:d01c02t01i01f00");
-#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */

@@ -24,11 +24,6 @@ sources-Kbuild := $(shell find . -type f -name "Kbuild")
 sources := $(sources-c) $(sources-h) $(sources-Kbuild) $(sources-dkms)
 
 
-ifneq (,$(shell grep "struct ssam_device_id" $(KDIR)/include/linux/mod_devicetable.h))
-	config += __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__=y
-endif
-
-
 all:
 	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) modules
 

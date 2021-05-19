@@ -1272,7 +1272,3 @@ module_exit(surface_dtx_exit);
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("Detachment-system driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
-
-#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:d01c11t01i00f00");
-#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
