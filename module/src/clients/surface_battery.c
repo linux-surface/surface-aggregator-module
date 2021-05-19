@@ -707,7 +707,7 @@ static ssize_t alarm_store(struct device *dev, struct device_attribute *attr, co
 	return count;
 }
 
-DEVICE_ATTR_RW(alarm);
+static DEVICE_ATTR_RW(alarm);
 
 static struct attribute *spwr_battery_attrs[] = {
 	&dev_attr_alarm.attr,
