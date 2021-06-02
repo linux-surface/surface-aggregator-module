@@ -1,3 +1,5 @@
+from dataclasses import dataclass
+
 import fcntl
 import ctypes
 import errno
@@ -43,6 +45,7 @@ def _IOWR(ty, nr, size):
 
 
 class _RawRequestPayload(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('data', ctypes.c_uint64),
         ('length', ctypes.c_uint16),
@@ -51,6 +54,7 @@ class _RawRequestPayload(ctypes.Structure):
 
 
 class _RawRequestResponse(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('data', ctypes.c_uint64),
         ('length', ctypes.c_uint16),
@@ -59,6 +63,7 @@ class _RawRequestResponse(ctypes.Structure):
 
 
 class _RawRequest(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [
         ('target_category', ctypes.c_uint8),
         ('target_id', ctypes.c_uint8),
@@ -68,6 +73,52 @@ class _RawRequest(ctypes.Structure):
         ('status', ctypes.c_int16),
         ('payload', _RawRequestPayload),
         ('response', _RawRequestResponse),
+    ]
+
+
+class _RawNotifierDesc(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('priority', ctypes.c_int32),
+        ('target_category', ctypes.c_uint8),
+    ]
+
+
+class _RawEventReg(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('target_category', ctypes.c_uint8),
+        ('target_id', ctypes.c_uint8),
+        ('cid_enable', ctypes.c_uint8),
+        ('cid_disable', ctypes.c_uint8),
+    ]
+
+
+class _RawEventId(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('target_category', ctypes.c_uint8),
+        ('instance', ctypes.c_uint8),
+    ]
+
+
+class _RawEventDesc(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('reg', _RawEventReg),
+        ('id', _RawEventId),
+        ('flags', ctypes.c_uint8),
+    ]
+
+
+class _RawEventHeader(ctypes.Structure):
+    _pack_ = 1
+    _fields_ = [
+        ('target_category', ctypes.c_uint8),
+        ('target_id', ctypes.c_uint8),
+        ('command_id', ctypes.c_uint8),
+        ('instance_id', ctypes.c_uint8),
+        ('length', ctypes.c_uint16),
     ]
 
 
@@ -91,6 +142,60 @@ class Request:
         self.response_cap = response_cap
 
 
+@dataclass
+class EventRegistry:
+    target_category: int
+    target_id: int
+    cid_enable: int
+    cid_disable: int
+
+
+@dataclass
+class EventId:
+    target_category: int
+    instance: int
+
+
+@dataclass
+class EventDescriptor:
+    reg: EventRegistry
+    id: EventId
+    flags: int
+
+
+class Event:
+    target_category: int
+    target_id: int
+    command_id: int
+    instance_id: int
+    data: bytes
+
+    def __init__(self, target_category, target_id, command_id, instance_id,
+                 data=bytes()):
+        self.target_category = target_category
+        self.target_id = target_id
+        self.command_id = command_id
+        self.instance_id = instance_id
+        self.data = data
+
+    def __repr__(self):
+        return f"Event {{ "                     \
+            f"tc={self.target_category:02x}, "  \
+            f"tid={self.target_id:02x}, "       \
+            f"cid={self.command_id:02x}, "      \
+            f"iid={self.instance_id:02x}, "     \
+            f"data=[{', '.join('{:02x}'.format(x) for x in self.data)}] }}"
+
+    def to_dict(self):
+        return {
+            "tc": self.target_category,
+            "tid": self.target_id,
+            "cid": self.command_id,
+            "iid": self.instance_id,
+            "data": list(self.data),
+        }
+
+
 REQUEST_HAS_RESPONSE = 1
 REQUEST_UNSEQUENCED = 2
 
@@ -98,6 +203,10 @@ REQUEST_UNSEQUENCED = 2
 _PATH_SSAM_DBGDEV = '/dev/surface/aggregator'
 
 _IOCTL_REQUEST = _IOWR(0xA5, 1, ctypes.sizeof(_RawRequest))
+_IOCTL_NOTIF_REGISTER = _IOW(0xA5, 2, ctypes.sizeof(_RawNotifierDesc))
+_IOCTL_NOTIF_UNREGISTER = _IOW(0xA5, 3, ctypes.sizeof(_RawNotifierDesc))
+_IOCTL_EVENTS_ENABLE = _IOW(0xA5, 4, ctypes.sizeof(_RawEventDesc))
+_IOCTL_EVENTS_DISABLE = _IOW(0xA5, 5, ctypes.sizeof(_RawEventDesc))
 
 
 def _request(fd, rqst: Request):
@@ -155,6 +264,67 @@ def _request(fd, rqst: Request):
         return None
 
 
+def _notifier_register(fd, target_category: int, priority: int):
+    raw = _RawNotifierDesc()
+    raw.priority = priority
+    raw.target_category = target_category
+
+    buf = bytes(raw)
+    fcntl.ioctl(fd, _IOCTL_NOTIF_REGISTER, buf, False)
+
+
+def _notifier_unregister(fd, target_category: int):
+    raw = _RawNotifierDesc()
+    raw.priority = 0
+    raw.target_category = target_category
+
+    buf = bytes(raw)
+    fcntl.ioctl(fd, _IOCTL_NOTIF_UNREGISTER, buf, False)
+
+
+def _event_enable(fd, desc: EventDescriptor):
+    raw = _RawEventDesc()
+    raw.reg.target_category = desc.reg.target_category
+    raw.reg.target_id = desc.reg.target_id
+    raw.reg.cid_enable = desc.reg.cid_enable
+    raw.reg.cid_disable = desc.reg.cid_disable
+    raw.id.target_category = desc.id.target_category
+    raw.id.instance = desc.id.instance
+    raw.flags = desc.flags
+
+    buf = bytes(raw)
+    fcntl.ioctl(fd, _IOCTL_EVENTS_ENABLE, buf, False)
+
+
+def _event_disable(fd, desc: EventDescriptor):
+    raw = _RawEventDesc()
+    raw.reg.target_category = desc.reg.target_category
+    raw.reg.target_id = desc.reg.target_id
+    raw.reg.cid_enable = desc.reg.cid_enable
+    raw.reg.cid_disable = desc.reg.cid_disable
+    raw.id.target_category = desc.id.target_category
+    raw.id.instance = desc.id.instance
+    raw.flags = desc.flags
+
+    buf = bytes(raw)
+    fcntl.ioctl(fd, _IOCTL_EVENTS_ENABLE, buf, False)
+
+
+def _event_read_blocking(fd):
+    data = bytes()
+    while len(data) < ctypes.sizeof(_RawEventHeader):
+        data += os.read(fd, ctypes.sizeof(_RawEventHeader) - len(data))
+
+    hdr = _RawEventHeader.from_buffer_copy(data)
+
+    data = bytes()
+    while len(data) < hdr.length:
+        data += os.read(fd, hdr.length - len(data))
+
+    return Event(hdr.target_category, hdr.target_id, hdr.command_id,
+                 hdr.instance_id, data)
+
+
 class Controller:
     def __init__(self):
         self.fd = None
@@ -178,3 +348,33 @@ class Controller:
             raise RuntimeError("controller is not open")
 
         return _request(self.fd, request)
+
+    def notifier_register(self, target_category: int, priority: int):
+        if self.fd is None:
+            raise RuntimeError("controller is not open")
+
+        return _notifier_register(self.fd, target_category, priority)
+
+    def notifier_unregister(self, target_category: int):
+        if self.fd is None:
+            raise RuntimeError("controller is not open")
+
+        return _notifier_unregister(self.fd, target_category)
+
+    def event_enable(self, desc: EventDescriptor):
+        if self.fd is None:
+            raise RuntimeError("controller is not open")
+
+        return _event_enable(self.fd, desc)
+
+    def event_disable(self, desc: EventDescriptor):
+        if self.fd is None:
+            raise RuntimeError("controller is not open")
+
+        return _event_disable(self.fd, desc)
+
+    def read_event(self):
+        if self.fd is None:
+            raise RuntimeError("controller is not open")
+
+        return _event_read_blocking(self.fd)
