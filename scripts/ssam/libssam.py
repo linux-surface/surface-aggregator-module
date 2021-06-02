@@ -307,7 +307,7 @@ def _event_disable(fd, desc: EventDescriptor):
     raw.flags = desc.flags
 
     buf = bytes(raw)
-    fcntl.ioctl(fd, _IOCTL_EVENTS_ENABLE, buf, False)
+    fcntl.ioctl(fd, _IOCTL_EVENTS_DISABLE, buf, False)
 
 
 def _event_read_blocking(fd):
@@ -349,7 +349,7 @@ class Controller:
 
         return _request(self.fd, request)
 
-    def notifier_register(self, target_category: int, priority: int):
+    def notifier_register(self, target_category: int, priority: int = 0):
         if self.fd is None:
             raise RuntimeError("controller is not open")
 
