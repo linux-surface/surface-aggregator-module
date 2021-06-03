@@ -207,7 +207,7 @@ static int ssam_cdev_notifier_unregister(struct ssam_cdev_client *client, u8 cat
 	client->notifier[index] = NULL;
 
 	mutex_unlock(&client->notifier_lock);
-	return 0;
+	return status;
 }
 
 static void ssam_cdev_notifier_unregister_all(struct ssam_cdev_client *client)
