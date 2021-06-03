@@ -22,6 +22,7 @@
 
 #include "../../include/uapi/linux/surface_aggregator/cdev.h"
 #include "../../include/linux/surface_aggregator/controller.h"
+#include "../../include/linux/surface_aggregator/serial_hub.h"
 
 #define SSAM_CDEV_DEVICE_NAME	"surface_aggregator_cdev"
 
@@ -131,22 +132,23 @@ static u32 ssam_cdev_notifier(struct ssam_event_notifier *nf, const struct ssam_
 	return 0;
 }
 
-static int ssam_cdev_notifier_register(struct ssam_cdev_client *client, u8 category, int priority)
+static int ssam_cdev_notifier_register(struct ssam_cdev_client *client, u8 tc, int priority)
 {
+	const u16 rqid = ssh_tc_to_rqid(tc);
+	const u16 event = ssh_rqid_to_event(rqid);
 	struct ssam_cdev_notifier *nf;
-	int index = ((int)category) - 1;
 	int status;
 
 	lockdep_assert_held_read(&client->cdev->lock);
 
 	/* Validate notifier target category. */
-	if (index < 0 || index >= SSH_NUM_EVENTS)
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	mutex_lock(&client->notifier_lock);
 
 	/* Check if the notifier has already been registered. */
-	if (client->notifier[index]) {
+	if (client->notifier[event]) {
 		mutex_unlock(&client->notifier_lock);
 		return -EEXIST;
 	}
@@ -167,7 +169,7 @@ static int ssam_cdev_notifier_register(struct ssam_cdev_client *client, u8 categ
 	nf->client = client;
 	nf->nf.base.fn = ssam_cdev_notifier;
 	nf->nf.base.priority = priority;
-	nf->nf.event.id.target_category = category;
+	nf->nf.event.id.target_category = tc;
 	nf->nf.event.mask = 0;	/* Do not do any matching. */
 	nf->nf.flags = SSAM_EVENT_NOTIFIER_OBSERVER;
 
@@ -176,35 +178,36 @@ static int ssam_cdev_notifier_register(struct ssam_cdev_client *client, u8 categ
 	if (status)
 		kfree(nf);
 	else
-		client->notifier[index] = nf;
+		client->notifier[event] = nf;
 
 	mutex_unlock(&client->notifier_lock);
 	return status;
 }
 
-static int ssam_cdev_notifier_unregister(struct ssam_cdev_client *client, u8 category)
+static int ssam_cdev_notifier_unregister(struct ssam_cdev_client *client, u8 tc)
 {
-	int index = ((int)category) - 1;
+	const u16 rqid = ssh_tc_to_rqid(tc);
+	const u16 event = ssh_rqid_to_event(rqid);
 	int status;
 
 	lockdep_assert_held_read(&client->cdev->lock);
 
 	/* Validate notifier target category. */
-	if (index < 0 || index >= SSH_NUM_EVENTS)
+	if (!ssh_rqid_is_event(rqid))
 		return -EINVAL;
 
 	mutex_lock(&client->notifier_lock);
 
 	/* Check if the notifier is currently registered. */
-	if (!client->notifier[index]) {
+	if (!client->notifier[event]) {
 		mutex_unlock(&client->notifier_lock);
 		return -ENOENT;
 	}
 
 	/* Unregister and free notifier. */
-	status = ssam_notifier_unregister(client->cdev->ctrl, &client->notifier[index]->nf);
-	kfree(client->notifier[index]);
-	client->notifier[index] = NULL;
+	status = ssam_notifier_unregister(client->cdev->ctrl, &client->notifier[event]->nf);
+	kfree(client->notifier[event]);
+	client->notifier[event] = NULL;
 
 	mutex_unlock(&client->notifier_lock);
 	return status;
