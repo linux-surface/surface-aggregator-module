@@ -2128,10 +2128,14 @@ int ssam_ctrl_notif_d0_entry(struct ssam_controller *ctrl)
  * @n:    The event notifier to register.
  *
  * Register an event notifier. Increment the usage counter of the associated
- * SAM event if the notifier is not marked as an observer. If the event was
- * previously not enabled, it will be enabled during this call. If the notifier
- * is marked as an observer, no attempt will be made at enabling any event and
- * no reference count will be modified.
+ * SAM event if the notifier is not marked as an observer. If the event is not
+ * marked as an observer and is currently not enabled, it will be enabled
+ * during this call. If the notifier is marked as an observer, no attempt will
+ * be made at enabling any event and no reference count will be modified.
+ *
+ * Notifiers marked as observers do not need to be associated with one specific
+ * event, i.e. as long as no event matching is performed, only the event target
+ * category needs to be set.
  *
  * Return: Returns zero on success, %-ENOSPC if there have already been
  * %INT_MAX notifiers for the event ID/type associated with the notifier block
