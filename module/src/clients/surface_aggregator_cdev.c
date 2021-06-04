@@ -485,6 +485,9 @@ static int ssam_cdev_device_open(struct inode *inode, struct file *filp)
 
 	if (test_bit(SSAM_CDEV_DEVICE_SHUTDOWN_BIT, &cdev->flags)) {
 		up_write(&cdev->client_lock);
+		mutex_destroy(&client->write_lock);
+		mutex_destroy(&client->read_lock);
+		mutex_destroy(&client->notifier_lock);
 		ssam_cdev_put(client->cdev);
 		vfree(client);
 		return -ENODEV;
