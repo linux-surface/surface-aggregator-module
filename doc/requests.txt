@@ -172,8 +172,21 @@ List of KIP System Requests (TC = 0x0e)
 
      CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
+    0x0a  0x00  0x02  no       Notify KIP display off           rev
+    0x0b  0x00  0x02  no       Notify KIP display on            rev
+    0x1d  0x00  0x01  no       Get KIP lid state                rev
     0x27     ?  0x02  yes      Events enable                    rev
     0x28     ?  0x02  yes      Events disable                   rev
+    0x2c  0x00  0x01  no       Get KIP connect state            rev
+
+
+List of KIP System Events (TC = 0x0e)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Name/Function                    Source
+    ------------------------------------------------------------------------
+    0x1d  0x00  0x01  yes      Notify KIP lid/kbd state         rev
+    0x2c  0x00  0x01  yes      Notify KIP connect state         rev
 
 
 List of Detachment System Requests (TC = 0x11)
@@ -363,16 +376,12 @@ represents the number of bytes actually read, and the end flag is nonzero if
 the buffer does not hold any more data beyond this read request.
 
 
-List of Unknown KIP Requests (TC = 0x0E)
+List of Unknown KIP Events (TC = 0x0E)
 --------------------------------------------------------------------------------
 
-     CID   IID   TID  Payload  Response  Function/Behavior      Source
+     CID   IID   TID  Payload  Function/Behavior                Source
     ------------------------------------------------------------------------
-    0x0a  0x00  0x02  no       no        called on display off  rev
-    0x0b  0x00  0x02  no       no        called on display on   rev
-
-    0x1d  0x00  0x01  no       u8        ?                      rev
-    0x2c  0x00  0x01  no       u8        ?                      rev
+    0x26  0x00  0x01  yes      hot-plug device state?           rev+log
 
 
 List of Unknown BAS Requests (TC = 0x11)
