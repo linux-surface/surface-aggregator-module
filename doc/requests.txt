@@ -41,9 +41,9 @@ the abbreviation found there.
     0x09  FWU
     0x0A  UNI
     0x0B  LPC
-    0x0C  TCL
+    0x0C  TCL (Telemetry, Crashdumps, and Logs?)
     0x0D  SFL
-    0x0E  KIP
+    0x0E  KIP (Keyboard and Integrated Peripherals, aka hotplug stuff?)
     0x0F  EXT
     0x10  BLD
     0x11  Detachment system and discrete graphics (Surface Book 2) [BAS]
