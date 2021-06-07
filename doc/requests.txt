@@ -351,16 +351,18 @@ List of Unknown TCL Requests (TC = 0x0C)
 
      CID   IID   TID  Payload  Response  Function/Behavior      Source
     ------------------------------------------------------------------------
-    0x0a  0x00  0x02  yes      yes       called for CID=0x0c    rev
-    0x0b  1+    0x02  yes      yes       called for CID=0x0c    rev
-    0x0c  1+    0x01  yes      yes       reads some buffer      rev
+    0x0a  0x00     ?  yes      yes       called for CID=0x0c    rev
+    0x0b  1+       ?  yes      yes       called for CID=0x0c    rev
+    0x0c  1+       ?  yes      yes       reads some buffer      rev
+    0x0e  0     0x01  yes      yes       ?                      rev
 
 CID=0x0a takes an u16 buffer ID as payload and returns that buffer ID,
 followed by a maximum IID. With that, CID=0x0c can be called for IIDs in
 range 1 to the obtained maximum (inclusively).
 
-CID=0x0b takes an u16 buffer ID as payload and returns that buffer ID,
-followed by unknown data.
+CID=0x0b takes an u16 buffer ID as payload and returns that buffer ID, followed
+by unknown data ([0:2] seems to be buffer id, [2] instance ID, [3] flags with
+[3]==1 meaning data available).
 
 CID=0x0c takes the following struct as input (in order):
 
