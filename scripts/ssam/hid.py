@@ -32,10 +32,10 @@ class SurfaceLegacyKeyboard:
 
 
 class SurfaceHidDevice:
-    def __init__(self, ctrl, instance):
+    def __init__(self, ctrl, target_id, instance):
         self.ctrl = ctrl
         self.target_categorty = 0x15
-        self.target_id = 0x02
+        self.target_id = target_id
         self.instance_id = instance
 
     def get_device_descriptor(self, entry):
@@ -86,7 +86,7 @@ def main():
         print(f'  legacy-set-capslock-led <state>')
         print(f'    set the capslock led state')
         print(f'')
-        print(f'  hid-get-descriptor <iid> <entry>')
+        print(f'  hid-get-descriptor <tid> <iid> <entry>')
         print(f'    get the HID device descriptor identified by <entry>')
         print(f'    for device instance with ID <iid>')
         print(f'')
@@ -116,11 +116,12 @@ def main():
             dev.set_capslock_led(state)
 
     elif cmd_name == 'hid-get-descriptor':
-        iid = int(sys.argv[2], 0)
-        entry = int(sys.argv[3], 0)
+        tid = int(sys.argv[2], 0)
+        iid = int(sys.argv[3], 0)
+        entry = int(sys.argv[4], 0)
 
         with Controller() as ctrl:
-            dev = SurfaceHidDevice(ctrl, iid)
+            dev = SurfaceHidDevice(ctrl, tid, iid)
             dump_raw_data(dev.get_device_descriptor(entry))
 
     else:
