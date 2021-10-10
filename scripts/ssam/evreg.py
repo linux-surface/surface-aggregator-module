@@ -11,8 +11,10 @@ EVCMDS = {
     'sam-disable': {'tid': 1, 'tc': 0x01, 'cid': 0x0c, 'iid': 0x00, 'snc': 0x01},
     'kip-enable':  {'tid': 2, 'tc': 0x0e, 'cid': 0x27, 'iid': 0x00, 'snc': 0x01},
     'kip-disable': {'tid': 2, 'tc': 0x0e, 'cid': 0x28, 'iid': 0x00, 'snc': 0x01},
-    'reg-enable':  {'tid': 2, 'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
-    'reg-disable': {'tid': 2, 'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
+    'reg1-enable':  {'tid': 1, 'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
+    'reg1-disable': {'tid': 1, 'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
+    'reg2-enable':  {'tid': 2, 'tc': 0x21, 'cid': 0x01, 'iid': 0x00, 'snc': 0x01},
+    'reg2-disable': {'tid': 2, 'tc': 0x21, 'cid': 0x02, 'iid': 0x00, 'snc': 0x01},
 }
 
 
