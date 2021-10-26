@@ -14,5 +14,5 @@ obj-m += surface_platform_profile.o
 
 #ccflags-y += -DDEBUG
 ccflags-y += -Wall -Wextra
-ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
+ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers -Wno-type-limits
 ccflags-y += -Wmaybe-uninitialized -Wuninitialized

@@ -14,6 +14,6 @@ surface_aggregator-objs += bus.o
 #ccflags-y += -DDEBUG
 #ccflags-y += -DCONFIG_SURFACE_AGGREGATOR_ERROR_INJECTION
 ccflags-y += -Wall -Wextra
-ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers
+ccflags-y += -Wno-unused-parameter -Wno-missing-field-initializers -Wno-type-limits
 ccflags-y += -Wmaybe-uninitialized -Wuninitialized
 ccflags-y += -I$(src)
