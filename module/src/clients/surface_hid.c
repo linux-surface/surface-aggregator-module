@@ -251,7 +251,3 @@ MODULE_AUTHOR("Blaž Hrastnik <blaz@mxxn.io>");
 MODULE_AUTHOR("Maximilian Luz <luzmaximilian@gmail.com>");
 MODULE_DESCRIPTION("HID transport driver for Surface System Aggregator Module");
 MODULE_LICENSE("GPL");
-
-#ifndef __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__
-MODULE_ALIAS("ssam:d01c15t*i*f00");
-#endif /* __KERNEL_HAS_SSAM_MODALIAS_SUPPORT__ */
