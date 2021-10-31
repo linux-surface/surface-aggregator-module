@@ -15,6 +15,7 @@ unload() {
     modprobe -r battery
     modprobe -r ac
 
+    ${cmd} surface_kip_tablet_switch
     ${cmd} surface_perfmode
     ${cmd} surface_kbd
     ${cmd} surface_hid
@@ -43,6 +44,7 @@ load() {
     ${cmd} "${client_pfx}"surface_hid"${ext}"
     ${cmd} "${client_pfx}"surface_kbd"${ext}"
     ${cmd} "${client_pfx}"surface_perfmode"${ext}"
+    ${cmd} "${client_pfx}"surface_kip_tablet_switch"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
