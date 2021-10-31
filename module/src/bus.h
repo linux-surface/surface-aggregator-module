@@ -10,8 +10,6 @@
 
 #include "../include/linux/surface_aggregator/controller.h"
 
-void ssam_controller_remove_clients(struct ssam_controller *ctrl);
-
 int ssam_bus_register(void);
 void ssam_bus_unregister(void);
 
