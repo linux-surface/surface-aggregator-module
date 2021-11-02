@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from datetime import datetime
 import fcntl
 import ctypes
 import errno
@@ -164,14 +165,16 @@ class EventDescriptor:
 
 
 class Event:
+    timestamp: datetime
     target_category: int
     target_id: int
     command_id: int
     instance_id: int
     data: bytes
 
-    def __init__(self, target_category, target_id, command_id, instance_id,
-                 data=bytes()):
+    def __init__(self, timestamp, target_category, target_id, command_id,
+                 instance_id, data=bytes()):
+        self.timestamp = timestamp
         self.target_category = target_category
         self.target_id = target_id
         self.command_id = command_id
@@ -180,6 +183,7 @@ class Event:
 
     def __repr__(self):
         return f"Event {{ "                     \
+            f"time={self.timestamp.strftime('%H:%M:%S.%f')}, " \
             f"tc={self.target_category:02x}, "  \
             f"tid={self.target_id:02x}, "       \
             f"cid={self.command_id:02x}, "      \
@@ -188,6 +192,7 @@ class Event:
 
     def to_dict(self):
         return {
+            "time": self.timestamp.strftime('%H:%M:%S.%f'),
             "tc": self.target_category,
             "tid": self.target_id,
             "cid": self.command_id,
@@ -321,8 +326,8 @@ def _event_read_blocking(fd):
     while len(data) < hdr.length:
         data += os.read(fd, hdr.length - len(data))
 
-    return Event(hdr.target_category, hdr.target_id, hdr.command_id,
-                 hdr.instance_id, data)
+    return Event(datetime.now(), hdr.target_category, hdr.target_id,
+                 hdr.command_id, hdr.instance_id, data)
 
 
 class Controller:
