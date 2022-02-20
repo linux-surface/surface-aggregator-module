@@ -3,11 +3,27 @@ from __future__ import print_function
 import sys
 import codecs
 import json
+import time
 
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+# global offset in cmdbytes
+data_idx = 0
+
+def data_push(delta):
+    global data_idx
+    data_idx = data_idx + delta
+
+def data_timestamp(timestamps):
+    global data_idx
+    prev = None
+    for ts, idx in timestamps:
+        if idx > data_idx:
+            return prev
+        prev = ts
+    return None
 
 class FrameCtrl:
     def __init__(self, type, len, pad, seq):
@@ -63,10 +79,15 @@ def parse_file(file):
     data = False
     lines = []
     cmddata = []
+    curtime = None
+    timestamps = []
 
     for line in file:
         if line.startswith("Major function ="):
             function = line.split('=', 1)[1].strip()
+        elif line.startswith("Time = "):
+            curtime = line.split('=', 1)[1].strip()
+            # curtime = time.strptime(curtime, '%m/%d/%Y %I:%M:%S %p')
         elif line.startswith("Data (Hexer)"):
             data = True
         elif data and line.startswith("  "):
@@ -76,12 +97,14 @@ def parse_file(file):
                 for l in lines:
                     strdata = l.split("\t")[1]
                     bytedata = [int(x, 16) for x in strdata.split()]
+                    timestamps.append((curtime, len(cmddata)))
                     cmddata += bytedata
 
             data = False
             lines = []
 
-    return bytes(cmddata)
+    timestamps.append((None, len(cmddata)))
+    return bytes(cmddata), timestamps
 
 
 def parse_syn(data):
@@ -90,8 +113,10 @@ def parse_syn(data):
 
         for i in range(1, len(data)):
             if data[i] == 0xaa and data[i+1] == 0x55:
+                data_push(i+2)
                 return data[i+2:]
 
+    data_push(2)
     return data[2:]
 
 
@@ -101,10 +126,12 @@ def parse_ter(data):
         print(data)
         exit(1)
 
+    data_push(2)
     return data[2:]
 
 
 def skip_checksum(data):
+    data_push(2)
     return data[2:]
 
 
@@ -114,6 +141,7 @@ def parse_frame_ctrl(data):
     pad = data[2]
     seq = data[3]
 
+    data_push(4)
     return data[4:], FrameCtrl(ty, len, pad, seq)
 
 
@@ -127,10 +155,11 @@ def parse_frame_cmd(data):
     rqid_hi = data[6]
     cid = data[7]
 
+    data_push(8)
     return data[8:], FrameCmd(ty, tc, out, inc, iid, rqid_lo, rqid_hi, cid)
 
 
-def parse_commands(data):
+def parse_commands(data, timestamps):
     records = []
 
     while data:
@@ -141,12 +170,15 @@ def parse_commands(data):
         if ctrl.type == 0x00 or ctrl.type == 0x80:
             data, cmd = parse_frame_cmd(data)
 
+            curtime = data_timestamp(timestamps)
+
             payload_len = ctrl.len - 8
+            data_push(payload_len)
             data, pld = data[payload_len:], data[0:payload_len]
 
             data = skip_checksum(data)
 
-            record = {"ctrl": ctrl.to_dict(), "cmd": cmd.to_dict(), "payload": list(pld)}
+            record = {"ctrl": ctrl.to_dict(), "cmd": cmd.to_dict(), "payload": list(pld), "time": curtime}
             records.append(record)
 
         elif ctrl.type == 0x40:
@@ -161,9 +193,9 @@ def parse_commands(data):
 
 def main(in_file):
     with codecs.open(in_file, 'r', encoding='utf-8', errors='ignore') as fd:
-        data = parse_file(fd)
+        data, timestamps = parse_file(fd)
 
-    print(json.dumps(parse_commands(data)))
+    print(json.dumps(parse_commands(data, timestamps)))
 
 
 if __name__ == '__main__':
