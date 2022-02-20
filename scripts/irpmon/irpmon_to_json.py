@@ -113,6 +113,7 @@ def parse_syn(data):
 
         for i in range(1, len(data)):
             if data[i] == 0xaa and data[i+1] == 0x55:
+                eprint("data dropped: " + ' '.join(map(hex, data[:i])))
                 data_push(i+2)
                 return data[i+2:]
 
