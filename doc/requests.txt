@@ -54,7 +54,7 @@ the abbreviation found there.
     0x16  TCH
     0x17  BKL
     0x18  TAM
-    0x19  ACC
+    0x19  ACC0
     0x1A  UFI
     0x1B  USC
     0x1C  PEN
@@ -63,6 +63,11 @@ the abbreviation found there.
     0x1F  SMC
     0x20  KPD
     0x21  Event/notifier registry [REG]
+    0x22  SPT
+    0x23  SYS
+    0x24  ACC1
+    0x25  SHB
+    0x26  Laptop Studio screen position [POS]
 
 
 List of System Requests (TC = 0x01)
