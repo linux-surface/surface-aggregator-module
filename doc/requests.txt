@@ -362,6 +362,14 @@ List of Unknown PMC Requests (TC = 0x04)
     0x07  0x00  0x01  ?        yes       ?                      probing
 
 
+List of Unknown KBD Requests (TC = 0x08)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Function/Behavior                Source
+    ------------------------------------------------------------------------
+    0x16     ?  0x02  no       connection state?                rev
+
+
 List of Unknown TCL Requests (TC = 0x0C)
 --------------------------------------------------------------------------------
 
@@ -394,6 +402,14 @@ represents the number of bytes actually read, and the end flag is nonzero if
 the buffer does not hold any more data beyond this read request.
 
 
+List of Unknown KIP Requests (TC = 0x0E)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x01     ?  0x02  yes      yes       get connection state?  rev
+
+
 List of Unknown KIP Events (TC = 0x0E)
 --------------------------------------------------------------------------------
 
@@ -416,6 +432,23 @@ List of Unknown REG Requests (TC = 0x21)
      CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
     0x02  0x00  0x02  yes      yes       ?? (possibly toggle)   log
+
+
+List of Unknown POS Requests (TC = 0x26)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x01     ?  0x01  no       28 bytes  ?                      rev
+    0x02     ?  0x01  4 bytes  4 bytes   ?                      rev
+
+
+List of Unknown POS Events (TC = 0x26)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Function/Behavior                Source
+    ------------------------------------------------------------------------
+    0x03  0x00  0x01  yes      form factor change               log
 
 
 Note: This list may not be exhaustive.
