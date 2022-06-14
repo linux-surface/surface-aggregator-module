@@ -407,7 +407,7 @@ List of Unknown KIP Requests (TC = 0x0E)
 
      CID   IID   TID  Payload  Response  Name/Function          Source
     ------------------------------------------------------------------------
-    0x01     ?  0x02  yes      yes       get connection state?  rev
+    0x01     ?  0x02  no       yes       get connection state?  rev
 
 
 List of Unknown KIP Events (TC = 0x0E)
