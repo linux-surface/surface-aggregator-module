@@ -164,12 +164,23 @@ List of Thermal Subsystem Events (TC = 0x03)
     0x0b  #SEN  0x01  ?        Notify sensor trip-point         log+dsdt
 
 
+List of SL1/SL2 Keyboard Requests (TC = 0x08)
+--------------------------------------------------------------------------------
+
+     CID   IID   TID  Payload  Response  Name/Function          Source
+    ------------------------------------------------------------------------
+    0x00   0x00   0x02 yes     yes       get descriptor         rev
+    0x01   0x00   0x02 yes     yes       set caps lock led      rev
+    0x0b   0x00   0x02 yes     yes       get feature report     rev
+
+
 List of SL1/SL2 Keyboard Events (TC = 0x08)
 --------------------------------------------------------------------------------
 
      CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
     0x03  0x00  0x02  yes      Keyboard HID input               log
+    0x04  0x00  0x02  yes      Hot-Keys HID input               log
 
 
 List of KIP System Requests (TC = 0x0e)
