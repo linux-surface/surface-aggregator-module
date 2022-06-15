@@ -82,7 +82,8 @@ List of System Requests (TC = 0x01)
     0x0b  0x00  0x01  yes      yes       Enable event source    log
     0x0c  0x00  0x01  yes      yes       Disable event source   log
 
-    0x10  0x00  0x01  no       yes       Unix Epoch (seconds)   probing
+    0x0f  0x00  0x01  u32      no        Set Unix timestamp     probing
+    0x10  0x00  0x01  no       yes       Get Unix timestamp     probing
 
     0x13  0x00  0x01  no       yes       SAM Controller version rev
     0x14  0x00  0x01  no       no        Hard Reset (Reboot)    probing
@@ -94,9 +95,12 @@ List of System Requests (TC = 0x01)
     0x1b  0x00  0x01  yes      yes       RTC: ACPI/_GWS         dsdt
     0x1c  0x00  0x01  yes      yes       RTC: ACPI/_CWS         dsdt
     0x1d  0x00  0x01  yes      yes       RTC: ACPI/_TIV         dsdt
-
+    0x1e  0x00  0x01  no       yes       RTC: ACPI/_GCP         probing
     0x1f  0x00  0x01  no       yes       RTC: ACPI/_GRT         dsdt
     0x20  0x00  0x01  yes      yes       RTC: ACPI/_SRT         dsdt
+
+    0x22  0x00  0x01  no       yes       RTC: get time/date v2  probing
+    0x23  0x00  0x01  yes      yes       RTC: set time/date v2  probing
 
     0x33  0x00  0x01  no       yes       Device D0 exit         rev
     0x34  0x00  0x01  no       yes       Device D0 entry        rev
@@ -287,13 +291,12 @@ List of Unknown System Requests (TC = 0x01)
     ------------------------------------------------------------------------
     0x0d   0    0x01  ?        yes       ?                      probing
     0x0e   0    0x01  ?        yes       ?                      probing
-    0x1e   0    0x01  ?        yes       ?                      probing
-    0x22   0    0x01  ?        yes       RTC: time + date + ?   probing
     0x24   0    0x01  ?        yes       RTC: ?                 probing
     0x27   0    0x01  ?        yes       RTC: ?                 probing
-    0x28   0    0x01  ?        yes       RTC: ?                 probing
     0x29   0    0x01  ?        yes       RTC: ?                 probing
-    0x2e   0    0x01  ?        yes       RTC: date + ?          probing
+    0x2b   0    0x01  yes      yes       RTC: ?                 probing
+    0x2c   0    0x01  yes      yes       RTC: ?                 probing
+    0x2e   0    0x01  ?        yes       RTC: ?                 probing
     0x2f   0    0x01  ?        yes       RTC: ?                 probing
 
 
