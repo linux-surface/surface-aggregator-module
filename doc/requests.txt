@@ -192,6 +192,7 @@ List of KIP System Requests (TC = 0x0e)
 
      CID   IID   TID  Payload  Name/Function                    Source
     ------------------------------------------------------------------------
+    0x02  0x00  0x02  no       Reconnect devices                probing
     0x0a  0x00  0x02  no       Notify KIP display off           rev
     0x0b  0x00  0x02  no       Notify KIP display on            rev
     0x1d  0x00  0x01  no       Get KIP lid state                rev
@@ -299,6 +300,7 @@ List of Unknown System Requests (TC = 0x01)
     0x2e   0    0x01  ?        yes       RTC: ?                 probing
     0x2f   0    0x01  ?        yes       RTC: ?                 probing
 
+    0x38  0x00  0x01  2b       2b        tcon: ?                rev
 
 
 List of Unknown Power Subsystem Requests (TC = 0x02)
