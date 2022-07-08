@@ -3,6 +3,7 @@
 
 obj-m += surface_acpi_notify.o
 obj-m += surface_aggregator_cdev.o
+obj-m += surface_aggregator_hub.o
 obj-m += surface_aggregator_registry.o
 obj-m += surface_aggregator_tabletsw.o
 obj-m += surface_battery.o
