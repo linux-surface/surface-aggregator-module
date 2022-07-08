@@ -4,7 +4,7 @@
  * keyboard interface (KBD/TC=0x08 subsystem). Provides support for the
  * integrated HID keyboard on Surface Laptops 1 and 2.
  *
- * Copyright (C) 2019-2021 Maximilian Luz <luzmaximilian@gmail.com>
+ * Copyright (C) 2019-2022 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <asm/unaligned.h>

@@ -3,7 +3,7 @@
  * Battery driver for 7th-generation Microsoft Surface devices via Surface
  * System Aggregator Module (SSAM).
  *
- * Copyright (C) 2019-2021 Maximilian Luz <luzmaximilian@gmail.com>
+ * Copyright (C) 2019-2022 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #include <asm/unaligned.h>

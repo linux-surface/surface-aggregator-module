@@ -6,7 +6,7 @@
  * device. This device provides direct user-space access to the SSAM EC.
  * Intended for debugging and development.
  *
- * Copyright (C) 2020-2021 Maximilian Luz <luzmaximilian@gmail.com>
+ * Copyright (C) 2020-2022 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #ifndef _UAPI_LINUX_SURFACE_AGGREGATOR_CDEV_H

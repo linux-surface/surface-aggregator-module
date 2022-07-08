@@ -4,7 +4,7 @@
  * transport driver. Provides support for integrated HID devices on Microsoft
  * Surface models.
  *
- * Copyright (C) 2019-2021 Maximilian Luz <luzmaximilian@gmail.com>
+ * Copyright (C) 2019-2022 Maximilian Luz <luzmaximilian@gmail.com>
  */
 
 #ifndef SURFACE_HID_CORE_H
