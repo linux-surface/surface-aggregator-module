@@ -90,7 +90,7 @@ def parse_file(file):
             # curtime = time.strptime(curtime, '%m/%d/%Y %I:%M:%S %p')
         elif line.startswith("Data (Hexer)"):
             data = True
-        elif data and line.startswith("  "):
+        elif data and line.startswith("  ") and line.strip():
             lines.append(line.strip())
         elif data:
             if function == 'Read' or function == 'Write':
