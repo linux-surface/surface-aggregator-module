@@ -49,24 +49,24 @@ class FrameCmd:
     def __init__(self, type, tc, out, inc, iid, rqid_lo, rqid_hi, cid):
         self.type = type
         self.tc = tc
-        self.outgoing = out
-        self.incoming = inc
+        self.sid = inc
+        self.tid = out
         self.iid = iid
         self.rqid_lo = rqid_lo
         self.rqid_hi = rqid_hi
         self.cid = cid
 
     def __str__(self):
-        return f"type: {hex(self.type)}, tc: {hex(self.tc)}, out: {hex(self.outgoing)}, " + \
-               f"in: {hex(self.incoming)}, iid: {hex(self.iid)}, rqid_lo: {hex(self.rqid_lo)}, " + \
+        return f"type: {hex(self.type)}, tc: {hex(self.tc)}, tid: {hex(self.tid)}, " + \
+               f"sid: {hex(self.sid)}, iid: {hex(self.iid)}, rqid_lo: {hex(self.rqid_lo)}, " + \
                f"rqid_hi: {hex(self.rqid_hi)}, cid: {hex(self.cid)}"
 
     def to_dict(self):
         return {
             "type": self.type,
             "tc": self.tc,
-            "outgoing": self.outgoing,
-            "incoming": self.incoming,
+            "sid": self.sid,
+            "tid": self.tid,
             "iid": self.iid,
             "rqid_lo": self.rqid_lo,
             "rqid_hi": self.rqid_hi,
