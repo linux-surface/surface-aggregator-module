@@ -44,6 +44,14 @@ def main():
             if rsp:
                 print(' '.join(['{:02x}'.format(x) for x in rsp]))
 
+    else:
+        print(f"Error: Unknown command '{cmd_name}'")
+        print(f'')
+        print(f'Usage:')
+        print(f'  {sys.argv[0]} <command> [args...]')
+        print(f'')
+        print(f"Run '{sys.argv[0]} help' for more information")
+
 
 if __name__ == '__main__':
     main()
