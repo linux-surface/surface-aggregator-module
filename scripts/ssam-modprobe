@@ -35,6 +35,9 @@ load() {
     ext=${2}
     client_pfx=${3}
 
+    # needed for surface_platform_profile
+    modprobe platform_profile
+
     ${cmd} surface_aggregator"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_cdev"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_hub"${ext}"
