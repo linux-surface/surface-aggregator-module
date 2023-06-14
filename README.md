@@ -10,8 +10,8 @@ If you have a Surface Book 2 you might also want to have a look at the [dtx-daem
 
 | Device                 | Supported Features                                                            | Known Issues/Missing Features |
 |------------------------|-------------------------------------------------------------------------------|-------------------------------|
-| Surface Book 2         | battery status, platform profiles, lid status, clipboard detachment, dGPU     | -                             |
-| Surface Book 3         | battery status, platform profiles, lid status, clipboard detachment, dGPU     | -                             |
+| Surface Book 2         | battery status, platform profiles, lid status, clipboard detachment           | -                             |
+| Surface Book 3         | battery status, platform profiles, lid status, clipboard detachment           | -                             |
 | Surface Laptop         | battery status, platform-profiles, keyboard                                   | -                             |
 | Surface Laptop 2       | battery status, platform-profiles, keyboard                                   | -                             |
 | Surface Laptop 3       | battery status, platform-profiles, keyboard/touchpad/generic HID              | -                             |
