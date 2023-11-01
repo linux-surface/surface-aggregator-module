@@ -11,7 +11,7 @@ MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 CHECKPATCH_OPTS := -f -q --no-tree --ignore LONG_LINE
 CHECKPATCH := $(KDIR)/scripts/checkpatch.pl $(CHECKPATCH_OPTS)
 
-SSAM_MODPROBE := $(shell pwd)/../scripts/ssam-modprobe
+SSAM_MODPROBE := "$(shell pwd)/../scripts/ssam-modprobe"
 
 
 sources-dkms := dkms.conf
@@ -25,13 +25,13 @@ sources := $(sources-c) $(sources-h) $(sources-Kbuild) $(sources-dkms)
 
 
 all:
-	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) modules
+	$(MAKE) -C $(KDIR) M="$(shell pwd)/src" $(config) modules
 
 clean:
-	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) clean
+	$(MAKE) -C $(KDIR) M="$(shell pwd)/src" $(config) clean
 
 install:
-	$(MAKE) -C $(KDIR) M=$(shell pwd)/src $(config) modules_install
+	$(MAKE) -C $(KDIR) M="$(shell pwd)/src" $(config) modules_install
 
 %.check:
 	@$(CHECKPATCH) $(basename $@) || true
