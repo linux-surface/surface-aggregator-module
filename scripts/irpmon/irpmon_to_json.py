@@ -486,7 +486,10 @@ def parse_json_file(path):
         bytedata = [a for a in codecs.decode(data, 'hex_codec')]
 
         irp_id = int(entry.get("ID"))
-        function = Function[entry.get("Major function")]
+        major_fun = entry.get("Major function")
+        if major_fun is None:
+            continue
+        function = Function[major_fun]
         curtime = entry.get("Time")
         status_constant = Status[entry.get("IOSB.Status constant")]
         irp_address =  int(entry.get("IRP address"), 0)
