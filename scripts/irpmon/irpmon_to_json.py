@@ -328,6 +328,8 @@ class BidirectionalParser:
         combined = self.read.communication()
         combined.extend(self.write.communication())
 
+        # Irp ids wrap, so sort it by index, which is the order in which the
+        # irp entries occured in the original log file.
         combined.sort(key=lambda x: x[1].index)
 
         # Now we no longer need the irp relations.
