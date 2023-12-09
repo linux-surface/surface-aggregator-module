@@ -328,7 +328,7 @@ class BidirectionalParser:
         combined = self.read.communication()
         combined.extend(self.write.communication())
 
-        combined.sort(key=lambda x: x[1].id)
+        combined.sort(key=lambda x: x[1].index)
 
         # Now we no longer need the irp relations.
         return [x[0] for x in combined]
@@ -336,11 +336,19 @@ class BidirectionalParser:
 
 # Helper to hold the relevant fields from the log records.
 Irp = namedtuple("Irp", [
-    "id",
+    # The index of this Irp record in the original file.
+    "index",
+    # The irp id, this seems to wrap around.
+    "irp_id",
+    # Major function
     "function",
+    # Time string
     "time",
+    # Status a reported in IOSB.Status constant
     "status",
+    # IRP address, to track start and finish
     "address",
+    # Data of the request.
     "data",
 ])
 
@@ -383,6 +391,7 @@ def parse_log_file(file):
 
     records = []
 
+    irp_index = 0
     for line_nr, line in enumerate(file):
         if line.startswith("ID ="):
             irp_id = int(line.split('=', 1)[1].strip())
@@ -411,7 +420,8 @@ def parse_log_file(file):
 
             if not discard:
                 record = Irp(
-                    id = irp_id,
+                    index = irp_index,
+                    irp_id = irp_id,
                     function = function,
                     time = curtime,
                     status = status_constant,
@@ -423,6 +433,7 @@ def parse_log_file(file):
             data = False
             discard = False
             lines = []
+            irp_index += 1
 
     return records
 
@@ -474,7 +485,7 @@ def parse_json_file(path):
 
     records = []
     # Now we have good and clean data.
-    for entry in irp_entries:
+    for irp_index, entry in enumerate(irp_entries):
         if entry.get("Driver name") != TARGET_DRIVER:
             continue
 
@@ -494,7 +505,8 @@ def parse_json_file(path):
         status_constant = Status[entry.get("IOSB.Status constant")]
         irp_address =  int(entry.get("IRP address"), 0)
         record = Irp(
-            id = irp_id,
+            index = irp_index,
+            irp_id = irp_id,
             function = function,
             time = curtime,
             status = status_constant,
