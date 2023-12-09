@@ -127,22 +127,29 @@ Data size = 48
 
 Note how ID 516, is a continuation of ID 512.
 A problem is that 513 and 514 are a write that's in between the reads.
+
 """
 
 """
-    Parser to convert irp records into the SSAM commands.
+    Parser to convert irp records into the SSAM commands, two parsers should
+    be used, one for the Read operations, and one for the Write operations.
+    Because read and writes can occur interleaved.
+
+    For more trivial files, a single parser could be used, but this will break
+    if the writes and reads are interleaved.
 """
 class Parser:
     def __init__(self, records):
         # Input IRP records
         self.records = records
+
         # Index of current record entry.
         self.index = RecordIndex(0, 0)
 
         # Initialise the cursor, by jumping over the records to be ignored
         self.advance(0)
 
-        # Parsed communication.
+        # Parsed communication, in (record, initial_irp)
         self.comm = []
 
     """
@@ -160,12 +167,6 @@ class Parser:
         # print(f"Advancing from {self.index} to offset {offset}")
         for outer in range(self.index.outer, len(self.records)):
             this_record = self.records[outer]
-
-            # Check if this is to be ignored.
-            if not this_record.function in (Function.Read, Function.Write):
-                continue
-            #if this_record.status in (Status.STATUS_TIMEOUT, ):
-            #    continue
 
             if (inner + offset) < len(this_record.data):
                 # This offset is in this outer index.
@@ -227,6 +228,9 @@ class Parser:
             ctrl = self.parse_frame_ctrl()
             self.skip_checksum()
 
+            current_record = self.current_record()
+            curtime = current_record.time
+
             if ctrl.type == 0x00 or ctrl.type == 0x80:
                 frame_cmd = self.parse_frame_cmd()
 
@@ -237,16 +241,17 @@ class Parser:
 
                 self.skip_checksum()
 
-                curtime = self.current_record().time
-                record = {"ctrl": ctrl.to_dict(), "cmd": frame_cmd.to_dict(), "payload": list(payload), "time": curtime}
-                self.comm.append(record)
+                parsed = {"ctrl": ctrl.to_dict(), "cmd": frame_cmd.to_dict(), "payload": list(payload), "time": curtime}
+                self.comm.append((parsed, current_record))
 
             elif ctrl.type == 0x40:
                 data = self.parse_ter()
-                self.comm.append({"ctrl": ctrl.to_dict()})
+                parsed = {"ctrl": ctrl.to_dict()}
+                self.comm.append((parsed, current_record))
             elif ctrl.type == 0x04:
                 data = self.parse_ter()
-                self.comm.append({"ctrl": ctrl.to_dict()})
+                parsed = {"ctrl": ctrl.to_dict()}
+                self.comm.append((parsed, current_record))
 
 
     def drop_until_syn(self):
@@ -274,14 +279,8 @@ class Parser:
             eprint(f"Warning: Expected full terminate, instead got {hfmt(expected_ter)}")
             eprint(f"Current index: {self.index}")
             eprint(f"Current record: {self.current_record()}")
-
-            if expected_ter[0] == 0xff and expected_ter[1] == 0xaa:
-                eprint("Got half TER, with 0xAA after terminate, removing 0xFF")
-                self.advance(1)
-                return
             self.drop_until_syn()
         self.advance(2)
-
 
     def skip_checksum(self):
         checksum = self.data(0, length=2)
@@ -307,6 +306,32 @@ class Parser:
 
         return FrameCmd(ty, tc, out, inc, iid, rqid_lo, rqid_hi, cid)
 
+
+"""
+    A bidirectional parser composed of two unidirectional parsers, this is
+    necessary because write and reads can be interleaved in the irp logs, to 
+    prevent parsing errors we need to handle both streams independently and
+    then combine them back into a single stream.
+"""
+class BidirectionalParser:
+    def __init__(self, records):
+        self.read = Parser([a for a in records if a.function == Function.Read])
+        self.write = Parser([a for a in records if a.function == Function.Write])
+
+    def parse(self):
+        self.read.parse()
+        self.write.parse()
+
+    def communication(self):
+
+        # Interweave the read and writes again.
+        combined = self.read.communication()
+        combined.extend(self.write.communication())
+
+        combined.sort(key=lambda x: x[1].id)
+
+        # Now we no longer need the irp relations.
+        return [x[0] for x in combined]
 
 
 # Helper to hold the relevant fields from the log records.
@@ -483,19 +508,23 @@ def main(in_file):
         with opener(in_file, "rb") as f:
             records = parse_log_file(codecs.iterdecode(f, encoding='utf-8', errors='ignore'))
 
-    p = Parser(records)
-    p.parse()
-    # p.index = RecordIndex(8, 39)
-    # print(hfmt(p.data(0, 20)))
-    # p.advance(8)
-    # print(hfmt(p.data(0, 20)))
-    # p.advance(3)
-    # print(hfmt(p.data(0, 20)))
 
+    if False:
+        p = Parser(records, direction=Function.Read)
+        p.index = RecordIndex(163, 45)
+        print(hfmt(p.data(0, 20)))
+        p.advance(8)
+        sys.exit(1)
+
+
+    p = BidirectionalParser(records)
+    p.parse()
     parsed_result = p.communication()
 
     json_string = json.dumps(parsed_result)
-    # This is safe as bytes are represented with integers.
+
+    # This is safe, this string does not occur in data as the data is
+    # represented with integers.
     json_string = json_string.replace("}, {", "},\n{")
     print(json_string)
 
