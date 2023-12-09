@@ -162,6 +162,18 @@ class Parser:
         return self.comm
 
     """
+        Return the remaining number of bytes.
+    """
+    def remaining(self):
+        remains = 0
+        inner = self.index.inner
+        for outer in range(self.index.outer, len(self.records)):
+            this_record = self.records[outer]
+            remains += len(this_record.data) - inner
+            inner = 0
+        return remains
+
+    """
         Returns a new record index offset away from the current index.
     """
     def advanced_index(self, offset):
@@ -258,12 +270,14 @@ class Parser:
 
 
     def drop_until_syn(self):
-        raise NotImplemented("todo")
-        for i in range(1, len(data)):
-            if data[i] == 0xaa and data[i+1] == 0x55:
-                eprint("data dropped: " + ' '.join(map(hex, data[:i])))
-                data_push(i+2)
-                return data[i+2:]
+        for i in range(1, self.remaining()):
+            expected_syn = self.data(i, length=2)
+            if expected_syn[0] == 0xaa and expected_syn[1] == 0x55:
+                dropped_data = self.data(0, i)
+                eprint(f"Found new syn, bytes dropped: {hfmt(dropped_data)}")
+                self.advance(i)
+                eprint(f"Now at {self.index} with record {self.current_record()}")
+                return
 
 
     def parse_syn(self):
