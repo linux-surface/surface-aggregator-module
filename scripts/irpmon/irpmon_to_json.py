@@ -8,11 +8,17 @@ import gzip
 from collections import namedtuple
 from enum import Enum
 
+
+# Name of the driver of interest, any log records pertaining to others are
+# ignored.
 TARGET_DRIVER = "\Driver\iaLPSS2_UART2_ADL"
 
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
+"""
+    Helper function to format integers or iterables as hexadecimal.
+"""
 def hfmt(b):
     if type(b) is int:
         return f"{b:0>2x}"
@@ -36,7 +42,6 @@ class FrameCtrl:
             "pad": self.pad,
             "seq": self.seq,
         }
-
 
 class FrameCmd:
     def __init__(self, type, tc, out, inc, iid, rqid_lo, rqid_hi, cid):
@@ -71,6 +76,62 @@ class FrameCmd:
 RecordIndex = namedtuple("RecordIndex", ["outer", "inner"])
 RecordIndex.advance_outer = lambda self: RecordIndex(outer=self.outer+1, inner=0)
 
+
+"""
+Notes:
+
+    The problem is that it is possible for writes to be interleaved with
+    extended read commands.
+
+ID = 512
+Type = IRPComp
+Major function = Read
+IRP address = 0xFFFF9A071E5BB670
+IOSB.Status constant = STATUS_SUCCESS
+Data size = 48
+  00:	aa 55 80 1d 00 48 06 91 80 02 00 01 01 4e 00 53
+  10:	01 9a 5e 02 00 42 5d 01 00 4e 00 f7 21 60 ea 00
+  20:	00 3c 73 00 00 83 86 aa 55 40 00 00 26 f8 ae ff
+
+ID = 513
+Type = IRP
+Major function = Write
+IRP address = 0xFFFF9A071E7B3670
+IOSB.Status constant = STATUS_SUCCESS
+Data size = 10
+  0:	aa 55 40 00 00 48 90 23 ff ff
+
+ID = 514
+Type = IRPComp
+Major function = Write
+IRP address = 0xFFFF9A071E7B3670
+IOSB.Status constant = STATUS_SUCCESS
+
+
+ID = 515
+Type = IRP
+Major function = Read
+Minor function = Normal
+IRP address = 0xFFFF9A071E5BB9A0
+IOSB.Status constant = STATUS_SUCCESS
+
+ID = 516
+Type = IRPComp
+Major function = Read
+IRP address = 0xFFFF9A071E5BB9A0
+IOSB.Status constant = STATUS_SUCCESS
+Data size = 48
+  00:	ff aa 55 80 46 00 49 18 2f 80 0c 00 01 00 4f 00
+  10:	0e ff ff 04 00 01 03 00 02 02 00 03 01 00 03 09
+  20:	00 01 06 00 01 ff ff ff 00 00 00 00 00 00 00 00
+
+Note how ID 516, is a continuation of ID 512.
+A problem is that 513 and 514 are a write that's in between the reads.
+"""
+
+"""
+    Parser to convert irp records into the SSAM commands.
+"""
 class Parser:
     def __init__(self, records):
         # Input IRP records
@@ -78,13 +139,15 @@ class Parser:
         # Index of current record entry.
         self.index = RecordIndex(0, 0)
 
-        # Initialise the cursor correctly, jumping over the records to be
-        # ignored
+        # Initialise the cursor, by jumping over the records to be ignored
         self.advance(0)
 
         # Parsed communication.
         self.comm = []
 
+    """
+        Retrieve the parsed communication.
+    """
     def communication(self):
         return self.comm
 
@@ -97,7 +160,6 @@ class Parser:
         # print(f"Advancing from {self.index} to offset {offset}")
         for outer in range(self.index.outer, len(self.records)):
             this_record = self.records[outer]
-            # print(this_record)
 
             # Check if this is to be ignored.
             if not this_record.function in (Function.Read, Function.Write):
@@ -107,7 +169,6 @@ class Parser:
 
             if (inner + offset) < len(this_record.data):
                 # This offset is in this outer index.
-                # print(f"Reached {outer} {inner + offset}");
                 return RecordIndex(outer, inner + offset)
             else:
                 # Subtract what bytes remain in this record.
@@ -121,7 +182,8 @@ class Parser:
 
     """
         Returns data from the current cursor position onwards, defaults to
-        returning a single byte.
+        returning a single byte, always returns a byte array object, even for
+        length of one.
     """
     def data(self, offset, length=1):
         index = self.advanced_index(offset)
@@ -141,32 +203,29 @@ class Parser:
         self.index = self.advanced_index(offset)
         # print(f"New cursor: {self.index}")
 
+    """
+        Returns true if the current index is None, indicating the cursor has
+        advanced beyond the records.
+    """
     def is_exhausted(self):
         return self.index is None
 
-
+    """
+        Returns the current record, or if the parser is exhausted the last one.
+    """
     def current_record(self):
+        if self.is_exhausted():
+            return self.records[-1]
         return self.records[self.index.outer]
-
-    def last_record(self):
-        return self.records[-1]
 
     """
         Process all records available and store the parsed results.
     """
     def parse(self):
         while self.index:
-            # print("Start:", hfmt(self.data(0, 60)))
             self.parse_syn()
-            # print("parsed syn")
-            # print("After syn", hfmt(self.data(0, 20)))
             ctrl = self.parse_frame_ctrl()
-            # print(f"parsed ctrl: {ctrl}")
-            # print("After ctrl", hfmt(self.data(0, 20)))
             self.skip_checksum()
-            # print("After chksm", hfmt(self.data(0, 20)))
-            # print(f"Skipping checksum, index now {self.index}")
-
 
             if ctrl.type == 0x00 or ctrl.type == 0x80:
                 frame_cmd = self.parse_frame_cmd()
@@ -174,12 +233,11 @@ class Parser:
                 payload_len = ctrl.len - 8
 
                 payload = self.data(0, length=payload_len)
-                # print(f"Payload is: {hfmt(payload)}, len: {payload_len}")
                 self.advance(payload_len)
 
                 self.skip_checksum()
-                time_record = self.current_record() if not self.is_exhausted() else self.last_record()
-                curtime = time_record.time
+
+                curtime = self.current_record().time
                 record = {"ctrl": ctrl.to_dict(), "cmd": frame_cmd.to_dict(), "payload": list(payload), "time": curtime}
                 self.comm.append(record)
 
@@ -203,7 +261,8 @@ class Parser:
     def parse_syn(self):
         expected_syn = self.data(0, length=2)
         if expected_syn[0] != 0xaa or expected_syn[1] != 0x55:
-            eprint("warning: expected SYN, skipping data until next SYN")
+            eprint(f"Warning: expected SYN, skipping data until next SYN, instead got {hfmt(expected_syn)}")
+            eprint(f"Current index: {self.index}")
             eprint(f"Current record: {self.current_record()}")
             self.drop_until_syn()
         self.advance(2)
@@ -212,21 +271,27 @@ class Parser:
     def parse_ter(self):
         expected_ter = self.data(0, length=2)
         if expected_ter[0] != 0xff or expected_ter[1] != 0xff:
-            eprint("warning: expected TER, skipping data until next SYN")
+            eprint(f"Warning: Expected full terminate, instead got {hfmt(expected_ter)}")
+            eprint(f"Current index: {self.index}")
+            eprint(f"Current record: {self.current_record()}")
+
+            if expected_ter[0] == 0xff and expected_ter[1] == 0xaa:
+                eprint("Got half TER, with 0xAA after terminate, removing 0xFF")
+                self.advance(1)
+                return
             self.drop_until_syn()
         self.advance(2)
 
 
     def skip_checksum(self):
+        checksum = self.data(0, length=2)
         self.advance(2)
-
 
     def parse_frame_ctrl(self):
         b = self.data(0, 4)
         (ty, len, pad, seq) = b
         self.advance(4)
         return FrameCtrl(ty, len, pad, seq)
-
 
     def parse_frame_cmd(self):
         data = self.data(0, length=8)
