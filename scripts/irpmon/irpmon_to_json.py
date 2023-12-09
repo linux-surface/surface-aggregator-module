@@ -328,6 +328,11 @@ def parse_json_file(path):
     for entry in irp_entries:
         if entry.get("Driver name") != TARGET_DRIVER:
             continue
+
+        if entry.get("Type") != "IRP":
+            # "DriverDetected"
+            continue
+
         data = entry.get("Parsers", {}).get("Hexer", {}).get("Data0", '')
         bytedata = [a for a in codecs.decode(data, 'hex_codec')]
 
