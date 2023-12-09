@@ -174,8 +174,8 @@ def process_records(records):
     for record in records:
         if not record.function in (Function.Read, Function.Write):
             continue
-        # if not record.status in (Status.STATUS_SUCCESS, Status.STATUS_PENDING):
-            # continue
+        if not record.status in (Status.STATUS_TIMEOUT, ):
+            continue
         # Ok, data is good, add it.
         all_data.extend(record.data)
         timestamps.append((record.time, len(all_data)))
@@ -244,6 +244,8 @@ def parse_log_file(file):
             irp_address = int(line.split('=', 1)[1].strip(), 0)
         elif line.startswith("Driver name = "):
             discard = line.split('=', 1)[1].strip() != TARGET_DRIVER
+        elif line.startswith("Type = "):
+            discard = discard or line.split('=', 1)[1].strip() == "DriverDetected"
         elif line.startswith("Time = "):
             curtime = line.split('=', 1)[1].strip()
             # curtime = time.strptime(curtime, '%m/%d/%Y %I:%M:%S %p')
@@ -283,7 +285,7 @@ def parse_log_file(file):
 def parse_json_file(path):
     opener = gzip.open if path.endswith("gz") else open
 
-    # This isn't compliant json, the 'stack' parameter is formatting is broken.
+    # This isn't compliant json, the 'stack' parameter's formatting is broken.
     with opener(path, "rt") as f:
         file_text = f.read()
 
@@ -317,7 +319,6 @@ def parse_json_file(path):
     # Lets also add some newlines, in case we need to open the file.
     fixed_string = fixed_string.replace('},{"ID"', '},\n{"ID"');
 
-    
     #with open("/tmp/fixed.json", "w") as f:
     #    f.write(fixed_string)
 
@@ -329,8 +330,8 @@ def parse_json_file(path):
         if entry.get("Driver name") != TARGET_DRIVER:
             continue
 
-        if entry.get("Type") != "IRP":
-            # "DriverDetected"
+        if entry.get("Type") == "DriverDetected":
+            # "DriverDetected", "IRPComp"
             continue
 
         data = entry.get("Parsers", {}).get("Hexer", {}).get("Data0", '')
