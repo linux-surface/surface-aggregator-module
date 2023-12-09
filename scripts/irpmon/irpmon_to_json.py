@@ -13,21 +13,10 @@ TARGET_DRIVER = "\Driver\iaLPSS2_UART2_ADL"
 def eprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
 
-# global offset in cmdbytes
-data_idx = 0
-
-def data_push(delta):
-    global data_idx
-    data_idx = data_idx + delta
-
-def data_timestamp(timestamps):
-    global data_idx
-    prev = timestamps[0][0]
-    for ts, idx in timestamps:
-        if idx > data_idx:
-            return prev
-        prev = ts
-    return None
+def hfmt(b):
+    if type(b) is int:
+        return f"{b:0>2x}"
+    return " ".join(f"{x:0>2x}" for x in b)
 
 class FrameCtrl:
     def __init__(self, type, len, pad, seq):
@@ -77,113 +66,182 @@ class FrameCmd:
             "cid": self.cid,
         }
 
+# Helper type to keep track of the outer index (into the Irp records) and the 
+# inner index (the byte offset in this irp record).
+RecordIndex = namedtuple("RecordIndex", ["outer", "inner"])
+RecordIndex.advance_outer = lambda self: RecordIndex(outer=self.outer+1, inner=0)
 
-def drop_until_syn(data):
-    for i in range(1, len(data)):
-        if data[i] == 0xaa and data[i+1] == 0x55:
-            eprint("data dropped: " + ' '.join(map(hex, data[:i])))
-            data_push(i+2)
-            return data[i+2:]
+class Parser:
+    def __init__(self, records):
+        # Input IRP records
+        self.records = records
+        # Index of current record entry.
+        self.index = RecordIndex(0, 0)
+
+        # Initialise the cursor correctly, jumping over the records to be
+        # ignored
+        self.advance(0)
+
+        # Parsed communication.
+        self.comm = []
+
+    def communication(self):
+        return self.comm
+
+    """
+        Returns a new record index offset away from the current index.
+    """
+    def advanced_index(self, offset):
+        inner = self.index.inner
+
+        # print(f"Advancing from {self.index} to offset {offset}")
+        for outer in range(self.index.outer, len(self.records)):
+            this_record = self.records[outer]
+            # print(this_record)
+
+            # Check if this is to be ignored.
+            if not this_record.function in (Function.Read, Function.Write):
+                continue
+            #if this_record.status in (Status.STATUS_TIMEOUT, ):
+            #    continue
+
+            if (inner + offset) < len(this_record.data):
+                # This offset is in this outer index.
+                # print(f"Reached {outer} {inner + offset}");
+                return RecordIndex(outer, inner + offset)
+            else:
+                # Subtract what bytes remain in this record.
+                offset -= (len(this_record.data) - inner)
+
+            # We're advancing the outer index, so inner becomes zero.
+            inner = 0
+
+        # If we don't find it, we reached the end, return a None
+        return None
+
+    """
+        Returns data from the current cursor position onwards, defaults to
+        returning a single byte.
+    """
+    def data(self, offset, length=1):
+        index = self.advanced_index(offset)
+
+        buffer = bytearray([])
+        while length:
+            from_this = self.records[index.outer].data[index.inner:index.inner+length]
+            length -= len(from_this)
+            buffer.extend(from_this)
+            index = index.advance_outer()
+        return buffer
+
+    """
+        Advances the index by the desired offset.
+    """
+    def advance(self, offset):
+        self.index = self.advanced_index(offset)
+        # print(f"New cursor: {self.index}")
+
+    def is_exhausted(self):
+        return self.index is None
 
 
-def parse_syn(data):
-    if data[0:2] != bytes([0xaa, 0x55]):
-        eprint("warning: expected SYN, skipping data until next SYN")
-        drop_until_syn(data)
+    def current_record(self):
+        return self.records[self.index.outer]
 
-    data_push(2)
-    return data[2:]
+    def last_record(self):
+        return self.records[-1]
 
-
-def parse_ter(data):
-    if data[0:2] != bytes([0xff, 0xff]):
-        eprint("warning: expected TER, skipping data until next SYN")
-        drop_until_syn(data)
-
-    data_push(2)
-    return data[2:]
-
-
-def skip_checksum(data):
-    data_push(2)
-    return data[2:]
-
-
-def parse_frame_ctrl(data):
-    ty = data[0]
-    len = data[1]
-    pad = data[2]
-    seq = data[3]
-
-    data_push(4)
-    return data[4:], FrameCtrl(ty, len, pad, seq)
+    """
+        Process all records available and store the parsed results.
+    """
+    def parse(self):
+        while self.index:
+            # print("Start:", hfmt(self.data(0, 60)))
+            self.parse_syn()
+            # print("parsed syn")
+            # print("After syn", hfmt(self.data(0, 20)))
+            ctrl = self.parse_frame_ctrl()
+            # print(f"parsed ctrl: {ctrl}")
+            # print("After ctrl", hfmt(self.data(0, 20)))
+            self.skip_checksum()
+            # print("After chksm", hfmt(self.data(0, 20)))
+            # print(f"Skipping checksum, index now {self.index}")
 
 
-def parse_frame_cmd(data):
-    ty = data[0]
-    tc = data[1]
-    out = data[2]
-    inc = data[3]
-    iid = data[4]
-    rqid_lo = data[5]
-    rqid_hi = data[6]
-    cid = data[7]
+            if ctrl.type == 0x00 or ctrl.type == 0x80:
+                frame_cmd = self.parse_frame_cmd()
 
-    data_push(8)
-    return data[8:], FrameCmd(ty, tc, out, inc, iid, rqid_lo, rqid_hi, cid)
+                payload_len = ctrl.len - 8
+
+                payload = self.data(0, length=payload_len)
+                # print(f"Payload is: {hfmt(payload)}, len: {payload_len}")
+                self.advance(payload_len)
+
+                self.skip_checksum()
+                time_record = self.current_record() if not self.is_exhausted() else self.last_record()
+                curtime = time_record.time
+                record = {"ctrl": ctrl.to_dict(), "cmd": frame_cmd.to_dict(), "payload": list(payload), "time": curtime}
+                self.comm.append(record)
+
+            elif ctrl.type == 0x40:
+                data = self.parse_ter()
+                self.comm.append({"ctrl": ctrl.to_dict()})
+            elif ctrl.type == 0x04:
+                data = self.parse_ter()
+                self.comm.append({"ctrl": ctrl.to_dict()})
 
 
-def parse_commands(data, timestamps):
-    records = []
+    def drop_until_syn(self):
+        raise NotImplemented("todo")
+        for i in range(1, len(data)):
+            if data[i] == 0xaa and data[i+1] == 0x55:
+                eprint("data dropped: " + ' '.join(map(hex, data[:i])))
+                data_push(i+2)
+                return data[i+2:]
 
-    while data:
-        data = parse_syn(data)
-        data, ctrl = parse_frame_ctrl(data)
-        data = skip_checksum(data)
 
-        if ctrl.type == 0x00 or ctrl.type == 0x80:
-            data, cmd = parse_frame_cmd(data)
+    def parse_syn(self):
+        expected_syn = self.data(0, length=2)
+        if expected_syn[0] != 0xaa or expected_syn[1] != 0x55:
+            eprint("warning: expected SYN, skipping data until next SYN")
+            eprint(f"Current record: {self.current_record()}")
+            self.drop_until_syn()
+        self.advance(2)
 
-            curtime = data_timestamp(timestamps)
 
-            payload_len = ctrl.len - 8
-            data_push(payload_len)
-            data, pld = data[payload_len:], data[0:payload_len]
+    def parse_ter(self):
+        expected_ter = self.data(0, length=2)
+        if expected_ter[0] != 0xff or expected_ter[1] != 0xff:
+            eprint("warning: expected TER, skipping data until next SYN")
+            self.drop_until_syn()
+        self.advance(2)
 
-            data = skip_checksum(data)
 
-            record = {"ctrl": ctrl.to_dict(), "cmd": cmd.to_dict(), "payload": list(pld), "time": curtime}
-            records.append(record)
+    def skip_checksum(self):
+        self.advance(2)
 
-        elif ctrl.type == 0x40:
-            data = parse_ter(data)
-            records.append({"ctrl": ctrl.to_dict()})
-        elif ctrl.type == 0x04:
-            data = parse_ter(data)
-            records.append({"ctrl": ctrl.to_dict()})
 
-    return records
+    def parse_frame_ctrl(self):
+        b = self.data(0, 4)
+        (ty, len, pad, seq) = b
+        self.advance(4)
+        return FrameCtrl(ty, len, pad, seq)
 
-def process_records(records):
-    all_data = bytearray([])
-    timestamps = []
 
-    # for r in records:
-        # print(r)
+    def parse_frame_cmd(self):
+        data = self.data(0, length=8)
+        ty = data[0]
+        tc = data[1]
+        out = data[2]
+        inc = data[3]
+        iid = data[4]
+        rqid_lo = data[5]
+        rqid_hi = data[6]
+        cid = data[7]
+        self.advance(8)
 
-    for record in records:
-        if not record.function in (Function.Read, Function.Write):
-            continue
-        if not record.status in (Status.STATUS_TIMEOUT, ):
-            continue
-        # Ok, data is good, add it.
-        all_data.extend(record.data)
-        timestamps.append((record.time, len(all_data)))
+        return FrameCmd(ty, tc, out, inc, iid, rqid_lo, rqid_hi, cid)
 
-    timestamps.append((None, len(all_data)))
-
-    # print(list(all_data))
-    return bytes(all_data), timestamps
 
 
 # Helper to hold the relevant fields from the log records.
@@ -360,9 +418,18 @@ def main(in_file):
         with opener(in_file, "rb") as f:
             records = parse_log_file(codecs.iterdecode(f, encoding='utf-8', errors='ignore'))
 
-    data, timestamps = process_records(records)
+    p = Parser(records)
+    p.parse()
+    # p.index = RecordIndex(8, 39)
+    # print(hfmt(p.data(0, 20)))
+    # p.advance(8)
+    # print(hfmt(p.data(0, 20)))
+    # p.advance(3)
+    # print(hfmt(p.data(0, 20)))
 
-    json_string = json.dumps(parse_commands(data, timestamps))
+    parsed_result = p.communication()
+
+    json_string = json.dumps(parsed_result)
     # This is safe as bytes are represented with integers.
     json_string = json_string.replace("}, {", "},\n{")
     print(json_string)
