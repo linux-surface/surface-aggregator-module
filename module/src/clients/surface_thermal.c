@@ -51,8 +51,8 @@ static int ssam_tmp_get_temperature(struct ssam_device *sdev, int *temperature)
 	if (status)
 		return status;
 
-	/* Convert centidegree to millidegree. */
-	*temperature = le16_to_cpu(temp_le) * 10;
+	/* Convert 1/10 °K to 1/1000 °C */
+	*temperature = (le16_to_cpu(temp_le) - 2731) * 100;
 	return 0;
 }
 
