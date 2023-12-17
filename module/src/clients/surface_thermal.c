@@ -42,7 +42,7 @@ static int ssam_tmp_get_available_sensors(struct ssam_device *sdev, s16 *sensors
 	return 0;
 }
 
-static int ssam_tmp_get_temperature(struct ssam_device *sdev, s16 *temperature)
+static int ssam_tmp_get_temperature(struct ssam_device *sdev, int *temperature)
 {
 	__le16 temp_le;
 	int status;
@@ -51,7 +51,8 @@ static int ssam_tmp_get_temperature(struct ssam_device *sdev, s16 *temperature)
 	if (status)
 		return status;
 
-	*temperature = le16_to_cpu(temp_le);
+	/* Convert centidegree to millidegree. */
+	*temperature = le16_to_cpu(temp_le) * 10;
 	return 0;
 }
 
@@ -63,24 +64,11 @@ struct ssam_sensor {
 	struct thermal_zone_device *tzd;
 };
 
-static inline int tmp_ssam_to_linux(s16 temperature)
-{
-	/* Convert centidegree to millidegree. */
-	return temperature * 10;
-}
-
 static int ssam_thermal_get_temp(struct thermal_zone_device* tzd, int *temp)
 {
 	struct ssam_sensor *sensor = tzd->devdata;
-	s16 temp_16;
-	int status;
 
-	status = ssam_tmp_get_temperature(sensor->sdev, &temp_16);
-	if (status)
-		return status;
-
-	*temp = tmp_ssam_to_linux(temp_16);
-	return 0;
+	return ssam_tmp_get_temperature(sensor->sdev, temp);
 }
 
 static struct thermal_zone_device_ops ssam_thermal_ops = {
@@ -95,7 +83,7 @@ static int ssam_thermal_sensor_probe(struct ssam_device *sdev)
 	int status;
 
 	/* Instance IDs must be 1 or larger. IID=0 is the hub device. */
-	if (sdev->uid.instance < 1)
+	if (sdev->uid.instance == 0x00)
 		return -ENODEV;
 
 	/* Make sure that the sensor is actually present. */
