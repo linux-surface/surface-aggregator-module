@@ -4,8 +4,12 @@
 MODULE_NAME := "surface_aggregator_module"
 MODULE_VERSION := "0.1"
 
+# Allow overriding KDIR from an environment variable.
+ifeq ($(KDIR),)
 KVERSION := "$(shell uname -r)"
 KDIR := /lib/modules/$(KVERSION)/build
+endif
+
 MDIR := /usr/src/$(MODULE_NAME)-$(MODULE_VERSION)
 
 CHECKPATCH_OPTS := -f -q --no-tree --ignore LONG_LINE
