@@ -16,6 +16,7 @@ unload() {
     modprobe -r ac
 
     ${cmd} surface_platform_profile
+    ${cmd} surface_temp
     ${cmd} surface_kbd
     ${cmd} surface_hid
     ${cmd} surface_hid_core
@@ -50,6 +51,7 @@ load() {
     ${cmd} "${client_pfx}"surface_hid"${ext}"
     ${cmd} "${client_pfx}"surface_kbd"${ext}"
     ${cmd} "${client_pfx}"surface_platform_profile"${ext}"
+    ${cmd} "${client_pfx}"surface_temp"${ext}"
     ${cmd} "${client_pfx}"surface_aggregator_registry"${ext}"
 
     if [ $(systemctl list-unit-files "surface-dtx-daemon.service" | wc -l) -gt 3 ]
