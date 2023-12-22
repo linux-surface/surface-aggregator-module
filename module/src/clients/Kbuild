@@ -13,8 +13,6 @@ obj-m += surface_hid_core.o
 obj-m += surface_hid.o
 obj-m += surface_kbd.o
 obj-m += surface_platform_profile.o
-obj-m += surface_thermal_hub.o
-obj-m += surface_thermal.o
 
 #ccflags-y += -DDEBUG
 ccflags-y += -Wall -Wextra
