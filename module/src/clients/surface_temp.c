@@ -14,6 +14,7 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
 
+
 /* -- SAM interface. -------------------------------------------------------- */
 
 SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
@@ -28,13 +29,16 @@ SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
 	.command_id      = 0x01,
 });
 
+#define SSAM_TMP_SENSOR_MAX_COUNT 16
+#define SSAM_TMP_SENSOR_NAME_LENGTH 18
+
 // Get name command returns 21 bytes.
 struct ssam_tmp_get_name {
 	__le16 unknown1;
 	char unknown2;
 	// All names observed so far are 6 long, but there's only zeros
-	// after it.
-	char name[18];
+	// after the name, so perhaps they can be longer.
+	char name[SSAM_TMP_SENSOR_NAME_LENGTH];
 } __packed;
 
 
@@ -76,7 +80,7 @@ static int ssam_tmp_get_temperature(struct ssam_device *sdev, u8 iid, long *temp
 struct ssam_temp {
 	struct ssam_device *sdev;
 	s16 sensors;
-	char names[16][sizeof_field(struct ssam_tmp_get_name, name)];
+	char names[SSAM_TMP_SENSOR_MAX_COUNT][SSAM_TMP_SENSOR_NAME_LENGTH];
 };
 
 static umode_t ssam_temp_hwmon_is_visible(const void *data,
@@ -122,8 +126,6 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 				       enum hwmon_sensor_types type,
 				       u32 attr, int channel, const char **str)
 {
-	struct ssam_tmp_get_name name_resp;
-	int status;
 	struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
 
 	if (type != hwmon_temp)
@@ -135,19 +137,8 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 	if (attr != hwmon_temp_label)
 		return -EOPNOTSUPP;
 
-	// Get the label from the SSAM if we haven't retrieved it yet.
-	if (ssam_temp->names[channel][0] == 0)
-	{
-		status =  ssam_retry(__ssam_tmp_get_name, ssam_temp->sdev->ctrl,
-				     SSAM_SSH_TID_SAM, channel + 1, &name_resp);
-		if (status < 0)
-			return -EIO;
-
-		// Store the name in the internal buffer.
-		memcpy(ssam_temp->names[channel], name_resp.name,
-		       sizeof(ssam_temp->names[channel]));
-	}
 	*str = ssam_temp->names[channel];
+
 	return 0;
 }
 
@@ -191,6 +182,8 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	struct ssam_temp *ssam_temp;
 	struct device *hwmon_dev;
 	s16 sensors;
+	int channel;
+	struct ssam_tmp_get_name name_resp;
 	int status;
 
 	status = ssam_tmp_get_available_sensors(sdev, &sensors);
@@ -200,6 +193,24 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	ssam_temp = devm_kzalloc(&sdev->dev, sizeof(*ssam_temp), GFP_KERNEL);
 	if (!ssam_temp)
 		return -ENOMEM;
+
+	// Retrieve the name for each sensor.
+	for (channel = 0; channel < SSAM_TMP_SENSOR_MAX_COUNT; channel++)
+	{
+		if ((sensors & BIT(channel)) == 0)
+			continue;
+
+		status =  ssam_retry(__ssam_tmp_get_name, sdev->ctrl,
+				     sdev->uid.target, channel + 1,
+				     &name_resp);
+		if (status < 0)
+			return -EIO;
+
+		// Copy the name in the internal buffer.
+		status = strscpy(ssam_temp->names[channel], name_resp.name,
+				 SSAM_TMP_SENSOR_NAME_LENGTH);
+		WARN_ON(status < 0);
+	}
 
 	ssam_temp->sdev = sdev;
 	ssam_temp->sensors = sensors;
