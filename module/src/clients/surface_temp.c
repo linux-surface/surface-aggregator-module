@@ -14,7 +14,6 @@
 #include "../../include/linux/surface_aggregator/controller.h"
 #include "../../include/linux/surface_aggregator/device.h"
 
-
 /* -- SAM interface. -------------------------------------------------------- */
 
 SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
@@ -27,6 +26,21 @@ SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
 SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
 	.target_category = SSAM_SSH_TC_TMP,
 	.command_id      = 0x01,
+});
+
+// Get name command returns 21 bytes.
+struct ssam_tmp_get_name {
+	__le16 unknown1;
+	char unknown2;
+	// All names observed so far are 6 long, but there's only zeros
+	// after it.
+	char name[18];
+} __packed;
+
+
+SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name, {
+	.target_category = SSAM_SSH_TC_TMP,
+	.command_id      = 0x0e,
 });
 
 static int ssam_tmp_get_available_sensors(struct ssam_device *sdev, s16 *sensors)
@@ -62,6 +76,7 @@ static int ssam_tmp_get_temperature(struct ssam_device *sdev, u8 iid, long *temp
 struct ssam_temp {
 	struct ssam_device *sdev;
 	s16 sensors;
+	char names[16][sizeof_field(struct ssam_tmp_get_name, name)];
 };
 
 static umode_t ssam_temp_hwmon_is_visible(const void *data,
@@ -107,7 +122,9 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 				       enum hwmon_sensor_types type,
 				       u32 attr, int channel, const char **str)
 {
-	const struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
+	struct ssam_tmp_get_name name_resp;
+	int status;
+	struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
 
 	if (type != hwmon_temp)
 		return -EOPNOTSUPP;
@@ -118,8 +135,19 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 	if (attr != hwmon_temp_label)
 		return -EOPNOTSUPP;
 
-	// TODO: get label from SAM
-	*str = "<not yet implemented>";
+	// Get the label from the SSAM if we haven't retrieved it yet.
+	if (ssam_temp->names[channel][0] == 0)
+	{
+		status =  ssam_retry(__ssam_tmp_get_name, ssam_temp->sdev->ctrl,
+				     SSAM_SSH_TID_SAM, channel + 1, &name_resp);
+		if (status < 0)
+			return -EIO;
+
+		// Store the name in the internal buffer.
+		memcpy(ssam_temp->names[channel], name_resp.name,
+		       sizeof(ssam_temp->names[channel]));
+	}
+	*str = ssam_temp->names[channel];
 	return 0;
 }
 
