@@ -126,7 +126,7 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 				       enum hwmon_sensor_types type,
 				       u32 attr, int channel, const char **str)
 {
-	struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
+	const struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
 
 	if (type != hwmon_temp)
 		return -EOPNOTSUPP;
