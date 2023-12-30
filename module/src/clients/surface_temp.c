@@ -42,13 +42,13 @@ SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
  */
 #define SSAM_TMP_SENSOR_NAME_LENGTH 18
 
-struct ssam_tmp_get_name {
+struct ssam_tmp_get_name_rsp {
 	__le16 unknown1;
 	char unknown2;
 	char name[SSAM_TMP_SENSOR_NAME_LENGTH];
 } __packed;
 
-SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name, {
+SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name_rsp, {
 	.target_category = SSAM_SSH_TC_TMP,
 	.command_id      = 0x0e,
 });
@@ -189,7 +189,7 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	struct device *hwmon_dev;
 	s16 sensors;
 	int channel;
-	struct ssam_tmp_get_name name_resp;
+	struct ssam_tmp_get_name_rsp name_rsp;
 	int status;
 
 	status = ssam_tmp_get_available_sensors(sdev, &sensors);
@@ -208,12 +208,12 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 
 		status =  ssam_retry(__ssam_tmp_get_name, sdev->ctrl,
 				     sdev->uid.target, channel + 1,
-				     &name_resp);
+				     &name_rsp);
 		if (status < 0)
-			return -EIO;
+			return status;
 
 		// Copy the name in the internal buffer.
-		status = strscpy(ssam_temp->names[channel], name_resp.name,
+		status = strscpy(ssam_temp->names[channel], name_rsp.name,
 				 SSAM_TMP_SENSOR_NAME_LENGTH);
 		WARN_ON(status < 0);
 	}
