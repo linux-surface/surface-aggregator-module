@@ -198,6 +198,9 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	if (!ssam_temp)
 		return -ENOMEM;
 
+	ssam_temp->sdev = sdev;
+	ssam_temp->sensors = sensors;
+
 	/* Retrieve the name for each available sensor. */
 	for (channel = 0; channel < SSAM_TMP_SENSOR_MAX_COUNT; channel++)
 	{
@@ -210,9 +213,6 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 		if (status)
 			return status;
 	}
-
-	ssam_temp->sdev = sdev;
-	ssam_temp->sensors = sensors;
 
 	hwmon_dev = devm_hwmon_device_register_with_info(&sdev->dev,
 			"surface_thermal", ssam_temp, &ssam_temp_hwmon_chip_info,
