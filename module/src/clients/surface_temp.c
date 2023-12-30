@@ -38,11 +38,9 @@ struct ssam_tmp_get_name_rsp {
 
 static_assert(sizeof(struct ssam_tmp_get_name_rsp) == 21);
 
-SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
+SSAM_DEFINE_SYNC_REQUEST_CL_R(__ssam_tmp_get_available_sensors, __le16, {
 	.target_category = SSAM_SSH_TC_TMP,
-	.target_id       = SSAM_SSH_TID_SAM,
 	.command_id      = 0x04,
-	.instance_id     = 0x00,
 });
 
 SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
@@ -60,7 +58,7 @@ static int ssam_tmp_get_available_sensors(struct ssam_device *sdev, s16 *sensors
 	__le16 sensors_le;
 	int status;
 
-	status = __ssam_tmp_get_available_sensors(sdev->ctrl, &sensors_le);
+	status = __ssam_tmp_get_available_sensors(sdev, &sensors_le);
 	if (status)
 		return status;
 
