@@ -29,18 +29,24 @@ SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
 	.command_id      = 0x01,
 });
 
+/*
+ * Available sensors are indicated by a 16-bit bitfield, where a 1 marks the
+ * presence of a sensor. So we have at most 16 possible sensors/channels.
+ */
 #define SSAM_TMP_SENSOR_MAX_COUNT 16
+
+/*
+ * All names observed so far are 6 characters long, but there's only
+ * zeros after the name, so perhaps they can be longer. This number reflects
+ * the maximum zero-padded space observed in the returned buffer.
+ */
 #define SSAM_TMP_SENSOR_NAME_LENGTH 18
 
-// Get name command returns 21 bytes.
 struct ssam_tmp_get_name {
 	__le16 unknown1;
 	char unknown2;
-	// All names observed so far are 6 long, but there's only zeros
-	// after the name, so perhaps they can be longer.
 	char name[SSAM_TMP_SENSOR_NAME_LENGTH];
 } __packed;
-
 
 SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name, {
 	.target_category = SSAM_SSH_TC_TMP,
