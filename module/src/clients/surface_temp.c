@@ -123,7 +123,10 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 static const struct hwmon_channel_info * const ssam_temp_hwmon_info[] = {
 	HWMON_CHANNEL_INFO(chip,
 			   HWMON_C_REGISTER_TZ),
-	/* We have at most 16 thermal sensors. */
+	/*
+	 * We have at most SSAM_TMP_SENSOR_MAX_COUNT = 16 thermal sensor
+	 * channels.
+	 */
 	HWMON_CHANNEL_INFO(temp,
 			   HWMON_T_INPUT | HWMON_T_LABEL,
 			   HWMON_T_INPUT | HWMON_T_LABEL,
