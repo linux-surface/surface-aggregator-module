@@ -17,18 +17,6 @@
 
 /* -- SAM interface. -------------------------------------------------------- */
 
-SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
-	.target_category = SSAM_SSH_TC_TMP,
-	.target_id       = SSAM_SSH_TID_SAM,
-	.command_id      = 0x04,
-	.instance_id     = 0x00,
-});
-
-SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
-	.target_category = SSAM_SSH_TC_TMP,
-	.command_id      = 0x01,
-});
-
 /*
  * Available sensors are indicated by a 16-bit bitfield, where a 1 marks the
  * presence of a sensor. So we have at most 16 possible sensors/channels.
@@ -49,6 +37,18 @@ struct ssam_tmp_get_name_rsp {
 } __packed;
 
 static_assert(sizeof(struct ssam_tmp_get_name_rsp) == 21);
+
+SSAM_DEFINE_SYNC_REQUEST_R(__ssam_tmp_get_available_sensors, __le16, {
+	.target_category = SSAM_SSH_TC_TMP,
+	.target_id       = SSAM_SSH_TID_SAM,
+	.command_id      = 0x04,
+	.instance_id     = 0x00,
+});
+
+SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_temperature, __le16, {
+	.target_category = SSAM_SSH_TC_TMP,
+	.command_id      = 0x01,
+});
 
 SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name_rsp, {
 	.target_category = SSAM_SSH_TC_TMP,
