@@ -95,19 +95,10 @@ static umode_t ssam_temp_hwmon_is_visible(const void *data,
 {
 	const struct ssam_temp *ssam_temp = data;
 
-	if (type != hwmon_temp)
+	if (ssam_temp->sensors & BIT(channel))
+		return  0444;
+	else
 		return 0;
-
-	switch (attr) {
-	case hwmon_temp_input:
-	case hwmon_temp_label:
-		if (ssam_temp->sensors & BIT(channel))
-			return  0444;
-		else
-			return 0;
-	default:
-		return 0;
-	}
 }
 
 static int ssam_temp_hwmon_read(struct device *dev,
@@ -115,15 +106,6 @@ static int ssam_temp_hwmon_read(struct device *dev,
 				u32 attr, int channel, long *value)
 {
 	const struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
-
-	if (type != hwmon_temp)
-		return -EOPNOTSUPP;
-
-	if (!(ssam_temp->sensors & BIT(channel)))
-		return -EOPNOTSUPP;
-
-	if (attr != hwmon_temp_input)
-		return -EOPNOTSUPP;
 
 	return ssam_tmp_get_temperature(ssam_temp->sdev, channel + 1, value);
 }
@@ -134,17 +116,7 @@ static int ssam_temp_hwmon_read_string(struct device *dev,
 {
 	const struct ssam_temp *ssam_temp = dev_get_drvdata(dev);
 
-	if (type != hwmon_temp)
-		return -EOPNOTSUPP;
-
-	if (!(ssam_temp->sensors & BIT(channel)))
-		return -EOPNOTSUPP;
-
-	if (attr != hwmon_temp_label)
-		return -EOPNOTSUPP;
-
 	*str = ssam_temp->names[channel];
-
 	return 0;
 }
 
