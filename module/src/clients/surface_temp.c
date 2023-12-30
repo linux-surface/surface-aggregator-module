@@ -197,7 +197,7 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	ssam_temp->sensors = sensors;
 
 	hwmon_dev = devm_hwmon_device_register_with_info(&sdev->dev,
-			"ssam_temp", ssam_temp, &ssam_temp_hwmon_chip_info,
+			"surface_thermal", ssam_temp, &ssam_temp_hwmon_chip_info,
 			NULL);
 	if (IS_ERR(hwmon_dev))
 		return PTR_ERR(hwmon_dev);
