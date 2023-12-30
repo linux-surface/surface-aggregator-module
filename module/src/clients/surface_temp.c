@@ -48,6 +48,8 @@ struct ssam_tmp_get_name_rsp {
 	char name[SSAM_TMP_SENSOR_NAME_LENGTH];
 } __packed;
 
+static_assert(sizeof(struct ssam_tmp_get_name_rsp) == 21);
+
 SSAM_DEFINE_SYNC_REQUEST_MD_R(__ssam_tmp_get_name, struct ssam_tmp_get_name_rsp, {
 	.target_category = SSAM_SSH_TC_TMP,
 	.command_id      = 0x0e,
