@@ -86,7 +86,7 @@ static int ssam_tmp_get_name(struct ssam_device *sdev, u8 iid, char *buf, size_t
 	int status;
 
 	status =  __ssam_tmp_get_name(sdev->ctrl, sdev->uid.target, iid, &name_rsp);
-	if (status < 0)
+	if (status)
 		return status;
 
 	/*
@@ -101,7 +101,7 @@ static int ssam_tmp_get_name(struct ssam_device *sdev, u8 iid, char *buf, size_t
 	status = strscpy(buf, name_rsp.name, buf_len);
 	WARN_ON(status < 0);
 
-	return status;
+	return status < 0 ? status : 0;
 }
 
 
