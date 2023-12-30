@@ -80,6 +80,30 @@ static int ssam_tmp_get_temperature(struct ssam_device *sdev, u8 iid, long *temp
 	return 0;
 }
 
+static int ssam_tmp_get_name(struct ssam_device *sdev, u8 iid, char *buf, size_t buf_len)
+{
+	struct ssam_tmp_get_name_rsp name_rsp;
+	int status;
+
+	status =  __ssam_tmp_get_name(sdev->ctrl, sdev->uid.target, iid, &name_rsp);
+	if (status < 0)
+		return status;
+
+	/*
+	 * This should not fail unless the name in the returned struct is not
+	 * null-terminated or someone changed something in the struct
+	 * definitions above, since our buffer and struct have the same
+	 * capacity by design. So if this fails blow this up with a warning.
+	 * Since the more likely cause is that the returned string isn't
+	 * null-terminated, we might have received garbage (as opposed to just
+	 * an incomplete string), so also fail the function.
+	 */
+	status = strscpy(buf, name_rsp.name, buf_len);
+	WARN_ON(status < 0);
+
+	return status;
+}
+
 
 /* -- Driver.---------------------------------------------------------------- */
 
@@ -164,7 +188,6 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	struct device *hwmon_dev;
 	s16 sensors;
 	int channel;
-	struct ssam_tmp_get_name_rsp name_rsp;
 	int status;
 
 	status = ssam_tmp_get_available_sensors(sdev, &sensors);
@@ -175,22 +198,17 @@ static int ssam_temp_probe(struct ssam_device *sdev)
 	if (!ssam_temp)
 		return -ENOMEM;
 
-	// Retrieve the name for each sensor.
+	/* Retrieve the name for each available sensor. */
 	for (channel = 0; channel < SSAM_TMP_SENSOR_MAX_COUNT; channel++)
 	{
-		if ((sensors & BIT(channel)) == 0)
+		if (!(sensors & BIT(channel)))
 			continue;
 
-		status =  ssam_retry(__ssam_tmp_get_name, sdev->ctrl,
-				     sdev->uid.target, channel + 1,
-				     &name_rsp);
-		if (status < 0)
+		status = ssam_tmp_get_name(sdev, channel + 1,
+					   ssam_temp->names[channel],
+					   SSAM_TMP_SENSOR_NAME_LENGTH);
+		if (status)
 			return status;
-
-		// Copy the name in the internal buffer.
-		status = strscpy(ssam_temp->names[channel], name_rsp.name,
-				 SSAM_TMP_SENSOR_NAME_LENGTH);
-		WARN_ON(status < 0);
 	}
 
 	ssam_temp->sdev = sdev;
